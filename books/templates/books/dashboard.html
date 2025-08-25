@@ -1,0 +1,532 @@
+{% extends 'books/base.html' %}
+{% load static %}
+{% load custom_filters %}
+{% load book_extras %}
+{% block title %}Dashboard - Ebook Library Manager{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="mb-0">Library Dashboard</h1>
+            <p class="text-muted">Overview of your ebook library management system</p>
+        </div>
+    </div>
+
+    <!-- Unified Statistics Row -->
+    <div class="row mb-4">
+
+        <!-- Total Books -->
+        <div class="col-md-2 mb-3">
+            <div class="card h-100 bg-primary text-white">
+                <div class="card-body">
+                    <h6 class="card-title mb-2">Total Books</h6>
+                    <h2 class="mb-0 fw-bold">{{ total_books|default:0 }}</h2>
+                    <small class="opacity-75">All scanned items</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- With Metadata -->
+        <div class="col-md-2 mb-3">
+            <div class="card h-100 bg-success text-white">
+                <div class="card-body">
+                    <h6 class="card-title mb-2">With Title</h6>
+                    <h2 class="mb-0 fw-bold">{{ books_with_metadata|default:0 }}</h2>
+                    <small class="opacity-75">{{ completion_percentage|floatformat:1 }}% Titles</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- With Cover -->
+        <div class="col-md-2 mb-3">
+            <div class="card h-100 bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-title mb-2">With Cover</h6>
+                    <h2 class="mb-0 fw-bold">{{ books_with_cover|default:0 }}</h2>
+                    <small class="opacity-75">{{ books_with_original_cover|default:0 }} have original covers</small>
+                    <small class="opacity-75">{{ missing_cover_percentage|floatformat:1 }}% have no covers</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Placeholders -->
+        <div class="col-md-2 mb-3">
+            <div class="card h-100 bg-secondary text-white">
+                <div class="card-body">
+                    <h6 class="card-title mb-2">Placeholders</h6>
+                    <h2 class="mb-0 fw-bold">{{ placeholder_count|default:0 }}</h2>
+                    <small class="opacity-75">Temporary entries</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Need Review -->
+        <div class="col-md-2 mb-3">
+            <div class="card h-100 bg-warning text-dark">
+                <div class="card-body">
+                    <h6 class="card-title mb-2">Need Review</h6>
+                    <h2 class="mb-0 fw-bold">{{ needs_review_count|default:0 }}</h2>
+                    <small class="opacity-75">Unreviewed items</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Corrupted Files -->
+        <div class="col-md-2 mb-3">
+            <div class="card h-100 bg-danger text-white">
+                <div class="card-body">
+                    <h6 class="card-title mb-2">Corrupted Files</h6>
+                    <h2 class="mb-0 fw-bold">{{ corrupted_count|default:0 }}</h2>
+                    <small class="opacity-75">{{ corrupted_percentage|floatformat:1 }}% flagged</small>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Quality Metrics Row -->
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <h6 class="card-title mb-0">Metadata Quality</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between mb-2">
+                            <label class="form-label mb-0">Average Confidence</label>
+                            <span class="badge bg-success">{{ avg_confidence|default:0|floatformat:'1' }}%</span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-success" role="progressbar"
+                                 style="width: {{ avg_confidence|default:0|floatformat:'0' }}%;"
+                                 aria-valuenow="{{ avg_confidence|default:0|floatformat:'1' }}"
+                                 aria-valuemin="0" aria-valuemax="100">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <label class="form-label mb-0">Average Completeness</label>
+                            <span class="badge bg-info">{{ avg_completeness|default:0|floatformat:'1' }}%</span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar bg-info" role="progressbar"
+                                 style="width: {{ avg_completeness|default:0|floatformat:'0' }}%;"
+                                 aria-valuenow="{{ avg_completeness|default:0|floatformat:'1' }}"
+                                 aria-valuemin="0" aria-valuemax="100">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <h6 class="card-title mb-0">Confidence Distribution</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="text-success">
+                                <h4 class="mb-1">{{ high_confidence_count|default:0 }}</h4>
+                                <small class="text-muted">High<br>(≥80%)</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-warning">
+                                <h4 class="mb-1">{{ medium_confidence_count|default:0 }}</h4>
+                                <small class="text-muted">Medium<br>(50-80%)</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-danger">
+                                <h4 class="mb-1">{{ low_confidence_count|default:0 }}</h4>
+                                <small class="text-muted">Low<br>(&lt;50%)</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <h6 class="card-title mb-0">System Status</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <div class="text-danger">
+                                <h4 class="mb-1">{{ error_count|default:0 }}</h4>
+                                <small class="text-muted">Errors</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-warning">
+                                <h4 class="mb-1">{{ warning_count|default:0 }}</h4>
+                                <small class="text-muted">Warnings</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-info">
+                                <h4 class="mb-1">{{ duplicate_count|default:0 }}</h4>
+                                <small class="text-muted">Duplicates</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Books Requiring Action Section -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card h-100 border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        Books Needing Attention
+                    </h6>
+                    <small class="opacity-75">Books with low confidence metadata (&lt;50%)</small>
+                </div>
+                <div class="card-body">
+                    {% if low_confidence_books %}
+                        <div class="list-group list-group-flush">
+                            {% for metadata in low_confidence_books %}
+                            <div class="list-group-item px-0 py-2">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <a href="{% url 'books:book_detail' metadata.book.pk %}" 
+                                           class="text-decoration-none fw-semibold">
+                                            {{ metadata.final_title|default:"Unknown Title"|truncatechars:40 }}
+                                        </a>
+                                        <br>
+                                        <small class="text-muted">
+                                            {{ metadata.final_author|default:"Unknown Author"|truncatechars:30 }}
+                                        </small>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge bg-danger">
+                                            {{ metadata.overall_confidence|floatformat:1 }}%
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-check-circle text-success fa-3x mb-3"></i>
+                            <p class="text-muted">All books have adequate metadata confidence</p>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-light">
+                    <a href="{% url 'books:book_list' %}?confidence=low" class="btn btn-sm btn-danger">
+                        <i class="fas fa-tools me-1"></i>Fix Low Confidence Books
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6 mb-3">
+            <div class="card h-100 border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-eye me-2"></i>
+                        Books Needing Review
+                    </h6>
+                    <small class="opacity-75">Books with unreviewed metadata</small>
+                </div>
+                <div class="card-body">
+                    {% if needs_review_books %}
+                        <div class="list-group list-group-flush">
+                            {% for book in needs_review_books %}
+                            <div class="list-group-item px-0 py-2">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <a href="{% url 'books:book_metadata' book.pk %}" class="text-decoration-none fw-semibold">
+                                            {{ book|get_display_title|truncatechars:40 }}
+                                        </a>
+                                        <br>
+                                        <small class="text-muted">
+                                            {{ book|get_display_author|truncatechars:30 }}
+                                        </small>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge bg-warning text-dark">
+                                            <i class="fas fa-clock"></i> Review
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-check-circle text-success fa-3x mb-3"></i>
+                            <p class="text-muted">All books have been reviewed</p>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-light">
+                    {% if first_review_target %}
+                        <a href="{% url 'books:book_metadata' first_review_target.id %}" class="btn btn-sm btn-warning">
+                            <i class="fas fa-eye me-1"></i>Start Review Process
+                        </a>
+                    {% else %}
+                        <span class="btn btn-sm btn-warning disabled">
+                            <i class="fas fa-check me-1"></i>All Reviews Complete
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Format Distribution and Scan Folders -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <h6 class="card-title mb-0">File Format Distribution</h6>
+                </div>
+                <div class="card-body">
+                    {% if format_stats %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Format</th>
+                                        <th>Count</th>
+                                        <th>Percentage</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for format in format_stats %}
+                                    <tr>
+                                        <td>
+                                            <span class="badge bg-secondary">{{ format.file_format|upper }}</span>
+                                        </td>
+                                        <td>{{ format.count }}</td>
+                                        <td>
+                                            <div class="progress" style="height: 15px;">
+                                                {% widthratio format.count total_books 100 as width %}
+                                                <div class="progress-bar bg-info" role="progressbar"
+                                                     style="width: {{ width }}%;"
+                                                     aria-valuenow="{{ width }}"
+                                                     aria-valuemin="0"
+                                                     aria-valuemax="100">
+                                                    {{ width }}%
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-file-alt text-muted fa-3x mb-3"></i>
+                            <p class="text-muted">No format statistics available</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <h6 class="card-title mb-0">Scan Folders</h6>
+                </div>
+                <div class="card-body">
+                    {% if scan_folders %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Path</th>
+                                        <th>Books</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for folder in scan_folders %}
+                                    <tr>
+                                        <td>
+                                            <small class="text-muted font-monospace">{{ folder.path|truncatechars:30 }}</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-secondary">{{ folder.book_count }}</span>
+                                        </td>
+                                        <td>
+                                            {% if folder.is_active %}
+                                                <span class="badge bg-success">Active</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-folder text-muted fa-3x mb-3"></i>
+                            <p class="text-muted">No scan folders configured</p>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-light">
+                    <a href="{% url 'books:scan_folder_list' %}" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-cog me-1"></i>Manage Folders
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity and Recently Added Books -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <h6 class="card-title mb-0">Recent Activity</h6>
+                </div>
+                <div class="card-body">
+                    {% if recent_logs %}
+                        <div class="list-group list-group-flush">
+                            {% for log in recent_logs %}
+                            <div class="list-group-item px-0 py-2">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <small class="text-muted">{{ log.timestamp|date:"M d, H:i" }}</small>
+                                        <br>
+                                        <span class="badge bg-{% if log.level == 'ERROR' %}danger{% elif log.level == 'WARNING' %}warning{% else %}info{% endif %} me-2">
+                                            {{ log.level }}
+                                        </span>
+                                        <span class="small">{{ log.message|truncatechars:50 }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-clock text-muted fa-3x mb-3"></i>
+                            <p class="text-muted">No recent activity</p>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-light">
+                    <a href="{% url 'books:scan_status' %}" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-list me-1"></i>View All Logs
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <h6 class="card-title mb-0">Recently Added Books</h6>
+                </div>
+                <div class="card-body">
+                    {% if recent_books %}
+                        <div class="list-group list-group-flush">
+                            {% for book in recent_books %}
+                            <div class="list-group-item px-0 py-2">
+                                <div class="d-flex gap-3 align-items-start">
+                                    <!-- Book Cover -->
+                                    <div class="flex-shrink-0">
+                                        {% book_cover book "tiny" %}
+                                    </div>
+
+                                    <!-- Book Info -->
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">
+                                            <a href="{% url 'books:book_detail' book.pk %}" class="text-decoration-none">
+                                                {{ book|get_display_title|truncatechars:25 }}
+                                            </a>
+                                        </h6>
+                                        <div class="small text-muted">
+                                            {{ book|get_display_author|truncatechars:20 }}
+                                        </div>
+                                        {% if book.finalmetadata and book.finalmetadata.isbn %}
+                                            <div class="small text-muted">ISBN: {{ book.finalmetadata.isbn }}</div>
+                                        {% endif %}
+                                        <div class="small text-muted">{{ book.last_scanned|date:"M d, H:i" }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-book text-muted fa-3x mb-3"></i>
+                            <p class="text-muted">No recent books</p>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-light">
+                    <a href="{% url 'books:book_list' %}" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-list me-1"></i>View All Books
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h6 class="card-title mb-0">Quick Actions</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-2">
+                            <a href="{% url 'books:trigger_scan' %}" class="btn btn-primary w-100">
+                                <i class="fas fa-sync me-2"></i>Scan Books
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            {% if first_review_target %}
+                                <a href="{% url 'books:book_metadata' first_review_target.id %}" class="btn btn-warning w-100">
+                                    <i class="fas fa-eye me-2"></i>Review Books
+                                </a>
+                            {% else %}
+                                <a href="{% url 'books:book_list' %}" class="btn btn-warning w-100">
+                                    <i class="fas fa-eye me-2"></i>Review Metadata
+                                </a>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{% url 'books:scan_folder_list' %}" class="btn btn-info w-100">
+                                <i class="fas fa-folder me-2"></i>Manage Folders
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{% url 'books:scan_status' %}" class="btn btn-secondary w-100">
+                                <i class="fas fa-list me-2"></i>View Logs
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

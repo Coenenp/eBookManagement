@@ -1,0 +1,318 @@
+from django.contrib import admin
+from .models import (
+    Author, Book, BookAuthor, BookCover, BookGenre, BookMetadata, BookSeries, BookTitle, BookPublisher,
+    DataSource, FinalMetadata, Genre, Publisher, ScanFolder, ScanLog, ScanStatus, Series
+)
+
+# ----------------------
+# Inline Admin Classes
+# ----------------------
+
+
+class BookTitleInline(admin.TabularInline):
+    model = BookTitle
+    extra = 0
+    readonly_fields = ('created_at',)
+
+
+class BookAuthorInline(admin.TabularInline):
+    model = BookAuthor
+    extra = 0
+    readonly_fields = ('created_at',)
+
+
+class BookSeriesInline(admin.TabularInline):
+    model = BookSeries
+    extra = 0
+    readonly_fields = ('created_at',)
+
+
+class BookGenreInline(admin.TabularInline):
+    model = BookGenre
+    extra = 0
+    readonly_fields = ('created_at',)
+
+
+class BookMetadataInline(admin.TabularInline):
+    model = BookMetadata
+    extra = 0
+    readonly_fields = ('created_at',)
+
+
+class BookCoverInline(admin.TabularInline):
+    model = BookCover
+    extra = 0
+    readonly_fields = ('created_at', 'aspect_ratio', 'resolution_str')
+
+
+class BookPublisherInline(admin.TabularInline):
+    model = BookPublisher
+    extra = 0
+    readonly_fields = ('created_at',)
+
+
+class FinalMetadataInline(admin.StackedInline):
+    model = FinalMetadata
+    extra = 0
+    readonly_fields = (
+        'final_title',
+        'final_title_confidence',
+        'final_author',
+        'final_author_confidence',
+        'overall_confidence',
+        'completeness_score',
+        'last_updated',
+    )
+    fieldsets = (
+        ('Final Choices', {
+            'fields': ('final_title', 'final_title_confidence', 'final_author', 'final_author_confidence')
+        }),
+        ('Quality', {
+            'fields': ('overall_confidence', 'completeness_score', 'last_updated'),
+            'classes': ('collapse',)
+        }),
+    )
+
+# ----------------------
+# Admin Classes
+# ----------------------
+
+
+@admin.register(DataSource)
+class DataSourceAdmin(admin.ModelAdmin):
+    list_display = ('name', 'get_name_display', 'trust_level')
+    list_filter = ('trust_level',)
+    search_fields = ('name',)
+    ordering = ('-trust_level', 'name')
+
+
+@admin.register(Author)
+class AuthorAdmin(admin.ModelAdmin):
+    list_display = ('first_name', 'last_name', 'name_normalized')
+    search_fields = ('first_name', 'last_name', 'name_normalized')
+    ordering = ('last_name', 'first_name')
+    readonly_fields = ('name', 'name_normalized')
+
+
+@admin.register(Genre)
+class GenreAdmin(admin.ModelAdmin):
+    list_display = ('name',)
+    search_fields = ('name',)
+    ordering = ('name',)
+
+
+@admin.register(Series)
+class SeriesAdmin(admin.ModelAdmin):
+    list_display = ('name',)
+    search_fields = ('name',)
+    ordering = ('name',)
+
+
+@admin.register(Publisher)
+class PublisherAdmin(admin.ModelAdmin):
+    list_display = ('name',)
+    search_fields = ('name',)
+    ordering = ('name',)
+
+
+@admin.register(ScanFolder)
+class ScanFolderAdmin(admin.ModelAdmin):
+    list_display = ('name', 'path', 'language', 'created_at', 'is_active', 'last_scanned')
+    list_filter = ('language', 'is_active', 'created_at')
+    search_fields = ('name', 'path')
+    readonly_fields = ('created_at', 'last_scanned')
+
+
+@admin.register(Book)
+class BookAdmin(admin.ModelAdmin):
+    list_display = ('filename', 'file_format', 'file_size_mb', 'is_placeholder', 'is_duplicate', 'is_corrupted', 'last_scanned')
+    list_filter = ('file_format', 'is_placeholder', 'is_duplicate', 'is_corrupted', 'last_scanned', 'cover_path', 'opf_path')
+    search_fields = ('file_path', 'titles__title', 'bookauthor__author__name')
+    readonly_fields = ('first_scanned', 'last_scanned', 'filename', 'file_size_mb', 'relative_path')
+
+    inlines = [
+        FinalMetadataInline,
+        BookTitleInline,
+        BookAuthorInline,
+        BookCoverInline,
+        BookSeriesInline,
+        BookGenreInline,
+        BookMetadataInline,
+    ]
+
+    fieldsets = (
+        ('File Information', {
+            'fields': ('file_path', 'file_format', 'file_size', 'file_size_mb', 'cover_path', 'opf_path', 'relative_path')
+        }),
+        ('Status', {
+            'fields': ('is_placeholder', 'is_duplicate', 'is_corrupted'),
+        }),
+        ('Scan Information', {
+            'fields': ('scan_folder', 'first_scanned', 'last_scanned'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def file_size_mb(self, obj):
+        if obj.file_size:
+            return f"{obj.file_size / (1024 * 1024):.2f} MB"
+        return "Unknown"
+    file_size_mb.short_description = 'File Size (MB)'
+
+
+@admin.register(BookTitle)
+class BookTitleAdmin(admin.ModelAdmin):
+    list_display = ('title', 'book', 'source', 'confidence', 'created_at')
+    list_filter = ('source', 'confidence', 'created_at')
+    search_fields = ('title', 'book__file_path')
+    readonly_fields = ('created_at',)
+
+
+@admin.register(BookAuthor)
+class BookAuthorAdmin(admin.ModelAdmin):
+    list_display = (
+        'author_full_name', 'author_first_name', 'author_last_name',
+        'book', 'source', 'confidence', 'is_main_author', 'created_at'
+    )
+    list_filter = ('source', 'confidence', 'is_main_author', 'created_at')
+    search_fields = ('author__name', 'author__first_name', 'author__last_name', 'book__file_path')
+    readonly_fields = ('created_at',)
+
+    def author_full_name(self, obj):
+        return obj.author.name
+    author_full_name.short_description = 'Author'
+
+    def author_first_name(self, obj):
+        return obj.author.first_name
+    author_first_name.short_description = 'First Name'
+
+    def author_last_name(self, obj):
+        return obj.author.last_name
+    author_last_name.short_description = 'Last Name'
+
+
+@admin.register(BookCover)
+class BookCoverAdmin(admin.ModelAdmin):
+    list_display = ('book', 'source', 'confidence', 'resolution_str', 'is_high_resolution', 'format', 'created_at')
+    list_filter = ('source', 'confidence', 'is_high_resolution', 'format', 'created_at')
+    search_fields = ('book__file_path', 'cover_path')
+    readonly_fields = ('created_at', 'aspect_ratio', 'is_high_resolution', 'resolution_str', 'is_local_file')
+
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('book', 'cover_path', 'source', 'confidence')
+        }),
+        ('Image Properties', {
+            'fields': ('width', 'height', 'aspect_ratio', 'file_size', 'format', 'is_high_resolution')
+        }),
+        ('System', {
+            'fields': ('resolution_str', 'is_local_file', 'created_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def resolution_str(self, obj):
+        return obj.resolution_str
+    resolution_str.short_description = 'Resolution'
+
+
+@admin.register(BookSeries)
+class BookSeriesAdmin(admin.ModelAdmin):
+    list_display = ('series', 'book', 'series_number', 'source', 'confidence', 'created_at')
+    list_filter = ('source', 'confidence', 'created_at')
+    search_fields = ('series__name', 'book__file_path')
+    readonly_fields = ('created_at',)
+
+
+@admin.register(BookGenre)
+class BookGenreAdmin(admin.ModelAdmin):
+    list_display = ('genre', 'book', 'source', 'confidence', 'created_at')
+    list_filter = ('source', 'confidence', 'created_at')
+    search_fields = ('genre__name', 'book__file_path')
+    readonly_fields = ('created_at',)
+
+
+@admin.register(BookPublisher)
+class BookPublisherAdmin(admin.ModelAdmin):
+    list_display = ('book', 'publisher', 'source', 'confidence', 'created_at')
+    list_filter = ('source', 'confidence', 'created_at')
+    search_fields = ('publisher__name', 'book__file_path')
+    readonly_fields = ('created_at',)
+
+
+@admin.register(BookMetadata)
+class BookMetadataAdmin(admin.ModelAdmin):
+    list_display = ('field_name', 'book', 'source', 'confidence', 'created_at')
+    list_filter = ('field_name', 'source', 'confidence', 'created_at')
+    search_fields = ('field_name', 'field_value', 'book__file_path')
+    readonly_fields = ('created_at',)
+
+
+@admin.register(FinalMetadata)
+class FinalMetadataAdmin(admin.ModelAdmin):
+    list_display = (
+        'book',
+        'final_title',
+        'final_title_confidence',
+        'final_author',
+        'final_author_confidence',
+        'final_series',
+        'final_series_confidence',
+        'final_cover_confidence',
+        'overall_confidence',
+        'completeness_score',
+        'is_reviewed',
+        'has_cover',
+    )
+    list_filter = ('is_reviewed', 'has_cover', 'overall_confidence', 'completeness_score', 'language', 'publication_year')
+    search_fields = ('final_title', 'final_author', 'book__file_path')
+    readonly_fields = ('overall_confidence', 'completeness_score', 'last_updated')
+
+    fieldsets = (
+        ('Core Metadata', {
+            'fields': ('book', 'final_title', 'final_title_confidence', 'final_author', 'final_author_confidence', 'final_publisher', 'final_publisher_confidence')
+        }),
+        ('Series Information', {
+            'fields': ('final_series', 'final_series_number', 'final_series_confidence')
+        }),
+        ('Cover Information', {
+            'fields': ('final_cover_path', 'final_cover_confidence', 'has_cover')
+        }),
+        ('Publication Information', {
+            'fields': ('language', 'isbn', 'publication_year', 'description')
+        }),
+        ('Quality Metrics', {
+            'fields': ('overall_confidence', 'completeness_score', 'is_reviewed'),
+            'classes': ('collapse',)
+        }),
+        ('System', {
+            'fields': ('last_updated',),
+            'classes': ('collapse',)
+        }),
+    )
+
+
+@admin.register(ScanLog)
+class ScanLogAdmin(admin.ModelAdmin):
+    list_display = ('timestamp', 'level', 'message_preview', 'file_path', 'scan_folder')
+    list_filter = ('level', 'timestamp', 'scan_folder')
+    search_fields = ('message', 'file_path')
+    readonly_fields = ('timestamp',)
+
+    def message_preview(self, obj):
+        return obj.message[:100] + "..." if len(obj.message) > 100 else obj.message
+    message_preview.short_description = 'Message Preview'
+
+
+@admin.register(ScanStatus)
+class ScanStatusAdmin(admin.ModelAdmin):
+    list_display = ('status', 'progress', 'message_preview', 'started', 'updated')
+    list_filter = ('status', 'started', 'updated')
+    search_fields = ('message',)
+    readonly_fields = ('started', 'updated')
+
+    def message_preview(self, obj):
+        if obj.message:
+            return obj.message[:100] + "..." if len(obj.message) > 100 else obj.message
+        return "No message"
+    message_preview.short_description = 'Message Preview'

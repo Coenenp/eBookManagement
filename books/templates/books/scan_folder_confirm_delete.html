@@ -1,0 +1,17 @@
+{% extends 'books/base.html' %}
+
+{% block title %}Delete Scan Folder - Ebook Library Manager{% endblock %}
+
+{% block content %}
+<h2>Delete Scan Folder</h2>
+<p>Are you sure you want to delete the scan folder "<strong>{{ object.name }}</strong>"?</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">
+        <i class="fas fa-trash"></i> Delete
+    </button>
+    <a href="{% url 'scan_folder_list' %}" class="btn btn-secondary">
+        <i class="fas fa-times"></i> Cancel
+    </a>
+</form>
+{% endblock %}

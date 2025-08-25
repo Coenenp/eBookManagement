@@ -1,0 +1,37 @@
+{% load static %}
+{% load custom_filters %}
+
+<div class="position-relative d-inline-block cover-wrapper cover-{{ size }}">
+  {% if base64_image %}
+    <img src="{{ base64_image }}"
+         alt="Cover for {{ book|get_display_title }}"
+         class="rounded shadow-sm cover-img cover-{{ size }}"
+         loading="lazy"
+         decoding="async">
+  {% elif is_url %}
+    <img src="{{ cover_path }}"
+         alt="Cover for {{ book|get_display_title }}"
+         class="rounded shadow-sm cover-img cover-{{ size }}"
+         loading="lazy"
+         decoding="async">
+  {% elif cover_path %}
+    <img src="{% static cover_path %}"
+         alt="Cover for {{ book|get_display_title }}"
+         class="rounded shadow-sm cover-img cover-{{ size }}"
+         loading="lazy"
+         decoding="async">
+  {% else %}
+    <div class="bg-secondary text-white rounded shadow-sm d-flex align-items-center justify-content-center cover-placeholder cover-{{ size }}">
+      <div class="text-center">
+        <i class="fas fa-book fa-2x mb-2"></i>
+        <div class="small">No Cover</div>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if badge %}
+    <span class="position-absolute top-0 start-0 translate-middle badge rounded-pill bg-primary">
+      {{ badge }}
+    </span>
+  {% endif %}
+</div>

@@ -1,0 +1,139 @@
+{% extends 'books/base.html' %}
+{% load static %}
+{% load custom_filters %}
+{% block title %}Manage Authors{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h3 class="mb-3"><i class="fas fa-user-edit me-2"></i>Author Management</h3>
+
+    <!-- Search Bar -->
+    <form method="get" class="mb-3">
+        <div class="row g-2">
+            <div class="col-md-6">
+                <input type="text" name="search" value="{{ search_query }}" class="form-control" placeholder="Search authors...">
+            </div>
+            <div class="col-md-4">
+                <select name="is_reviewed" class="form-select">
+                    <option value="">All Authors</option>
+                    <option value="true" {% if request.GET.is_reviewed == 'true' %}selected{% endif %}>Reviewed Only</option>
+                    <option value="false" {% if request.GET.is_reviewed == 'false' %}selected{% endif %}>Unreviewed Only</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-outline-primary w-100" type="submit">
+                    <i class="fas fa-search me-1"></i>Filter
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <form method="post" action="{% url 'books:author_bulk_delete' %}">
+        {% csrf_token %}
+
+        {% if authors %}
+        <table class="table table-bordered table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 40px;"><input type="checkbox" id="select-all"></th>
+                    <th>Name</th>
+                    <th>First Name</th>
+                    <th>Last Name</th>
+                    <th>Sources</th>
+                    <th>Reviewed</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for author in authors %}
+                <tr>
+                    <td>
+                        {% if not author.is_reviewed %}
+                        <input type="checkbox" name="selected_authors" value="{{ author.id }}">
+                        {% endif %}
+                    </td>
+                    <td>{{ author.name }}</td>
+                    <td>{{ author.first_name }}</td>
+                    <td>{{ author.last_name }}</td>
+                    <td>
+                        {% for src in author_sources|get_item:author.id %}
+                            <span class="badge bg-info text-dark">{{ src }}</span>
+                        {% empty %}
+                            <span class="text-muted">None</span>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {% if author.is_reviewed %}
+                            <span class="badge bg-success"><i class="fas fa-check me-1"></i>Reviewed</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Pending</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <div class="d-flex gap-3">
+                <button type="submit" formaction="{% url 'books:author_bulk_delete' %}" class="btn btn-danger">
+                    <i class="fas fa-trash me-1"></i> Delete Selected
+                </button>
+                <button type="submit" formaction="{% url 'books:author_mark_reviewed' %}" class="btn btn-success">
+                    <i class="fas fa-check me-1"></i> Mark Reviewed
+                </button>
+            </div>
+            <div class="text-end">
+            {% if page_obj.paginator.num_pages > 1 %}
+                <nav>
+                    <ul class="pagination mb-0">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link"
+                                href="?{% querystring request.GET 'page' page_obj.previous_page_number %}">
+                                    Previous
+                                </a>
+                            </li>
+                        {% endif %}
+
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if num == page_obj.number %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num >= page_obj.number|add:'-2' and num <= page_obj.number|add:'2' %}
+                                <li class="page-item">
+                                    <a class="page-link"
+                                    href="?{% querystring request.GET 'page' num %}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link"
+                                href="?{% querystring request.GET 'page' page_obj.next_page_number %}">
+                                    Next
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-info">No authors found.</div>
+        {% endif %}
+    </form>
+</div>
+
+<script>
+const selectAllCheckbox = document.getElementById('select-all');
+if (selectAllCheckbox) {
+    selectAllCheckbox.addEventListener('click', function () {
+        const checkboxes = document.querySelectorAll('input[name="selected_authors"]');
+        checkboxes.forEach(cb => cb.checked = this.checked);
+    });
+}
+</script>
+{% endblock %}

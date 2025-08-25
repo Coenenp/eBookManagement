@@ -1,0 +1,149 @@
+{% extends 'books/base.html' %}
+
+{% block title %}Scan Status - Ebook Library Manager{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2>📚 Scan Status</h2>
+
+  {% if scan_status %}
+  <div class="card shadow-sm mt-3">
+    <div class="card-body">
+      <p><strong>Status:</strong>
+        <span id="scan-status" class="badge
+          {% if scan_status.status == 'Running' %}bg-primary
+          {% elif scan_status.status == 'Completed' %}bg-success
+          {% elif scan_status.status == 'Failed' %}bg-danger
+          {% else %}bg-secondary{% endif %}">
+          {{ scan_status.status }}
+        </span>
+      </p>
+
+      <p><strong>Started:</strong> <span id="scan-started">{{ scan_status.started|date:"F d, Y H:i" }}</span></p>
+
+      <p><strong>Progress:</strong></p>
+      <div class="progress mb-3" style="height: 25px;">
+        <div id="scan-progress-bar"
+            class="progress-bar bg-info"
+            role="progressbar"
+            style="width: {{ scan_status.progress|default:0 }}%;"
+            aria-valuenow="{{ scan_status.progress|default:0 }}"
+            aria-valuemin="0"
+            aria-valuemax="100">
+          {{ scan_status.progress|default:0 }}%
+        </div>
+      </div>
+      <p><strong>Message:</strong> <span id="scan-message">{{ scan_status.message|default:"No additional information." }}</span></p>
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-info mt-3">No active scans running.</div>
+  {% endif %}
+
+  <a href="{% url 'books:book_list' %}" class="btn btn-outline-primary mt-4">
+    <i class="fas fa-arrow-left"></i> Back to Books
+  </a>
+</div>
+<!-- 🚨 Error and Warning Logs -->
+<div class="card mt-5">
+  <div class="card-body">
+    <h5>⚠️ Scan Logs — Errors & Warnings</h5>
+    <p class="text-muted">Recent scan issues related to file or folder operations.</p>
+
+    <table class="table table-sm table-hover table-bordered">
+      <thead class="table-light">
+        <tr>
+          <th>🕒 Time</th>
+          <th>Level</th>
+          <th>File Path</th>
+          <th>Scan Folder</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+          <tr>
+            <td>{{ log.timestamp|date:"Y-m-d H:i:s" }}</td>
+            <td>
+              <span class="badge {% if log.level == "ERROR" %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                {{ log.level }}
+              </span>
+            </td>
+            <td class="text-break small">
+              {% if log.file_path %}
+                {{ log.file_path }}
+              {% else %}
+                &mdash;
+              {% endif %}
+            </td>
+            <td class="small">
+              {% if log.scan_folder %}
+                {{ log.scan_folder.name }}
+              {% else %}
+                &mdash;
+              {% endif %}
+            </td>
+            <td style="white-space: pre-line;">{{ log.message }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" class="text-center text-muted">No recent scan warnings or errors.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+      function fetchStatus() {
+          fetch("{% url 'books:live_scan_status' %}")
+              .then(response => response.json())
+              .then(data => {
+                  if (data.status) {
+                      
+                     // Update status badge classes
+                      const statusBadge = document.getElementById("scan-status");
+                      if (statusBadge) {
+                          statusBadge.textContent = data.status;
+                          statusBadge.className = "badge " + (
+                              data.status === "Running" ? "bg-primary" :
+                              data.status === "Completed" ? "bg-success" :
+                              data.status === "Failed" ? "bg-danger" : "bg-secondary"
+                          );
+                      }
+                      
+                      const startedEl = document.getElementById("scan-started");
+                      if (startedEl) startedEl.textContent = data.started;
+
+                      const messageEl = document.getElementById("scan-message");
+                      if (messageEl) messageEl.textContent = data.message;
+
+                      const progressBar = document.getElementById("scan-progress-bar");
+                      if (progressBar) {
+                          const progress = data.progress || 0;
+                          progressBar.style.width = progress + "%";
+                          progressBar.textContent = progress + "%";
+                          progressBar.setAttribute("aria-valuenow", progress);
+                          progressBar.className = "progress-bar bg-" +
+                              (progress === 100 ? "success" : progress >= 50 ? "info" : "warning");
+                      }
+
+                      if (data.status !== "Running") clearInterval(intervalId);
+                  }
+              })
+              .catch(error => {
+                  console.error("Status fetch error:", error);
+              });
+      }
+
+      // Start immediately
+      fetchStatus();
+
+      // Keep polling every 5 seconds
+      const intervalId = setInterval(fetchStatus, 5000);
+  });
+</script>
+{% endblock %}

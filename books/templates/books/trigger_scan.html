@@ -1,0 +1,25 @@
+{% extends 'books/base.html' %}
+
+{% block title %}Trigger Scan - Ebook Library Manager{% endblock %}
+
+{% block content %}
+<h2>Trigger Scan</h2>
+<p>Click the button below to trigger a scan of all active scan folders.</p>
+<form method="post">
+    {% csrf_token %}
+    <label for="folder_path">Choose a folder to scan (optional):</label>
+    <select name="folder_path" class="form-control mb-3">
+        <option value="">Full scan of all active folders</option>
+        {% for folder in active_folders %}
+            <option value="{{ folder.path }}">{{ folder.path }}</option>
+        {% endfor %}
+    </select>
+
+    <button type="submit" class="btn btn-primary">
+        <i class="fas fa-sync"></i> Start Scan
+    </button>
+    <a href="{% url 'books:book_list' %}" class="btn btn-secondary">
+        <i class="fas fa-times"></i> Cancel
+    </a>
+</form>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends 'books/base.html' %}
+
+{% block title %}Add Scan Folder - Ebook Library Manager{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Add Scan Folder</h2>
+<form method="post" novalidate>
+    {% csrf_token %}
+    <div class="mb-3">
+        {{ form.name.label_tag }}
+        {{ form.name }}
+        {% if form.name.errors %}
+            <div class="text-danger">{{ form.name.errors }}</div>
+        {% endif %}
+    </div>
+
+    <div class="mb-3">
+        {{ form.path.label_tag }}
+        {{ form.path }}
+        {% if form.path.errors %}
+            <div class="text-danger">{{ form.path.errors }}</div>
+        {% endif %}
+    </div>
+
+    <div class="mb-3">
+        {{ form.language.label_tag }}
+        {{ form.language }}
+        {% if form.language.errors %}
+            <div class="text-danger">{{ form.language.errors }}</div>
+        {% endif %}
+    </div>
+
+    <div class="form-check mb-3">
+        {{ form.is_active }}
+        {{ form.is_active.label_tag }}
+    </div>
+
+    <button type="submit" class="btn btn-primary">
+        <i class="fas fa-save"></i> Save
+    </button>
+    <a href="{% url 'books:scan_folder_list' %}" class="btn btn-secondary">
+        <i class="fas fa-times"></i> Cancel
+    </a>
+</form>
+{% endblock %}

@@ -1,0 +1,406 @@
+{% extends 'books/base.html' %}
+{% load static %}
+{% load custom_filters %}
+{% load book_extras %}
+{% block title %}Books - Ebook Library Manager{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 id="page-title" class="h3 mb-0">
+                    <i class="fas fa-book me-2"></i>
+                    Ebook Library
+                </h1>
+                {% if first_review_target %}
+                <div class="alert alert-info mb-0 py-2">
+                    <span class="me-2">
+                        <i class="fas fa-clipboard-check"></i>
+                        Quick Action:
+                    </span>
+                    <a href="{% url 'books:book_metadata' first_review_target.id %}" class="btn btn-sm btn-primary">
+                        <i class="fas fa-eye"></i> Review Next Book
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Review Type Tabs -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="fas fa-filter me-2"></i>
+                        Review Categories
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="nav nav-pills nav-justified">
+                        {% for type, label, badge, color in review_tabs %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if review_type == type %}active{% endif %} d-flex align-items-center justify-content-center py-3"
+                               href="?review_type={{ type }}">
+                                <span class="me-2">{{ label }}</span>
+                                <span class="badge bg-{{ color }}">{{ badge }}</span>
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced Filters -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-search me-2"></i>
+                            Search & Filters
+                        </h5>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse">
+                            <i class="fas fa-cog me-1"></i>
+                            Advanced Filters
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form method="get">
+                        <input type="hidden" name="review_type" value="{{ review_type }}">
+                        <!-- Main Search Row -->
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-8">
+                                <label for="search_query" class="form-label fw-bold">Search Books</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <i class="fas fa-search"></i>
+                                    </span>
+                                    <input type="text" class="form-control" id="search_query" name="search_query"
+                                           value="{{ search_query }}" placeholder="Search titles, authors, series...">
+                                </div>
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary me-2">
+                                    <i class="fas fa-search"></i> Search
+                                </button>
+                                <a href="{% url 'books:book_list' %}" class="btn btn-outline-secondary">
+                                    <i class="fas fa-times"></i> Clear
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Collapsible Advanced Filters -->
+                        <div class="collapse" id="filterCollapse">
+                            <div class="border-top pt-3">
+                                <div class="row g-3">
+                                    <!-- Basic Filters -->
+                                    <div class="col-md-3">
+                                        <label for="language" class="form-label">Language</label>
+                                        <select class="form-select" id="language" name="language">
+                                            <option value="">All Languages</option>
+                                            {% for lang in languages %}
+                                            <option value="{{ lang }}" {% if lang == language_filter|default_if_none:'' %}selected{% endif %}>
+                                                {{ lang|default:"Unknown" }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <label for="file_format" class="form-label">Format</label>
+                                        <select class="form-select" id="file_format" name="file_format">
+                                            <option value="">All Formats</option>
+                                            {% for format in formats %}
+                                            <option value="{{ format }}" {% if format == format_filter %}selected{% endif %}>
+                                                {{ format|upper }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <label for="confidence" class="form-label">Confidence</label>
+                                        <select class="form-select" id="confidence" name="confidence">
+                                            <option value="">All Confidence</option>
+                                            <option value="high" {% if confidence_filter == 'high' %}selected{% endif %}>High (≥80%)</option>
+                                            <option value="medium" {% if confidence_filter == 'medium' %}selected{% endif %}>Medium (50-80%)</option>
+                                            <option value="low" {% if confidence_filter == 'low' %}selected{% endif %}>Low (&lt;50%)</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <label for="missing" class="form-label">Missing Data</label>
+                                        <select class="form-select" id="missing" name="missing">
+                                            <option value="">All Books</option>
+                                            <option value="title" {% if missing_filter == 'title' %}selected{% endif %}>Missing Title</option>
+                                            <option value="author" {% if missing_filter == 'author' %}selected{% endif %}>Missing Author</option>
+                                            <option value="series" {% if missing_filter == 'series' %}selected{% endif %}>Missing Series</option>
+                                            <option value="cover" {% if missing_filter == 'cover' %}selected{%  endif %}>Missing Cover</option>
+                                            <option value="publisher" {% if missing_filter == 'publisher' %}selected{% endif %}>Missing Punlisher</option>
+                                            <option value="metadata" {% if missing_filter == 'metadata' %}selected{% endif %}>No Metadata</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Status Filters -->
+                                    <div class="col-md-3">
+                                        <label for="needs_review" class="form-label">Review Status</label>
+                                        <select class="form-select" id="needs_review" name="needs_review">
+                                            <option value="">All Books</option>
+                                            <option value="true" {% if request.GET.needs_review == 'true' %}selected{% endif %}>Needs Review</option>
+                                            <option value="false" {% if request.GET.needs_review == 'false' %}selected{% endif %}>Reviewed</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <label for="has_placeholder" class="form-label">Type</label>
+                                        <select class="form-select" id="has_placeholder" name="has_placeholder">
+                                            <option value="">All Books</option>
+                                            <option value="true" {% if request.GET.has_placeholder == 'true' %}selected{% endif %}>Placeholders</option>
+                                            <option value="false" {% if request.GET.has_placeholder == 'false' %}selected{% endif %}>Regular Books</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Sorting -->
+                                    <div class="col-md-3">
+                                        <label for="sort" class="form-label">Sort By</label>
+                                        <select class="form-select" id="sort" name="sort">
+                                            <option value="last_scanned" {% if sort_by == 'last_scanned' %}selected{% endif %}>Last Scanned</option>
+                                            <option value="title" {% if sort_by == 'title' %}selected{% endif %}>Title</option>
+                                            <option value="author" {% if sort_by == 'author' %}selected{% endif %}>Author</option>
+                                            <option value="confidence" {% if sort_by == 'confidence' %}selected{% endif %}>Confidence</option>
+                                            <option value="completeness" {% if sort_by == 'completeness' %}selected{% endif %}>Completeness</option>
+                                            <option value="format" {% if sort_by == 'format' %}selected{% endif %}>Format</option>
+                                            <option value="size" {% if sort_by == 'size' %}selected{% endif %}>Size</option>
+                                            <option value="path" {% if sort_by == 'path' %}selected{% endif %}>Path</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <label for="order" class="form-label">Order</label>
+                                        <select class="form-select" id="order" name="order">
+                                            <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>Descending</option>
+                                            <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>Ascending</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Book Grid -->
+    <div class="row">
+        {% load cache %}
+        {% for item in books_with_covers %} 
+            <!-- {% cache 300 book_card item.book.id item.book.last_scanned %} -->
+            {% with book=item.book %}
+            <div class="col-xl-3 col-lg-4 col-md-6 mb-4">
+                <div class="card h-100 shadow-sm 
+                            {% if book.is_placeholder %}border-info{% endif %} 
+                            {% if book.needs_review %}border-warning{% endif %} 
+                            {% if book.is_duplicate %}border-danger{% endif %}">
+                    
+                    <!-- Book Cover Header -->
+                    <div class="text-center p-3 bg-light">
+                        {% book_cover book size='small' %}
+                    </div>
+
+                    <!-- Book Details -->
+                    <div class="card-body">
+                        <!-- Title -->
+                        <h6 class="card-title mb-2">
+                            <a href="{% url 'books:book_detail' book.pk %}" class="text-decoration-none text-dark">
+                                {% if book.finalmetadata.final_title %}
+                                    {{ book.finalmetadata.final_title|truncatechars:50 }}
+                                {% elif book.titles.first %}
+                                    {{ book.titles.first.title|truncatechars:50 }}
+                                {% else %}
+                                    Unknown Title
+                                {% endif %}
+                            </a>
+                        </h6>
+
+                        <!-- Author -->
+                        <p class="text-muted mb-2">
+                            <i class="fas fa-user me-1"></i>
+                            {% if book.finalmetadata.final_author %}
+                                {{ book.finalmetadata.final_author|truncatechars:30 }}
+                            {% elif book.bookauthor.first %}
+                                {{ book.bookauthor.first.author.name|truncatechars:30 }}
+                            {% else %}
+                                Unknown Author
+                            {% endif %}
+                        </p>
+
+                        <!-- Series -->
+                        {% if book.finalmetadata.final_series %}
+                        <p class="text-muted small mb-2">
+                            <i class="fas fa-list me-1"></i>
+                            {{ book.finalmetadata.final_series|truncatechars:25 }}
+                            {% if book.finalmetadata.final_series_number %}
+                            <span class="badge bg-secondary">#{{ book.finalmetadata.final_series_number }}</span>
+                            {% endif %}
+                        </p>
+                        {% endif %}
+
+                        <!-- File Info -->
+                        <div class="small text-muted mb-3">
+                            <div class="d-flex justify-content-between">
+                                <span>
+                                    <i class="fas fa-file-alt me-1"></i>
+                                    {{ book.file_format|upper|default:"Unknown" }}
+                                </span>
+                                <span>{{ book.file_size|filesizeformat|default:"Unknown" }}</span>
+                            </div>
+                            {% if book.finalmetadata.language %}
+                            <div class="mt-1">
+                                <i class="fas fa-language me-1"></i>
+                                {{ book.finalmetadata.language }}
+                            </div>
+                            {% endif %}
+                            {% if book.scan_folder %}
+                            <div class="mt-1">
+                                <i class="fas fa-calendar me-1"></i>
+                                {{ book.last_scanned|date:"M d, Y" }}
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Quality Scores -->
+                        {% if book.finalmetadata %}
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between small">
+                                <span>Confidence:</span>
+                                <span class="badge {% if book.finalmetadata.overall_confidence >= 0.8 %}bg-success{% elif book.finalmetadata.overall_confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
+                                    {{ book.finalmetadata.overall_confidence|mul:100|floatformat:0 }}%
+                                </span>
+                            </div>
+                            <div class="d-flex justify-content-between small mt-1">
+                                <span>Completeness:</span>
+                                <span class="badge {% if book.finalmetadata.completeness_score >= 0.8 %}bg-success{% elif book.finalmetadata.completeness_score >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
+                                    {{ book.finalmetadata.completeness_score|mul:100|floatformat:0 }}%
+                                </span>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Status Badges -->
+                        <div class="mb-3">
+                            {% if book.needs_review %}
+                            <span class="badge bg-warning text-dark me-1">
+                                <i class="fas fa-exclamation-triangle me-1"></i>Needs Review
+                            </span>
+                            {% endif %}
+                            {% if book.is_placeholder %}
+                            <span class="badge bg-info me-1">
+                                <i class="fas fa-file-alt me-1"></i>Placeholder
+                            </span>
+                            {% endif %}
+                            {% if book.is_duplicate %}
+                            <span class="badge bg-danger me-1">
+                                <i class="fas fa-copy me-1"></i>Duplicate
+                            </span>
+                            {% endif %}
+                        </div>
+
+                        <!-- Admin Info -->
+                        {% if user.is_staff %}
+                        <div class="small text-muted border-top pt-2">
+                            <div class="mb-1">
+                                <i class="fas fa-folder me-1"></i>
+                                <code>{{ book.relative_path|truncatechars:40 }}</code>
+                            </div>
+                            <div>
+                                <i class="fas fa-hdd me-1"></i>
+                                <code>{{ book.scan_folder.path|truncatechars:40 }}</code>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="card-footer bg-transparent border-top">
+                        <div class="d-grid gap-2">
+                            <a href="{% url 'books:book_detail' book.pk %}" class="btn btn-outline-primary">
+                                <i class="fas fa-eye me-1"></i> View Details
+                            </a>
+                            {% if book.needs_review %}
+                            <a href="{% url 'books:book_metadata' book.pk %}" class="btn btn-success">
+                                <i class="fas fa-edit me-1"></i> Review Metadata
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endwith %}
+            <!-- {% endcache %} -->
+        {% empty %}
+        <div class="col-12">
+            <div class="text-center py-5">
+                <i class="fas fa-book fa-4x text-muted mb-3"></i>
+                <h4 class="text-muted">No books found</h4>
+                <p class="text-muted">Try adjusting your search criteria or filters.</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if is_paginated %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <nav aria-label="Book pagination">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{{ query_params.urlencode }}&page={{ page_obj.previous_page_number }}">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ num }}</span>
+                    </li>
+                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{{ query_params.urlencode }}&page={{ num }}">{{ num }}</a>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{{ query_params.urlencode }}&page={{ page_obj.next_page_number }}">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            
+            <!-- Page Info -->
+            <div class="text-center text-muted small mt-2">
+                Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} books
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+
+{% endblock %}

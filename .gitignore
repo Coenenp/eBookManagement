@@ -1,0 +1,58 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+media/
+
+# Environment variables
+.env
+
+# VSCode settings
+.vscode/
+
+# macOS files
+.DS_Store
+
+# PyCharm
+.idea/
+
+# Coverage reports
+htmlcov/
+.coverage
+
+# Migrations (optional, sometimes you want to include these)
+# */migrations/
+
+# mypy
+.mypy_cache/
+
+# pytest cache
+.pytest_cache/
+
+# celery beat schedule file
+celerybeat-schedule
+
+# Sphinx docs
+docs/_build/
+
+# Unit test / coverage reports
+.coverage
+*.cover
+coverage.xml
+
+# PyInstaller
+*.manifest
+*.spec

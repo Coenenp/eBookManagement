@@ -1,0 +1,140 @@
+{% load custom_filters %}
+{% load book_extras %}
+
+<div class="card h-100 shadow-sm 
+            {% if book.is_placeholder %}border-info{% endif %} 
+            {% if book.needs_review %}border-warning{% endif %} 
+            {% if book.is_duplicate %}border-danger{% endif %}"
+     data-book-id="{{ book.pk }}">
+    
+    <!-- Book Cover Header -->
+    <div class="text-center p-3 bg-light">
+        {% book_cover book size='small' %}
+    </div>
+
+    <!-- Book Details -->
+    <div class="card-body">
+        <!-- Title -->
+        <h6 class="card-title mb-2">
+            <a href="{% url 'books:book_detail' book.pk %}" 
+               class="text-decoration-none text-dark"
+               aria-label="View details for {{ book|get_display_title }}">
+                {{ book|get_display_title|truncatechars:50 }}
+            </a>
+        </h6>
+
+        <!-- Author -->
+        <p class="text-muted mb-2">
+            <i class="fas fa-user me-1" aria-hidden="true"></i>
+            {{ book|get_display_author|truncatechars:30 }}
+        </p>
+
+        <!-- Series -->
+        {% if book.finalmetadata.final_series %}
+        <p class="text-muted small mb-2">
+            <i class="fas fa-list me-1" aria-hidden="true"></i>
+            {{ book.finalmetadata.final_series|truncatechars:25 }}
+            {% if book.finalmetadata.final_series_number %}
+            <span class="badge bg-secondary">#{{ book.finalmetadata.final_series_number }}</span>
+            {% endif %}
+        </p>
+        {% endif %}
+
+        <!-- File Info -->
+        <div class="small text-muted mb-3">
+            <div class="d-flex justify-content-between">
+                <span>
+                    <i class="fas fa-file-alt me-1" aria-hidden="true"></i>
+                    {{ book.file_format|upper|default:"Unknown" }}
+                </span>
+                <span>{{ book.file_size|filesizeformat|default:"Unknown" }}</span>
+            </div>
+            {% if book.finalmetadata.language %}
+            <div class="mt-1">
+                <i class="fas fa-language me-1" aria-hidden="true"></i>
+                {{ book.finalmetadata.language }}
+            </div>
+            {% endif %}
+            {% if book.scan_folder %}
+            <div class="mt-1">
+                <i class="fas fa-calendar me-1" aria-hidden="true"></i>
+                <time datetime="{{ book.last_scanned|date:'c' }}">
+                    {{ book.last_scanned|date:"M d, Y" }}
+                </time>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Quality Scores -->
+        {% if book.finalmetadata %}
+        <div class="mb-3" role="group" aria-label="Quality metrics">
+            <div class="d-flex justify-content-between small">
+                <span>Confidence:</span>
+                <span class="badge {% if book.finalmetadata.overall_confidence >= 0.8 %}bg-success{% elif book.finalmetadata.overall_confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}"
+                      aria-label="Confidence score: {{ book.finalmetadata.overall_confidence|mul:100|floatformat:0 }} percent">
+                    {{ book.finalmetadata.overall_confidence|mul:100|floatformat:0 }}%
+                </span>
+            </div>
+            <div class="d-flex justify-content-between small mt-1">
+                <span>Completeness:</span>
+                <span class="badge {% if book.finalmetadata.completeness_score >= 0.8 %}bg-success{% elif book.finalmetadata.completeness_score >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}"
+                      aria-label="Completeness score: {{ book.finalmetadata.completeness_score|mul:100|floatformat:0 }} percent">
+                    {{ book.finalmetadata.completeness_score|mul:100|floatformat:0 }}%
+                </span>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Status Badges -->
+        <div class="mb-3" role="group" aria-label="Book status">
+            {% if book.needs_review %}
+            <span class="badge bg-warning text-dark me-1">
+                <i class="fas fa-exclamation-triangle me-1" aria-hidden="true"></i>Needs Review
+            </span>
+            {% endif %}
+            {% if book.is_placeholder %}
+            <span class="badge bg-info me-1">
+                <i class="fas fa-file-alt me-1" aria-hidden="true"></i>Placeholder
+            </span>
+            {% endif %}
+            {% if book.is_duplicate %}
+            <span class="badge bg-danger me-1">
+                <i class="fas fa-copy me-1" aria-hidden="true"></i>Duplicate
+            </span>
+            {% endif %}
+        </div>
+
+        <!-- Admin Info -->
+        {% if user.is_staff %}
+        <details class="small text-muted border-top pt-2">
+            <summary class="mb-1">System Info</summary>
+            <div class="mb-1">
+                <i class="fas fa-folder me-1" aria-hidden="true"></i>
+                <code>{{ book.relative_path|truncatechars:40 }}</code>
+            </div>
+            <div>
+                <i class="fas fa-hdd me-1" aria-hidden="true"></i>
+                <code>{{ book.scan_folder.path|truncatechars:40 }}</code>
+            </div>
+        </details>
+        {% endif %}
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="card-footer bg-transparent border-top">
+        <div class="d-grid gap-2">
+            <a href="{% url 'books:book_detail' book.pk %}" 
+               class="btn btn-outline-primary"
+               aria-label="View details for {{ book|get_display_title }}">
+                <i class="fas fa-eye me-1" aria-hidden="true"></i> View Details
+            </a>
+            {% if book.needs_review %}
+            <a href="{% url 'books:book_metadata' book.pk %}" 
+               class="btn btn-success"
+               aria-label="Review metadata for {{ book|get_display_title }}">
+                <i class="fas fa-edit me-1" aria-hidden="true"></i> Review Metadata
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
