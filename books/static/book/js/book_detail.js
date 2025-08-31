@@ -294,6 +294,19 @@ class CoversTabManager {
             if (response.success) {
                 Utils.showToast("Cover removed successfully.", "success");
                 this.removeCoverElement(coverPath);
+                
+                // Check if a new cover was automatically selected (fallback logic)
+                if (response.new_cover_path) {
+                    Utils.showToast(`Switched to next best cover: ${response.new_cover_path}`, "info");
+                    this.updateCoverSelection(response.new_cover_path);
+                    
+                    // Suggest page reload to see the updated cover
+                    setTimeout(() => {
+                        if (confirm("Cover updated. Reload page to see changes?")) {
+                            location.reload();
+                        }
+                    }, 2000);
+                }
             } else {
                 Utils.showToast(response.message || "Failed to remove cover.", "danger");
             }

@@ -5,17 +5,6 @@
 {% load book_extras %}
 {% block title %}{{ book.title }} - Ebook Library Manager{% endblock %}
 
-{% block extra_head %}
-<script src="{% static 'books/js/book_detail.js' %}"></script>
-<script>
-    // Pass book ID to JavaScript
-    document.addEventListener('DOMContentLoaded', function() {
-        document.body.dataset.bookId = {{ book.id|safe }};
-        // Alternative: window.bookId = {{ book.id|safe }};
-    });
-</script>
-{% endblock %}
-
 {% block content %}
 <div class="main-container">
     <!-- Legend -->
@@ -55,35 +44,7 @@
             
             <div class="row align-items-center">
                 <div class="col-md-3 text-center">
-                {% if primary_cover %}
-                    {% if primary_cover|slice:":4" == "http" %}
-                    <img src="{{ primary_cover}}"
-                        alt="Book cover"
-                        class="rounded shadow-sm"
-                        style="width: 150px; height: 200px; object-fit: cover;">
-                    {% elif primary_cover_base64 %}
-                    <img src="{{ primary_cover_base64 }}"
-                        alt="Book cover"
-                        class="rounded shadow-sm"
-                        style="width: 150px; height: 200px; object-fit: cover;">
-                    {% else %}
-                    <div class="bg-secondary text-white rounded shadow-sm d-flex align-items-center justify-content-center"
-                        style="width: 150px; height: 200px; margin: 0 auto;">
-                        <div class="text-center">
-                        <i class="fas fa-book fa-2x mb-2"></i>
-                        <div class="small">Cover not available</div>
-                        </div>
-                    </div>
-                    {% endif %}
-                {% else %}
-                    <div class="bg-secondary text-white rounded shadow-sm d-flex align-items-center justify-content-center"
-                        style="width: 150px; height: 200px; margin: 0 auto;">
-                    <div class="text-center">
-                        <i class="fas fa-book fa-2x mb-2"></i>
-                        <div class="small">No Cover</div>
-                    </div>
-                    </div>
-                {% endif %}
+                    {% book_cover book size='medium' %}
                 </div>
                 <div class="col-md-9">
                     <h1 class="mb-3">{{ book.title }}</h1>
@@ -472,11 +433,8 @@
                                     </div>
                                 </div>
                                 <div class="card-body text-center">
-                                    <img src="{{ book_cover_base64 }}"
-                                        alt="Original scanned cover"
-                                        class="img-thumbnail shadow-sm mb-3"
-                                        style="max-height: 200px; object-fit: contain;">
-                                    <div class="d-flex justify-content-center gap-2">
+                                    {% book_cover book size='medium' %}
+                                    <div class="d-flex justify-content-center gap-2 mt-3">
                                         {% if book.cover_path != book.finalmetadata.final_cover_path %}
                                         <button class="btn btn-primary btn-sm"
                                             data-action="select-cover"
@@ -515,9 +473,8 @@
                                     </div>
                                 </div>
                                 <div class="card-body text-center">
-                                    <img src="{{ cover.cover_path }}" alt="Cover from {{ cover.source.name }}"
-                                        class="img-thumbnail shadow-sm mb-3" style="max-height: 200px; object-fit: contain;">
-                                    <div class="d-flex justify-content-center gap-2">
+                                    {% book_cover_from_metadata cover book size='medium' %}
+                                    <div class="d-flex justify-content-center gap-2 mt-3">
                                         {% if cover.cover_path != book.finalmetadata.final_cover_path %}
                                             <button class="btn btn-primary btn-sm"
                                                     data-action="select-cover"
@@ -894,21 +851,9 @@
                                     <!-- Cover Preview -->
                                     <div id="coverPreview" class="mt-2 text-center">
                                         {% if book.finalmetadata.final_cover_path %}
-                                            {% if book.finalmetadata.final_cover_path|slice:":4" == "http" %}
-                                                <img src="{{ book.finalmetadata.final_cover_path }}"
-                                                    alt="Current cover"
-                                                    class="img-thumbnail"
-                                                    id="coverImage"
-                                                    style="max-width: 150px; max-height: 200px;">
-                                            {% elif primary_cover_base64 %}
-                                                <img src="{{ primary_cover_base64 }}"
-                                                    alt="Current cover"
-                                                    class="img-thumbnail"
-                                                    id="coverImage"
-                                                    style="max-width: 150px; max-height: 200px;">
-                                            {% else %}
-                                                <div class="text-muted">No cover preview available</div>
-                                            {% endif %}
+                                            <div id="coverImage">
+                                                {% book_cover book size='small' %}
+                                            </div>
                                         {% else %}
                                             <div class="text-muted">No cover selected</div>
                                         {% endif %}
@@ -1041,4 +986,14 @@
 <!-- Toast Container -->
 <div id="toast-container" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1080; max-width: 350px;"></div>
 
+<!-- Initialize Book Detail Manager -->
+<script>
+// Set book ID for JavaScript to use
+window.bookId = {{ book.id }};
+</script>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'book/js/book_detail.js' %}"></script>
 {% endblock %}
