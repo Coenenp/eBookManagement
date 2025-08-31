@@ -8,11 +8,11 @@ import logging
 from django.conf import settings
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse
+from django.db import IntegrityError
 
 from .models import (
-    Book, BookTitle, BookAuthor, BookCover, BookSeries, BookPublisher,
-    BookGenre, BookMetadata, DataSource, Author,
-    Series, Publisher, Genre
+    Author, Book, BookTitle, BookAuthor, BookCover, BookSeries, BookPublisher,
+    BookGenre, BookMetadata, DataSource, Series, Publisher, Genre
 )
 
 logger = logging.getLogger(__name__)
@@ -221,21 +221,57 @@ class MetadataProcessor:
         author_value = form_data.get('final_author', '').strip()
         if author_value:
             logger.debug(f"Creating manual author entry: {author_value}")
-            author, created = Author.objects.get_or_create(
-                name=author_value,
-                defaults={'is_reviewed': True}
-            )
-            if created:
-                logger.debug(f"Created new author: {author}")
 
-            return BookAuthor(
+            try:
+                # Try to create the author - the model's save() method handles normalization correctly now
+                author, created = Author.objects.get_or_create(
+                    name=author_value,
+                    defaults={'is_reviewed': True}
+                )
+                if created:
+                    logger.debug(f"Created new author: {author}")
+                else:
+                    logger.debug(f"Found existing author: {author}")
+            except IntegrityError as e:
+                if "UNIQUE constraint failed: books_author.name_normalized" in str(e):
+                    # Find existing author by normalized name
+                    normalized = Author.normalize_name(author_value)
+                    try:
+                        author = Author.objects.get(name_normalized=normalized)
+                        logger.debug(f"Found existing author via normalized name: {author}")
+                        created = False
+                    except Author.DoesNotExist:
+                        logger.error(f"Constraint error but couldn't find existing author: {e}")
+                        return
+                else:
+                    logger.error(f"Unexpected IntegrityError: {e}")
+                    return
+
+            # Check if BookAuthor relationship already exists
+            existing_book_author = BookAuthor.objects.filter(
                 book=book,
                 author=author,
-                source=manual_source,
-                confidence=1.0,
-                is_main_author=True,
-                is_active=True  # Ensure it's active
-            )
+                source=manual_source
+            ).first()
+
+            if existing_book_author:
+                # Update existing entry
+                existing_book_author.confidence = 1.0
+                existing_book_author.is_main_author = True
+                existing_book_author.is_active = True
+                existing_book_author.save()
+                logger.debug(f"Updated existing book author: {existing_book_author}")
+                return None  # Don't add to bulk create since we saved directly
+            else:
+                # Create new BookAuthor entry
+                return BookAuthor(
+                    book=book,
+                    author=author,
+                    source=manual_source,
+                    confidence=1.0,
+                    is_main_author=True,
+                    is_active=True  # Ensure it's active
+                )
         return None
 
     @staticmethod
@@ -325,28 +361,17 @@ class MetadataProcessor:
                 if created:
                     logger.debug(f"Created new genre: {genre}")
 
-                # Check if this book-genre-source combination already exists
-                existing_book_genre = BookGenre.objects.filter(
+                # Use the new create_or_update_best method to handle duplicates
+                book_genre = BookGenre.create_or_update_best(
                     book=book,
                     genre=genre,
-                    source=manual_source
-                ).first()
+                    source=manual_source,
+                    confidence=1.0,
+                    is_active=True
+                )
 
-                if not existing_book_genre:
-                    genre_entries.append(BookGenre(
-                        book=book,
-                        genre=genre,
-                        source=manual_source,
-                        confidence=1.0,
-                        is_active=True
-                    ))
-                    logger.debug(f"Added genre entry for: {genre_name}")
-                else:
-                    # Ensure existing entry is active
-                    if not existing_book_genre.is_active:
-                        existing_book_genre.is_active = True
-                        existing_book_genre.save()
-                        logger.debug(f"Reactivated existing genre entry: {genre_name}")
+                if book_genre:
+                    logger.debug(f"Processed genre entry for: {genre_name}")
 
         return genre_entries
 
@@ -356,37 +381,79 @@ class CoverManager:
 
     @staticmethod
     def handle_cover_upload(request, book, uploaded_file):
-        """Handle uploaded cover file."""
+        """Handle uploaded cover file and create BookCover entry."""
         try:
-            upload_dir = os.path.join(settings.MEDIA_ROOT, 'covers', str(book.id))
+            import time
+            import uuid
+
+            # Create unique filename to avoid conflicts
+            file_ext = uploaded_file.name.split('.')[-1].lower()
+            timestamp = int(time.time())
+            unique_id = str(uuid.uuid4())[:8]
+            filename = f"book_{book.id}_cover_{timestamp}_{unique_id}.{file_ext}"
+
+            upload_dir = os.path.join(settings.MEDIA_ROOT, 'cover_cache')
             os.makedirs(upload_dir, exist_ok=True)
 
             # Create relative path for storage
-            relative_path = os.path.join('covers', str(book.id), uploaded_file.name)
-            full_path = os.path.join(settings.MEDIA_ROOT, relative_path)
+            relative_path = os.path.join('cover_cache', filename).replace('\\', '/')
+            full_path = os.path.join(settings.MEDIA_ROOT, 'cover_cache', filename)
 
+            # Save file
             with open(full_path, 'wb+') as destination:
                 for chunk in uploaded_file.chunks():
                     destination.write(chunk)
 
+            # Create media URL path (ensure forward slashes for URLs)
+            cover_url = f"{settings.MEDIA_URL}{relative_path}"
+
+            # Get or create manual source
             manual_source, _ = DataSource.objects.get_or_create(
                 name=DataSource.MANUAL,
                 defaults={'trust_level': 0.9}
             )
 
-            BookCover.objects.create(
+            # Check if this exact cover already exists
+            existing_cover = BookCover.objects.filter(
                 book=book,
-                cover_path=f"{settings.MEDIA_URL}{relative_path}",  # Store with MEDIA_URL prefix
-                source=manual_source,
-                confidence=1.0,
-                format=uploaded_file.name.split('.')[-1].lower()
-            )
+                cover_path=cover_url,
+                source=manual_source
+            ).first()
 
-            return f"{settings.MEDIA_URL}{relative_path}"
+            if existing_cover:
+                # Update existing cover
+                existing_cover.confidence = 1.0
+                existing_cover.format = file_ext
+                existing_cover.is_active = True
+                existing_cover.save()
+                logger.debug(f"Updated existing cover: {existing_cover}")
+                cover_entry = existing_cover
+            else:
+                # Create new cover entry
+                cover_entry = BookCover.objects.create(
+                    book=book,
+                    cover_path=cover_url,
+                    source=manual_source,
+                    confidence=1.0,
+                    format=file_ext,
+                    is_active=True
+                )
+                logger.debug(f"Created new cover: {cover_entry}")
+
+            return {
+                'success': True,
+                'cover_path': cover_url,
+                'cover_id': cover_entry.id,
+                'filename': filename,
+                'full_path': full_path
+            }
 
         except Exception as e:
             logger.error(f"Error uploading cover for book {book.id}: {e}")
-            return None
+            return {
+                'success': False,
+                'error': str(e)
+            }
 
     @staticmethod
     def manage_cover_action(request, book_id):
@@ -434,10 +501,24 @@ class CoverManager:
                 "cover_path": book.cover_path
             })
         elif action == "remove":
-            return JsonResponse({
-                "success": False,
-                "message": "Original source covers cannot be deleted"
-            }, status=403)
+            # Check if original cover is currently selected as final cover
+            was_final_cover = book.finalmetadata.final_cover_path == book.cover_path
+
+            if was_final_cover:
+                # Find next best cover to use as fallback
+                book.finalmetadata.update_final_cover()
+                book.finalmetadata.save()
+
+                return JsonResponse({
+                    "success": True,
+                    "message": "Original cover removed from selection, switched to next best cover",
+                    "new_cover_path": book.finalmetadata.final_cover_path
+                })
+            else:
+                return JsonResponse({
+                    "success": False,
+                    "message": "Original cover is not currently selected"
+                }, status=400)
 
         return JsonResponse({"success": False, "message": "Invalid action for original cover"}, status=400)
 
@@ -455,9 +536,25 @@ class CoverManager:
         if action == "remove":
             if not cover.is_active:
                 return JsonResponse({"success": False, "message": "Cover already inactive"}, status=400)
+
+            # Check if this is the currently selected final cover
+            was_final_cover = book.finalmetadata.final_cover_path == cover.cover_path
+
             cover.is_active = False
             cover.save()
-            book.finalmetadata.update_final_cover()
+
+            # Only update final cover if we removed the currently selected one
+            if was_final_cover:
+                book.finalmetadata.update_final_cover()
+                book.finalmetadata.save()
+                logger.debug(f"Removed final cover, updated to next best: {book.finalmetadata.final_cover_path}")
+
+                return JsonResponse({
+                    "success": True,
+                    "message": "Cover deactivated, switched to next best cover",
+                    "new_cover_path": book.finalmetadata.final_cover_path
+                })
+
             return JsonResponse({"success": True, "message": "Cover deactivated"})
 
         elif action == "select":
@@ -480,7 +577,7 @@ class GenreManager:
 
     @staticmethod
     def handle_genre_updates(request, book, form):
-        """Handle genre selection and manual genre additions - FIXED VERSION."""
+        """Handle genre selection and manual genre additions - IMPROVED VERSION."""
         try:
             selected_genres = request.POST.getlist('final_genres')
             manual_genres = request.POST.get('manual_genres', '').strip()
@@ -497,31 +594,42 @@ class GenreManager:
                 defaults={'trust_level': 1.0}
             )
 
-            # Don't deactivate existing genres - just add/activate the selected ones
+            # Get all currently active genres for this book to compare
+            current_active_genres = set(
+                BookGenre.objects.filter(book=book, is_active=True)
+                                 .values_list('genre__name', flat=True)
+            )
+
+            selected_genre_names = set(selected_genres)
+
+            # Deactivate genres that are no longer selected
+            genres_to_deactivate = current_active_genres - selected_genre_names
+            if genres_to_deactivate:
+                deactivated_count = BookGenre.objects.filter(
+                    book=book,
+                    genre__name__in=genres_to_deactivate,
+                    is_active=True
+                ).update(is_active=False)
+                logger.debug(f"Deactivated {deactivated_count} genres: {list(genres_to_deactivate)}")
+
+            # Process each selected genre using the new create_or_update_best method
             for genre_name in selected_genres:
-                # Create or get genre (removed problematic 'slug' field)
+                # Create or get genre
                 genre, created = Genre.objects.get_or_create(name=genre_name)
                 if created:
                     logger.debug(f"Created new genre: {genre_name}")
 
-                # Create or update BookGenre relationship
-                book_genre, created = BookGenre.objects.get_or_create(
+                # Use the new method to handle potential duplicates intelligently
+                book_genre = BookGenre.create_or_update_best(
                     book=book,
                     genre=genre,
                     source=manual_source,
-                    defaults={
-                        'confidence': 1.0,
-                        'is_active': True
-                    }
+                    confidence=1.0,
+                    is_active=True
                 )
 
-                if not created and not book_genre.is_active:
-                    # Reactivate if it was previously deactivated
-                    book_genre.is_active = True
-                    book_genre.save()
-                    logger.debug(f"Reactivated genre: {genre_name}")
-                elif created:
-                    logger.debug(f"Created new BookGenre relationship: {genre_name}")
+                if book_genre:
+                    logger.debug(f"Processed BookGenre relationship: {genre_name}")
 
             logger.debug(f"Successfully processed {len(selected_genres)} genres for book {book.id}")
 
