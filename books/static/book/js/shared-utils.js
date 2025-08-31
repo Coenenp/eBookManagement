@@ -168,6 +168,51 @@ EbookLibrary.Ajax = {
             EbookLibrary.Notifications.show(`Request failed: ${error.message}`, 'danger');
             throw error;
         }
+    },
+
+    // Standardized AJAX patterns for common operations
+    async bookAction(bookId, action, data = {}) {
+        return this.makeRequest(`/ajax/book/${bookId}/${action}/`, {
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+    },
+
+    async updateBookStatus(bookId, statusData) {
+        return this.bookAction(bookId, 'update_status', statusData);
+    },
+
+    async updateBookMetadata(bookId, metadataData) {
+        return this.bookAction(bookId, 'update_metadata', metadataData);
+    },
+
+    async manageCover(bookId, coverData) {
+        return this.bookAction(bookId, 'manage_cover', coverData);
+    },
+
+    async uploadCover(bookId, fileData) {
+        const formData = new FormData();
+        formData.append('cover_file', fileData);
+        
+        return this.makeRequest(`/ajax/book/${bookId}/upload_cover/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': EbookLibrary.Forms.getCSRFToken()
+                // Don't set Content-Type for FormData
+            },
+            body: formData
+        });
+    },
+
+    async getMetadataConflicts(bookId) {
+        return this.bookAction(bookId, 'conflicts');
+    },
+
+    async triggerScan(scanData) {
+        return this.makeRequest('/ajax/trigger_scan/', {
+            method: 'POST',
+            body: JSON.stringify(scanData)
+        });
     }
 };
 

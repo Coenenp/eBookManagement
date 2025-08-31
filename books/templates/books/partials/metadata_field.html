@@ -1,0 +1,23 @@
+{% load badge_tags %}
+
+<!-- Reusable metadata field display with source info -->
+<div class="metadata-field-display">
+    <div class="d-flex justify-content-between align-items-center">
+        <div class="field-value">
+            {{ value|default:"Not available" }}
+        </div>
+        <div class="field-source">
+            {% if is_final %}
+                {% status_badge 'final' %}
+            {% else %}
+                {% metadata_source_badge source_name False confidence %}
+            {% endif %}
+        </div>
+    </div>
+    
+    {% if confidence %}
+        <div class="confidence-indicator mt-1">
+            {% confidence_badge confidence %}
+        </div>
+    {% endif %}
+</div>

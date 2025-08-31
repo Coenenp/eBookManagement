@@ -1,0 +1,18 @@
+{% load badge_tags %}
+
+<!-- Reusable book status badges -->
+<div class="book-status-badges" role="group" aria-label="Book status">
+    {% if book.finalmetadata.is_reviewed %}
+        {% status_badge 'reviewed' book.finalmetadata.is_reviewed %}
+    {% else %}
+        {% status_badge 'needs_review' book.needs_review %}
+    {% endif %}
+    
+    {% if book.is_placeholder %}
+        {% status_badge 'placeholder' True %}
+    {% endif %}
+    
+    {% if book.is_duplicate %}
+        {% status_badge 'duplicate' True %}
+    {% endif %}
+</div>

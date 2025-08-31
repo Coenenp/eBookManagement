@@ -1,9 +1,8 @@
 from django import forms
-from django.utils import timezone
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
-from django.core.exceptions import ValidationError
 from .models import ScanFolder, Book, FinalMetadata, BookCover, LANGUAGE_CHOICES
+from .mixins import StandardFormMixin, BaseMetadataValidator
 import os
 
 # ------------------------
@@ -23,16 +22,11 @@ class UserRegisterForm(UserCreationForm):
 # Scan Folder Form
 # ------------------------
 
-class ScanFolderForm(forms.ModelForm):
+class ScanFolderForm(StandardFormMixin, forms.ModelForm):
     class Meta:
         model = ScanFolder
         fields = ['name', 'path', 'language', 'is_active']
-        widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'path': forms.TextInput(attrs={'class': 'form-control'}),
-            'language': forms.Select(attrs={'class': 'form-control'}),
-            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        }
+        # StandardFormMixin will apply standard styling automatically
 
     def clean_path(self):
         path = self.cleaned_data['path']
@@ -47,26 +41,21 @@ class ScanFolderForm(forms.ModelForm):
 # Book Search Form
 # ------------------------
 
-class BookSearchForm(forms.Form):
+class BookSearchForm(StandardFormMixin, forms.Form):
     search_query = forms.CharField(
         max_length=100,
         required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Search books, authors, series...'
-        })
+        widget=forms.TextInput(attrs={'placeholder': 'Search books, authors, series...'})
     )
 
     language = forms.ChoiceField(
         choices=[('', 'All Languages')] + LANGUAGE_CHOICES,
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-select'})
+        required=False
     )
 
     file_format = forms.ChoiceField(
         choices=[('', 'All Formats')] + Book.FORMAT_CHOICES,
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-select'})
+        required=False
     )
 
     has_placeholder = forms.ChoiceField(
@@ -75,8 +64,7 @@ class BookSearchForm(forms.Form):
             ('', 'All Books'),
             ('false', 'Real files only'),
             ('true', 'Placeholders only'),
-        ],
-        widget=forms.Select(attrs={'class': 'form-select'})
+        ]
     )
 
     is_reviewed = forms.ChoiceField(
@@ -85,8 +73,7 @@ class BookSearchForm(forms.Form):
             ('', 'All Books'),
             ('false', 'Needs Review'),
             ('true', 'Reviewed'),
-        ],
-        widget=forms.Select(attrs={'class': 'form-select'})
+        ]
     )
 
     confidence_level = forms.ChoiceField(
@@ -96,8 +83,7 @@ class BookSearchForm(forms.Form):
             ('high', 'High (>0.8)'),
             ('medium', 'Medium (0.5-0.8)'),
             ('low', 'Low (<0.5)'),
-        ],
-        widget=forms.Select(attrs={'class': 'form-select'})
+        ]
     )
 
     has_cover = forms.ChoiceField(
@@ -106,8 +92,7 @@ class BookSearchForm(forms.Form):
             ('', 'All Books'),
             ('true', 'Has Cover'),
             ('false', 'No Cover'),
-        ],
-        widget=forms.Select(attrs={'class': 'form-select'})
+        ]
     )
 
 
@@ -116,38 +101,8 @@ class BookSearchForm(forms.Form):
 # ------------------------
 
 
-class BaseMetadataValidator:
-    @staticmethod
-    def validate_year(value, field_name="year"):
-        if value is None or (isinstance(value, str) and value.strip() == ''):
-            return None
-
-        try:
-            year = int(value) if isinstance(value, int) else int(str(value).strip())
-            current_year = timezone.now().year
-
-            if year < 1000 or year > current_year + 1:
-                raise ValidationError(f"{field_name} must be between 1000 and {current_year + 1}.")
-
-            return year
-        except (ValueError, TypeError):
-            raise ValidationError(f"{field_name} must be a valid year.")
-
-    @staticmethod
-    def validate_isbn(value):
-        if not value:
-            return ''
-
-        isbn_str = str(value).strip()
-        isbn_clean = isbn_str.replace('-', '').replace(' ', '')
-
-        if not (len(isbn_clean) == 10 or len(isbn_clean) == 13):
-            raise ValidationError("ISBN must be 10 or 13 digits long.")
-
-        if not isbn_clean.replace('X', '').replace('x', '').isdigit():
-            raise ValidationError("ISBN must contain only digits (and X for ISBN-10).")
-
-        return isbn_str
+# Remove the duplicate BaseMetadataValidator class - using the one from mixins
+# class BaseMetadataValidator: ... (removed)
 
 
 class MetadataReviewForm(forms.ModelForm):
