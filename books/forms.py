@@ -105,7 +105,7 @@ class BookSearchForm(StandardFormMixin, forms.Form):
 # class BaseMetadataValidator: ... (removed)
 
 
-class MetadataReviewForm(StandardFormMixin, forms.ModelForm):
+class MetadataReviewForm(StandardFormMixin, BaseMetadataValidator, forms.ModelForm):
     """Form for reviewing and updating final metadata with dropdown + manual entry support."""
 
     # Cover upload field
@@ -166,16 +166,12 @@ class MetadataReviewForm(StandardFormMixin, forms.ModelForm):
     def clean_final_title(self):
         """Validate that title is provided."""
         title = self.cleaned_data.get('final_title', '').strip()
-        if not title:
-            raise forms.ValidationError('Title is required.')
-        return title
+        return self.validate_required_text(title, 'Title')
 
     def clean_final_author(self):
         """Validate that author is provided."""
         author = self.cleaned_data.get('final_author', '').strip()
-        if not author:
-            raise forms.ValidationError('Author is required.')
-        return author
+        return self.validate_required_text(author, 'Author')
 
     def clean_final_series_number(self):
         value = self.cleaned_data.get('final_series_number')
@@ -190,13 +186,13 @@ class MetadataReviewForm(StandardFormMixin, forms.ModelForm):
         return value_str
 
     def clean_publication_year(self):
-        return BaseMetadataValidator.validate_year(
+        return self.validate_year(
             self.cleaned_data.get('publication_year'),
             "Publication year"
         )
 
     def clean_isbn(self):
-        return BaseMetadataValidator.validate_isbn(
+        return self.validate_isbn(
             self.cleaned_data.get('isbn')
         )
 
@@ -214,13 +210,10 @@ class MetadataReviewForm(StandardFormMixin, forms.ModelForm):
 # Book Status Update Form
 # ------------------------
 
-class BookStatusForm(forms.ModelForm):
+class BookStatusForm(StandardFormMixin, forms.ModelForm):
     class Meta:
         model = Book
         fields = ['is_duplicate']
-        widgets = {
-            'is_duplicate': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        }
 
 
 # ------------------------
@@ -315,95 +308,64 @@ class BulkUpdateForm(forms.Form):
 # Advanced Search Form
 # ------------------------
 
-class AdvancedSearchForm(forms.Form):
+class AdvancedSearchForm(StandardFormMixin, BaseMetadataValidator, forms.Form):
     title = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Title contains...'
-        })
+        widget=StandardWidgetMixin.text_with_placeholder('Title contains...')
     )
 
     author = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Author contains...'
-        })
+        widget=StandardWidgetMixin.text_with_placeholder('Author contains...')
     )
 
     series = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Series contains...'
-        })
+        widget=StandardWidgetMixin.text_with_placeholder('Series contains...')
     )
 
     isbn = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'ISBN'
-        })
+        widget=StandardWidgetMixin.text_with_placeholder('ISBN')
     )
 
     publisher = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Publisher contains...'
-        })
+        widget=StandardWidgetMixin.text_with_placeholder('Publisher contains...')
     )
 
     publication_year_from = forms.IntegerField(
         required=False,
-        widget=forms.NumberInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'From year'
-        })
+        widget=StandardWidgetMixin.text_with_placeholder('From year')
     )
 
     publication_year_to = forms.IntegerField(
         required=False,
-        widget=forms.NumberInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'To year'
-        })
+        widget=StandardWidgetMixin.text_with_placeholder('To year')
     )
 
     language = forms.ChoiceField(
         choices=[('', 'All Languages')] + LANGUAGE_CHOICES,
         required=False,
-        widget=forms.Select(attrs={'class': 'form-select'})
+        widget=StandardWidgetMixin.get_widget('select')
     )
 
     file_format = forms.ChoiceField(
         choices=[('', 'All Formats')] + Book.FORMAT_CHOICES,
         required=False,
-        widget=forms.Select(attrs={'class': 'form-select'})
+        widget=StandardWidgetMixin.get_widget('select')
     )
 
     confidence_min = forms.FloatField(
         required=False,
-        widget=forms.NumberInput(attrs={
-            'class': 'form-control',
-            'min': '0',
-            'max': '1',
-            'step': '0.1',
-            'placeholder': 'Min confidence'
-        })
+        widget=StandardWidgetMixin.number_with_range(
+            min_val=0, max_val=1, step=0.1, placeholder='Min confidence')
     )
 
     confidence_max = forms.FloatField(
         required=False,
-        widget=forms.NumberInput(attrs={
-            'class': 'form-control',
-            'min': '0',
-            'max': '1',
-            'step': '0.1',
-            'placeholder': 'Max confidence'
-        })
+        widget=StandardWidgetMixin.number_with_range(
+            min_val=0, max_val=1, step=0.1, placeholder='Max confidence')
     )
 
     def clean(self):
@@ -417,7 +379,11 @@ class AdvancedSearchForm(forms.Form):
         conf_min = cleaned_data.get('confidence_min')
         conf_max = cleaned_data.get('confidence_max')
 
-        if conf_min is not None and conf_max is not None and conf_min > conf_max:
-            raise forms.ValidationError("Minimum confidence must be less than or equal to maximum confidence.")
+        if conf_min is not None and conf_max is not None:
+            # Use inherited validation method
+            self.validate_confidence(conf_min)
+            self.validate_confidence(conf_max)
+            if conf_min > conf_max:
+                raise forms.ValidationError("Minimum confidence must be less than or equal to maximum confidence.")
 
         return cleaned_data

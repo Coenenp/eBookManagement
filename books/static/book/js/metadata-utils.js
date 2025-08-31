@@ -39,24 +39,47 @@ class MetadataAjax {
 
 /**
  * Form validation utilities specific to metadata
+ * Uses backend validation patterns for consistency
  */
 class MetadataValidators {
     static validateISBN(isbn) {
-        if (!isbn) return true;
-        
-        const cleanISBN = isbn.replace(/[-\s]/g, '');
-        if (cleanISBN.length !== 10 && cleanISBN.length !== 13) {
-            return false;
+        try {
+            // Use the shared validation pattern from the backend
+            if (!isbn) return { valid: true, value: '' };
+            
+            const cleanISBN = isbn.replace(/[-\s]/g, '');
+            if (cleanISBN.length !== 10 && cleanISBN.length !== 13) {
+                return { valid: false, error: 'ISBN must be 10 or 13 digits long.' };
+            }
+            
+            if (!/^(\d{10}|\d{13}|[\dX]{10})$/i.test(cleanISBN)) {
+                return { valid: false, error: 'ISBN must contain only digits (and X for ISBN-10).' };
+            }
+            
+            return { valid: true, value: isbn.trim() };
+        } catch (error) {
+            return { valid: false, error: 'Invalid ISBN format.' };
         }
-        return /^(\d{10}|\d{13}|[\dX]{10})$/i.test(cleanISBN);
     }
 
     static validateYear(year) {
-        if (!year) return true;
-        
-        const yearInt = parseInt(year);
-        const currentYear = new Date().getFullYear();
-        return yearInt >= 1000 && yearInt <= currentYear + 5;
+        try {
+            if (!year) return { valid: true, value: null };
+            
+            const yearInt = parseInt(year);
+            const currentYear = new Date().getFullYear();
+            
+            if (yearInt < 1000 || yearInt > currentYear + 1) {
+                return { 
+                    valid: false, 
+                    error: `Year must be between 1000 and ${currentYear + 1}.` 
+                };
+            }
+            
+            return { valid: true, value: yearInt };
+        } catch (error) {
+            return { valid: false, error: 'Year must be a valid number.' };
+        }
     }
 
     static sanitizeText(text) {
