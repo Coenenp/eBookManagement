@@ -48,6 +48,7 @@ urlpatterns = [
     path('ajax/book/<int:book_id>/update_status/', views.ajax_update_book_status, name='ajax_update_book_status'),
     path('ajax/book/<int:book_id>/conflicts/', views.ajax_get_metadata_conflicts, name='ajax_get_metadata_conflicts'),
     path('ajax/book/<int:book_id>/remove_metadata/', views.ajax_get_metadata_remove, name='ajax_get_metadata_remove'),
+    path('ajax/book/<int:book_id>/upload_cover/', views.ajax_upload_cover, name='ajax_upload_cover'),
     path('ajax/book/<int:book_id>/manage_cover/', views.ajax_manage_cover, name='ajax_manage_cover'),
 ]
 
