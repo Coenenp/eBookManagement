@@ -10,6 +10,7 @@ from django.db.models import Q, Count, Avg
 from django.db import transaction
 from django.views.decorators.http import require_http_methods, require_POST
 from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
 from functools import wraps
 from .models import (
     Book, ScanFolder, BookTitle, BookAuthor, Author, BookSeries, Series, BookCover, BookPublisher, Publisher,
@@ -551,16 +552,19 @@ class BookDetailView(LoginRequiredMixin, DetailView):
                     if 'new_cover_upload' in request.FILES:
                         uploaded_path = CoverManager.handle_cover_upload(request, book, request.FILES['new_cover_upload'])
                         if uploaded_path:
-                            final_metadata.final_cover_path = uploaded_path
+                            logger.debug(f"Cover uploaded successfully: {uploaded_path}")
 
                     # Handle genre updates
                     GenreManager.handle_genre_updates(request, book, form)
 
+                    # Set manual update flag to prevent auto-override of user choices
+                    final_metadata._manual_update = True
+
                     # Save final metadata
                     final_metadata.save()
 
-                    # Update final values based on newly created entries
-                    final_metadata.update_final_values()  # If you have this method
+                    # Update final values to ensure latest data is selected
+                    final_metadata.update_final_values()
 
                 messages.success(request, "Final metadata updated successfully!")
 
@@ -703,6 +707,9 @@ class BookMetadataUpdateView(LoginRequiredMixin, View):
                 updated_fields.append('reviewed status')
 
             final_metadata.updated_at = timezone.now()
+
+            # Save with flag to prevent auto-update since we've made manual changes
+            final_metadata._manual_update = True
             final_metadata.save()
 
             if updated_fields:
@@ -882,20 +889,25 @@ class BookMetadataUpdateView(LoginRequiredMixin, View):
             )
 
     def _process_cover_field(self, request, final_metadata, book):
-        """Process cover selection and upload - FIXED for display issues"""
+        """Process cover selection and upload - ENHANCED for immediate upload."""
         updated_fields = []
         final_cover_path = request.POST.get('final_cover_path', '').strip()
         cover_upload = request.FILES.get('cover_upload')
 
         if final_cover_path == 'custom_upload' and cover_upload:
-            # Use CoverManager for upload - this now returns the correct URL
-            cover_path = CoverManager.handle_cover_upload(request, book, cover_upload)
-            if cover_path:
-                final_metadata.final_cover_path = cover_path
+            # Handle traditional form upload
+            result = CoverManager.handle_cover_upload(request, book, cover_upload)
+            if result['success']:
+                final_metadata.final_cover_path = result['cover_path']
                 updated_fields.append('cover (uploaded)')
         elif final_cover_path and final_cover_path != 'custom_upload':
+            # Handle selection of existing cover
             final_metadata.final_cover_path = final_cover_path
             updated_fields.append('cover')
+        elif final_cover_path.startswith(settings.MEDIA_URL):
+            # Handle AJAX uploaded cover (already processed)
+            final_metadata.final_cover_path = final_cover_path
+            updated_fields.append('cover (pre-uploaded)')
 
         return updated_fields
 
@@ -1447,6 +1459,58 @@ def ajax_trigger_scan(request):
     scan_status.save()
 
     return {'success': True, 'message': message}
+
+
+@ajax_response_handler
+@require_POST
+def ajax_upload_cover(request, book_id):
+    """AJAX endpoint for immediate cover upload and preview."""
+    try:
+        book = Book.objects.get(pk=book_id)
+
+        if 'cover_file' not in request.FILES:
+            return JsonResponse({
+                'success': False,
+                'error': 'No file provided'
+            }, status=400)
+
+        uploaded_file = request.FILES['cover_file']
+
+        # Validate file
+        if not uploaded_file.content_type.startswith('image/'):
+            return JsonResponse({
+                'success': False,
+                'error': 'File must be an image'
+            }, status=400)
+
+        # Upload and create cover entry
+        result = CoverManager.handle_cover_upload(request, book, uploaded_file)
+
+        if result['success']:
+            return JsonResponse({
+                'success': True,
+                'cover_path': result['cover_path'],
+                'cover_id': result['cover_id'],
+                'filename': result['filename'],
+                'message': 'Cover uploaded successfully'
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': result['error']
+            }, status=500)
+
+    except Book.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Book not found'
+        }, status=404)
+    except Exception as e:
+        logger.error(f"Error in ajax_upload_cover for book {book_id}: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
 
 
 @ajax_response_handler
