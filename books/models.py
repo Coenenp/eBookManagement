@@ -146,8 +146,6 @@ class Author(models.Model):
     is_reviewed = models.BooleanField(default=False, help_text="Mark authors you've verified or finalized")
 
     def save(self, *args, **kwargs):
-        self.name_normalized = self.normalize_name(f"{self.first_name} {self.last_name}")
-
         # Only extract if first and last aren't already set
         if not (self.first_name and self.last_name):
             name_clean = self.name.strip()
@@ -184,6 +182,9 @@ class Author(models.Model):
 
                 self.first_name = " ".join(first).strip()
                 self.last_name = " ".join(last).strip()
+
+        # Now normalize the name after we have proper first_name and last_name
+        self.name_normalized = self.normalize_name(f"{self.first_name} {self.last_name}")
 
         super().save(*args, **kwargs)
 
@@ -360,8 +361,75 @@ class BookGenre(models.Model):
     is_active = models.BooleanField(default=True, help_text="Uncheck to hide this without deleting it.")
     created_at = models.DateTimeField(auto_now_add=True)
 
+    @classmethod
+    def create_or_update_best(cls, book, genre, source, confidence=1.0, is_active=True):
+        """
+        Create or update BookGenre with best source and confidence.
+        If a BookGenre for this book+genre already exists, compare sources and confidence.
+        Keep the entry with the highest trust level + confidence combination.
+        """
+        from django.db import transaction
+
+        with transaction.atomic():
+            # Check if any BookGenre exists for this book+genre combination
+            existing_entries = cls.objects.filter(book=book, genre=genre)
+
+            if not existing_entries.exists():
+                # No existing entry, create new one
+                return cls.objects.create(
+                    book=book,
+                    genre=genre,
+                    source=source,
+                    confidence=confidence,
+                    is_active=is_active
+                )
+
+            # Calculate combined score for new entry
+            new_score = source.trust_level * confidence
+
+            # Find best existing entry
+            best_existing = None
+            best_existing_score = 0
+
+            for entry in existing_entries:
+                existing_score = entry.source.trust_level * entry.confidence
+                if existing_score > best_existing_score:
+                    best_existing = entry
+                    best_existing_score = existing_score
+
+            # Compare scores
+            if new_score > best_existing_score:
+                # New entry is better, update the best existing one
+                best_existing.source = source
+                best_existing.confidence = confidence
+                best_existing.is_active = is_active
+                best_existing.save()
+
+                # Deactivate other entries for the same book+genre
+                existing_entries.exclude(id=best_existing.id).update(is_active=False)
+
+                logger.debug(f"Updated BookGenre {best_existing.id} for book {book.id}, genre '{genre.name}' "
+                             f"with better source '{source.name}' (score: {new_score:.3f} vs {best_existing_score:.3f})")
+                return best_existing
+            else:
+                # Existing entry is better or equal, just ensure it's active
+                if not best_existing.is_active:
+                    best_existing.is_active = True
+                    best_existing.save()
+
+                logger.debug(f"Kept existing BookGenre {best_existing.id} for book {book.id}, genre '{genre.name}' "
+                             f"(existing score: {best_existing_score:.3f} vs new: {new_score:.3f})")
+                return best_existing
+
     class Meta:
         unique_together = ['book', 'genre', 'source']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['book', 'genre'],
+                condition=models.Q(is_active=True),
+                name='unique_active_book_genre'
+            )
+        ]
 
 
 class Publisher(models.Model):
@@ -573,6 +641,11 @@ class FinalMetadata(models.Model):
         self.update_final_cover()
         self.update_final_publisher()
 
+        # Update dynamic fields (publication_year, description, isbn, language)
+        dynamic_fields = ['publication_year', 'description', 'isbn', 'language']
+        for field_name in dynamic_fields:
+            self.update_dynamic_field(field_name)
+
         self.calculate_overall_confidence()
         self.calculate_completeness_score()
 
@@ -580,14 +653,20 @@ class FinalMetadata(models.Model):
             f"Updated values for book {self.book.id}: "
             f"title='{self.final_title}', author='{self.final_author}', "
             f"series='{self.final_series}', cover='{self.final_cover_path}', "
-            f"publisher='{self.final_publisher}', confidence={self.overall_confidence:.2f}, "
+            f"publisher='{self.final_publisher}', year='{self.publication_year}', "
+            f"isbn='{self.isbn}', confidence={self.overall_confidence:.2f}, "
             f"completeness={self.completeness_score:.2f}"
         )
 
     def save(self, *args, **kwargs):
-        if not self.is_reviewed:
+        # Check if this is a manual update (set by views when user makes manual changes)
+        manual_update = getattr(self, '_manual_update', False)
+
+        if not self.is_reviewed and not manual_update:
             logger.debug(f"Auto-updating metadata before saving book {self.book.id}")
             self.update_final_values()
+        elif manual_update:
+            logger.debug(f"Skipping auto-update for book {self.book.id} due to manual changes")
 
         if self.language:
             self.language = normalize_language(self.language)
