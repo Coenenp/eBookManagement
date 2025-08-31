@@ -317,11 +317,12 @@ def _process_open_library_metadata(book, source, result, confidence):
 
     for subject in result.get("subjects", [])[:5]:
         genre_obj, _ = Genre.objects.get_or_create(name=subject.strip().title())
-        BookGenre.objects.get_or_create(
+        BookGenre.create_or_update_best(
             book=book,
             genre=genre_obj,
             source=source,
-            defaults={"confidence": confidence}
+            confidence=confidence,
+            is_active=True
         )
 
     if result.get("language"):
@@ -415,11 +416,12 @@ def _process_google_books_metadata(book, source, result, confidence):
 
     for category in result.get("categories", [])[:5]:
         genre_obj, _ = Genre.objects.get_or_create(name=category.strip().title())
-        BookGenre.objects.get_or_create(
+        BookGenre.create_or_update_best(
             book=book,
             genre=genre_obj,
             source=source,
-            defaults={"confidence": confidence}
+            confidence=confidence,
+            is_active=True
         )
 
     for identifier in result.get("industryIdentifiers", []):
@@ -450,11 +452,12 @@ def _process_goodreads_metadata(book, source, result, confidence):
     if result.get("genres"):
         for genre in result["genres"][:5]:
             genre_obj, _ = Genre.objects.get_or_create(name=genre.strip().title())
-            BookGenre.objects.get_or_create(
+            BookGenre.create_or_update_best(
                 book=book,
                 genre=genre_obj,
                 source=source,
-                defaults={"confidence": confidence}
+                confidence=confidence,
+                is_active=True
             )
 
     if result.get("language"):
