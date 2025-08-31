@@ -105,26 +105,20 @@ class BookSearchForm(StandardFormMixin, forms.Form):
 # class BaseMetadataValidator: ... (removed)
 
 
-class MetadataReviewForm(forms.ModelForm):
+class MetadataReviewForm(StandardFormMixin, forms.ModelForm):
     """Form for reviewing and updating final metadata with dropdown + manual entry support."""
 
     # Cover upload field
     new_cover_upload = forms.ImageField(
         required=False,
-        widget=forms.ClearableFileInput(attrs={
-            'class': 'form-control',
-            'accept': 'image/*'
-        }),
+        widget=StandardWidgetMixin.get_widget('image_input'),
         label="Upload New Cover"
     )
 
     # Manual entry fields for additional genres
     manual_genres = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Enter additional genres...'
-        }),
+        widget=StandardWidgetMixin.text_with_placeholder('Enter additional genres...'),
         label="Add Custom Genres (comma-separated)"
     )
 
@@ -145,49 +139,21 @@ class MetadataReviewForm(forms.ModelForm):
         ]
 
         widgets = {
-            'final_title': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter title',
-                'required': True
-            }),
-            'final_author': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter author',
-                'required': True
-            }),
-            'final_series': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter series name'
-            }),
-            'final_series_number': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter series number',
-                'pattern': '[0-9]*',
-                'title': 'Please enter numbers only'
-            }),
-            'final_publisher': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter publisher'
-            }),
-            'final_cover_path': forms.HiddenInput(),
-            'language': forms.Select(attrs={'class': 'form-select'}),
-            'isbn': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter ISBN'
-            }),
-            'publication_year': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter publication year',
-                'min': '1000',
-                'max': '2030',
-                'title': 'Enter a 4-digit year'
-            }),
-            'description': forms.Textarea(attrs={
-                'class': 'form-control',
-                'rows': 5,
-                'placeholder': 'Enter description'
-            }),
-            'is_reviewed': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'final_title': StandardWidgetMixin.text_required_with_placeholder('Enter title'),
+            'final_author': StandardWidgetMixin.text_required_with_placeholder('Enter author'),
+            'final_series': StandardWidgetMixin.text_with_placeholder('Enter series name'),
+            'final_series_number': StandardWidgetMixin.get_widget('text_input', 
+                placeholder='Enter series number', pattern='[0-9]*', 
+                title='Please enter numbers only'),
+            'final_publisher': StandardWidgetMixin.text_with_placeholder('Enter publisher'),
+            'final_cover_path': StandardWidgetMixin.get_widget('hidden'),
+            'language': StandardWidgetMixin.get_widget('select'),
+            'isbn': StandardWidgetMixin.text_with_placeholder('Enter ISBN'),
+            'publication_year': StandardWidgetMixin.number_with_range(
+                min_val=1000, max_val=2030, placeholder='Enter publication year'),
+            'description': StandardWidgetMixin.get_widget('textarea', 
+                placeholder='Enter description'),
+            'is_reviewed': StandardWidgetMixin.get_widget('checkbox'),
         }
 
     def __init__(self, *args, **kwargs):
@@ -261,7 +227,7 @@ class BookStatusForm(forms.ModelForm):
 # Book Edit Form
 # ------------------------
 
-class BookEditForm(forms.ModelForm):
+class BookEditForm(StandardFormMixin, forms.ModelForm):
     class Meta:
         model = Book
         fields = [
@@ -272,17 +238,11 @@ class BookEditForm(forms.ModelForm):
             'is_duplicate',
         ]
         widgets = {
-            'file_format': forms.Select(attrs={'class': 'form-select'}),
-            'cover_path': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Path to cover image'
-            }),
-            'opf_path': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Path to .opf metadata file'
-            }),
-            'is_placeholder': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'is_duplicate': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'file_format': StandardWidgetMixin.get_widget('select'),
+            'cover_path': StandardWidgetMixin.text_with_placeholder('Path to cover image'),
+            'opf_path': StandardWidgetMixin.text_with_placeholder('Path to .opf metadata file'),
+            'is_placeholder': StandardWidgetMixin.get_widget('checkbox'),
+            'is_duplicate': StandardWidgetMixin.get_widget('checkbox'),
         }
 
 
@@ -290,7 +250,7 @@ class BookEditForm(forms.ModelForm):
 # Book Cover Form
 # ------------------------
 
-class BookCoverForm(forms.ModelForm):
+class BookCoverForm(StandardFormMixin, forms.ModelForm):
     class Meta:
         model = BookCover
         fields = [
@@ -301,28 +261,12 @@ class BookCoverForm(forms.ModelForm):
             'format',
         ]
         widgets = {
-            'cover_path': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Path to cover image or URL'
-            }),
-            'confidence': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '0',
-                'max': '1',
-                'step': '0.1'
-            }),
-            'width': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Width in pixels'
-            }),
-            'height': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Height in pixels'
-            }),
-            'format': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'jpg, png, gif, etc.'
-            }),
+            'cover_path': StandardWidgetMixin.text_with_placeholder('Path to cover image or URL'),
+            'confidence': StandardWidgetMixin.number_with_range(
+                min_val=0, max_val=1, step=0.1, placeholder='Confidence score'),
+            'width': StandardWidgetMixin.text_with_placeholder('Width in pixels'),
+            'height': StandardWidgetMixin.text_with_placeholder('Height in pixels'),
+            'format': StandardWidgetMixin.text_with_placeholder('jpg, png, gif, etc.'),
         }
 
 

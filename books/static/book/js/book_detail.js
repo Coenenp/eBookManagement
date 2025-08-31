@@ -221,7 +221,7 @@ class MetadataTabManager {
         const response = await fetch(url, {
             method: 'POST',
             headers: {
-                'X-CSRFToken': Utils.getCookie('csrftoken'),
+                'X-CSRFToken': Utils.getCSRFToken(),
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(data),
@@ -320,7 +320,7 @@ class CoversTabManager {
         const response = await fetch(`/ajax/book/${this.bookId}/manage_cover/`, {
             method: 'POST',
             headers: {
-                'X-CSRFToken': Utils.getCookie('csrftoken'),
+                'X-CSRFToken': Utils.getCSRFToken(),
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
@@ -571,19 +571,36 @@ class EditFormManager {
 
     updateCoverPreview(src, isUpload = false) {
         const coverPreview = document.getElementById('coverPreview');
-        const coverImage = document.getElementById('coverImage');
         
-        if (!coverPreview) return;
+        if (!coverPreview) {
+            console.warn('Cover preview element not found');
+            return;
+        }
         
         if (src && src.trim() !== '') {
+            let coverImage = document.getElementById('coverImage');
             if (coverImage) {
                 coverImage.src = src;
                 coverImage.style.display = 'block';
             } else {
-                coverPreview.innerHTML = `<img src="${src}" alt="Cover preview" class="img-thumbnail" id="coverImage" style="max-width: 150px; max-height: 200px;">`;
+                const img = document.createElement('img');
+                img.src = src;
+                img.alt = 'Cover preview';
+                img.className = 'img-thumbnail';
+                img.id = 'coverImage';
+                img.style.maxWidth = '150px';
+                img.style.maxHeight = '200px';
+                
+                coverPreview.innerHTML = '';
+                coverPreview.appendChild(img);
             }
         } else {
-            coverPreview.innerHTML = '<div class="text-muted">No cover selected</div>';
+            const placeholder = document.createElement('div');
+            placeholder.className = 'text-muted';
+            placeholder.textContent = 'No cover selected';
+            
+            coverPreview.innerHTML = '';
+            coverPreview.appendChild(placeholder);
         }
     }
 
@@ -817,6 +834,11 @@ class Utils {
         return decodeURIComponent(cookieValue || '');
     }
 
+    static getCSRFToken() {
+        // Use shared utility method
+        return EbookLibrary.Forms.getCSRFToken() || this.getCookie('csrftoken');
+    }
+
     static showToast(message, type = 'info') {
         const container = document.getElementById('toast-container');
         if (!container) {
@@ -856,10 +878,22 @@ class Utils {
     static showValidationError(message) {
         const alert = document.createElement('div');
         alert.className = 'alert alert-danger alert-dismissible fade show';
-        alert.innerHTML = `
-            <strong>Validation Error:</strong> ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
+        
+        // Create elements safely
+        const strongElement = document.createElement('strong');
+        strongElement.textContent = 'Validation Error: ';
+        
+        const messageText = document.createTextNode(message);
+        
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'btn-close';
+        closeButton.setAttribute('data-bs-dismiss', 'alert');
+        closeButton.setAttribute('aria-label', 'Close');
+        
+        alert.appendChild(strongElement);
+        alert.appendChild(messageText);
+        alert.appendChild(closeButton);
         
         const form = document.getElementById('metadataUpdateForm');
         if (form) {

@@ -118,10 +118,17 @@ EbookLibrary.Notifications = {
     show(message, type = 'info', duration = 5000) {
         const notification = document.createElement('div');
         notification.className = `alert alert-${type} alert-dismissible fade show`;
-        notification.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
+        
+        // Create message text safely
+        const messageText = document.createTextNode(message);
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'btn-close';
+        closeButton.setAttribute('data-bs-dismiss', 'alert');
+        closeButton.setAttribute('aria-label', 'Close');
+        
+        notification.appendChild(messageText);
+        notification.appendChild(closeButton);
         
         let container = document.querySelector('.notification-container');
         if (!container) {

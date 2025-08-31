@@ -1,42 +1,31 @@
-<nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom shadow-sm">
+<!-- User Authentication Header -->
+<div class="bg-light py-2 border-bottom">
     <div class="container">
-        <a class="navbar-brand fw-bold text-primary" href="{% url 'books:dashboard' %}">
-            <i class="fas fa-book me-1"></i>eBook Library
-        </a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
-                data-bs-target="#navbarNav" aria-controls="navbarNav"
-                aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-
-        <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
-            <ul class="navbar-nav align-items-center">
+        <div class="row align-items-center">
+            <div class="col">
+                <a class="navbar-brand fw-bold text-primary" href="{% url 'books:dashboard' %}">
+                    <i class="fas fa-book me-1"></i>eBook Library
+                </a>
+            </div>
+            <div class="col-auto">
                 {% if user.is_authenticated %}
-                    <li class="nav-item me-3">
-                        <span class="navbar-text text-muted small">
-                            Logged in as <strong>{{ user.username }}</strong>
-                        </span>
-                    </li>
-                    <li class="nav-item">
-                        <form action="{% url 'books:logout' %}" method="post" class="d-inline">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-outline-danger btn-sm">Sign out</button>
-                        </form>
-                    </li>
+                    <span class="text-muted small me-3">
+                        Logged in as <strong>{{ user.username }}</strong>
+                    </span>
+                    <form action="{% url 'books:logout' %}" method="post" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline-danger btn-sm">Sign out</button>
+                    </form>
                 {% else %}
-                    <li class="nav-item me-2">
-                        <a class="btn btn-outline-primary btn-sm" href="{% url 'books:login' %}">Sign in</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="btn btn-outline-success btn-sm" href="{% url 'books:signup' %}">Sign up</a>
-                    </li>
+                    <a class="btn btn-outline-primary btn-sm me-2" href="{% url 'books:login' %}">Sign in</a>
+                    <a class="btn btn-outline-success btn-sm" href="{% url 'books:signup' %}">Sign up</a>
                 {% endif %}
-            </ul>
+            </div>
         </div>
     </div>
-</nav>
+</div>
 
-<!-- Sidebar Navigation (Modern and Clean) -->
+<!-- Main Navigation with integrated sidebar functionality -->
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
     <div class="container">
         <div class="collapse navbar-collapse" id="navbarNav">
