@@ -50,62 +50,187 @@ legend {
    📚 Book Covers
 ========================================= */
 
+/* Cover containers with enforced 3:2 aspect ratio */
+.cover-container {
+    position: relative;
+    background-color: #f8f9fa;
+    overflow: hidden;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: block;
+    border: none;
+    outline: none;
+    max-width: 100%;
+}
+
+/* Ensure images and placeholders work with padding-bottom technique */
+.cover-container.cover-large .cover-image,
+.cover-container.cover-large .cover-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* Size-specific containers with fixed 3:2 aspect ratio */
+.cover-container.cover-tiny {
+    width: 50px;
+    height: calc(50px * 1.5); /* 75px - enforced 3:2 ratio */
+    position: relative; /* Added for absolute positioned images */
+}
+
+.cover-container.cover-small {
+    width: 120px;
+    height: calc(120px * 1.5); /* 180px - enforced 3:2 ratio */
+    position: relative; /* Added for absolute positioned images */
+}
+
+.cover-container.cover-medium {
+    width: 150px;
+    height: calc(150px * 1.5); /* 225px - enforced 3:2 ratio */
+    position: relative; /* Added for absolute positioned images */
+}
+
+.cover-container.cover-large {
+    width: 100%;
+    max-width: 200px;
+    height: 0;
+    padding-bottom: 66.67%; /* 2/3 * 100% = 66.67% for 3:2 aspect ratio */
+    margin: 0 auto;
+    position: relative;
+}
+
+/* Responsive adjustments for large covers */
+@media (max-width: 768px) {
+    .cover-container.cover-large {
+        max-width: 160px;
+    }
+}
+
+@media (max-width: 576px) {
+    .cover-container.cover-large {
+        max-width: 120px;
+    }
+}
+
+/* Image styling within containers */
 .cover-image {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
-    height: auto;
+    height: 100%;
     object-fit: cover;
-    border-radius: 0.375rem;
+    display: block;
+    border: none;
+    outline: none;
 }
 
-/* ADD: Cover container for consistent sizing */
-.cover-container {
-    position: relative;
-    aspect-ratio: 2/3; /* Standard book cover ratio */
-    background-color: #f8f9fa;
-    overflow: hidden;
-    border-radius: 0.375rem 0.375rem 0 0;
-}
-
-.cover-tiny {
-    width: 50px;
-    height: 75px;
-    object-fit: cover;
-    font-size: 0.6rem;
-}
-
-.cover-small {
-    width: 120px;
-    height: 160px;
-    aspect-ratio: 3/4;
-    object-fit: cover;
-    font-size: 0.6rem;
-}
-
-.cover-medium {
-    width: 150px;
-    height: 200px;
-    object-fit: cover;
-}
-
-.cover-large {
-    width: 100%;
-    max-height: 300px;
-    object-fit: cover;
-}
-
+/* Placeholder styling */
 .cover-placeholder {
     display: flex;
     align-items: center;
     justify-content: center;
     text-align: center;
-    aspect-ratio: 3/4;
+    background-color: #6c757d;
+    color: white;
+    width: 100%;
+    height: 100%;
+    border: none;
+    outline: none;
 }
 
 .cover-wrapper {
   position: relative;
+}
+
+/* Center cover wrapper content */
+.cover-wrapper {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    width: 100%;
+}
+/* Center the card body content for cover selection cards only */
+.card.cover-card .card-body {
+    text-align: center;
+}
+
+/* Center form check elements only in cover selection cards */
+.card.cover-card .card-body .form-check,
+.cover-section .card .card-body .form-check {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+/* Center form check label content only in cover selection cards */
+.card.cover-card .card-body .form-check-label,
+.cover-section .card .card-body .form-check-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    margin-left: 0;
+}
+
+/* Center badges within labels only in cover selection cards */
+.card.cover-card .card-body .form-check-label > div,
+.cover-section .card .card-body .form-check-label > div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* Style badge containers to center content only in cover selection cards */
+.card.cover-card .card-body .form-check-label > div:last-child,
+.cover-section .card .card-body .form-check-label > div:last-child {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+}
+
+/* Ensure covers center properly in cards */
+.card .cover-container {
+    margin: 15px auto;
+    display: block;
+}
+
+/* Specific styling for metadata page covers */
+.card .cover-container.cover-large {
+    margin: 15px auto;
+    flex-shrink: 0; /* Prevent shrinking */
+}
+
+/* Ensure medium covers maintain aspect ratio in cards */
+.card .cover-wrapper.cover-medium {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+.card .cover-wrapper.cover-medium .cover-container {
+    flex-shrink: 0;
+    margin: 15px auto;
+}
+
+/* Center cover wrapper content */
+.cover-wrapper {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    width: 100%;
 }
 
 .cover-img {
@@ -123,7 +248,7 @@ legend {
     padding: 0.2rem 0.4rem;
 }
 
-img[loading="lazy"] {
+img[loading="lazy"]:not([src^="data:"]) {
     opacity: 0;
     transition: opacity 0.3s ease;
 }
