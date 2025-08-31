@@ -151,9 +151,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             overall_confidence__lt=0.5
         ).select_related('book')[:10]
 
-        # Books needing review
+        # Books needing review (include books without FinalMetadata)
         context['needs_review_books'] = Book.objects.filter(
-            finalmetadata__is_reviewed=False
+            Q(finalmetadata__is_reviewed=False) | Q(finalmetadata__isnull=True)
         ).select_related('finalmetadata').prefetch_related(
             'titles__source',
             'bookauthor__author',
@@ -204,10 +204,11 @@ class BookListView(LoginRequiredMixin, ListView):
     def _apply_review_type_filter(self, queryset):
         review_type = self.request.GET.get('review_type', '')
         filter_map = {
-            'needs_review': Q(finalmetadata__is_reviewed=False) | Q(finalmetadata__is_reviewed__isnull=True),
+            # Handle books without FinalMetadata (during scanning) and those needing review
+            'needs_review': Q(finalmetadata__is_reviewed=False) | Q(finalmetadata__is_reviewed__isnull=True) | Q(finalmetadata__isnull=True),
             'low_confidence': Q(finalmetadata__overall_confidence__lt=0.5),
             'incomplete': Q(finalmetadata__completeness_score__lt=0.5),
-            'missing_cover': Q(finalmetadata__has_cover=False),
+            'missing_cover': Q(finalmetadata__has_cover=False) | Q(finalmetadata__isnull=True),
             'duplicates': Q(is_duplicate=True),
             'placeholders': Q(is_placeholder=True),
             'corrupted': Q(is_corrupted=True),
@@ -220,6 +221,7 @@ class BookListView(LoginRequiredMixin, ListView):
         GET = self.request.GET
 
         if search := GET.get('search_query'):
+            # Include books without FinalMetadata by searching their basic fields and file_path
             queryset = queryset.filter(
                 Q(titles__title__icontains=search) |
                 Q(bookauthor__author__name__icontains=search) |
@@ -251,7 +253,8 @@ class BookListView(LoginRequiredMixin, ListView):
             filter_conditions['has_placeholder'] = has_placeholder
 
         needs_review = {
-            'true': Q(finalmetadata__is_reviewed=False) | Q(finalmetadata__is_reviewed__isnull=True),
+            # Include books without FinalMetadata (they definitely need review)
+            'true': Q(finalmetadata__is_reviewed=False) | Q(finalmetadata__is_reviewed__isnull=True) | Q(finalmetadata__isnull=True),
             'false': Q(finalmetadata__is_reviewed=True)
         }.get(GET.get('needs_review'))
 

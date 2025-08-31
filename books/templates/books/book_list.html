@@ -221,8 +221,8 @@
                         <!-- Title -->
                         <h6 class="card-title mb-2">
                             <a href="{% url 'books:book_detail' book.pk %}" class="text-decoration-none text-dark">
-                                {% if book.finalmetadata.final_title %}
-                                    {{ book.finalmetadata.final_title|truncatechars:50 }}
+                                {% if book.final_metadata and book.final_metadata.final_title %}
+                                    {{ book.final_metadata.final_title|truncatechars:50 }}
                                 {% elif book.titles.first %}
                                     {{ book.titles.first.title|truncatechars:50 }}
                                 {% else %}
@@ -234,8 +234,8 @@
                         <!-- Author -->
                         <p class="text-muted mb-2">
                             <i class="fas fa-user me-1"></i>
-                            {% if book.finalmetadata.final_author %}
-                                {{ book.finalmetadata.final_author|truncatechars:30 }}
+                            {% if book.final_metadata and book.final_metadata.final_author %}
+                                {{ book.final_metadata.final_author|truncatechars:30 }}
                             {% elif book.bookauthor.first %}
                                 {{ book.bookauthor.first.author.name|truncatechars:30 }}
                             {% else %}
@@ -244,12 +244,12 @@
                         </p>
 
                         <!-- Series -->
-                        {% if book.finalmetadata.final_series %}
+                        {% if book.final_metadata and book.final_metadata.final_series %}
                         <p class="text-muted small mb-2">
                             <i class="fas fa-list me-1"></i>
-                            {{ book.finalmetadata.final_series|truncatechars:25 }}
-                            {% if book.finalmetadata.final_series_number %}
-                            <span class="badge bg-secondary">#{{ book.finalmetadata.final_series_number }}</span>
+                            {{ book.final_metadata.final_series|truncatechars:25 }}
+                            {% if book.final_metadata.final_series_number %}
+                            <span class="badge bg-secondary">#{{ book.final_metadata.final_series_number }}</span>
                             {% endif %}
                         </p>
                         {% endif %}
@@ -263,10 +263,10 @@
                                 </span>
                                 <span>{{ book.file_size|filesizeformat|default:"Unknown" }}</span>
                             </div>
-                            {% if book.finalmetadata.language %}
+                            {% if book.final_metadata and book.final_metadata.language %}
                             <div class="mt-1">
                                 <i class="fas fa-language me-1"></i>
-                                {{ book.finalmetadata.language }}
+                                {{ book.final_metadata.language }}
                             </div>
                             {% endif %}
                             {% if book.scan_folder %}
@@ -278,26 +278,38 @@
                         </div>
 
                         <!-- Quality Scores -->
-                        {% if book.finalmetadata %}
+                        {% if book.final_metadata %}
                         <div class="mb-3">
                             <div class="d-flex justify-content-between small">
                                 <span>Confidence:</span>
-                                <span class="badge {% if book.finalmetadata.overall_confidence >= 0.8 %}bg-success{% elif book.finalmetadata.overall_confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
-                                    {{ book.finalmetadata.overall_confidence|mul:100|floatformat:0 }}%
+                                <span class="badge {% if book.final_metadata.overall_confidence >= 0.8 %}bg-success{% elif book.final_metadata.overall_confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
+                                    {{ book.final_metadata.overall_confidence|mul:100|floatformat:0 }}%
                                 </span>
                             </div>
                             <div class="d-flex justify-content-between small mt-1">
                                 <span>Completeness:</span>
-                                <span class="badge {% if book.finalmetadata.completeness_score >= 0.8 %}bg-success{% elif book.finalmetadata.completeness_score >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
-                                    {{ book.finalmetadata.completeness_score|mul:100|floatformat:0 }}%
+                                <span class="badge {% if book.final_metadata.completeness_score >= 0.8 %}bg-success{% elif book.final_metadata.completeness_score >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
+                                    {{ book.final_metadata.completeness_score|mul:100|floatformat:0 }}%
                                 </span>
+                            </div>
+                        </div>
+                        {% else %}
+                        <!-- Show processing indicator for books without final metadata -->
+                        <div class="mb-3">
+                            <div class="alert alert-info py-2 small mb-0">
+                                <i class="fas fa-spinner fa-spin me-1"></i>
+                                Processing metadata...
                             </div>
                         </div>
                         {% endif %}
 
                         <!-- Status Badges -->
                         <div class="mb-3">
-                            {% if book.needs_review %}
+                            {% if not book.final_metadata %}
+                            <span class="badge bg-secondary me-1">
+                                <i class="fas fa-cog me-1"></i>Processing
+                            </span>
+                            {% elif book.needs_review %}
                             <span class="badge bg-warning text-dark me-1">
                                 <i class="fas fa-exclamation-triangle me-1"></i>Needs Review
                             </span>

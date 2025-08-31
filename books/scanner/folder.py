@@ -111,7 +111,6 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
         #   if created:
         #       final_metadata.save()
 
-
     logger.info(f"Processed: {Path(file_path).name}")
 
 
