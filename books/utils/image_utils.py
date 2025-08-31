@@ -1,3 +1,8 @@
+"""Image and cover handling utilities.
+
+This module provides functions for downloading, processing, and encoding
+book cover images for display and storage operations.
+"""
 import os
 import base64
 import requests

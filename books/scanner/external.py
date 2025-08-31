@@ -1,3 +1,9 @@
+"""External metadata service integration.
+
+This module provides integration with external services like Google Books
+and Open Library for retrieving book metadata, covers, and additional
+information to enhance local book data.
+"""
 import logging
 import re
 import requests

@@ -1,3 +1,9 @@
+"""Django forms for ebook library management.
+
+This module contains form classes for user registration, book metadata editing,
+cover management, and scan folder configuration. Includes validation mixins
+and standardized form components.
+"""
 from django import forms
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm

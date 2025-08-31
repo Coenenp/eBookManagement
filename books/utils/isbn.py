@@ -1,3 +1,8 @@
+"""ISBN validation and normalization utilities.
+
+This module provides functions for processing ISBN numbers including
+validation, normalization, and format conversion operations.
+"""
 import re
 
 

@@ -15,7 +15,7 @@ from .models import (
     BookGenre, BookMetadata, DataSource, Series, Publisher, Genre
 )
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('books.scanner')
 
 
 class MetadataProcessor:

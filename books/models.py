@@ -1,3 +1,9 @@
+"""Django models for ebook library management.
+
+This module defines the database models for managing ebooks, metadata,
+authors, publishers, genres, and scan operations. Includes comprehensive
+relationship models for book metadata synchronization.
+"""
 from django.db import models
 from .mixins import FinalMetadataSyncMixin
 from django.core.validators import MinValueValidator, MaxValueValidator
@@ -7,7 +13,7 @@ import os
 import logging
 
 
-logger = logging.getLogger('ebook_scanner')
+logger = logging.getLogger('books.scanner')
 logger.debug("Logger is working!")
 
 

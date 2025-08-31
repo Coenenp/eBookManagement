@@ -1,3 +1,8 @@
+"""EPUB metadata extraction utilities.
+
+This module provides functions for extracting metadata from EPUB files
+including title, author, publisher, language, and ISBN information.
+"""
 from django.db import IntegrityError
 from ebooklib import epub
 from books.models import DataSource, BookTitle, Publisher, BookPublisher, BookMetadata

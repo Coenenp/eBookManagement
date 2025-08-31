@@ -1,3 +1,8 @@
+"""Filename and metadata parsing utilities.
+
+This module provides functions for parsing ebook filenames to extract
+metadata like titles, authors, series information, and publication data.
+"""
 import re
 from pathlib import Path
 from typing import Dict, Optional, Tuple, List

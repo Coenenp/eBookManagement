@@ -1,3 +1,8 @@
+"""File operation utilities for ebook scanning.
+
+This module provides functions for detecting ebook file formats,
+finding cover images, and handling OPF metadata files.
+"""
 import os
 from pathlib import Path
 

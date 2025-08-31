@@ -1,3 +1,8 @@
+"""Folder scanning operations for ebook discovery.
+
+This module handles scanning directories for ebook files, extracting
+metadata from various formats, and managing book creation processes.
+"""
 import os
 import logging
 import zipfile

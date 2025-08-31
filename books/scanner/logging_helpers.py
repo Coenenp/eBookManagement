@@ -1,3 +1,8 @@
+"""Logging utilities for scanner operations.
+
+This module provides functions for logging scan errors and operations
+to the database for tracking and debugging purposes.
+"""
 from books.models import ScanLog
 
 

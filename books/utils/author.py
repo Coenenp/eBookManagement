@@ -1,3 +1,8 @@
+"""Author name processing utilities.
+
+This module provides functions for parsing, normalizing, and handling
+author names including split operations and database lookups.
+"""
 from books.models import Author, BookAuthor
 import logging
 from django.db import models

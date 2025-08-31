@@ -1,9 +1,14 @@
+"""Metadata resolution and confidence scoring.
+
+This module provides functions for resolving final metadata from multiple
+sources and calculating confidence scores for metadata accuracy.
+"""
 import re
 import logging
 
 from books.models import FinalMetadata
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("books.scanner")
 
 
 def resolve_final_metadata(book):

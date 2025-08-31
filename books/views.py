@@ -1,3 +1,9 @@
+"""Django views for ebook library management.
+
+This module contains views for book listing, detail display, metadata management,
+cover handling, scanning operations, and administrative functions. Includes
+both class-based and function-based views with comprehensive filtering and search.
+"""
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import View, ListView, DetailView, CreateView, DeleteView, TemplateView
 from django.contrib import messages
@@ -30,7 +36,7 @@ import logging
 import json
 
 
-logger = logging.getLogger('ebook_scanner')
+logger = logging.getLogger('books.scanner')
 
 
 def signup(request):

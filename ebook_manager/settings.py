@@ -177,11 +177,5 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': True,
         },
-        'ebook_scanner': {
-            'handlers': ['file', 'console'],
-            'level': 'DEBUG',
-            'propagate': True,
-        },
-
     },
 }

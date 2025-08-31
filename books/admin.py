@@ -1,3 +1,9 @@
+"""Django admin configuration for ebook library management.
+
+This module configures the Django admin interface for all book-related models
+including books, authors, publishers, metadata, and scan operations. Provides
+comprehensive admin views with filtering, search, and bulk operations.
+"""
 from django.contrib import admin
 from .models import (
     Author, Book, BookAuthor, BookCover, BookGenre, BookMetadata, BookSeries, BookTitle, BookPublisher,

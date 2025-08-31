@@ -1,3 +1,8 @@
+"""URL configuration for books application.
+
+This module defines URL patterns for the books app including book views,
+authentication, cover handling, and administrative functions.
+"""
 from django.contrib.auth import views as auth_views
 from django.views.generic import RedirectView
 from django.urls import path, reverse_lazy

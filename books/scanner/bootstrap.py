@@ -1,3 +1,10 @@
+"""Data source bootstrapping utilities.
+
+This module ensures that default data sources are created in the database
+with appropriate confidence levels for metadata extraction.
+"""
+
+
 def ensure_data_sources():
     from books.models import DataSource
 

@@ -1,3 +1,8 @@
+"""Django management command for scanning ebooks.
+
+This command provides a CLI interface for scanning ebook folders
+and extracting metadata using the EbookScanner engine.
+"""
 from django.core.management.base import BaseCommand
 from books.scanner.scanner_engine import EbookScanner
 

@@ -1,3 +1,8 @@
+"""PDF metadata extraction utilities.
+
+This module provides functions for extracting metadata from PDF files
+including title, author, and document properties.
+"""
 from PyPDF2 import PdfReader
 from books.models import DataSource, BookTitle, BookMetadata
 from books.utils.author import attach_authors

@@ -1,3 +1,8 @@
+"""OPF metadata extraction utilities.
+
+This module provides functions for extracting metadata from OPF (Open Packaging Format)
+files commonly used in EPUB and other ebook formats for comprehensive metadata.
+"""
 from lxml import etree as ET
 from books.models import (
     DataSource, BookTitle, BookMetadata,

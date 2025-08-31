@@ -1,3 +1,8 @@
+"""MOBI metadata extraction utilities.
+
+This module provides functions for extracting metadata from MOBI files
+including title, author, publisher, and other bibliographic information.
+"""
 import mobi
 from django.db import IntegrityError
 from books.utils.author import attach_authors

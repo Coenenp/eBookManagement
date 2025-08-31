@@ -1,3 +1,8 @@
+"""Cache key generation utilities.
+
+This module provides functions for generating consistent cache keys
+using SHA1 hashing for caching operations.
+"""
 import hashlib
 
 

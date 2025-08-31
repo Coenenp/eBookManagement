@@ -1,9 +1,15 @@
+"""Custom template filters for various data manipulation.
+
+This module provides template filters for mathematical operations,
+text processing, and data formatting in Django templates.
+"""
 from django import template
 import urllib.parse
 import os
 import logging
 import bleach
 
+logger = logging.getLogger('books.scanner')
 register = template.Library()
 
 
@@ -71,7 +77,6 @@ def get_display_title(book):
 
         return 'Unknown Title'
     except Exception as e:
-        logger = logging.getLogger(__name__)
         logger.error(f"Error getting display title for book {getattr(book, 'id', 'unknown')}: {e}")
         return 'Unknown Title'
 
