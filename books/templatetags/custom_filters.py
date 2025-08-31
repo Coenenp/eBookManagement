@@ -2,6 +2,7 @@ from django import template
 import urllib.parse
 import os
 import logging
+import bleach
 
 register = template.Library()
 
@@ -88,18 +89,6 @@ def get_display_author(book):
 
 
 @register.filter
-def get_cover_path(book):
-    """Return the best available cover path or base64 string."""
-    try:
-        if hasattr(book, 'finalmetadata') and book.finalmetadata:
-            cover = book.finalmetadata.final_cover_path or book.finalmetadata.cover_base64
-            return cover if cover else 'No Cover'
-        return book.cover_path or 'No Cover'
-    except Exception:
-        return 'No Cover'
-
-
-@register.filter
 def safe_confidence_format(confidence):
     """Safely format confidence values."""
     try:
@@ -109,13 +98,12 @@ def safe_confidence_format(confidence):
     except (ValueError, TypeError):
         return "0.00"
 
-# In custom_filters.py, your sanitizeText is incomplete:
+
 @register.filter
 def sanitize_html(text):
+    """Sanitize HTML content, allowing only safe tags."""
     if not text:
         return ''
-    
-    # Use bleach library for proper HTML sanitization
-    import bleach
+
     allowed_tags = ['b', 'i', 'em', 'strong']
     return bleach.clean(text, tags=allowed_tags, strip=True)
