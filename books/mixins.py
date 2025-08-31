@@ -7,7 +7,7 @@ from django.utils import timezone
 
 class StandardWidgetMixin:
     """Mixin providing standard widget configurations"""
-    
+
     STANDARD_WIDGETS = {
         'text_input': forms.TextInput(attrs={'class': 'form-control'}),
         'text_input_required': forms.TextInput(attrs={'class': 'form-control', 'required': True}),
@@ -28,13 +28,13 @@ class StandardWidgetMixin:
         base_widget = cls.STANDARD_WIDGETS.get(widget_type)
         if not base_widget:
             raise ValueError(f"Unknown widget type: {widget_type}")
-        
+
         if extra_attrs:
             # Clone the widget and add extra attributes
             new_attrs = base_widget.attrs.copy()
             new_attrs.update(extra_attrs)
             return base_widget.__class__(attrs=new_attrs)
-        
+
         return base_widget
 
     @classmethod
@@ -73,7 +73,7 @@ class StandardWidgetMixin:
 
 class BaseMetadataValidator:
     """Shared validation logic for metadata forms"""
-    
+
     @staticmethod
     def validate_year(value, field_name="year"):
         """Validate publication year"""
@@ -113,7 +113,7 @@ class BaseMetadataValidator:
         """Validate confidence score"""
         if value is None:
             return value
-        
+
         try:
             conf = float(value)
             if not (0 <= conf <= 1):
@@ -132,11 +132,11 @@ class BaseMetadataValidator:
 
 class StandardFormMixin(StandardWidgetMixin):
     """Complete form mixin with common functionality"""
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.apply_standard_styling()
-    
+
     def apply_standard_styling(self):
         """Apply standard Bootstrap styling to all form fields"""
         for field_name, field in self.fields.items():
