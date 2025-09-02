@@ -7,6 +7,7 @@ and standardized form components.
 from django import forms
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
+from django.utils.safestring import mark_safe
 from .models import ScanFolder, Book, FinalMetadata, BookCover, LANGUAGE_CHOICES
 from .mixins import StandardFormMixin, BaseMetadataValidator
 import os
@@ -28,18 +29,63 @@ class UserRegisterForm(UserCreationForm):
 # Scan Folder Form
 # ------------------------
 
+class FolderSelectWidget(forms.TextInput):
+    """Simple text input for folder paths with helpful guidance."""
+
+    def __init__(self, attrs=None):
+        default_attrs = {
+            'class': 'form-control',
+            'placeholder': 'Enter the full path to your folder (e.g., C:\\Users\\Pieter\\Documents\\eBooks)'
+        }
+        if attrs:
+            default_attrs.update(attrs)
+        super().__init__(default_attrs)
+
+    def render(self, name, value, attrs=None, renderer=None):
+        # Render the main input field
+        text_input = super().render(name, value, attrs, renderer)
+
+        # Simple widget with clear guidance
+        widget_html = f'''
+        <div class="folder-path-container">
+            {text_input}
+            <div class="form-text mt-2">
+                <i class="fas fa-info-circle text-primary"></i>
+                <strong>How to find your folder path:</strong>
+            </div>
+            <div class="form-text">
+                <ol class="mb-0 small">
+                    <li>Open File Explorer and navigate to your folder</li>
+                    <li>Click on the address bar at the top</li>
+                    <li>Copy the full path (e.g., C:\\Users\\Pieter\\Documents\\eBooks)</li>
+                    <li>Paste it in the field above</li>
+                </ol>
+            </div>
+        </div>
+        '''
+
+        return mark_safe(widget_html)
+
+
 class ScanFolderForm(StandardFormMixin, forms.ModelForm):
     class Meta:
         model = ScanFolder
         fields = ['name', 'path', 'language', 'is_active']
-        # StandardFormMixin will apply standard styling automatically
+        widgets = {
+            'path': FolderSelectWidget(),
+        }
 
     def clean_path(self):
         path = self.cleaned_data['path']
+        if not path or not path.strip():
+            raise forms.ValidationError("Please provide a folder path.")
+
+        path = path.strip()
+
         if not os.path.exists(path):
-            raise forms.ValidationError("The specified path does not exist.")
+            raise forms.ValidationError(f"The specified path does not exist: {path}")
         if not os.path.isdir(path):
-            raise forms.ValidationError("The specified path is not a directory.")
+            raise forms.ValidationError(f"The specified path is not a directory: {path}")
         return path
 
 

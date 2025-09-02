@@ -12,8 +12,12 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('folder_path', nargs='?', type=str)
-        parser.add_argument('--rescan', action='store_true')
+        parser.add_argument('--rescan', action='store_true', help='Rescan all files even if already processed')
+        parser.add_argument('--resume', action='store_true', help='Resume interrupted scan from where it left off')
 
     def handle(self, *args, **options):
-        scanner = EbookScanner(rescan=options.get('rescan', False))
+        scanner = EbookScanner(
+            rescan=options.get('rescan', False),
+            resume=options.get('resume', False)
+        )
         scanner.run(options.get('folder_path'))

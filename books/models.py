@@ -348,6 +348,7 @@ class BookSeries(FinalMetadataSyncMixin, models.Model):
 class Genre(models.Model):
     """Book genres/categories"""
     name = models.CharField(max_length=100, unique=True)
+    is_reviewed = models.BooleanField(default=False, help_text="Mark genres you've verified or finalized")
 
     def __str__(self):
         return self.name
@@ -579,11 +580,45 @@ class FinalMetadata(models.Model):
                 is_active=True
             ).order_by('-confidence').first()
 
-            setattr(self, field_name, next_value.field_value if next_value else '')
-            logger.debug(f"Selected {field_name}: {getattr(self, field_name)} (from metadata)")
+            if next_value and next_value.field_value:
+                value = next_value.field_value
+
+                # Handle special cases for publication_year
+                if field_name == 'publication_year':
+                    try:
+                        # Handles strings like "1998", "circa 2005", "Published in 2012"
+                        import re
+                        year_match = re.search(r'\b(18|19|20)\d{2}\b', str(value))
+                        if year_match:
+                            year = int(year_match.group())
+                            if 1000 < year <= 2100:  # sanity check
+                                setattr(self, field_name, year)
+                                logger.debug(f"Selected {field_name}: {year} (from metadata)")
+                                return
+                        # If we can't parse a valid year, set to None
+                        setattr(self, field_name, None)
+                        logger.debug(f"Selected {field_name}: None (couldn't parse '{value}')")
+                    except Exception as e:
+                        logger.warning(f"Error parsing year from '{value}': {e}")
+                        setattr(self, field_name, None)
+                else:
+                    setattr(self, field_name, value)
+                    logger.debug(f"Selected {field_name}: {value} (from metadata)")
+            else:
+                # Set appropriate default for the field type
+                if field_name == 'publication_year':
+                    setattr(self, field_name, None)
+                else:
+                    setattr(self, field_name, '')
+                logger.debug(f"Selected {field_name}: {getattr(self, field_name)} (default - no metadata)")
+
         except Exception as e:
             logger.error(f"Error updating dynamic field '{field_name}' for book {self.book.id}: {e}")
-            setattr(self, field_name, '')
+            # Set appropriate default for the field type
+            if field_name == 'publication_year':
+                setattr(self, field_name, None)
+            else:
+                setattr(self, field_name, '')
 
     def update_final_title(self):
         try:
@@ -723,5 +758,62 @@ class ScanStatus(models.Model):
     started = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
 
+    # Resume tracking fields
+    last_processed_file = models.TextField(blank=True, null=True, help_text="Last file path that was completely processed")
+    total_files = models.IntegerField(default=0, help_text="Total number of files to process")
+    processed_files = models.IntegerField(default=0, help_text="Number of files processed so far")
+    scan_folders = models.TextField(blank=True, null=True, help_text="JSON list of folders being scanned")
+
     def __str__(self):
         return f"{self.status} ({self.progress}%) at {self.updated.strftime('%Y-%m-%d %H:%M:%S')}"
+
+
+class FileOperation(models.Model):
+    """Track file rename operations for complete reversal capability."""
+    OPERATION_TYPES = [
+        ('rename', 'File Rename'),
+        ('move', 'File Move'),
+        ('create_folder', 'Folder Creation'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('reverted', 'Reverted'),
+    ]
+
+    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='file_operations')
+    operation_type = models.CharField(max_length=20, choices=OPERATION_TYPES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    # Original state
+    original_file_path = models.TextField(blank=True)
+    original_cover_path = models.TextField(blank=True)
+    original_opf_path = models.TextField(blank=True)
+    original_folder_path = models.TextField(blank=True)
+
+    # New state
+    new_file_path = models.TextField(blank=True)
+    new_cover_path = models.TextField(blank=True)
+    new_opf_path = models.TextField(blank=True)
+    new_folder_path = models.TextField(blank=True)
+
+    # Additional files affected (JSON list)
+    additional_files = models.TextField(default='[]', help_text='JSON list of additional files moved')
+
+    # Operation metadata
+    operation_date = models.DateTimeField(auto_now_add=True)
+    batch_id = models.UUIDField(null=True, blank=True, help_text='Groups operations from same batch')
+    notes = models.TextField(blank=True)
+    error_message = models.TextField(blank=True)
+
+    # User who performed the operation
+    user = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        db_table = 'books_fileoperation'
+        ordering = ['-operation_date']
+
+    def __str__(self):
+        return f"{self.operation_type} - {self.book.finalmetadata.final_title if self.book.finalmetadata else self.book.id} - {self.status}"

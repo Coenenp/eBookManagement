@@ -1,0 +1,135 @@
+{% extends 'books/base.html' %}
+{% load static %}
+{% load custom_filters %}
+{% block title %}Manage Genres{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h3 class="mb-3"><i class="fas fa-tags me-2"></i>Genre Management</h3>
+
+    <!-- Search Bar -->
+    <form method="get" class="mb-3">
+        <div class="row g-2">
+            <div class="col-md-6">
+                <input type="text" name="search" value="{{ search_query }}" class="form-control" placeholder="Search genres...">
+            </div>
+            <div class="col-md-4">
+                <select name="is_reviewed" class="form-select">
+                    <option value="">All Genres</option>
+                    <option value="true" {% if request.GET.is_reviewed == 'true' %}selected{% endif %}>Reviewed Only</option>
+                    <option value="false" {% if request.GET.is_reviewed == 'false' %}selected{% endif %}>Unreviewed Only</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-outline-primary w-100" type="submit">
+                    <i class="fas fa-search me-1"></i>Filter
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <form method="post" action="{% url 'books:genre_bulk_delete' %}">
+        {% csrf_token %}
+
+        {% if genres %}
+        <table class="table table-bordered table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 40px;"><input type="checkbox" id="select-all"></th>
+                    <th>Name</th>
+                    <th>Sources</th>
+                    <th>Reviewed</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for genre in genres %}
+                <tr>
+                    <td>
+                        {% if not genre.is_reviewed %}
+                        <input type="checkbox" name="selected_genres" value="{{ genre.id }}">
+                        {% endif %}
+                    </td>
+                    <td>{{ genre.name }}</td>
+                    <td>
+                        {% for src in genre_sources|get_item:genre.id %}
+                            <span class="badge bg-info text-dark">{{ src }}</span>
+                        {% empty %}
+                            <span class="text-muted">None</span>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {% if genre.is_reviewed %}
+                            <span class="badge bg-success"><i class="fas fa-check me-1"></i>Reviewed</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Pending</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <div class="d-flex gap-3">
+                <button type="submit" formaction="{% url 'books:genre_bulk_delete' %}" class="btn btn-danger">
+                    <i class="fas fa-trash me-1"></i> Delete Selected
+                </button>
+                <button type="submit" formaction="{% url 'books:genre_mark_reviewed' %}" class="btn btn-success">
+                    <i class="fas fa-check me-1"></i> Mark Reviewed
+                </button>
+            </div>
+            <div class="text-end">
+            {% if page_obj.paginator.num_pages > 1 %}
+                <nav>
+                    <ul class="pagination mb-0">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link"
+                                href="?{% querystring request.GET 'page' page_obj.previous_page_number %}">
+                                    Previous
+                                </a>
+                            </li>
+                        {% endif %}
+
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if num == page_obj.number %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num >= page_obj.number|add:'-2' and num <= page_obj.number|add:'2' %}
+                                <li class="page-item">
+                                    <a class="page-link"
+                                    href="?{% querystring request.GET 'page' num %}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link"
+                                href="?{% querystring request.GET 'page' page_obj.next_page_number %}">
+                                    Next
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-info">No genres found.</div>
+        {% endif %}
+    </form>
+</div>
+
+<script>
+const selectAllCheckbox = document.getElementById('select-all');
+if (selectAllCheckbox) {
+    selectAllCheckbox.addEventListener('click', function () {
+        const checkboxes = document.querySelectorAll('input[name="selected_genres"]');
+        checkboxes.forEach(cb => cb.checked = this.checked);
+    });
+}
+</script>
+{% endblock %}

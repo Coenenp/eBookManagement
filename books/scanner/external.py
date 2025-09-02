@@ -54,6 +54,37 @@ def query_metadata_and_covers(book):
         traceback.print_exc()
 
 
+def query_metadata_and_covers_with_terms(book, search_title=None, search_author=None, search_isbn=None):
+    """Query external metadata using specific search terms instead of book's existing metadata"""
+    try:
+        # Use provided search terms, fall back to existing metadata
+        title = search_title or _get_best_title(book)
+        author = search_author or _get_best_author(book)
+
+        logger.info(f"Retrieving metadata and covers with custom terms for book {book.id}")
+        logger.info(f"Search terms - Title: '{title}', Author: '{author}', ISBN: '{search_isbn}'")
+
+        if title or author or search_isbn:
+            # Try ISBN search first if provided
+            if search_isbn:
+                logger.info(f"[ISBN SEARCH] ISBN: {search_isbn}")
+                # For now, just pass to existing functions - they can use the ISBN if they support it
+
+            logger.info(f"[OPEN LIBRARY COMBINED] Title: {title}, Author: {author}")
+            _query_open_library_combined(book, title, author)
+
+            logger.info(f"[GOOGLE BOOKS COMBINED] Title: {title}, Author: {author}")
+            _query_google_books_combined(book, title, author)
+
+            logger.info(f"[GOODREADS COMBINED] Title: {title}, Author: {author}")
+            _query_goodreads_combined(book, title, author)
+        else:
+            logger.warning(f"[QUERY SKIPPED] No usable search terms provided for book ID {book.id}")
+    except Exception as e:
+        logger.error(f"[QUERY_METADATA_AND_COVERS_WITH_TERMS EXCEPTION] {e}")
+        traceback.print_exc()
+
+
 def _get_best_title(book):
     best = BookTitle.objects.filter(book=book).order_by('-confidence').first()
     return best.title if best else None

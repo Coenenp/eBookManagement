@@ -158,9 +158,9 @@
                                 </div>
                             </div>
                             <!-- Progress bar for upload -->
-                            <div class="progress" id="uploadProgress" style="display: none;">
-                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                                     role="progressbar" style="width: 0%"></div>
+                            <div class="progress d-hidden" id="uploadProgress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated progress-bar-width-0" 
+                                     role="progressbar"></div>
                             </div>
                         </div>
                     </div>
@@ -1263,9 +1263,8 @@ class MetadataFormHandler {
                         <span class="badge bg-success">New</span>
                     </div>
                     <div class="mb-2">
-                        <small class="text-muted d-block text-center" 
-                               title="${result.filename}" 
-                               style="word-break: break-all; line-height: 1.2; max-width: 100%;">
+                        <small class="text-muted d-block text-center text-break-all" 
+                               title="${result.filename}">>
                             ${displayFilename}
                         </small>
                     </div>
@@ -1456,8 +1455,7 @@ class MetadataFormHandler {
         
         cardBody.innerHTML = `
             <div class="cover-container">
-                <img src="${imageSrc}" alt="Cover preview" class="card-img-top cover-image cover-large"
-                     style="max-width: 100%; max-height: 300px; object-fit: contain;">
+                <img src="${imageSrc}" alt="Cover preview" class="card-img-top cover-image cover-large max-width-100 max-height-300 object-fit-contain">>
             </div>
             <div class="card-body p-2">
                 <div class="form-check">

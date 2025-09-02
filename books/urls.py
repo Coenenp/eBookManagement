@@ -29,11 +29,24 @@ urlpatterns = [
     path('book/<int:pk>/metadata/', views.BookMetadataView.as_view(), name='book_metadata'),
     path('book/<int:pk>/metadata/update/', views.BookMetadataUpdateView.as_view(), name='book_metadata_update'),
     path('book/<int:book_id>/toggle_review/', views.toggle_needs_review, name='toggle_needs_review'),
+    path('book/<int:book_id>/rescan/', views.rescan_external_metadata, name='rescan_external_metadata'),
 
     # Author management
     path('authors/', views.AuthorListView.as_view(), name='author_list'),
     path('authors/bulk-delete/', views.AuthorBulkDeleteView.as_view(), name='author_bulk_delete'),
     path('authors/mark-reviewed/', views.AuthorMarkReviewedView.as_view(), name='author_mark_reviewed'),
+
+    # Genre management
+    path('genres/', views.GenreListView.as_view(), name='genre_list'),
+    path('genres/bulk-delete/', views.GenreBulkDeleteView.as_view(), name='genre_bulk_delete'),
+    path('genres/mark-reviewed/', views.GenreMarkReviewedView.as_view(), name='genre_mark_reviewed'),
+
+    # Book renaming/organization
+    path('rename-books/', views.BookRenamerView.as_view(), name='book_renamer'),
+    path('rename-books/preview/', views.BookRenamerPreviewView.as_view(), name='book_renamer_preview'),
+    path('rename-books/execute/', views.BookRenamerExecuteView.as_view(), name='book_renamer_execute'),
+    path('rename-books/revert/', views.BookRenamerRevertView.as_view(), name='book_renamer_revert'),
+    path('rename-books/history/', views.BookRenamerHistoryView.as_view(), name='book_renamer_history'),
 
     # Scan folder management
     path('scan_folders/', views.ScanFolderListView.as_view(), name='scan_folder_list'),

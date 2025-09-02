@@ -8,6 +8,7 @@ class BookDetailManager {
         this.metadataManager = new MetadataTabManager(bookId);
         this.coversManager = new CoversTabManager(bookId);
         this.formManager = new EditFormManager();
+        this.rescanManager = new RescanTabManager(bookId);
         this.init();
     }
 
@@ -188,8 +189,7 @@ class MetadataTabManager {
 
         if (metadataItem) {
             console.log('Removing metadata element:', metadataItem);
-            metadataItem.style.transition = 'opacity 0.3s ease';
-            metadataItem.style.opacity = '0';
+            metadataItem.classList.add('metadata-fade');
             setTimeout(() => metadataItem.remove(), 300);
         } else {
             console.warn('Could not find metadata element to remove for id:', id);
@@ -358,9 +358,9 @@ class CoversTabManager {
                     selectedBadge.textContent = 'Selected';
                     badgeContainer.appendChild(selectedBadge);
                 }
-                if (selectBtn) selectBtn.style.display = 'none';
+                if (selectBtn) selectBtn.classList.add('d-hidden');
             } else {
-                if (selectBtn) selectBtn.style.display = '';
+                if (selectBtn) selectBtn.classList.remove('d-hidden');
             }
         });
     }
@@ -370,9 +370,7 @@ class CoversTabManager {
         coverCards.forEach(card => {
             const img = card.querySelector('img');
             if (img && img.src.includes(coverPath)) {
-                card.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-                card.style.opacity = '0';
-                card.style.transform = 'scale(0.9)';
+                card.classList.add('scale-down');
                 setTimeout(() => card.remove(), 300);
             }
         });
@@ -389,18 +387,7 @@ class CoversTabManager {
         // Add hover effects
         const coverImages = document.querySelectorAll('#covers .img-thumbnail');
         coverImages.forEach(img => {
-            img.style.cursor = 'pointer';
-            img.style.transition = 'transform 0.2s ease, box-shadow 0.2s ease';
-            
-            img.addEventListener('mouseenter', () => {
-                img.style.transform = 'scale(1.05)';
-                img.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)';
-            });
-            
-            img.addEventListener('mouseleave', () => {
-                img.style.transform = 'scale(1)';
-                img.style.boxShadow = '';
-            });
+            img.classList.add('cover-hover-effect');
         });
     }
 
@@ -432,7 +419,7 @@ class CoversTabManager {
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body text-center">
-                        <img id="previewImage" class="img-fluid" style="max-height: 70vh;">
+                        <img id="previewImage" class="img-fluid max-height-70vh">>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -545,11 +532,11 @@ class EditFormManager {
             const selectedValue = e.target.value;
             
             if (selectedValue === '__manual__') {
-                coverUploadSection.style.display = 'block';
+                coverUploadSection.classList.remove('d-hidden');
                 hiddenCoverPath.value = '';
                 this.updateCoverPreview('');
             } else {
-                coverUploadSection.style.display = 'none';
+                coverUploadSection.classList.add('d-hidden');
                 hiddenCoverPath.value = selectedValue;
                 this.updateCoverPreview(selectedValue);
             }
@@ -578,9 +565,9 @@ class EditFormManager {
         if (src && src.trim() !== '') {
             if (coverImage) {
                 coverImage.src = src;
-                coverImage.style.display = 'block';
+                coverImage.classList.remove('d-hidden');
             } else {
-                coverPreview.innerHTML = `<img src="${src}" alt="Cover preview" class="img-thumbnail" id="coverImage" style="max-width: 150px; max-height: 200px;">`;
+                coverPreview.innerHTML = `<img src="${src}" alt="Cover preview" class="img-thumbnail cover-preview-small" id="coverImage">`;
             }
         } else {
             coverPreview.innerHTML = '<div class="text-muted">No cover selected</div>';
@@ -794,7 +781,7 @@ class EditFormManager {
         // Hide cover upload section
         const coverUploadSection = document.getElementById('coverUploadSection');
         if (coverUploadSection) {
-            coverUploadSection.style.display = 'none';
+            coverUploadSection.classList.add('d-hidden');
         }
     }
 
@@ -846,7 +833,7 @@ class Utils {
         if (typeof bootstrap !== 'undefined' && bootstrap.Toast) {
             new bootstrap.Toast(toast, { delay: 4000 }).show();
         } else {
-            toast.style.display = 'block';
+            toast.classList.remove('d-hidden');
             setTimeout(() => toast.remove(), 4000);
         }
 
@@ -894,6 +881,236 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log('BookDetailManager initialized successfully');
 });
+
+// =============================================================================
+// RESCAN TAB MANAGER
+// =============================================================================
+
+class RescanTabManager {
+    constructor(bookId) {
+        this.bookId = bookId;
+        this.init();
+    }
+
+    init() {
+        this.bindEvents();
+    }
+
+    bindEvents() {
+        // Preview search terms button
+        const previewBtn = document.getElementById('rescanPreviewBtn');
+        if (previewBtn) {
+            previewBtn.addEventListener('click', () => this.previewSearchTerms());
+        }
+
+        // Start rescan button
+        const rescanBtn = document.getElementById('rescanBtn');
+        if (rescanBtn) {
+            rescanBtn.addEventListener('click', () => this.startRescan());
+        }
+    }
+
+    previewSearchTerms() {
+        const searchTerms = this.getSearchTerms();
+        
+        let message = 'The following search terms will be used for the rescan:\n\n';
+        if (searchTerms.title) message += `Title: "${searchTerms.title}"\n`;
+        if (searchTerms.author) message += `Author: "${searchTerms.author}"\n`;
+        if (searchTerms.isbn) message += `ISBN: "${searchTerms.isbn}"\n`;
+        if (searchTerms.series) message += `Series: "${searchTerms.series}"\n`;
+        
+        if (!searchTerms.title && !searchTerms.author && !searchTerms.isbn) {
+            message = 'No search terms available. Please provide at least a title, author, or ISBN.';
+        }
+        
+        alert(message);
+    }
+
+    getSearchTerms() {
+        return {
+            title: document.getElementById('rescan_title').value.trim(),
+            author: document.getElementById('rescan_author').value.trim(),
+            isbn: document.getElementById('rescan_isbn').value.trim(),
+            series: document.getElementById('rescan_series').value.trim()
+        };
+    }
+
+    getSelectedSources() {
+        const sources = [];
+        const checkboxes = document.querySelectorAll('input[name="sources"]:checked');
+        checkboxes.forEach(cb => sources.push(cb.value));
+        return sources;
+    }
+
+    getOptions() {
+        return {
+            clearExisting: document.getElementById('rescan_clear_existing').checked,
+            forceRefresh: document.getElementById('rescan_force_refresh').checked
+        };
+    }
+
+    async startRescan() {
+        const searchTerms = this.getSearchTerms();
+        const sources = this.getSelectedSources();
+        const options = this.getOptions();
+
+        // Validate inputs
+        if (!searchTerms.title && !searchTerms.author && !searchTerms.isbn) {
+            alert('Please provide at least a title, author, or ISBN for the rescan.');
+            return;
+        }
+
+        if (sources.length === 0) {
+            alert('Please select at least one external source to query.');
+            return;
+        }
+
+        // Show progress section
+        this.showProgress();
+        
+        // Disable rescan button
+        const rescanBtn = document.getElementById('rescanBtn');
+        rescanBtn.disabled = true;
+        rescanBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Rescanning...';
+
+        try {
+            // Prepare form data
+            const formData = new FormData();
+            
+            // Add search terms
+            formData.append('title_override', searchTerms.title);
+            formData.append('author_override', searchTerms.author);
+            formData.append('isbn_override', searchTerms.isbn);
+            formData.append('series_override', searchTerms.series);
+            
+            // Add sources
+            sources.forEach(source => formData.append('sources[]', source));
+            
+            // Add options
+            formData.append('clear_existing', options.clearExisting);
+            formData.append('force_refresh', options.forceRefresh);
+            
+            // Add CSRF token
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            formData.append('csrfmiddlewaretoken', csrfToken);
+
+            // Update progress
+            this.updateProgress(20, 'Sending request to external sources...');
+
+            // Send request
+            const response = await fetch(`/book/${this.bookId}/rescan/`, {
+                method: 'POST',
+                body: formData
+            });
+
+            this.updateProgress(50, 'Processing response...');
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.updateProgress(100, 'Rescan completed successfully!');
+                this.showResults(result);
+            } else {
+                throw new Error(result.error || 'Unknown error occurred');
+            }
+
+        } catch (error) {
+            console.error('Rescan error:', error);
+            this.showError(error.message);
+        } finally {
+            // Re-enable rescan button
+            rescanBtn.disabled = false;
+            rescanBtn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Start Rescan';
+        }
+    }
+
+    showProgress() {
+        const progressSection = document.getElementById('rescanProgress');
+        const resultsSection = document.getElementById('rescanResults');
+        
+        progressSection.classList.remove('d-hidden');
+        resultsSection.classList.add('d-hidden');
+        
+        this.updateProgress(0, 'Initializing rescan...');
+    }
+
+    updateProgress(percentage, status) {
+        const progressBar = document.getElementById('rescanProgressBar');
+        const statusText = document.getElementById('rescanStatus');
+        const logText = document.getElementById('rescanLog');
+        
+        progressBar.style.width = percentage + '%';
+        progressBar.setAttribute('aria-valuenow', percentage);
+        statusText.textContent = status;
+        
+        // Add to log
+        const timestamp = new Date().toLocaleTimeString();
+        logText.innerHTML += `<div>${timestamp}: ${status}</div>`;
+        logText.scrollTop = logText.scrollHeight;
+    }
+
+    showResults(result) {
+        const progressSection = document.getElementById('rescanProgress');
+        const resultsSection = document.getElementById('rescanResults');
+        const summaryDiv = document.getElementById('rescanSummary');
+        
+        progressSection.classList.add('d-hidden');
+        resultsSection.classList.remove('d-hidden');
+        
+        // Build summary HTML
+        let summaryHtml = '<h6>Rescan Summary:</h6>';
+        summaryHtml += `<p><strong>Search Terms Used:</strong></p><ul>`;
+        if (result.search_terms.title) summaryHtml += `<li>Title: "${result.search_terms.title}"</li>`;
+        if (result.search_terms.author) summaryHtml += `<li>Author: "${result.search_terms.author}"</li>`;
+        if (result.search_terms.isbn) summaryHtml += `<li>ISBN: "${result.search_terms.isbn}"</li>`;
+        if (result.search_terms.series) summaryHtml += `<li>Series: "${result.search_terms.series}"</li>`;
+        summaryHtml += '</ul>';
+        
+        summaryHtml += '<p><strong>Sources Queried:</strong> ' + result.sources_queried.join(', ') + '</p>';
+        
+        summaryHtml += '<p><strong>New Metadata Added:</strong></p><ul>';
+        for (const [key, count] of Object.entries(result.added_counts)) {
+            if (count > 0) {
+                summaryHtml += `<li>${key.charAt(0).toUpperCase() + key.slice(1)}: ${count} new entries</li>`;
+            }
+        }
+        summaryHtml += '</ul>';
+        
+        const totalAdded = Object.values(result.added_counts).reduce((sum, count) => sum + count, 0);
+        if (totalAdded === 0) {
+            summaryHtml += '<p class="text-muted">No new metadata was found.</p>';
+        } else {
+            summaryHtml += `<p class="text-success"><strong>Total: ${totalAdded} new metadata entries added</strong></p>`;
+        }
+        
+        summaryDiv.innerHTML = summaryHtml;
+    }
+
+    showError(errorMessage) {
+        const progressSection = document.getElementById('rescanProgress');
+        const resultsSection = document.getElementById('rescanResults');
+        
+        progressSection.classList.add('d-hidden');
+        
+        // Show error in results section
+        const resultsDiv = document.querySelector('#rescanResults .card-header');
+        const resultsBody = document.querySelector('#rescanResults .card-body');
+        
+        resultsDiv.className = 'card-header bg-danger text-white';
+        resultsDiv.innerHTML = '<h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Rescan Failed</h6>';
+        
+        resultsBody.innerHTML = `
+            <div class="alert alert-danger">
+                <strong>Error:</strong> ${errorMessage}
+            </div>
+            <button type="button" class="btn btn-secondary" onclick="location.reload()">
+                <i class="fas fa-refresh me-2"></i>Refresh Page
+            </button>
+        `;
+        
+        resultsSection.style.display = 'block';
+    }
+}
 
 // =============================================================================
 // LEGACY COMPATIBILITY (for onclick handlers)

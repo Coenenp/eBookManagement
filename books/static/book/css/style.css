@@ -47,6 +47,114 @@ legend {
 }
 
 /* ======================================
+   🎛️ Utility Classes
+========================================= */
+
+/* Display utilities */
+.d-hidden { display: none !important; }
+.d-block { display: block !important; }
+
+/* Progress bars */
+.progress-tall { height: 25px; }
+.progress-bar-width-0 { width: 0%; }
+
+/* Alignment utilities */
+.align-self-center { align-self: center; }
+
+/* Size constraints */
+.max-width-100 { max-width: 100%; }
+.max-height-300 { max-height: 300px; }
+.max-height-70vh { max-height: 70vh; }
+
+/* Text utilities */
+.text-break-all { 
+    word-break: break-all; 
+    line-height: 1.2; 
+    max-width: 100%; 
+}
+.text-pre-line { white-space: pre-line; }
+
+/* Table column widths */
+.col-width-40 { width: 40px; }
+.col-width-120 { width: 120px; }
+.col-width-140 { width: 140px; }
+.col-width-160 { max-width: 160px; }
+.col-width-250 { width: 250px; }
+
+/* Cover preview */
+.cover-preview-small { 
+    max-width: 150px; 
+    max-height: 200px; 
+}
+
+/* Object fit utilities */
+.object-fit-contain { object-fit: contain; }
+
+/* Alert utilities */
+.alert-sm { 
+    font-size: 0.75rem; 
+    padding: 0.25rem 0.5rem; 
+    margin-bottom: 0.25rem; 
+}
+
+/* Toast container */
+.toast-container {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    padding: 1rem;
+    z-index: 1080;
+    max-width: 350px;
+}
+
+/* Progress positioning */
+.progress-relative {
+    position: relative;
+}
+
+/* Table cursor styles */
+.cursor-pointer {
+    cursor: pointer;
+    font-weight: 600;
+    border: none;
+}
+
+/* Z-index utilities */
+.z-index-1050 { z-index: 1050; }
+
+/* Transition effects */
+.fade-out {
+    transition: opacity 0.3s ease;
+    opacity: 0;
+}
+
+.scale-down {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    opacity: 0;
+    transform: scale(0.9);
+}
+
+.cover-hover-effect {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cover-hover-effect:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+/* Animation states */
+.metadata-fade {
+    transition: opacity 0.3s ease;
+    opacity: 0;
+}
+
+.metadata-fade.show {
+    opacity: 1;
+}
+
+/* ======================================
    📚 Book Covers
 ========================================= */
 

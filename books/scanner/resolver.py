@@ -31,7 +31,7 @@ def resolve_final_metadata(book):
     best_series = book.series_info.filter(is_active=True).order_by('-confidence').first()
     if best_series:
         final_metadata.final_series = best_series.series.name
-        final_metadata.final_series_number = best_series.series_number if best_series.series_number is not None else 0
+        final_metadata.final_series_number = str(best_series.series_number) if best_series.series_number is not None else ''
         final_metadata.final_series_confidence = best_series.confidence
 
     # 📕 Cover

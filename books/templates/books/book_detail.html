@@ -105,6 +105,11 @@
                         <i class="fas fa-edit me-2"></i>Edit Final Metadata
                     </button>
                 </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="rescan-tab" data-bs-toggle="tab" data-bs-target="#rescan" type="button" role="tab">
+                        <i class="fas fa-sync-alt me-2"></i>Rescan External Data
+                    </button>
+                </li>
             </ul>
         </div>
         <div class="card-body">
@@ -140,7 +145,7 @@
                                                 </small>
                                             </div>
                                             <div class="d-flex gap-1">
-                                                <span class="badge {% if title.confidence >= 0.8 %}bg-success{% elif title.confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}" style="align-self: center;">
+                                                <span class="badge {% if title.confidence >= 0.8 %}bg-success{% elif title.confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %} align-self-center">>
                                                     {{ title.confidence|floatformat:2 }}
                                                 </span>
                                                 <button class="btn btn-sm btn-outline-danger"
@@ -187,7 +192,7 @@
                                                 </small>
                                             </div>
                                             <div class="d-flex gap-1">
-                                                <span class="badge {% if book_author.confidence >= 0.8 %}bg-success{% elif book_author.confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}" style="align-self: center;">
+                                                <span class="badge {% if book_author.confidence >= 0.8 %}bg-success{% elif book_author.confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %} align-self-center">>
                                                     {{ book_author.confidence|floatformat:2 }}
                                                 </span>
                                                 <button class="btn btn-sm btn-outline-danger"
@@ -234,7 +239,7 @@
                                                 </small>
                                             </div>
                                             <div class="d-flex gap-1">
-                                                <span class="badge {% if series_info.confidence >= 0.8 %}bg-success{% elif series_info.confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}" style="align-self: center;">
+                                                <span class="badge {% if series_info.confidence >= 0.8 %}bg-success{% elif series_info.confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %} align-self-center">>
                                                     {{ series_info.confidence|floatformat:2 }}
                                                 </span>
                                                 <button class="btn btn-sm btn-outline-danger"
@@ -276,7 +281,7 @@
                                                 </small>
                                             </div>
                                             <div class="d-flex gap-1">
-                                                <span class="badge {% if book_genre.confidence >= 0.8 %}bg-success{% elif book_genre.confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}" style="align-self: center;">
+                                                <span class="badge {% if book_genre.confidence >= 0.8 %}bg-success{% elif book_genre.confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %} align-self-center">>
                                                     {{ book_genre.confidence|floatformat:2 }}
                                                 </span>
                                                 <button class="btn btn-sm btn-outline-danger"
@@ -329,7 +334,7 @@
                                                 <span class="badge 
                                                     {% if book_publisher.confidence >= 0.8 %}bg-success
                                                     {% elif book_publisher.confidence >= 0.5 %}bg-warning
-                                                    {% else %}bg-danger{% endif %}" style="align-self: center;">
+                                                    {% else %}bg-danger{% endif %} align-self-center">
                                                     {{ book_publisher.confidence|floatformat:2 }}
                                                 </span>
                                                 <button class="btn btn-sm btn-outline-danger"
@@ -388,7 +393,7 @@
                                                                             <span class="badge 
                                                                                 {% if metadata.confidence >= 0.8 %}bg-success
                                                                                 {% elif metadata.confidence >= 0.5 %}bg-warning
-                                                                                {% else %}bg-danger{% endif %}" style="align-self: center;">
+                                                                                {% else %}bg-danger{% endif %} align-self-center">>
                                                                                 {{ metadata.confidence|floatformat:2 }}
                                                                             </span>
                                                                             <button class="btn btn-sm btn-outline-danger"
@@ -464,7 +469,7 @@
                                         <i class="fas fa-database me-2"></i>{{ cover.source.name }}
                                     </h6>
                                     <div>
-                                        <span class="badge {% if cover.confidence >= 0.8 %}bg-success{% elif cover.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}" style="align-self: center;"> 
+                                        <span class="badge {% if cover.confidence >= 0.8 %}bg-success{% elif cover.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %} align-self-center">> 
                                             {{ cover.confidence|floatformat:2 }}
                                         </span>
                                         {% if cover.cover_path == book.finalmetadata.final_cover_path %}
@@ -860,7 +865,7 @@
                                     </div>
                                     
                                     <!-- Upload New Cover (hidden by default) -->
-                                    <div id="coverUploadSection" class="mt-2" style="display: none;">
+                                    <div id="coverUploadSection" class="mt-2 d-hidden">>
                                         <input type="file" name="new_cover_upload" class="form-control" id="id_new_cover_upload" accept="image/*">
                                         {% if form.new_cover_upload.errors %}
                                             <div class="text-danger small mt-1">{{ form.new_cover_upload.errors }}</div>
@@ -978,13 +983,210 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Rescan Tab -->
+                <div class="tab-pane fade" id="rescan" role="tabpanel">
+                    <div class="card">
+                        <div class="card-header">
+                            <h4 class="mb-0">
+                                <i class="fas fa-sync-alt me-2"></i>Rescan External Metadata
+                            </h4>
+                            <p class="text-muted mb-0 mt-2">Query external sources for updated metadata using the current final metadata as search terms.</p>
+                        </div>
+                        <div class="card-body">
+                            <!-- Current Final Metadata Summary -->
+                            <div class="card mb-4 bg-light">
+                                <div class="card-header">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-info-circle me-2"></i>Current Final Metadata
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-2">
+                                                <strong>Title:</strong> 
+                                                <span class="text-muted">{{ book.finalmetadata.final_title|default:"Not set" }}</span>
+                                            </div>
+                                            <div class="mb-2">
+                                                <strong>Author:</strong> 
+                                                <span class="text-muted">{{ book.finalmetadata.final_author|default:"Not set" }}</span>
+                                            </div>
+                                            <div class="mb-2">
+                                                <strong>Series:</strong> 
+                                                <span class="text-muted">{{ book.finalmetadata.final_series|default:"Not set" }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-2">
+                                                <strong>Publisher:</strong> 
+                                                <span class="text-muted">{{ book.finalmetadata.final_publisher|default:"Not set" }}</span>
+                                            </div>
+                                            <div class="mb-2">
+                                                <strong>ISBN:</strong> 
+                                                <span class="text-muted">{{ book.finalmetadata.isbn|default:"Not set" }}</span>
+                                            </div>
+                                            <div class="mb-2">
+                                                <strong>Year:</strong> 
+                                                <span class="text-muted">{{ book.finalmetadata.publication_year|default:"Not set" }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Rescan Options -->
+                            <div class="row mb-4">
+                                <div class="col-md-8">
+                                    <h6>External Sources to Query:</h6>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="rescan_google" name="sources" value="google" checked>
+                                        <label class="form-check-label" for="rescan_google">
+                                            <i class="fas fa-search me-2 text-primary"></i>Google Books
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="rescan_openlibrary" name="sources" value="openlibrary" checked>
+                                        <label class="form-check-label" for="rescan_openlibrary">
+                                            <i class="fas fa-book me-2 text-warning"></i>Open Library
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="rescan_goodreads" name="sources" value="goodreads" checked>
+                                        <label class="form-check-label" for="rescan_goodreads">
+                                            <i class="fas fa-star me-2 text-success"></i>Goodreads
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <h6>Rescan Options:</h6>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="rescan_clear_existing" name="options" value="clear_existing">
+                                        <label class="form-check-label" for="rescan_clear_existing">
+                                            Clear existing external metadata first
+                                        </label>
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" id="rescan_force_refresh" name="options" value="force_refresh" checked>
+                                        <label class="form-check-label" for="rescan_force_refresh">
+                                            Force refresh (ignore cache)
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Search Terms Override -->
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-edit me-2"></i>Override Search Terms (Optional)
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="rescan_title" class="form-label">Title</label>
+                                                <input type="text" class="form-control" id="rescan_title" name="title_override" 
+                                                       value="{{ book.finalmetadata.final_title|default:'' }}" 
+                                                       placeholder="Leave empty to use current final title">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="rescan_author" class="form-label">Author</label>
+                                                <input type="text" class="form-control" id="rescan_author" name="author_override" 
+                                                       value="{{ book.finalmetadata.final_author|default:'' }}" 
+                                                       placeholder="Leave empty to use current final author">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="rescan_isbn" class="form-label">ISBN</label>
+                                                <input type="text" class="form-control" id="rescan_isbn" name="isbn_override" 
+                                                       value="{{ book.finalmetadata.isbn|default:'' }}" 
+                                                       placeholder="Leave empty to use current ISBN">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="rescan_series" class="form-label">Series</label>
+                                                <input type="text" class="form-control" id="rescan_series" name="series_override" 
+                                                       value="{{ book.finalmetadata.final_series|default:'' }}" 
+                                                       placeholder="Leave empty to use current series">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="text-muted">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    This will query external sources and may add new metadata entries to review.
+                                </div>
+                                <div>
+                                    <button type="button" id="rescanPreviewBtn" class="btn btn-outline-primary me-2">
+                                        <i class="fas fa-eye me-2"></i>Preview Search Terms
+                                    </button>
+                                    <button type="button" id="rescanBtn" class="btn btn-primary">
+                                        <i class="fas fa-sync-alt me-2"></i>Start Rescan
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Progress Section (Initially Hidden) -->
+                            <div id="rescanProgress" class="mt-4 d-hidden">>
+                                <div class="card border-info">
+                                    <div class="card-header bg-info text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-spinner fa-spin me-2"></i>Rescanning in Progress
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="progress mb-3">
+                                            <div id="rescanProgressBar" class="progress-bar progress-bar-striped progress-bar-animated progress-bar-width-0" role="progressbar">></div>
+                                        </div>
+                                        <div id="rescanStatus" class="text-muted">Initializing rescan...</div>
+                                        <div id="rescanLog" class="mt-3 small text-muted"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Results Section (Initially Hidden) -->
+                            <div id="rescanResults" class="mt-4 d-hidden">>
+                                <div class="card border-success">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-check-circle me-2"></i>Rescan Complete
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="rescanSummary"></div>
+                                        <div class="mt-3">
+                                            <button type="button" class="btn btn-primary" onclick="location.reload()">
+                                                <i class="fas fa-refresh me-2"></i>Refresh Page to See New Data
+                                            </button>
+                                            <button type="button" class="btn btn-secondary ms-2" onclick="document.getElementById('metadata-tab').click()">
+                                                <i class="fas fa-eye me-2"></i>View Metadata Tab
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Toast Container -->
-<div id="toast-container" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1080; max-width: 350px;"></div>
+<div id="toast-container" class="toast-container"></div>
 
 <!-- Initialize Book Detail Manager -->
 <script>

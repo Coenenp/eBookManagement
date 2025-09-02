@@ -4,16 +4,49 @@
 
 {% block content %}
 <h2>Trigger Scan</h2>
-<p>Click the button below to trigger a scan of all active scan folders.</p>
+<p>Choose your scan options below:</p>
 <form method="post">
     {% csrf_token %}
-    <label for="folder_path">Choose a folder to scan (optional):</label>
-    <select name="folder_path" class="form-control mb-3">
-        <option value="">Full scan of all active folders</option>
-        {% for folder in active_folders %}
-            <option value="{{ folder.path }}">{{ folder.path }}</option>
-        {% endfor %}
-    </select>
+    <div class="mb-3">
+        <label for="folder_path">Choose a folder to scan (optional):</label>
+        <select name="folder_path" class="form-control">
+            <option value="">Full scan of all active folders</option>
+            {% for folder in active_folders %}
+                <option value="{{ folder.path }}">{{ folder.path }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label>Scan Options:</label>
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="scan_mode" id="normal" value="normal" checked>
+            <label class="form-check-label" for="normal">
+                <strong>Normal Scan</strong> - Skip already processed files
+            </label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="scan_mode" id="resume" value="resume">
+            <label class="form-check-label" for="resume">
+                <strong>Resume Scan</strong> - Continue from where last scan was interrupted
+            </label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="scan_mode" id="rescan" value="rescan">
+            <label class="form-check-label" for="rescan">
+                <strong>Full Rescan</strong> - Process all files even if already scanned
+            </label>
+        </div>
+    </div>
+
+    {% if last_scan %}
+    <div class="alert alert-info">
+        <strong>Last scan status:</strong> {{ last_scan.status }}
+        {% if last_scan.last_processed_file %}
+            <br><small>Last processed: {{ last_scan.last_processed_file }}</small>
+        {% endif %}
+    </div>
+    {% endif %}
 
     <button type="submit" class="btn btn-primary">
         <i class="fas fa-sync"></i> Start Scan

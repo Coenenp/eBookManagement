@@ -22,7 +22,7 @@
       <p><strong>Started:</strong> <span id="scan-started">{{ scan_status.started|date:"F d, Y H:i" }}</span></p>
 
       <p><strong>Progress:</strong></p>
-      <div class="progress mb-3" style="height: 25px;">
+      <div class="progress mb-3 progress-tall">
         <div id="scan-progress-bar"
             class="progress-bar bg-info"
             role="progressbar"
@@ -33,7 +33,22 @@
           {{ scan_status.progress|default:0 }}%
         </div>
       </div>
+      
+      {% if scan_status.total_files and scan_status.total_files > 0 %}
+      <p><strong>Files:</strong> {{ scan_status.processed_files|default:0 }} of {{ scan_status.total_files }} processed</p>
+      {% endif %}
+      
+      {% if scan_status.last_processed_file %}
+      <p><strong>Last processed:</strong> <small class="text-muted">{{ scan_status.last_processed_file|truncatechars:80 }}</small></p>
+      {% endif %}
+      
       <p><strong>Message:</strong> <span id="scan-message">{{ scan_status.message|default:"No additional information." }}</span></p>
+      
+      {% if scan_status.status == 'Running' and scan_status.last_processed_file %}
+      <div class="alert alert-info">
+        <strong>Resume available:</strong> If this scan gets interrupted, you can resume it using the "Resume Scan" option.
+      </div>
+      {% endif %}
     </div>
   </div>
   {% else %}
@@ -83,7 +98,7 @@
                 &mdash;
               {% endif %}
             </td>
-            <td style="white-space: pre-line;">{{ log.message }}</td>
+            <td class="text-pre-line">{{ log.message }}</td>
           </tr>
         {% empty %}
           <tr>

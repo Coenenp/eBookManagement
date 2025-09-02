@@ -180,6 +180,26 @@ def book_cover(book, size='medium', badge=None):
         return _get_fallback_context(book, size, badge)
 
 
+@register.filter
+def safe_finalmetadata(book, field_name):
+    """Safely access finalmetadata fields, returning None or default if metadata doesn't exist"""
+    try:
+        if hasattr(book, 'finalmetadata') and book.finalmetadata:
+            return getattr(book.finalmetadata, field_name, None)
+        return None
+    except Exception:
+        return None
+
+
+@register.filter
+def has_finalmetadata(book):
+    """Check if book has finalmetadata safely"""
+    try:
+        return hasattr(book, 'finalmetadata') and book.finalmetadata is not None
+    except Exception:
+        return False
+
+
 @register.inclusion_tag('books/confidence_meter.html')
 def confidence_meter(confidence, source=None):
     """Render confidence meter with Bootstrap styling"""

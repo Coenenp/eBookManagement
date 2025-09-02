@@ -112,3 +112,21 @@ def sanitize_html(text):
 
     allowed_tags = ['b', 'i', 'em', 'strong']
     return bleach.clean(text, tags=allowed_tags, strip=True)
+
+
+@register.filter
+def language_name(language_code):
+    """Convert language code to readable name."""
+    from books.models import LANGUAGE_CHOICES
+    lang_dict = dict(LANGUAGE_CHOICES)
+    return lang_dict.get(language_code, language_code)
+
+
+@register.simple_tag(takes_context=True)
+def url_replace(context, **kwargs):
+    """Replace query parameters in current URL."""
+    request = context['request']
+    query = request.GET.copy()
+    for key, value in kwargs.items():
+        query[key] = value
+    return query.urlencode()

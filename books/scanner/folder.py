@@ -24,25 +24,128 @@ from books.utils.author import attach_authors
 logger = logging.getLogger("books.scanner")
 
 
-def scan_directory(directory, scan_folder, rescan=False, ebook_extensions=None, cover_extensions=None):
-    status, _ = ScanStatus.objects.get_or_create(id=1)
-    status.message = "Counting files..."
-    status.save()
+def scan_directory(directory, scan_folder, rescan=False, ebook_extensions=None, cover_extensions=None, scan_status=None, resume_from=None):
+    if not scan_status:
+        scan_status, _ = ScanStatus.objects.get_or_create(id=1)
+
+    scan_status.message = "Counting files..."
+    scan_status.save()
 
     ebook_files, cover_files, opf_files = _collect_files(directory, ebook_extensions, cover_extensions)
-    total_files = len(ebook_files)
+
+    # Handle resume logic
+    if resume_from:
+        logger.info(f"Attempting to resume from: {resume_from}")
+
+        # First, check for books that exist but need metadata completion
+        incomplete_books = _find_incomplete_metadata_books(directory, scan_folder)
+
+        if incomplete_books:
+            logger.info(f"Found {len(incomplete_books)} books needing metadata completion")
+            _complete_metadata_for_books(incomplete_books, scan_status)
+
+        # Then handle file-based resume
+        try:
+            # Find the index of the file we should resume from
+            resume_index = 0
+            for i, file_path in enumerate(ebook_files):
+                if file_path == resume_from:
+                    # Start from the next file after the last processed one
+                    resume_index = i + 1
+                    break
+
+            if resume_index > 0:
+                logger.info(f"Resuming file processing from file #{resume_index + 1} out of {len(ebook_files)}")
+                ebook_files = ebook_files[resume_index:]
+                # Update status to reflect already processed files
+                scan_status.processed_files = resume_index
+            else:
+                logger.info("Resume file not found in current directory, starting from beginning")
+                scan_status.processed_files = 0
+        except Exception as e:
+            logger.warning(f"Error processing resume point: {e}. Starting from beginning.")
+            scan_status.processed_files = 0
+    else:
+        scan_status.processed_files = 0
+
+    total_files = len(ebook_files) + scan_status.processed_files
+    scan_status.total_files = total_files
+    scan_status.save()
 
     for i, ebook_path in enumerate(ebook_files, 1):
         try:
             _process_book(ebook_path, scan_folder, cover_files, opf_files, rescan)
+
+            # Update progress tracking
+            current_processed = scan_status.processed_files + i
+            scan_status.processed_files = current_processed
+            scan_status.last_processed_file = ebook_path
+
         except Exception as e:
             logger.error(f"[PROCESS_BOOK ERROR] {ebook_path}: {str(e)}")
             traceback.print_exc()
             log_scan_error(f"Failed to process: {str(e)}", ebook_path, scan_folder)
 
-        update_scan_progress(status, i, total_files, Path(ebook_path).name)
+            # Still update progress even on error
+            current_processed = scan_status.processed_files + i
+            scan_status.processed_files = current_processed
+
+        update_scan_progress(scan_status, current_processed, total_files, Path(ebook_path).name)
 
     _handle_orphans(directory, cover_files, opf_files, ebook_files, scan_folder)
+
+
+def _find_incomplete_metadata_books(directory, scan_folder):
+    """Find books in the directory that exist in DB but have incomplete metadata."""
+    from books.models import Book, FinalMetadata
+
+    # Get all books in this scan folder that don't have complete metadata
+    incomplete_books = Book.objects.filter(
+        scan_folder=scan_folder,
+        file_path__startswith=directory
+    ).exclude(
+        # Exclude books that have FinalMetadata (considered complete)
+        id__in=FinalMetadata.objects.values_list('book_id', flat=True)
+    ).exclude(
+        # Exclude corrupted books
+        is_corrupted=True
+    )
+
+    logger.info(f"Found {incomplete_books.count()} books needing metadata completion in {directory}")
+    return list(incomplete_books)
+
+
+def _complete_metadata_for_books(books, scan_status):
+    """Complete metadata collection for existing books."""
+    total_incomplete = len(books)
+
+    for i, book in enumerate(books, 1):
+        try:
+            logger.info(f"[METADATA COMPLETION] Processing book {book.id}: {book.file_path}")
+
+            # Skip the file creation part, book already exists
+            # Go straight to metadata collection steps
+
+            logger.info(f"[METADATA and COVER CANDIDATES QUERY] Path: {book.file_path}")
+            query_metadata_and_covers(book)
+
+            try:
+                logger.info(f"[FINAL METADATA RESOLVE] Path: {book.file_path}")
+                resolve_final_metadata(book)
+                logger.info(f"Completed metadata for book {book.id}")
+            except Exception as e:
+                logger.error(f"Final metadata resolution failed for {book.file_path}: {str(e)}")
+
+        except Exception as e:
+            logger.error(f"[METADATA COMPLETION ERROR] Book {book.id}: {str(e)}")
+            traceback.print_exc()
+
+        # Update progress
+        scan_status.message = f"Completing metadata for book {book.id} ({i}/{total_incomplete})"
+        scan_status.save()
+
+        if i % 10 == 0:  # Log every 10 books
+            logger.info(f"Completed metadata for {i}/{total_incomplete} books")
 
 
 def _collect_files(directory, ebook_exts, cover_exts):

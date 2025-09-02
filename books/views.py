@@ -20,7 +20,7 @@ from django.conf import settings
 from functools import wraps
 from .models import (
     Book, ScanFolder, BookTitle, BookAuthor, Author, BookSeries, Series, BookCover, BookPublisher, Publisher,
-    BookGenre, BookMetadata, FinalMetadata, ScanLog, DataSource, ScanStatus, LANGUAGE_CHOICES
+    BookGenre, Genre, BookMetadata, FinalMetadata, ScanLog, DataSource, ScanStatus, LANGUAGE_CHOICES, FileOperation
 )
 from .forms import ScanFolderForm, BookSearchForm, MetadataReviewForm, UserRegisterForm
 from .book_utils import (
@@ -350,7 +350,12 @@ class BookListView(LoginRequiredMixin, ListView):
         processed = []
 
         for book in books:
-            cover_path = getattr(book.finalmetadata, 'final_cover_path', '') or book.cover_path
+            # Safely get cover path, handling books without finalmetadata
+            try:
+                cover_path = getattr(book.finalmetadata, 'final_cover_path', '') or book.cover_path
+            except Exception:
+                cover_path = book.cover_path
+
             is_url = str(cover_path).startswith("http")
             base64_image = encode_cover_to_base64(cover_path) if cover_path and not is_url else None
 
@@ -544,7 +549,6 @@ class BookDetailView(LoginRequiredMixin, DetailView):
         if form.is_valid():
             try:
                 with transaction.atomic():
-                    # DEBUG: Log all POST data to see what manual entries are flagged
                     logger.debug("POST data received:")
                     for key, value in request.POST.items():
                         if 'manual_entry' in key:
@@ -1102,46 +1106,43 @@ class TriggerScanView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         context['active_folders'] = ScanFolder.objects.filter(is_active=True)
         context['recent_logs'] = ScanLog.objects.order_by('-timestamp')[:10]
+        context['last_scan'] = ScanStatus.objects.order_by('-started').first()
         return context
 
     def post(self, request, *args, **kwargs):
         try:
-            from django.utils import timezone
-
             folder_path = request.POST.get('folder_path')
+            scan_mode = request.POST.get('scan_mode', 'normal')
 
-            # Create or update scan status immediately
-            scan_status, created = ScanStatus.objects.get_or_create(
-                defaults={
-                    'status': 'Running',
-                    'progress': 0,
-                    'started': timezone.now(),
-                    'message': 'Initializing scan...'
-                }
+            # Create a new scan status for this scan
+            scan_status = ScanStatus.objects.create(
+                status='Running',
+                progress=0,
+                message='Initializing scan...'
             )
 
-            # If status already exists, update it
-            if not created:
-                scan_status.status = 'Running'
-                scan_status.progress = 0
-                scan_status.started = timezone.now()
-                scan_status.message = 'Initializing scan...'
-                scan_status.save()
+            # Build command based on scan mode and options
+            project_dir = getattr(settings, 'BASE_DIR', os.getcwd())
+            manage_py_path = os.path.join(project_dir, 'manage.py')
+            cmd = [sys.executable, manage_py_path, 'scan_ebooks']
 
+            # Add folder path if specified
             if folder_path:
-                # Single folder scan
-                subprocess.Popen(
-                    [sys.executable, 'manage.py', 'scan_ebooks', '--folder', folder_path],
-                    cwd=os.getcwd()
-                )
+                cmd.append(folder_path)
 
-                # Update scan status message
-                scan_status.message = f'Scan started for folder: {folder_path}'
-                scan_status.save()
+            # Add scan mode flags
+            if scan_mode == 'rescan':
+                cmd.append('--rescan')
+            elif scan_mode == 'resume':
+                cmd.append('--resume')
 
-                messages.success(request, f"Book scan started for folder: {folder_path}")
+            # Start the subprocess
+            subprocess.Popen(cmd, cwd=project_dir)
+
+            # Update scan status message based on mode
+            if folder_path:
+                base_message = f'Scan started for folder: {folder_path}'
             else:
-                # Full scan of all active folders
                 active_folders = ScanFolder.objects.filter(is_active=True)
                 folder_count = active_folders.count()
 
@@ -1152,18 +1153,20 @@ class TriggerScanView(LoginRequiredMixin, TemplateView):
                     messages.error(request, "No active folders found to scan.")
                     return redirect('books:trigger_scan')
 
-                # Start full scan (let the management command handle all active folders)
-                subprocess.Popen(
-                    [sys.executable, 'manage.py', 'scan_ebooks'],
-                    cwd=os.getcwd()
-                )
+                base_message = f'Full scan started for {folder_count} active folder{"s" if folder_count != 1 else ""}'
 
-                # Update scan status message
-                scan_status.message = f'Full scan started for {folder_count} active folder{"s" if folder_count != 1 else ""}'
-                scan_status.save()
+            # Add mode description to message
+            mode_descriptions = {
+                'normal': '',
+                'resume': ' (resuming from interruption)',
+                'rescan': ' (full rescan mode)'
+            }
 
-                messages.success(request, f"Full book scan started for {folder_count} active folder{'s' if folder_count != 1 else ''}.")
+            final_message = base_message + mode_descriptions.get(scan_mode, '')
+            scan_status.message = final_message
+            scan_status.save()
 
+            messages.success(request, final_message.replace('started', 'initiated'))
             return redirect('books:scan_status')
 
         except Exception as e:
@@ -1218,7 +1221,7 @@ class ScanStatusView(LoginRequiredMixin, ListView):
             book_count=Count('book')
         ).order_by('-last_scanned')
 
-        context['scan_status'] = ScanStatus.objects.last()
+        context['scan_status'] = ScanStatus.objects.order_by('-started').first()
 
         return context
 
@@ -1346,6 +1349,898 @@ class AuthorMarkReviewedView(LoginRequiredMixin, View):
 
         return redirect('books:author_list')
 
+
+# ------------------------
+# Genre Management Views
+# ------------------------
+
+class GenreListView(LoginRequiredMixin, ListView):
+    model = Genre
+    template_name = 'books/genre_list.html'
+    context_object_name = 'genres'
+    paginate_by = 25
+
+    def get_queryset(self):
+        query = self.request.GET.get('search', '')
+        reviewed_filter = self.request.GET.get('is_reviewed', '')
+
+        base_qs = Genre.objects.all()
+
+        if query:
+            base_qs = base_qs.filter(name__icontains=query)
+
+        if reviewed_filter == 'true':
+            base_qs = base_qs.filter(is_reviewed=True)
+        elif reviewed_filter == 'false':
+            base_qs = base_qs.filter(is_reviewed=False)
+
+        return base_qs.order_by('name')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search_query'] = self.request.GET.get('search', '')
+        context['genre_sources'] = {
+            genre.id: list(BookGenre.objects.filter(genre=genre).values_list('source__name', flat=True).distinct())
+            for genre in context['genres']
+        }
+        return context
+
+
+class GenreBulkDeleteView(LoginRequiredMixin, View):
+    def post(self, request):
+        selected_ids = request.POST.getlist('selected_genres')
+        genres = Genre.objects.filter(id__in=selected_ids, is_reviewed=False)
+
+        deleted = []
+        for genre in genres:
+            BookGenre.objects.filter(genre=genre).delete()
+            genre.delete()
+            deleted.append(genre.name)
+
+        if deleted:
+            messages.success(request, f"Deleted {len(deleted)} genres: {', '.join(deleted[:5])}...")
+        else:
+            messages.info(request, "No genres deleted. Reviewed genres are protected.")
+
+        return redirect('books:genre_list')
+
+
+class GenreDeleteView(LoginRequiredMixin, DeleteView):
+    model = Genre
+    template_name = 'books/genre_confirm_delete.html'
+    success_url = reverse_lazy('books:genre_list')
+
+    def delete(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        genre_name = self.object.name
+        BookGenre.objects.filter(genre=self.object).delete()
+        self.object.delete()
+        messages.success(request, f'Genre "{genre_name}" and their metadata entries were deleted.')
+        return redirect(self.success_url)
+
+
+class GenreMarkReviewedView(LoginRequiredMixin, View):
+    def post(self, request):
+        selected_ids = request.POST.getlist('selected_genres')
+        updated = Genre.objects.filter(id__in=selected_ids, is_reviewed=False).update(is_reviewed=True)
+
+        if updated:
+            messages.success(request, f"Marked {updated} genre(s) as reviewed.")
+        else:
+            messages.info(request, "No changes made. All selected genres were already reviewed.")
+
+        return redirect('books:genre_list')
+
+
+# =============================================================================
+# BOOK RENAMING/ORGANIZATION VIEWS
+# =============================================================================
+
+class BookRenamerView(LoginRequiredMixin, ListView):
+    """View for organizing and renaming reviewed books with preview functionality."""
+    model = Book
+    template_name = 'books/book_renamer.html'
+    context_object_name = 'books'
+    paginate_by = 50
+
+    def get_queryset(self):
+        """Get reviewed books that can be renamed."""
+        queryset = Book.objects.filter(
+            finalmetadata__is_reviewed=True,
+            is_placeholder=False
+        ).select_related(
+            'finalmetadata'
+        ).prefetch_related(
+            'bookauthor_set__author',
+            'bookseries_set__series',
+            'bookgenre_set__genre'
+        )
+
+        # Apply filters
+        search = self.request.GET.get('search', '')
+        author = self.request.GET.get('author', '')
+        language = self.request.GET.get('language', '')
+        file_format = self.request.GET.get('file_format', '')
+        confidence_min = self.request.GET.get('confidence_min', '')
+        has_series = self.request.GET.get('has_series', '')
+        genre = self.request.GET.get('genre', '')
+        show_complete_series = self.request.GET.get('complete_series', '')
+
+        if search:
+            queryset = queryset.filter(
+                Q(finalmetadata__final_title__icontains=search) |
+                Q(finalmetadata__final_author__icontains=search)
+            )
+
+        if author:
+            queryset = queryset.filter(finalmetadata__final_author__icontains=author)
+
+        if language:
+            queryset = queryset.filter(finalmetadata__language=language)
+
+        if file_format:
+            queryset = queryset.filter(file_format=file_format)
+
+        if confidence_min:
+            try:
+                conf_min = float(confidence_min)
+                queryset = queryset.filter(confidence__gte=conf_min)
+            except ValueError:
+                pass
+
+        if has_series == 'true':
+            queryset = queryset.filter(finalmetadata__final_series__isnull=False)
+        elif has_series == 'false':
+            queryset = queryset.filter(finalmetadata__final_series__isnull=True)
+
+        if genre:
+            queryset = queryset.filter(bookgenre__genre__name__icontains=genre)
+
+        # Filter for complete series only
+        if show_complete_series == 'true':
+            complete_series_books = self._get_complete_series_books()
+            if complete_series_books:
+                queryset = queryset.filter(id__in=complete_series_books)
+            else:
+                queryset = queryset.none()
+
+        return queryset.distinct().order_by(
+            'finalmetadata__final_author',
+            'finalmetadata__final_series',
+            'finalmetadata__final_series_number',
+            'finalmetadata__final_title'
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Add filter options
+        context['languages'] = LANGUAGE_CHOICES
+        context['formats'] = Book.FORMAT_CHOICES
+        context['search_query'] = self.request.GET.get('search', '')
+        context['author_filter'] = self.request.GET.get('author', '')
+        context['language_filter'] = self.request.GET.get('language', '')
+        context['format_filter'] = self.request.GET.get('file_format', '')
+        context['confidence_filter'] = self.request.GET.get('confidence_min', '')
+        context['series_filter'] = self.request.GET.get('has_series', '')
+        context['genre_filter'] = self.request.GET.get('genre', '')
+        context['complete_series_filter'] = self.request.GET.get('complete_series', '')
+
+        # Analyze series completion
+        series_analysis = self._analyze_series_completion()
+        context['complete_series'] = series_analysis['complete_series']
+        context['incomplete_series'] = series_analysis['incomplete_series']
+
+        # Generate new file paths for each book with warnings
+        books_with_paths = []
+        for book in context['books']:
+            new_path = self._generate_new_file_path(book)
+            warnings = self._generate_warnings(book)
+            books_with_paths.append({
+                'book': book,
+                'current_path': book.file_path,
+                'new_path': new_path,
+                'can_rename': self._can_rename_book(book),
+                'warnings': warnings,
+                'is_complete_series': self._is_book_in_complete_series(book, series_analysis['complete_series'])
+            })
+
+        context['books_with_paths'] = books_with_paths
+
+        return context
+
+    def _analyze_series_completion(self):
+        """Analyze all series to find complete ones with no gaps."""
+        series_data = {}
+
+        # Get all books with series information
+        books_with_series = Book.objects.filter(
+            finalmetadata__is_reviewed=True,
+            finalmetadata__final_series__isnull=False,
+            finalmetadata__final_series_number__isnull=False,
+            is_placeholder=False
+        ).select_related('finalmetadata')
+
+        # Group by author and series
+        for book in books_with_series:
+            fm = book.finalmetadata
+            author = fm.final_author or "Unknown Author"
+            series = fm.final_series
+
+            key = f"{author}||{series}"
+            if key not in series_data:
+                series_data[key] = {
+                    'author': author,
+                    'series': series,
+                    'books': [],
+                    'numbers': set()
+                }
+
+            try:
+                series_num = float(fm.final_series_number)
+                series_data[key]['books'].append({
+                    'book': book,
+                    'number': series_num,
+                    'title': fm.final_title
+                })
+                series_data[key]['numbers'].add(series_num)
+            except (ValueError, TypeError):
+                # Skip books with invalid series numbers
+                continue
+
+        complete_series = []
+        incomplete_series = []
+
+        for key, data in series_data.items():
+            if len(data['books']) < 2:
+                continue  # Skip single book "series"
+
+            numbers = sorted(data['numbers'])
+
+            # Check if series is complete (no gaps from 1 to max)
+            is_complete = (
+                len(numbers) >= 2 and  # At least 2 books
+                numbers[0] == 1.0 and  # Starts with 1
+                all(numbers[i] == numbers[i-1] + 1 for i in range(1, len(numbers)))  # No gaps
+            )
+
+            series_info = {
+                'author': data['author'],
+                'series': data['series'],
+                'books': sorted(data['books'], key=lambda x: x['number']),
+                'count': len(data['books']),
+                'numbers': numbers,
+                'key': key
+            }
+
+            if is_complete:
+                complete_series.append(series_info)
+            else:
+                # Analyze what's missing
+                max_num = int(max(numbers))
+                missing = [i for i in range(1, max_num + 1) if i not in numbers]
+                series_info['missing_numbers'] = missing
+                incomplete_series.append(series_info)
+
+        return {
+            'complete_series': complete_series,
+            'incomplete_series': incomplete_series
+        }
+
+    def _is_book_in_complete_series(self, book, complete_series):
+        """Check if a book is part of a complete series."""
+        if not book.finalmetadata or not book.finalmetadata.final_series:
+            return False
+
+        fm = book.finalmetadata
+        author = fm.final_author or "Unknown Author"
+        series = fm.final_series
+
+        for series_info in complete_series:
+            if series_info['author'] == author and series_info['series'] == series:
+                return True
+        return False
+
+    def _get_complete_series_books(self):
+        """Get book IDs that are part of complete series."""
+        series_analysis = self._analyze_series_completion()
+        book_ids = []
+
+        for series_info in series_analysis['complete_series']:
+            for book_data in series_info['books']:
+                book_ids.append(book_data['book'].id)
+
+        return book_ids
+
+    def _generate_warnings(self, book):
+        """Generate warnings for potential issues with the book."""
+        warnings = []
+        fm = book.finalmetadata
+
+        # Check for missing metadata
+        if not fm.final_author or fm.final_author.strip() == "":
+            warnings.append({
+                'type': 'warning',
+                'message': 'Missing author information'
+            })
+
+        if not fm.final_title or fm.final_title.strip() == "":
+            warnings.append({
+                'type': 'warning',
+                'message': 'Missing title information'
+            })
+
+        # Check confidence levels
+        if hasattr(fm, 'overall_confidence') and fm.overall_confidence is not None:
+            if fm.overall_confidence < 0.5:
+                warnings.append({
+                    'type': 'danger',
+                    'message': f'Low confidence score: {fm.overall_confidence:.2f}'
+                })
+            elif fm.overall_confidence < 0.7:
+                warnings.append({
+                    'type': 'warning',
+                    'message': f'Medium confidence score: {fm.overall_confidence:.2f}'
+                })
+
+        # Check for series consistency
+        if fm.final_series and not fm.final_series_number:
+            warnings.append({
+                'type': 'warning',
+                'message': 'Series name present but missing series number'
+            })
+        elif fm.final_series_number and not fm.final_series:
+            warnings.append({
+                'type': 'warning',
+                'message': 'Series number present but missing series name'
+            })
+
+        # Check for duplicate file names
+        if self._check_for_duplicate_paths(book):
+            warnings.append({
+                'type': 'danger',
+                'message': 'Potential duplicate file path detected'
+            })
+
+        # Check file existence
+        if not self._can_rename_book(book):
+            warnings.append({
+                'type': 'danger',
+                'message': 'Original file not found'
+            })
+
+        return warnings
+
+    def _check_for_duplicate_paths(self, book):
+        """Check if the generated path would conflict with existing files."""
+        new_path = self._generate_new_file_path(book)
+
+        # Check if any other book would generate the same path
+        other_books = Book.objects.filter(
+            finalmetadata__is_reviewed=True,
+            is_placeholder=False
+        ).exclude(id=book.id).select_related('finalmetadata')
+
+        for other_book in other_books:
+            other_path = self._generate_new_file_path(other_book)
+            if new_path == other_path:
+                return True
+        return False
+
+    def _generate_new_file_path(self, book):
+        """Generate the new organized file path based on the suggested structure."""
+        try:
+            fm = book.finalmetadata
+            base_library = "eBooks Library"
+
+            # Format (EPUB, PDF, etc.)
+            file_format = book.file_format.upper() if book.file_format else "UNKNOWN"
+
+            # Language
+            language = "Unknown"
+            if fm.language:
+                # Convert language code to readable name
+                lang_dict = dict(LANGUAGE_CHOICES)
+                language = lang_dict.get(fm.language, fm.language)
+
+            # Main Category (for now, default to Fiction/Non-Fiction based on genres)
+            category = self._determine_category(book)
+
+            # Author (Last, First format)
+            author = self._format_author_name(fm.final_author)
+
+            # Series handling
+            if fm.final_series and fm.final_series_number:
+                # Series book
+                series_folder = self._clean_filename(fm.final_series)
+                book_folder = f"{fm.final_series_number} - {self._clean_filename(fm.final_title)}"
+                filename_base = f"{author} - {fm.final_series} #{fm.final_series_number} - {fm.final_title}"
+            else:
+                # Standalone book
+                series_folder = None
+                book_folder = self._clean_filename(fm.final_title)
+                filename_base = f"{author} - {fm.final_title}"
+
+            # Clean filename
+            filename_base = self._clean_filename(filename_base)
+            file_extension = book.file_format.lower() if book.file_format else "epub"
+
+            # Construct path
+            if series_folder:
+                folder_path = f"{base_library}/{file_format}/{language}/{category}/{self._clean_filename(author)}/{series_folder}/{book_folder}"
+            else:
+                folder_path = f"{base_library}/{file_format}/{language}/{category}/{self._clean_filename(author)}/{book_folder}"
+
+            new_file_path = f"{folder_path}/{filename_base}.{file_extension}"
+
+            return new_file_path
+
+        except Exception as e:
+            return f"Error generating path: {str(e)}"
+
+    def _determine_category(self, book):
+        """Determine main category based on genres."""
+        fiction_indicators = ['fiction', 'novel', 'romance', 'mystery', 'thriller', 'fantasy', 'sci-fi', 'science fiction']
+
+        genres = book.bookgenre.filter(is_active=True).values_list('genre__name', flat=True)
+        genre_names = [g.lower() for g in genres]
+
+        for genre in genre_names:
+            if any(indicator in genre for indicator in fiction_indicators):
+                return "Fiction"
+
+        # Default categories based on common patterns
+        if any(g in genre_names for g in ['biography', 'history', 'science', 'technology', 'business']):
+            return "Non-Fiction"
+        elif any(g in genre_names for g in ['reference', 'manual', 'guide', 'cookbook']):
+            return "Reference"
+
+        return "Fiction"  # Default
+
+    def _format_author_name(self, author_name):
+        """Format author name as 'Last, First'."""
+        if not author_name:
+            return "Unknown Author"
+
+        # Try to parse "First Last" format
+        parts = author_name.strip().split()
+        if len(parts) >= 2:
+            first = ' '.join(parts[:-1])
+            last = parts[-1]
+            return f"{last}, {first}"
+        else:
+            return author_name
+
+    def _clean_filename(self, name):
+        """Clean filename to be filesystem safe."""
+        if not name:
+            return "Unknown"
+
+        import re
+        # Remove invalid characters
+        cleaned = re.sub(r'[<>:"/\\|?*]', '', str(name))
+        # Replace multiple spaces with single space
+        cleaned = re.sub(r'\s+', ' ', cleaned)
+        # Trim and limit length
+        cleaned = cleaned.strip()[:100]
+
+        return cleaned if cleaned else "Unknown"
+
+    def _can_rename_book(self, book):
+        """Check if book can be safely renamed."""
+        import os
+        return os.path.exists(book.file_path) if book.file_path else False
+
+
+class BookRenamerPreviewView(LoginRequiredMixin, View):
+    """AJAX view to preview renaming changes."""
+
+    def post(self, request):
+        selected_ids = request.POST.getlist('selected_books')
+        if not selected_ids:
+            return JsonResponse({'error': 'No books selected'}, status=400)
+
+        books = Book.objects.filter(
+            id__in=selected_ids,
+            finalmetadata__is_reviewed=True,
+            is_placeholder=False
+        ).select_related('finalmetadata')
+
+        preview_data = []
+        for book in books:
+            renamer_view = BookRenamerView()
+            new_path = renamer_view._generate_new_file_path(book)
+
+            preview_data.append({
+                'id': book.id,
+                'title': book.finalmetadata.final_title,
+                'author': book.finalmetadata.final_author,
+                'current_path': book.file_path,
+                'new_path': new_path,
+                'can_rename': renamer_view._can_rename_book(book)
+            })
+
+        return JsonResponse({'preview': preview_data})
+
+
+class BookRenamerExecuteView(LoginRequiredMixin, View):
+    """Execute the actual file renaming with operation tracking."""
+
+    def post(self, request):
+        import uuid
+        import json
+
+        selected_ids = request.POST.getlist('selected_books')
+        if not selected_ids:
+            return JsonResponse({'error': 'No books selected'}, status=400)
+
+        books = Book.objects.filter(
+            id__in=selected_ids,
+            finalmetadata__is_reviewed=True,
+            is_placeholder=False
+        ).select_related('finalmetadata')
+
+        # Generate batch ID for this operation
+        batch_id = uuid.uuid4()
+
+        results = {
+            'success': [],
+            'errors': [],
+            'warnings': [],
+            'total': len(books),
+            'batch_id': str(batch_id)
+        }
+
+        for book in books:
+            try:
+                # Create file operation record first
+                file_op = FileOperation.objects.create(
+                    book=book,
+                    operation_type='rename',
+                    batch_id=batch_id,
+                    user=request.user,
+                    original_file_path=book.file_path or '',
+                    original_cover_path=book.cover_path or '',
+                    original_opf_path=getattr(book, 'opf_path', '') or '',
+                    original_folder_path=os.path.dirname(book.file_path) if book.file_path else '',
+                )
+
+                # Generate warnings before rename
+                warnings = self._generate_warnings(book)
+
+                success_data = self._rename_book_files(book, file_op)
+                if success_data:
+                    file_op.status = 'completed'
+                    file_op.new_file_path = success_data['new_path']
+                    file_op.new_cover_path = success_data.get('new_cover_path', '')
+                    file_op.new_opf_path = success_data.get('new_opf_path', '')
+                    file_op.new_folder_path = os.path.dirname(success_data['new_path'])
+                    file_op.additional_files = json.dumps(success_data.get('additional_files', []))
+                    file_op.save()
+
+                    result_data = {
+                        'id': book.id,
+                        'title': book.finalmetadata.final_title,
+                        'old_path': file_op.original_file_path,
+                        'new_path': success_data['new_path'],
+                        'operation_id': file_op.id
+                    }
+
+                    if warnings:
+                        result_data['warnings'] = warnings
+                        results['warnings'].append(result_data)
+                    else:
+                        results['success'].append(result_data)
+                else:
+                    file_op.status = 'failed'
+                    file_op.error_message = 'Failed to rename files'
+                    file_op.save()
+
+                    results['errors'].append({
+                        'id': book.id,
+                        'title': book.finalmetadata.final_title,
+                        'error': 'Failed to rename files',
+                        'operation_id': file_op.id
+                    })
+
+            except Exception as e:
+                # Update file operation if it exists
+                try:
+                    file_op.status = 'failed'
+                    file_op.error_message = str(e)
+                    file_op.save()
+                    operation_id = file_op.id
+                except Exception:
+                    operation_id = None
+
+                results['errors'].append({
+                    'id': book.id,
+                    'title': book.finalmetadata.final_title,
+                    'error': str(e),
+                    'operation_id': operation_id
+                })
+
+        return JsonResponse(results)
+
+    def _generate_warnings(self, book):
+        """Generate warnings for the book (same as in BookRenamerView)."""
+        warnings = []
+        fm = book.finalmetadata
+
+        # Check for missing metadata
+        if not fm.final_author or fm.final_author.strip() == "":
+            warnings.append('Missing author information')
+
+        if not fm.final_title or fm.final_title.strip() == "":
+            warnings.append('Missing title information')
+
+        # Check confidence levels
+        if hasattr(fm, 'overall_confidence') and fm.overall_confidence is not None:
+            if fm.overall_confidence < 0.5:
+                warnings.append(f'Low confidence score: {fm.overall_confidence:.2f}')
+            elif fm.overall_confidence < 0.7:
+                warnings.append(f'Medium confidence score: {fm.overall_confidence:.2f}')
+
+        return warnings
+
+    def _rename_book_files(self, book, file_op):
+        """Rename all files associated with a book with detailed tracking."""
+        import os
+        import shutil
+
+        renamer_view = BookRenamerView()
+        new_path = renamer_view._generate_new_file_path(book)
+
+        if not book.file_path or not os.path.exists(book.file_path):
+            return False
+
+        try:
+            # Create directory structure
+            new_dir = os.path.dirname(new_path)
+            os.makedirs(new_dir, exist_ok=True)
+
+            # Get base paths
+            old_base = os.path.splitext(book.file_path)[0]
+            new_base = os.path.splitext(new_path)[0]
+
+            # Files to rename
+            files_to_rename = []
+            additional_files = []
+
+            # Main file
+            if os.path.exists(book.file_path):
+                files_to_rename.append((book.file_path, new_path))
+
+            # Associated files (cover, opf, txt, etc.)
+            for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.opf', '.txt', '.json']:
+                old_file = old_base + ext
+                if os.path.exists(old_file):
+                    new_file = new_base + ext
+                    files_to_rename.append((old_file, new_file))
+                    additional_files.append({
+                        'original': old_file,
+                        'new': new_file,
+                        'type': ext.replace('.', '')
+                    })
+
+            # Look for other related files (different naming patterns)
+            old_dir = os.path.dirname(book.file_path)
+            old_filename = os.path.splitext(os.path.basename(book.file_path))[0]
+
+            if os.path.exists(old_dir):
+                for filename in os.listdir(old_dir):
+                    if filename.startswith(old_filename) and filename != os.path.basename(book.file_path):
+                        old_file = os.path.join(old_dir, filename)
+                        new_filename = filename.replace(old_filename, os.path.splitext(os.path.basename(new_path))[0])
+                        new_file = os.path.join(new_dir, new_filename)
+
+                        files_to_rename.append((old_file, new_file))
+                        additional_files.append({
+                            'original': old_file,
+                            'new': new_file,
+                            'type': 'related'
+                        })
+
+            # Perform the renames
+            renamed_files = []
+            try:
+                for old_file, new_file in files_to_rename:
+                    shutil.move(old_file, new_file)
+                    renamed_files.append(new_file)
+
+                # Update database
+                book.file_path = new_path
+
+                # Update cover path
+                if book.cover_path and book.cover_path.startswith(old_base):
+                    new_cover_path = book.cover_path.replace(old_base, new_base)
+                    book.cover_path = new_cover_path
+                else:
+                    new_cover_path = book.cover_path
+
+                # Update OPF path if it exists
+                if hasattr(book, 'opf_path') and book.opf_path and book.opf_path.startswith(old_base):
+                    new_opf_path = book.opf_path.replace(old_base, new_base)
+                    book.opf_path = new_opf_path
+                else:
+                    new_opf_path = getattr(book, 'opf_path', '')
+
+                book.save()
+
+                return {
+                    'new_path': new_path,
+                    'new_cover_path': new_cover_path,
+                    'new_opf_path': new_opf_path,
+                    'additional_files': additional_files
+                }
+
+            except Exception as e:
+                # Rollback on error
+                for i, (old_file, new_file) in enumerate(files_to_rename[:len(renamed_files)]):
+                    try:
+                        shutil.move(new_file, old_file)
+                    except Exception:
+                        pass
+                raise e
+
+        except Exception:
+            return False
+
+
+class BookRenamerRevertView(LoginRequiredMixin, View):
+    """Revert file rename operations using operation tracking."""
+
+    def post(self, request):
+
+        batch_id = request.POST.get('batch_id')
+        operation_ids = request.POST.getlist('operation_ids')
+
+        if not batch_id and not operation_ids:
+            return JsonResponse({'error': 'No operations specified for reversal'}, status=400)
+
+        # Get operations to revert
+        if batch_id:
+            operations = FileOperation.objects.filter(
+                batch_id=batch_id,
+                status='completed'
+            ).select_related('book')
+        else:
+            operations = FileOperation.objects.filter(
+                id__in=operation_ids,
+                status='completed'
+            ).select_related('book')
+
+        results = {
+            'success': [],
+            'errors': [],
+            'total': len(operations)
+        }
+
+        for operation in operations:
+            try:
+                success = self._revert_file_operation(operation)
+                if success:
+                    operation.status = 'reverted'
+                    operation.save()
+
+                    results['success'].append({
+                        'operation_id': operation.id,
+                        'book_id': operation.book.id,
+                        'title': operation.book.finalmetadata.final_title if operation.book.finalmetadata else 'Unknown',
+                        'reverted_from': operation.new_file_path,
+                        'reverted_to': operation.original_file_path
+                    })
+                else:
+                    results['errors'].append({
+                        'operation_id': operation.id,
+                        'book_id': operation.book.id,
+                        'title': operation.book.finalmetadata.final_title if operation.book.finalmetadata else 'Unknown',
+                        'error': 'Failed to revert file operation'
+                    })
+            except Exception as e:
+                results['errors'].append({
+                    'operation_id': operation.id,
+                    'book_id': operation.book.id,
+                    'title': operation.book.finalmetadata.final_title if operation.book.finalmetadata else 'Unknown',
+                    'error': str(e)
+                })
+
+        return JsonResponse(results)
+
+    def _revert_file_operation(self, operation):
+        """Revert a single file operation."""
+        import os
+        import shutil
+        import json
+
+        try:
+            book = operation.book
+
+            # Check if new files exist
+            if not os.path.exists(operation.new_file_path):
+                return False
+
+            # Create original directory if needed
+            original_dir = os.path.dirname(operation.original_file_path)
+            os.makedirs(original_dir, exist_ok=True)
+
+            # Revert main file
+            shutil.move(operation.new_file_path, operation.original_file_path)
+
+            # Revert additional files
+            if operation.additional_files:
+                try:
+                    additional_files = json.loads(operation.additional_files)
+                    for file_info in additional_files:
+                        if os.path.exists(file_info['new']):
+                            # Create directory for original file if needed
+                            os.makedirs(os.path.dirname(file_info['original']), exist_ok=True)
+                            shutil.move(file_info['new'], file_info['original'])
+                except (json.JSONDecodeError, KeyError):
+                    # Continue even if additional files fail
+                    pass
+
+            # Update database
+            book.file_path = operation.original_file_path
+
+            if operation.original_cover_path:
+                book.cover_path = operation.original_cover_path
+
+            if hasattr(book, 'opf_path') and operation.original_opf_path:
+                book.opf_path = operation.original_opf_path
+
+            book.save()
+
+            # Try to remove empty directories
+            try:
+                new_dir = os.path.dirname(operation.new_file_path)
+                if os.path.exists(new_dir) and not os.listdir(new_dir):
+                    os.rmdir(new_dir)
+
+                    # Try to remove parent directories if empty
+                    parent_dir = os.path.dirname(new_dir)
+                    while parent_dir and parent_dir != os.path.dirname(parent_dir):
+                        if os.path.exists(parent_dir) and not os.listdir(parent_dir):
+                            os.rmdir(parent_dir)
+                            parent_dir = os.path.dirname(parent_dir)
+                        else:
+                            break
+            except OSError:
+                # Don't fail the revert if directory cleanup fails
+                pass
+
+            return True
+
+        except Exception:
+            return False
+
+
+class BookRenamerHistoryView(LoginRequiredMixin, ListView):
+    """View recent file operations with revert capabilities."""
+    model = FileOperation
+    template_name = 'books/book_renamer_history.html'
+    context_object_name = 'operations'
+    paginate_by = 50
+
+    def get_queryset(self):
+        return FileOperation.objects.select_related('book', 'book__finalmetadata', 'user').order_by('-operation_date')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Group operations by batch for easier reversal
+        operations_by_batch = {}
+        for operation in context['operations']:
+            if operation.batch_id:
+                batch_id = str(operation.batch_id)
+                if batch_id not in operations_by_batch:
+                    operations_by_batch[batch_id] = []
+                operations_by_batch[batch_id].append(operation)
+
+        context['operations_by_batch'] = operations_by_batch
+        return context
+
+
 # =============================================================================
 # AJAX VIEWS
 # =============================================================================
@@ -1430,29 +2325,33 @@ def ajax_trigger_scan(request):
             'error': 'No folder path provided for folder scan'
         }
 
-    scan_status, created = ScanStatus.objects.get_or_create(
-        defaults={
-            'status': 'Running',
-            'progress': 0,
-            'started': timezone.now(),
-            'message': 'Initializing scan...'
-        }
+    # Always create a new scan status entry for each scan
+    scan_status = ScanStatus.objects.create(
+        status='Running',
+        progress=0,
+        message='Initializing scan...'
     )
 
-    if not created:
-        scan_status.status = 'Running'
-        scan_status.progress = 0
-        scan_status.started = timezone.now()
-        scan_status.message = 'Initializing scan...'
-        scan_status.save()
+    # Add better error handling for subprocess
+    # Use Django's BASE_DIR to ensure we're in the correct directory
+    project_dir = getattr(settings, 'BASE_DIR', os.getcwd())
+    manage_py_path = os.path.join(project_dir, 'manage.py')
 
-    cmd = [sys.executable, 'manage.py', 'scan_ebooks']
+    cmd = [sys.executable, manage_py_path, 'scan_ebooks']
     if scan_type == 'folder':
-        cmd.extend(['--folder', folder_path])
+        cmd.append(folder_path)
     elif scan_type == 'rescan':
         cmd.append('--rescan')
 
-    subprocess.Popen(cmd, cwd=os.getcwd())
+    try:
+        subprocess.Popen(cmd, cwd=project_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        logger.info(f"Started scan process with command: {' '.join(cmd)} in directory: {project_dir}")
+    except Exception as e:
+        logger.error(f"Failed to start scan process: {e}")
+        scan_status.status = 'Error'
+        scan_status.message = f'Failed to start scan: {str(e)}'
+        scan_status.save()
+        return {'success': False, 'error': f'Failed to start scan: {str(e)}'}
 
     message = 'Scan initiated'
     scan_message = 'Scan started'
@@ -1582,7 +2481,7 @@ def delete_scan_folder_ajax(request, folder_id):
 @ajax_response_handler
 def current_scan_status(request):
     """Return current scan status as JSON."""
-    scan_status = ScanStatus.objects.last()
+    scan_status = ScanStatus.objects.order_by('-started').first()
     if scan_status:
         return {
             'status': scan_status.status,
@@ -1637,6 +2536,181 @@ def toggle_needs_review(request, book_id):
         final_metadata.save()
 
     return redirect('books:book_detail', pk=book.id)
+
+
+@csrf_exempt
+@require_POST
+def rescan_external_metadata(request, book_id):
+    """Rescan external metadata using current final metadata as search terms."""
+    import traceback
+    from django.http import JsonResponse
+    from books.scanner.external import query_metadata_and_covers_with_terms
+    from django.core.cache import cache
+
+    try:
+        book = get_object_or_404(Book, pk=book_id)
+
+        # Handle both JSON and form data
+        if request.content_type == 'application/json':
+            import json
+            data = json.loads(request.body)
+            sources = data.get('sources', [])
+            clear_existing = data.get('clear_existing', False)
+            force_refresh = data.get('force_refresh', False)
+            title_override = data.get('title_search', '').strip()
+            author_override = data.get('author_search', '').strip()
+            isbn_override = data.get('isbn_override', '').strip()
+            series_override = data.get('series_override', '').strip()
+        else:
+            # Get parameters from POST data
+            sources = request.POST.getlist('sources[]')
+            clear_existing = request.POST.get('clear_existing') == 'true'
+            force_refresh = request.POST.get('force_refresh') == 'true'
+
+            # Get override search terms
+            title_override = request.POST.get('title_override', '').strip()
+            author_override = request.POST.get('author_override', '').strip()
+            isbn_override = request.POST.get('isbn_override', '').strip()
+            series_override = request.POST.get('series_override', '').strip()
+
+        logger.info(f"Starting external metadata rescan for book {book_id}")
+        logger.info(f"Sources: {sources}")
+        logger.info(f"Clear existing: {clear_existing}")
+        logger.info(f"Force refresh: {force_refresh}")
+
+        # Get current final metadata or use overrides
+        final_metadata = getattr(book, 'finalmetadata', None)
+
+        search_title = title_override
+        search_author = author_override
+        search_isbn = isbn_override
+        search_series = series_override
+
+        if not search_title and final_metadata:
+            search_title = final_metadata.final_title or ''
+        if not search_author and final_metadata:
+            search_author = final_metadata.final_author or ''
+        if not search_isbn and final_metadata:
+            search_isbn = final_metadata.isbn or ''
+        if not search_series and final_metadata:
+            search_series = final_metadata.final_series or ''
+
+        # Fall back to basic book data if no final metadata
+        if not search_title:
+            # Try to get title from existing titles
+            first_title = book.titles.filter(is_active=True).order_by('-confidence').first()
+            if first_title:
+                search_title = first_title.title
+            else:
+                # Last resort: use filename without extension
+                search_title = os.path.splitext(book.filename)[0]
+        if not search_author:
+            # Try to get author from existing book authors
+            first_author = book.bookauthor.filter(is_main_author=True, is_active=True).first()
+            if first_author:
+                search_author = first_author.author.name
+
+        logger.info(f"Search terms - Title: '{search_title}', Author: '{search_author}', ISBN: '{search_isbn}', Series: '{search_series}'")
+
+        if not search_title and not search_author and not search_isbn:
+            return JsonResponse({
+                'success': False,
+                'error': 'No search terms available. Please provide at least a title, author, or ISBN.'
+            })
+
+        # Clear cache if force refresh is enabled
+        if force_refresh:
+            cache_keys = [
+                f"google_books_{search_title}_{search_author}",
+                f"openlibrary_{search_title}_{search_author}",
+                f"goodreads_{search_title}_{search_author}",
+            ]
+            if search_isbn:
+                cache_keys.extend([
+                    f"google_books_isbn_{search_isbn}",
+                    f"openlibrary_isbn_{search_isbn}",
+                ])
+            for key in cache_keys:
+                cache.delete(key)
+
+        # Clear existing external metadata if requested
+        if clear_existing:
+            logger.info("Clearing existing external metadata")
+            external_sources = ['google_books', 'open_library', 'goodreads']
+
+            # Clear metadata from external sources
+            book.titles.filter(source__name__in=external_sources).update(is_active=False)
+            book.bookauthor.filter(source__name__in=external_sources).update(is_active=False)
+            book.bookgenre.filter(source__name__in=external_sources).update(is_active=False)
+            book.series_info.filter(source__name__in=external_sources).update(is_active=False)
+            book.bookpublisher.filter(source__name__in=external_sources).update(is_active=False)
+            book.metadata.filter(source__name__in=external_sources).update(is_active=False)
+            book.covers.filter(source__name__in=external_sources).update(is_active=False)
+
+        # Count existing metadata before rescan
+        before_counts = {
+            'titles': book.titles.filter(is_active=True).count(),
+            'authors': book.bookauthor.filter(is_active=True).count(),
+            'genres': book.bookgenre.filter(is_active=True).count(),
+            'series': book.series_info.filter(is_active=True).count(),
+            'publishers': book.bookpublisher.filter(is_active=True).count(),
+            'covers': book.covers.filter(is_active=True).count(),
+            'metadata': book.metadata.filter(is_active=True).count(),
+        }
+
+        # Perform the external metadata query using custom search terms
+        # Note: This uses the new function that accepts custom search terms
+        try:
+            query_metadata_and_covers_with_terms(book, search_title, search_author, search_isbn)
+        except Exception as e:
+            logger.error(f"Error during external metadata query: {e}")
+            return JsonResponse({
+                'success': False,
+                'error': f'Error querying external sources: {str(e)}'
+            })
+
+        # Count new metadata after rescan
+        after_counts = {
+            'titles': book.titles.filter(is_active=True).count(),
+            'authors': book.bookauthor.filter(is_active=True).count(),
+            'genres': book.bookgenre.filter(is_active=True).count(),
+            'series': book.series_info.filter(is_active=True).count(),
+            'publishers': book.bookpublisher.filter(is_active=True).count(),
+            'covers': book.covers.filter(is_active=True).count(),
+            'metadata': book.metadata.filter(is_active=True).count(),
+        }
+
+        # Calculate what was added
+        added_counts = {
+            key: after_counts[key] - before_counts[key]
+            for key in before_counts.keys()
+        }
+
+        logger.info(f"External metadata rescan completed for book {book_id}")
+        logger.info(f"Added metadata: {added_counts}")
+
+        return JsonResponse({
+            'success': True,
+            'message': 'External metadata rescan completed successfully',
+            'search_terms': {
+                'title': search_title,
+                'author': search_author,
+                'isbn': search_isbn,
+                'series': search_series,
+            },
+            'sources_queried': sources,
+            'before_counts': before_counts,
+            'after_counts': after_counts,
+            'added_counts': added_counts,
+        })
+
+    except Exception as e:
+        logger.error(f"Error in rescan_external_metadata: {e}")
+        logger.error(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'error': f'An error occurred during the rescan: {str(e)}'
+        })
 
 
 @ajax_response_handler
