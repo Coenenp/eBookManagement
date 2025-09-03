@@ -10,24 +10,20 @@
         </button>
 
         <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
-            <ul class="navbar-nav align-items-center">
-                {% if user.is_authenticated %}
-                    <li class="nav-item me-3">
+            <ul class="navbar-nav align-items-center" role="list">{% if user.is_authenticated %}<li class="nav-item me-3" role="listitem">
                         <span class="navbar-text text-muted small">
                             Logged in as <strong>{{ user.username }}</strong>
                         </span>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item" role="listitem">
                         <form action="{% url 'books:logout' %}" method="post" class="d-inline">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-outline-danger btn-sm">Sign out</button>
                         </form>
-                    </li>
-                {% else %}
-                    <li class="nav-item me-2">
+                    </li>{% else %}<li class="nav-item me-2" role="listitem">
                         <a class="btn btn-outline-primary btn-sm" href="{% url 'books:login' %}">Sign in</a>
                     </li>
-                    <li class="nav-item">
+                    <li class="nav-item" role="listitem">
                         <a class="btn btn-outline-success btn-sm" href="{% url 'books:signup' %}">Sign up</a>
                     </li>
                 {% endif %}
@@ -92,15 +88,11 @@
                     </a>
                 </li>
             </ul>
-            <ul class="navbar-nav ms-auto">
-                {% for item in sidebar_items %}
-                <li class="nav-item">
+            <ul class="navbar-nav ms-auto" role="list">{% for item in sidebar_items %}<li class="nav-item" role="listitem">
                     <a class="nav-link" href="{% url item.url %}">
                         <i class="fas fa-{{ item.icon }} me-1"></i> {{ item.name }}
                     </a>
-                </li>
-                {% endfor %}
-            </ul>
+                </li>{% endfor %}</ul>
         </div>
     </div>
 </nav>

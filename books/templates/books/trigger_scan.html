@@ -9,7 +9,7 @@
     {% csrf_token %}
     <div class="mb-3">
         <label for="folder_path">Choose a folder to scan (optional):</label>
-        <select name="folder_path" class="form-control">
+        <select id="folder_path" name="folder_path" class="form-control" title="Choose a folder to scan">
             <option value="">Full scan of all active folders</option>
             {% for folder in active_folders %}
                 <option value="{{ folder.path }}">{{ folder.path }}</option>

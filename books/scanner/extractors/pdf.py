@@ -22,19 +22,19 @@ def extract(book):
                 book=book,
                 title=meta.title.strip(),
                 source=source,
-                defaults={'confidence': 0.7}
+                defaults={'confidence': source.trust_level}
             )
 
         if meta.author:
             raw_names = [meta.author.strip()]
-            attach_authors(book, raw_names, source, confidence=0.7)
+            attach_authors(book, raw_names, source, confidence=source.trust_level)
 
         if meta.creator:
             BookMetadata.objects.get_or_create(
                 book=book,
                 field_name='creator',
                 source=source,
-                defaults={'field_value': meta.creator.strip(), 'confidence': 0.6}
+                defaults={'field_value': meta.creator.strip(), 'confidence': source.trust_level}
             )
 
     except Exception as e:

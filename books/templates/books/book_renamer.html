@@ -38,7 +38,8 @@
                 <div class="card-header">
                     <h5 class="mb-0">
                         <i class="fas fa-filter me-2"></i>Filters
-                        <button class="btn btn-sm btn-outline-secondary float-end" type="button" data-bs-toggle="collapse" data-bs-target="#filtersCollapse">
+                        <button class="btn btn-sm btn-outline-secondary float-end" type="button" data-bs-toggle="collapse" data-bs-target="#filtersCollapse"
+                               aria-label="Toggle filters" title="Toggle filters section">
                             <i class="fas fa-chevron-down"></i>
                         </button>
                     </h5>
@@ -140,7 +141,8 @@
                 <div class="card-header">
                     <h5 class="mb-0">
                         <i class="fas fa-layer-group me-2"></i>Complete Series Available
-                        <button class="btn btn-sm btn-outline-secondary float-end" type="button" data-bs-toggle="collapse" data-bs-target="#seriesCollapse">
+                        <button class="btn btn-sm btn-outline-secondary float-end" type="button" data-bs-toggle="collapse" data-bs-target="#seriesCollapse"
+                               aria-label="Toggle series list" title="Toggle complete series list">
                             <i class="fas fa-chevron-down"></i>
                         </button>
                     </h5>
@@ -180,13 +182,14 @@
                     <table class="table table-striped table-hover">
                         <thead class="table-dark">
                             <tr>
-                                <th style="width: 40px;">
-                                    <input type="checkbox" id="selectAllCheckbox" class="form-check-input">
+                                <th class="table-col-narrow">
+                                    <label for="selectAllCheckbox" class="visually-hidden">Select all books</label>
+                                    <input type="checkbox" id="selectAllCheckbox" class="form-check-input" aria-label="Select all books">
                                 </th>
                                 <th>Book Details</th>
                                 <th>Current Path</th>
                                 <th>New Organized Path</th>
-                                <th style="width: 120px;">Status & Warnings</th>
+                                <th class="table-col-status">Status & Warnings</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -198,6 +201,7 @@
                                            class="form-check-input book-checkbox"
                                            data-author="{{ item.book.finalmetadata.final_author }}"
                                            data-series="{{ item.book.finalmetadata.final_series }}"
+                                           aria-label="Select {{ item.book.finalmetadata.final_title|truncatechars:30 }}"
                                            {% if item.is_complete_series %}data-complete-series="true"{% endif %}>
                                     {% else %}
                                     <i class="fas fa-times text-danger" title="File not found"></i>
@@ -240,7 +244,7 @@
                                     {% if item.warnings %}
                                     <div class="mt-1">
                                         {% for warning in item.warnings %}
-                                        <div class="alert alert-{{ warning.type }} alert-sm p-1 mb-1" style="font-size: 0.75rem;">
+                                        <div class="alert alert-{{ warning.type }} alert-sm alert-small p-1 mb-1">
                                             {{ warning.message }}
                                         </div>
                                         {% endfor %}
@@ -257,37 +261,7 @@
             <!-- Pagination -->
             {% if is_paginated %}
             <nav aria-label="Books pagination">
-                <ul class="pagination justify-content-center">
-                    {% if page_obj.has_previous %}
-                        <li class="page-item">
-                            <a class="page-link" href="?{% url_replace page=1 %}">First</a>
-                        </li>
-                        <li class="page-item">
-                            <a class="page-link" href="?{% url_replace page=page_obj.previous_page_number %}">Previous</a>
-                        </li>
-                    {% endif %}
-
-                    {% for num in page_obj.paginator.page_range %}
-                        {% if page_obj.number == num %}
-                            <li class="page-item active">
-                                <span class="page-link">{{ num }}</span>
-                            </li>
-                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                            <li class="page-item">
-                                <a class="page-link" href="?{% url_replace page=num %}">{{ num }}</a>
-                            </li>
-                        {% endif %}
-                    {% endfor %}
-
-                    {% if page_obj.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="?{% url_replace page=page_obj.next_page_number %}">Next</a>
-                        </li>
-                        <li class="page-item">
-                            <a class="page-link" href="?{% url_replace page=page_obj.paginator.num_pages %}">Last</a>
-                        </li>
-                    {% endif %}
-                </ul>
+                <ul class="pagination justify-content-center" role="list">{% if page_obj.has_previous %}<li class="page-item" role="listitem"><a class="page-link" href="?{% url_replace page=1 %}">First</a></li><li class="page-item" role="listitem"><a class="page-link" href="?{% url_replace page=page_obj.previous_page_number %}">Previous</a></li>{% endif %}{% for num in page_obj.paginator.page_range %}{% if page_obj.number == num %}<li class="page-item active" role="listitem"><span class="page-link">{{ num }}</span></li>{% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}<li class="page-item" role="listitem"><a class="page-link" href="?{% url_replace page=num %}">{{ num }}</a></li>{% endif %}{% endfor %}{% if page_obj.has_next %}<li class="page-item" role="listitem"><a class="page-link" href="?{% url_replace page=page_obj.next_page_number %}">Next</a></li><li class="page-item" role="listitem"><a class="page-link" href="?{% url_replace page=page_obj.paginator.num_pages %}">Last</a></li>{% endif %}</ul>
             </nav>
             {% endif %}
 
@@ -341,10 +315,10 @@
             </div>
             <div class="modal-body">
                 <div class="progress mb-3">
-                    <div class="progress-bar" role="progressbar" style="width: 0%" id="progressBar"></div>
+                    <div class="progress-bar progress-bar-width-0" role="progressbar" id="progressBar"></div>
                 </div>
                 <div id="progressText">Preparing to organize files...</div>
-                <div id="progressResults" class="mt-3" style="display: none;">
+                <div id="progressResults" class="mt-3 d-hidden">
                     <div class="row">
                         <div class="col-md-4">
                             <div class="alert alert-success">
@@ -362,7 +336,7 @@
                             </div>
                         </div>
                     </div>
-                    <div id="revertSection" class="mt-3" style="display: none;">
+                    <div id="revertSection" class="mt-3 d-hidden">
                         <div class="alert alert-info">
                             <strong>Need to revert?</strong> 
                             <button type="button" class="btn btn-sm btn-warning ms-2" id="revertBtn">
@@ -373,7 +347,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-primary" id="closeProgressBtn" style="display: none;" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary d-hidden" id="closeProgressBtn" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -557,10 +531,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Show progress modal
         progressModal.show();
-        document.getElementById('progressBar').style.width = '0%';
+        document.getElementById('progressBar').className = 'progress-bar progress-bar-striped progress-bar-animated progress-bar-width-0';
         document.getElementById('progressText').textContent = 'Starting file organization...';
-        document.getElementById('progressResults').style.display = 'none';
-        document.getElementById('closeProgressBtn').style.display = 'none';
+        document.getElementById('progressResults').className = 'mt-3 d-hidden';
+        document.getElementById('closeProgressBtn').className = 'btn btn-primary d-hidden';
 
         // Make AJAX request for execution
         const formData = new FormData();
@@ -573,18 +547,18 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .then(response => response.json())
         .then(data => {
-            document.getElementById('progressBar').style.width = '100%';
+            document.getElementById('progressBar').className = 'progress-bar progress-bar-width-100';
             document.getElementById('progressText').textContent = 'File organization completed!';
             
             document.getElementById('successCount').textContent = data.success.length;
             document.getElementById('warningCount').textContent = data.warnings ? data.warnings.length : 0;
             document.getElementById('errorCount').textContent = data.errors.length;
-            document.getElementById('progressResults').style.display = 'block';
-            document.getElementById('closeProgressBtn').style.display = 'inline-block';
+            document.getElementById('progressResults').className = 'mt-3 d-block';
+            document.getElementById('closeProgressBtn').className = 'btn btn-primary d-inline-block';
             
             // Show revert option if there were successful operations
             if (data.success.length > 0 || (data.warnings && data.warnings.length > 0)) {
-                document.getElementById('revertSection').style.display = 'block';
+                document.getElementById('revertSection').className = 'mt-3 d-block';
                 
                 // Store batch ID for reversal
                 window.lastBatchId = data.batch_id;
@@ -622,10 +596,9 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         })
         .catch(error => {
-            document.getElementById('progressBar').style.width = '100%';
-            document.getElementById('progressBar').classList.add('bg-danger');
+            document.getElementById('progressBar').className = 'progress-bar progress-bar-width-100 bg-danger';
             document.getElementById('progressText').textContent = 'Error during file organization';
-            document.getElementById('closeProgressBtn').style.display = 'inline-block';
+            document.getElementById('closeProgressBtn').className = 'btn btn-primary d-inline-block';
         });
     }
 

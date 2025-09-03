@@ -192,6 +192,13 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
     logger.info(f"[INTERNAL METADATA PARSE] Path: {book.file_path}")
     _extract_internal_metadata(book)
 
+    logger.info(f"[CONTENT ISBN SCAN] Path: {book.file_path}")
+    try:
+        from books.scanner.extractors.content_isbn import save_content_isbns
+        save_content_isbns(book)
+    except Exception as e:
+        logger.warning(f"Content ISBN extraction failed: {str(e)}")
+
     logger.info(f"[OPF PARSE] Path: {book.file_path}")
     if book.opf_path:
         try:
@@ -231,11 +238,11 @@ def _extract_filename_metadata(book):
             book=book,
             title=parsed["title"],
             source=source,
-            defaults={"confidence": 0.6}
+            defaults={"confidence": source.trust_level}
         )
 
     raw_names = parsed.get("authors", [])[:3]
-    attach_authors(book, raw_names, source, confidence=0.5)
+    attach_authors(book, raw_names, source, confidence=source.trust_level)
 
     if parsed.get("series"):
         series_obj, _ = Series.objects.get_or_create(name=parsed["series"])

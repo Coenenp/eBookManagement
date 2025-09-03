@@ -46,12 +46,12 @@ def extract(book):
                 book=book,
                 title=title.strip(),
                 source=source,
-                defaults={'confidence': 0.9}
+                defaults={'confidence': source.trust_level}
             )
 
         # Authors
         if author:
-            attach_authors(book, [author], source, confidence=0.9)
+            attach_authors(book, [author], source, confidence=source.trust_level)
 
         # Publisher
         if publisher:
@@ -67,7 +67,7 @@ def extract(book):
                     book=book,
                     publisher=pub_obj,
                     source=source,
-                    defaults={'confidence': 0.8}
+                    defaults={'confidence': source.trust_level}
                 )
             except IntegrityError as e:
                 logger.warning(f"[BOOKPUBLISHER DUPLICATE] Could not create BookPublisher for {book.file_path}: {e}")
@@ -83,7 +83,7 @@ def extract(book):
                     book=book,
                     field_name=field,
                     source=source,
-                    defaults={'field_value': value.strip(), 'confidence': 0.8}
+                    defaults={'field_value': value.strip(), 'confidence': source.trust_level}
                 )
 
         return {

@@ -1,75 +1,38 @@
 <!-- This fixes the pagination performance issue for large datasets -->
 <nav aria-label="Book pagination" role="navigation">
-    <ul class="pagination justify-content-center">
-        {% if page_obj.has_previous %}
-        <li class="page-item">
+    <ul class="pagination justify-content-center" role="list">{% if page_obj.has_previous %}<li class="page-item" role="listitem">
             <a class="page-link" href="?{{ query_params.urlencode }}&page=1" aria-label="First page">
                 <i class="fas fa-angle-double-left" aria-hidden="true"></i>
                 <span class="visually-hidden">First</span>
             </a>
         </li>
-        <li class="page-item">
+        <li class="page-item" role="listitem">
             <a class="page-link" href="?{{ query_params.urlencode }}&page={{ page_obj.previous_page_number }}" aria-label="Previous page">
                 <i class="fas fa-chevron-left" aria-hidden="true"></i> Previous
             </a>
-        </li>
-        {% endif %}
-        
-        {% with page_num=page_obj.number total_pages=page_obj.paginator.num_pages %}
-            <!-- Show first page if we're far from it -->
-            {% if page_num > 4 %}
-                <li class="page-item">
+        </li>{% endif %}{% with page_num=page_obj.number total_pages=page_obj.paginator.num_pages %}{% if page_num > 4 %}<li class="page-item" role="listitem">
                     <a class="page-link" href="?{{ query_params.urlencode }}&page=1">1</a>
-                </li>
-                {% if page_num > 5 %}
-                    <li class="page-item disabled">
+                </li>{% if page_num > 5 %}<li class="page-item disabled" role="listitem">
                         <span class="page-link">…</span>
-                    </li>
-                {% endif %}
-            {% endif %}
-            
-            <!-- Show pages around current page -->
-            {% for num in page_obj.paginator.page_range %}
-                {% if num >= page_num|add:"-2" and num <= page_num|add:"2" %}
-                    {% if page_num == num %}
-                    <li class="page-item active" aria-current="page">
+                    </li>{% endif %}{% endif %}{% for num in page_obj.paginator.page_range %}{% if num >= page_num|add:"-2" and num <= page_num|add:"2" %}{% if page_num == num %}<li class="page-item active" aria-current="page" role="listitem">
                         <span class="page-link">{{ num }}</span>
-                    </li>
-                    {% else %}
-                    <li class="page-item">
+                    </li>{% else %}<li class="page-item" role="listitem">
                         <a class="page-link" href="?{{ query_params.urlencode }}&page={{ num }}">{{ num }}</a>
-                    </li>
-                    {% endif %}
-                {% endif %}
-            {% endfor %}
-            
-            <!-- Show last page if we're far from it -->
-            {% if page_num < total_pages|add:"-3" %}
-                {% if page_num < total_pages|add:"-4" %}
-                    <li class="page-item disabled">
+                    </li>{% endif %}{% endif %}{% endfor %}{% if page_num < total_pages|add:"-3" %}{% if page_num < total_pages|add:"-4" %}<li class="page-item disabled" role="listitem">
                         <span class="page-link">…</span>
-                    </li>
-                {% endif %}
-                <li class="page-item">
+                    </li>{% endif %}<li class="page-item" role="listitem">
                     <a class="page-link" href="?{{ query_params.urlencode }}&page={{ total_pages }}">{{ total_pages }}</a>
-                </li>
-            {% endif %}
-        {% endwith %}
-        
-        {% if page_obj.has_next %}
-        <li class="page-item">
+                </li>{% endif %}{% endwith %}{% if page_obj.has_next %}<li class="page-item" role="listitem">
             <a class="page-link" href="?{{ query_params.urlencode }}&page={{ page_obj.next_page_number }}" aria-label="Next page">
                 Next <i class="fas fa-chevron-right" aria-hidden="true"></i>
             </a>
         </li>
-        <li class="page-item">
+        <li class="page-item" role="listitem">
             <a class="page-link" href="?{{ query_params.urlencode }}&page={{ page_obj.paginator.num_pages }}" aria-label="Last page">
                 <span class="visually-hidden">Last</span>
                 <i class="fas fa-angle-double-right" aria-hidden="true"></i>
             </a>
-        </li>
-        {% endif %}
-    </ul>
+        </li>{% endif %}</ul>
     
     <!-- Page Info with better semantics -->
     <div class="text-center text-muted small mt-2" role="status" aria-live="polite">

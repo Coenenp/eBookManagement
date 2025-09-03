@@ -1,70 +1,79 @@
 def normalize_language(value):
-    """Normalize various language codes or names into a consistent display format."""
+    """Normalize various language codes or names into consistent ISO language codes."""
 
     lang_map = {
         # English
-        'en': 'English', 'eng': 'English', 'english': 'English',
-        'en-us': 'English', 'en-gb': 'English',
+        'en': 'en', 'eng': 'en', 'english': 'en',
+        'en-us': 'en', 'en-gb': 'en',
 
         # French
-        'fr': 'French', 'fra': 'French', 'fre': 'French', 'french': 'French', 'fr-fr': 'French',
+        'fr': 'fr', 'fra': 'fr', 'fre': 'fr', 'french': 'fr', 'fr-fr': 'fr',
 
         # German
-        'de': 'German', 'deu': 'German', 'ger': 'German', 'german': 'German', 'de-de': 'German',
+        'de': 'de', 'deu': 'de', 'ger': 'de', 'german': 'de', 'de-de': 'de',
 
         # Dutch
-        'nl': 'Dutch', 'nld': 'Dutch', 'dut': 'Dutch', 'dutch': 'Dutch', 'nl-nl': 'Dutch',
+        'nl': 'nl', 'nld': 'nl', 'dut': 'nl', 'dutch': 'nl', 'nl-nl': 'nl',
 
         # Spanish
-        'es': 'Spanish', 'spa': 'Spanish', 'spanish': 'Spanish',
+        'es': 'es', 'spa': 'es', 'spanish': 'es',
 
         # Portuguese
-        'pt': 'Portuguese', 'por': 'Portuguese', 'pt-br': 'Portuguese (Brazil)', 'portuguese': 'Portuguese',
+        'pt': 'pt', 'por': 'pt', 'pt-br': 'pt', 'portuguese': 'pt',
 
         # Italian
-        'it': 'Italian', 'ita': 'Italian', 'italian': 'Italian',
+        'it': 'it', 'ita': 'it', 'italian': 'it',
 
         # Japanese
-        'ja': 'Japanese', 'jpn': 'Japanese', 'japanese': 'Japanese',
+        'ja': 'ja', 'jpn': 'ja', 'japanese': 'ja',
 
         # Korean
-        'ko': 'Korean', 'kor': 'Korean', 'korean': 'Korean',
+        'ko': 'ko', 'kor': 'ko', 'korean': 'ko',
 
         # Chinese
-        'zh': 'Chinese', 'chi': 'Chinese', 'zho': 'Chinese', 'chinese': 'Chinese',
+        'zh': 'zh', 'chi': 'zh', 'zho': 'zh', 'chinese': 'zh',
 
+        # Additional languages to match LANGUAGE_CHOICES
         # Hebrew
-        'he': 'Hebrew', 'heb': 'Hebrew', 'hebrew': 'Hebrew',
+        'he': 'he', 'heb': 'he', 'hebrew': 'he',
 
         # Hungarian
-        'hu': 'Hungarian', 'hun': 'Hungarian', 'hungarian': 'Hungarian',
+        'hu': 'hu', 'hun': 'hu', 'hungarian': 'hu',
 
         # Polish
-        'pl': 'Polish', 'pol': 'Polish', 'polish': 'Polish',
+        'pl': 'pl', 'pol': 'pl', 'polish': 'pl',
 
         # Russian
-        'ru': 'Russian', 'rus': 'Russian', 'russian': 'Russian',
+        'ru': 'ru', 'rus': 'ru', 'russian': 'ru',
 
         # Turkish
-        'tr': 'Turkish', 'tur': 'Turkish', 'turkish': 'Turkish',
+        'tr': 'tr', 'tur': 'tr', 'turkish': 'tr',
 
         # Catalan
-        'ca': 'Catalan', 'cat': 'Catalan', 'catalan': 'Catalan',
+        'ca': 'ca', 'cat': 'ca', 'catalan': 'ca',
 
         # Indonesian
-        'id': 'Indonesian', 'ind': 'Indonesian', 'indonesian': 'Indonesian',
+        'id': 'id', 'ind': 'id', 'indonesian': 'id',
 
         # Hebrew mis-capitalizations
-        'Heb': 'Hebrew', 'HEB': 'Hebrew',
+        'Heb': 'he', 'HEB': 'he',
 
-        # Unknown or undefined
-        'und': 'Unknown', 'zxx': 'Unknown', '': 'Unknown',
+        # Unknown or undefined - return None to be filtered out
+        'und': None, 'zxx': None, '': None, 'unknown': None,
     }
+
+    # Import here to avoid circular imports
+    from books.models import LANGUAGE_CHOICES
+    valid_codes = [code for code, name in LANGUAGE_CHOICES]
 
     normalized_values = []
     for segment in str(value).replace(';', ',').split(','):
         code = segment.strip().lower()
         if code:
-            normalized_values.append(lang_map.get(code, code.title()))
+            normalized_code = lang_map.get(code)
+            # Only include codes that are in our LANGUAGE_CHOICES
+            if normalized_code and normalized_code in valid_codes:
+                normalized_values.append(normalized_code)
 
-    return normalized_values[0] if len(normalized_values) == 1 else ', '.join(normalized_values)
+    # Return the first valid code, or None if no valid codes found
+    return normalized_values[0] if normalized_values else None

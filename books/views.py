@@ -9,7 +9,7 @@ from django.views.generic import View, ListView, DetailView, CreateView, DeleteV
 from django.contrib import messages
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.http import JsonResponse
 from django.utils import timezone
 from django.db.models import Q, Count, Avg
@@ -371,7 +371,15 @@ class BookListView(LoginRequiredMixin, ListView):
             del context['query_params']['page']
 
         context['formats'] = Book.objects.values_list('file_format', flat=True).distinct().order_by('file_format')
-        context['languages'] = FinalMetadata.objects.values_list('language', flat=True).distinct().order_by('language')
+
+        # Get all language values from database and filter to only valid ISO codes
+        all_languages = FinalMetadata.objects.values_list('language', flat=True).distinct()
+        valid_language_codes = [code for code, name in LANGUAGE_CHOICES]
+        used_languages = [lang for lang in all_languages if lang in valid_language_codes]
+
+        # Create language choices for template - only include languages actually used in the database
+        lang_dict = dict(LANGUAGE_CHOICES)
+        context['languages'] = [(code, lang_dict[code]) for code in used_languages if code in lang_dict]
 
         metadata_stats = FinalMetadata.objects.aggregate(
             avg_confidence=Avg('overall_confidence'),
@@ -468,6 +476,9 @@ class BookDetailView(LoginRequiredMixin, DetailView):
         # Cover handling
         context.update(self._get_cover_context(book, final_metadata))
 
+        # Navigation handling
+        context.update(self._get_navigation_context(book))
+
         return context
 
     def _get_metadata_context(self, book):
@@ -479,23 +490,63 @@ class BookDetailView(LoginRequiredMixin, DetailView):
         context['all_authors'] = book.bookauthor.filter(is_active=True).order_by('-confidence', '-is_main_author')
         context['all_genres'] = book.bookgenre.filter(is_active=True).order_by('-confidence')
         context['all_series'] = book.series_info.filter(is_active=True).order_by('-confidence')
+
+        # If no series relationships but there is series info in final metadata or series_number metadata, show it
+        if not context['all_series'].exists():
+            series_number_metadata = book.metadata.filter(is_active=True, field_name='series_number').first()
+            if series_number_metadata or (book.finalmetadata and book.finalmetadata.final_series):
+                # Create a context entry to show series information
+                context['has_series_number_only'] = True
+                context['series_number_metadata'] = series_number_metadata
+                context['final_series_name'] = getattr(book.finalmetadata, 'final_series', '') if book.finalmetadata else ''
+                context['final_series_number'] = getattr(book.finalmetadata, 'final_series_number', '') if book.finalmetadata else ''
+
         context['all_publishers'] = book.bookpublisher.filter(is_active=True).order_by('-confidence')
         context['all_covers'] = book.covers.filter(is_active=True).order_by('-confidence', '-is_high_resolution')
 
-        # Group additional metadata by field name for dropdowns
-        additional_metadata = book.metadata.filter(is_active=True).order_by('field_name', '-confidence')
+        # Group additional metadata by field name for dropdowns (exclude series_number as it's handled in series section)
+        additional_metadata = book.metadata.filter(is_active=True).exclude(field_name='series_number').order_by('field_name', '-confidence')
         metadata_by_field = {}
+
+        # Field mapping from metadata field names to FinalMetadata attribute names
+        field_mapping = {
+            'description': 'description',
+            'isbn': 'isbn',
+            'publication_year': 'publication_year',
+            'language': 'language',
+            # Add any other fields as needed
+        }
 
         for metadata in additional_metadata:
             is_final = False
+            is_top_choice = False
             if book.finalmetadata:
-                final_value = getattr(book.finalmetadata, metadata.field_name, None)
-                is_final = str(metadata.field_value) == str(final_value)
+                # Get the correct final metadata field name
+                final_field_name = field_mapping.get(metadata.field_name, metadata.field_name)
+                final_value = getattr(book.finalmetadata, final_field_name, None)
+                # Handle None values and empty strings
+                if final_value is not None and str(final_value).strip():
+                    is_final = str(metadata.field_value) == str(final_value)
 
-            metadata_by_field.setdefault(metadata.field_name, []).append({
+            field_entries = metadata_by_field.setdefault(metadata.field_name, [])
+
+            # Mark as top choice if this is the first (highest confidence) entry and no final selection exists
+            if not field_entries:  # First entry for this field
+                has_final_selection = any(entry.get('is_final_selected', False) for entry in field_entries)
+                if not has_final_selection and not is_final:
+                    is_top_choice = True
+
+            field_entries.append({
                 'instance': metadata,
-                'is_final_selected': is_final
+                'is_final_selected': is_final,
+                'is_top_choice': is_top_choice
             })
+
+        # After processing all entries, mark top choices for fields without final selections
+        for field_name, entries in metadata_by_field.items():
+            has_final_selection = any(entry['is_final_selected'] for entry in entries)
+            if not has_final_selection and entries:
+                entries[0]['is_top_choice'] = True
 
         context['metadata_by_field'] = metadata_by_field
 
@@ -527,6 +578,74 @@ class BookDetailView(LoginRequiredMixin, DetailView):
             context['primary_cover_base64'] = None
 
         context['book_cover_base64'] = encode_cover_to_base64(book.cover_path)
+        return context
+
+    def _get_navigation_context(self, book):
+        """Get navigation context for flexible book navigation."""
+        context = {}
+
+        # Get current book metadata for filtering
+        current_metadata = getattr(book, 'finalmetadata', None)
+        current_author = current_metadata.final_author if current_metadata else None
+        current_series = current_metadata.final_series if current_metadata else None
+        current_reviewed = current_metadata.is_reviewed if current_metadata else False
+
+        # Base queryset for navigation
+        base_queryset = Book.objects.select_related('finalmetadata').filter(is_placeholder=False)
+
+        # Navigation by chronological order (ID-based)
+        context['prev_book'] = base_queryset.filter(id__lt=book.id).order_by('-id').first()
+        context['next_book'] = base_queryset.filter(id__gt=book.id).order_by('id').first()
+
+        # Navigation by same author
+        if current_author:
+            same_author_qs = base_queryset.filter(finalmetadata__final_author=current_author)
+            context['prev_same_author'] = same_author_qs.filter(id__lt=book.id).order_by('-id').first()
+            context['next_same_author'] = same_author_qs.filter(id__gt=book.id).order_by('id').first()
+
+        # Navigation by same series (if book is part of series)
+        if current_series:
+            same_series_qs = base_queryset.filter(finalmetadata__final_series=current_series)
+            # Order by series number if available, otherwise by ID
+            context['prev_same_series'] = same_series_qs.filter(id__lt=book.id).order_by('-finalmetadata__final_series_number', '-id').first()
+            context['next_same_series'] = same_series_qs.filter(id__gt=book.id).order_by('finalmetadata__final_series_number', 'id').first()
+
+        # Navigation by review status
+        if current_reviewed:
+            # Next unreviewed book
+            context['next_unreviewed'] = base_queryset.filter(
+                finalmetadata__is_reviewed=False,
+                id__gt=book.id
+            ).order_by('id').first()
+
+            # Previous reviewed book
+            context['prev_reviewed'] = base_queryset.filter(
+                finalmetadata__is_reviewed=True,
+                id__lt=book.id
+            ).order_by('-id').first()
+        else:
+            # Next reviewed book
+            context['next_reviewed'] = base_queryset.filter(
+                finalmetadata__is_reviewed=True,
+                id__gt=book.id
+            ).order_by('id').first()
+
+            # Previous unreviewed book
+            context['prev_unreviewed'] = base_queryset.filter(
+                finalmetadata__is_reviewed=False,
+                id__lt=book.id
+            ).order_by('-id').first()
+
+        # Navigation by needs review (books with conflicts or low confidence)
+        needs_review_qs = base_queryset.filter(
+            Q(finalmetadata__is_reviewed=False) |
+            Q(bookauthor__confidence__lt=0.7) |
+            Q(titles__confidence__lt=0.7) |
+            Q(series_info__confidence__lt=0.7)
+        ).distinct()
+        context['prev_needs_review'] = needs_review_qs.filter(id__lt=book.id).order_by('-id').first()
+        context['next_needs_review'] = needs_review_qs.filter(id__gt=book.id).order_by('id').first()
+
         return context
 
     def post(self, request, *args, **kwargs):
@@ -677,6 +796,17 @@ class BookMetadataView(LoginRequiredMixin, DetailView):
         context['all_titles'] = book.titles.filter(is_active=True).order_by('-confidence')
         context['all_authors'] = book.bookauthor.filter(is_active=True).order_by('-confidence', '-is_main_author')
         context['all_series'] = book.series_info.filter(is_active=True).order_by('-confidence')
+
+        # If no series relationships but there is series info in final metadata or series_number metadata, show it
+        if not context['all_series'].exists():
+            series_number_metadata = book.metadata.filter(is_active=True, field_name='series_number').first()
+            if series_number_metadata or (book.finalmetadata and book.finalmetadata.final_series):
+                # Create a context entry to show series information
+                context['has_series_number_only'] = True
+                context['series_number_metadata'] = series_number_metadata
+                context['final_series_name'] = getattr(book.finalmetadata, 'final_series', '') if book.finalmetadata else ''
+                context['final_series_number'] = getattr(book.finalmetadata, 'final_series_number', '') if book.finalmetadata else ''
+
         context['all_publishers'] = book.bookpublisher.filter(is_active=True).order_by('-confidence')
         context['all_genres'] = book.bookgenre.filter(is_active=True).order_by('-confidence')
         context['all_covers'] = book.covers.filter(is_active=True).order_by('-confidence', '-is_high_resolution')
@@ -734,12 +864,16 @@ class BookMetadataUpdateView(LoginRequiredMixin, View):
             else:
                 messages.info(request, "No changes were made to the metadata.")
 
-            return redirect('books:book_metadata', pk=book.id)
+            # Redirect back to the edit tab
+            redirect_url = reverse('books:book_detail', kwargs={'pk': book.id}) + '?tab=edit'
+            return redirect(redirect_url)
 
         except Exception as e:
             logger.error(f"Error updating metadata for book {pk}: {e}")
             messages.error(request, f"An error occurred while updating metadata: {str(e)}")
-            return redirect('books:book_metadata', pk=pk)
+            # Redirect back to the edit tab even on error
+            redirect_url = reverse('books:book_detail', kwargs={'pk': pk}) + '?tab=edit'
+            return redirect(redirect_url)
 
     def _process_text_fields(self, request, final_metadata):
         """Process title, author, series, publisher fields"""
@@ -928,7 +1062,7 @@ class BookMetadataUpdateView(LoginRequiredMixin, View):
         """Process publication year - FIXED to store in both places"""
         updated_fields = []
 
-        final_year = request.POST.get('final_publication_year', '').strip()
+        final_year = request.POST.get('publication_year', '').strip()
         manual_year = request.POST.get('manual_publication_year', '').strip()
 
         year_value = None
@@ -987,7 +1121,7 @@ class BookMetadataUpdateView(LoginRequiredMixin, View):
         }
 
         for field_name, (display_name, manual_field) in metadata_fields.items():
-            final_value = request.POST.get(f'final_{field_name}', '').strip()
+            final_value = request.POST.get(field_name, '').strip()
             manual_value = request.POST.get(manual_field, '').strip()
 
             value_to_save = None
@@ -2710,6 +2844,62 @@ def rescan_external_metadata(request, book_id):
         return JsonResponse({
             'success': False,
             'error': f'An error occurred during the rescan: {str(e)}'
+        })
+
+
+@require_POST
+def ajax_rescan_external_metadata(request, book_id):
+    """AJAX wrapper for rescan_external_metadata for the metadata page quick rescan."""
+    import json
+
+    try:
+        # Parse the request data
+        data = json.loads(request.body)
+
+        # Extract search terms and options
+        search_terms = data.get('searchTerms', {})
+        sources = data.get('sources', ['google', 'openlibrary', 'goodreads'])
+        options = data.get('options', {})
+
+        # Prepare the data for the existing rescan function
+        rescan_data = {
+            'sources': sources,
+            'clear_existing': options.get('clearExisting', False),
+            'force_refresh': options.get('forceRefresh', True),
+            'title_search': search_terms.get('title', ''),
+            'author_search': search_terms.get('author', ''),
+            'isbn_override': search_terms.get('isbn', ''),
+            'series_override': search_terms.get('series', '')
+        }
+
+        # Create a new request object with the formatted data
+        from django.http import HttpRequest
+        new_request = HttpRequest()
+        new_request.method = 'POST'
+        new_request.content_type = 'application/json'
+        new_request._body = json.dumps(rescan_data).encode('utf-8')
+        new_request.user = request.user
+
+        # Call the existing rescan function
+        response = rescan_external_metadata(new_request, book_id)
+
+        # Extract JSON data from the response
+        if hasattr(response, 'content'):
+            response_data = json.loads(response.content.decode('utf-8'))
+            # Add new_metadata_count for the UI
+            if response_data.get('success'):
+                added_counts = response_data.get('added_counts', {})
+                total_new = sum(added_counts.values())
+                response_data['new_metadata_count'] = total_new
+            return JsonResponse(response_data)
+        else:
+            return response
+
+    except Exception as e:
+        logger.error(f"Error in ajax_rescan_external_metadata: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': f'An error occurred during the quick rescan: {str(e)}'
         })
 
 

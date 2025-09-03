@@ -28,6 +28,13 @@ LANGUAGE_CHOICES = [
     ('ja', 'Japanese'),
     ('ko', 'Korean'),
     ('zh', 'Chinese'),
+    ('ru', 'Russian'),
+    ('pl', 'Polish'),
+    ('he', 'Hebrew'),
+    ('hu', 'Hungarian'),
+    ('tr', 'Turkish'),
+    ('ca', 'Catalan'),
+    ('id', 'Indonesian'),
 ]
 
 
@@ -44,6 +51,7 @@ class DataSource(models.Model):
     GOOGLE_BOOKS_COVERS = 'Google Books Covers'
     ORIGINAL_SCAN = 'Original Scan'
     MANUAL = 'Manual Entry'
+    CONTENT_SCAN = 'content_scan'
 
     SOURCE_CHOICES = [
         (FILENAME, 'Filename'),
@@ -57,6 +65,7 @@ class DataSource(models.Model):
         (GOOGLE_BOOKS_COVERS, 'Google Books Covers'),
         (ORIGINAL_SCAN, 'Original Scan'),
         (MANUAL, 'Manual Entry'),
+        (CONTENT_SCAN, 'Content Scan'),
     ]
 
     name = models.CharField(max_length=50, choices=SOURCE_CHOICES, unique=True)

@@ -53,10 +53,23 @@ legend {
 /* Display utilities */
 .d-hidden { display: none !important; }
 .d-block { display: block !important; }
+.d-inline-block { display: inline-block !important; }
 
 /* Progress bars */
 .progress-tall { height: 25px; }
 .progress-bar-width-0 { width: 0%; }
+.progress-bar-width-100 { width: 100%; }
+.progress-bar-initial { width: 0%; }
+
+/* Progress bar specific classes */
+.progress-bar-scan { width: var(--scan-width, 0%); }
+.progress-bar-trust { width: var(--trust-width, 0%); }
+.progress-bar-confidence { width: var(--confidence-width, 0%); }
+.progress-bar-completeness { width: var(--completeness-width, 0%); }
+.progress-bar-format { width: var(--format-width, 0%); }
+
+/* Progress height utilities */
+.progress-height-15 { height: 15px; }
 
 /* Alignment utilities */
 .align-self-center { align-self: center; }
@@ -81,6 +94,19 @@ legend {
 .col-width-160 { max-width: 160px; }
 .col-width-250 { width: 250px; }
 
+/* Table specific classes */
+.table-col-narrow { width: 40px; }
+.table-col-status { width: 120px; }
+.checkbox-column { width: 40px; }
+
+/* Alert utilities */
+.alert-sm { 
+    font-size: 0.75rem; 
+    padding: 0.25rem 0.5rem; 
+    margin-bottom: 0.25rem; 
+}
+.alert-small { font-size: 0.75rem; }
+
 /* Cover preview */
 .cover-preview-small { 
     max-width: 150px; 
@@ -89,13 +115,6 @@ legend {
 
 /* Object fit utilities */
 .object-fit-contain { object-fit: contain; }
-
-/* Alert utilities */
-.alert-sm { 
-    font-size: 0.75rem; 
-    padding: 0.25rem 0.5rem; 
-    margin-bottom: 0.25rem; 
-}
 
 /* Toast container */
 .toast-container {
@@ -114,6 +133,21 @@ legend {
 
 /* Table cursor styles */
 .cursor-pointer {
+    cursor: pointer;
+    font-weight: 600;
+    border: none;
+}
+
+/* Data source specific styles */
+.data-source-table th.col-name { width: 250px; }
+.data-source-table th.col-trust { width: 250px; }
+.data-source-table td.name-cell { max-width: 160px; }
+.trust-progress {
+    width: 140px;
+    height: 20px;
+    position: relative;
+}
+.trust-level-badge {
     cursor: pointer;
     font-weight: 600;
     border: none;
@@ -575,4 +609,80 @@ img[loading="lazy"].loaded {
 .form-check-input:focus + .form-check-label {
     outline: 2px solid #0d6efd;
     outline-offset: 2px;
+}
+
+/* ======================================
+   📍 Book Navigation
+========================================= */
+
+/* Navigation button toolbar responsive behavior */
+.btn-toolbar.gap-2 {
+    flex-wrap: wrap;
+    gap: 0.5rem !important;
+}
+
+.btn-toolbar .btn-group {
+    flex-shrink: 0;
+}
+
+/* Make navigation buttons more compact on small screens */
+@media (max-width: 768px) {
+    .btn-toolbar .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.8rem;
+    }
+    
+    .btn-toolbar .btn-group-sm .btn i {
+        margin: 0 0.2rem;
+    }
+    
+    /* Stack navigation groups vertically on very small screens */
+    .btn-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .btn-toolbar .btn-group {
+        justify-content: center;
+        margin-bottom: 0.25rem;
+    }
+}
+
+/* Navigation card styling */
+.navigation-card {
+    border-left: 4px solid #007bff;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.navigation-card .card-body {
+    padding: 0.75rem 1rem;
+}
+
+/* Different color schemes for navigation types */
+.nav-basic { border-left-color: #007bff; }
+.nav-author { border-left-color: #17a2b8; }
+.nav-series { border-left-color: #28a745; }
+.nav-review { border-left-color: #ffc107; }
+
+/* Navigation icons */
+.navigation-icon {
+    opacity: 0.7;
+    margin-right: 0.5rem;
+}
+
+/* Hover effects for navigation buttons */
+.btn-outline-primary:hover,
+.btn-outline-info:hover,
+.btn-outline-success:hover,
+.btn-outline-warning:hover,
+.btn-outline-secondary:hover,
+.btn-outline-danger:hover {
+    transform: translateY(-1px);
+    transition: transform 0.1s ease;
+}
+
+/* Disabled button states */
+.btn.disabled {
+    opacity: 0.5;
+    transform: none !important;
 }

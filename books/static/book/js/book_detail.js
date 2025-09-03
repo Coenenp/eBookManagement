@@ -15,6 +15,7 @@ class BookDetailManager {
     init() {
         this.initializeTabFunctionality();
         this.initializeTooltips();
+        this.initializeKeyboardNavigation();
         this.bindGlobalEvents();
     }
 
@@ -64,6 +65,87 @@ class BookDetailManager {
             tooltipTriggerList.forEach(tooltipTriggerEl => {
                 new bootstrap.Tooltip(tooltipTriggerEl, { placement: 'top', trigger: 'hover focus' });
             });
+        }
+    }
+
+    initializeKeyboardNavigation() {
+        // Get navigation links for keyboard shortcuts
+        const navigationLinks = {
+            prevBook: document.querySelector('a[href*="/books/"][title*="Previous Book"]'),
+            nextBook: document.querySelector('a[href*="/books/"][title*="Next Book"]'),
+            nextUnreviewed: document.querySelector('a[href*="/books/"][title*="Next Unreviewed"]'),
+            nextAuthor: document.querySelector('a[href*="/books/"][title*="Next by"]'),
+            nextSeries: document.querySelector('a[href*="/books/"][title*="Next in"]')
+        };
+
+        // Add keyboard event listener
+        document.addEventListener('keydown', (e) => {
+            // Only trigger if no input field is focused
+            if (document.activeElement.tagName === 'INPUT' || 
+                document.activeElement.tagName === 'TEXTAREA' || 
+                document.activeElement.tagName === 'SELECT') {
+                return;
+            }
+
+            switch(e.key) {
+                case 'ArrowLeft':
+                    if (navigationLinks.prevBook) {
+                        e.preventDefault();
+                        window.location.href = navigationLinks.prevBook.href;
+                    }
+                    break;
+                case 'ArrowRight':
+                    if (navigationLinks.nextBook) {
+                        e.preventDefault();
+                        window.location.href = navigationLinks.nextBook.href;
+                    }
+                    break;
+                case 'u': // 'u' for unreviewed
+                case 'U':
+                    if (navigationLinks.nextUnreviewed) {
+                        e.preventDefault();
+                        window.location.href = navigationLinks.nextUnreviewed.href;
+                    }
+                    break;
+                case 'a': // 'a' for author
+                case 'A':
+                    if (navigationLinks.nextAuthor) {
+                        e.preventDefault();
+                        window.location.href = navigationLinks.nextAuthor.href;
+                    }
+                    break;
+                case 's': // 's' for series
+                case 'S':
+                    if (navigationLinks.nextSeries) {
+                        e.preventDefault();
+                        window.location.href = navigationLinks.nextSeries.href;
+                    }
+                    break;
+            }
+        });
+
+        // Add help text for keyboard shortcuts
+        this.addKeyboardShortcutsHelp();
+    }
+
+    addKeyboardShortcutsHelp() {
+        // Find the navigation cards and add help text
+        const navigationCards = document.querySelectorAll('.navigation-card');
+        if (navigationCards.length > 0) {
+            const helpText = `
+                <div class="text-muted small mt-2">
+                    <i class="fas fa-keyboard me-1"></i>
+                    <strong>Keyboard shortcuts:</strong> 
+                    ← Prev • → Next • U Unreviewed • A Author • S Series
+                </div>
+            `;
+            
+            // Add to the first navigation card only
+            const firstCard = navigationCards[0];
+            const cardBody = firstCard.querySelector('.card-body');
+            if (cardBody) {
+                cardBody.insertAdjacentHTML('beforeend', helpText);
+            }
         }
     }
 

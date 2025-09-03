@@ -25,11 +25,11 @@
                 <div class="card-body">
                     {% if data_sources %}
                         <div class="table-responsive">
-                            <table class="table table-striped table-hover align-middle">
+                            <table class="table table-striped table-hover align-middle data-source-table">
                                 <thead class="thead-dark">
                                     <tr>
-                                        <th style="width: 250px;">Name</th>
-                                        <th style="width: 250px;">Trust Level</th>
+                                        <th class="col-name">Name</th>
+                                        <th class="col-trust">Trust Level</th>
                                         <th class="ps-5">Usage Statistics</th>
                                     </tr>
                                 </thead>
@@ -37,7 +37,7 @@
                                     {% for source in data_sources %}
                                     <tr>
                                         <!-- Name Column -->
-                                        <td class="text-truncate" style="max-width: 160px;">
+                                        <td class="text-truncate name-cell">
                                             <strong>{{ source.name }}</strong>
                                         </td>
 
@@ -45,16 +45,14 @@
                                         <td>
                                             <div class="d-flex align-items-center justify-content-start gap-3">
                                                 <!-- Progress Bar -->
-                                                <div class="progress" style="width: 140px; height: 20px; position: relative;">
-                                                    <div class="progress-bar {% if source.trust_level >= 0.8 %}bg-success{% elif source.trust_level >= 0.6 %}bg-warning{% else %}bg-danger{% endif %}"
+                                                <div class="progress trust-progress">
+                                                    <div class="progress-bar progress-bar-trust {% if source.trust_level >= 0.8 %}bg-success{% elif source.trust_level >= 0.6 %}bg-warning{% else %}bg-danger{% endif %}"
                                                         role="progressbar"
-                                                        style="width: {{ source.trust_level|mul:100|default:0|floatformat:0 }}%;"
-                                                        aria-valuenow="{{ source.trust_level|mul:100|default:0|floatformat:0 }}"
-                                                        aria-valuemin="0"
-                                                        aria-valuemax="100">
+                                                        data-width="{{ source.trust_level|mul:100|default:0|floatformat:0 }}"
+                                                        aria-label="Trust level {{ source.trust_level|floatformat:2 }} percent">
                                                     </div>
                                                     <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center text-white fw-bold fs-6">
-                                                        {{ source.trust_level|floatformat:1 }}
+                                                        {{ source.trust_level|floatformat:2 }}
                                                     </div>
                                                 </div>
 
@@ -64,9 +62,8 @@
                                                         data-source-id="{{ source.id }}" 
                                                         data-current-level="{{ source.trust_level }}"
                                                         data-update-url="{% url 'books:update_trust' pk=source.id %}"
-                                                        title="Click to edit trust level"
-                                                        style="cursor: pointer; font-weight: 600; border: none;">
-                                                    <i class="fas fa-edit me-1"></i>{{ source.trust_level|floatformat:1 }}
+                                                        title="Click to edit trust level">
+                                                    <i class="fas fa-edit me-1"></i>{{ source.trust_level|floatformat:2 }}
                                                 </button>
                                             </div>
                                         </td>
@@ -164,7 +161,7 @@
                                             Top Contributor: <strong>{{ top_source.name }}</strong>
                                         </h5>
                                         <p class="text-muted mb-0">
-                                            {{ top_source.metadata_count }} entries at {{ top_source.trust_level|floatformat:1 }} trust
+                                            {{ top_source.metadata_count }} entries at {{ top_source.trust_level|floatformat:2 }} trust
                                         </p>
                                     </div>
                                 </div>
@@ -202,10 +199,10 @@
                                name="trust_level" 
                                min="0" 
                                max="1" 
-                               step="0.1" 
+                               step="0.05" 
                                required>
                         <div class="form-text">
-                            Enter a value between 0.0 and 1.0 (e.g., 0.8 for 80% trust)
+                            Enter a value between 0.0 and 1.0 in increments of 0.05 (e.g., 0.85, 0.75, 0.65)
                         </div>
                     </div>
                 </div>
@@ -307,6 +304,15 @@ document.getElementById('trustLevelForm').addEventListener('submit', function(e)
 // Reset form when modal is hidden
 document.getElementById('trustLevelModal').addEventListener('hidden.bs.modal', function () {
     document.getElementById('trustLevelForm').reset();
+});
+
+// Set progress bar widths dynamically
+document.addEventListener('DOMContentLoaded', function() {
+    const progressBars = document.querySelectorAll('.progress-bar[data-width]');
+    progressBars.forEach(bar => {
+        const width = bar.getAttribute('data-width');
+        bar.style.setProperty('--trust-width', width + '%');
+    });
 });
 </script>
 {% endblock %}

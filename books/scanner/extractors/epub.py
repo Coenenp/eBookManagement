@@ -26,13 +26,13 @@ def extract(book):
                 book=book,
                 title=titles[0][0],
                 source=source,
-                defaults={'confidence': 0.9}
+                defaults={'confidence': source.trust_level}
             )
 
         # Authors
         creators = epub_book.get_metadata('DC', 'creator')
         raw_names = [c[0] for c in creators if c and c[0]]
-        attach_authors(book, raw_names, source, confidence=0.9)
+        attach_authors(book, raw_names, source, confidence=source.trust_level)
 
         # Publisher
         publishers = epub_book.get_metadata('DC', 'publisher')
@@ -48,7 +48,7 @@ def extract(book):
                     book=book,
                     publisher=publisher_obj,
                     source=source,
-                    defaults={'confidence': 0.8}
+                    defaults={'confidence': source.trust_level}
                 )
             except IntegrityError as e:
                 logger.warning(f"Duplicate BookPublisher skipped: {e}")
@@ -71,7 +71,7 @@ def extract(book):
                     book=book,
                     field_name=dc_field if dc_field != 'identifier' else 'isbn',
                     source=source,
-                    defaults={'field_value': field_value, 'confidence': 0.8}
+                    defaults={'field_value': field_value, 'confidence': source.trust_level}
                 )
 
     except Exception as e:

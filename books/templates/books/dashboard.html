@@ -100,10 +100,9 @@
                             <span class="badge bg-success">{{ avg_confidence|default:0|floatformat:'1' }}%</span>
                         </div>
                         <div class="progress">
-                            <div class="progress-bar bg-success" role="progressbar"
-                                 style="width: {{ avg_confidence|default:0|floatformat:'0' }}%;"
-                                 aria-valuenow="{{ avg_confidence|default:0|floatformat:'1' }}"
-                                 aria-valuemin="0" aria-valuemax="100">
+                            <div class="progress-bar bg-success progress-bar-confidence" role="progressbar"
+                                 data-width="{{ avg_confidence|default:0|floatformat:'0' }}"
+                                 aria-label="Average confidence {{ avg_confidence|default:0|floatformat:'1' }} percent">
                             </div>
                         </div>
                     </div>
@@ -114,10 +113,9 @@
                             <span class="badge bg-info">{{ avg_completeness|default:0|floatformat:'1' }}%</span>
                         </div>
                         <div class="progress">
-                            <div class="progress-bar bg-info" role="progressbar"
-                                 style="width: {{ avg_completeness|default:0|floatformat:'0' }}%;"
-                                 aria-valuenow="{{ avg_completeness|default:0|floatformat:'1' }}"
-                                 aria-valuemin="0" aria-valuemax="100">
+                            <div class="progress-bar bg-info progress-bar-completeness" role="progressbar"
+                                 data-width="{{ avg_completeness|default:0|floatformat:'0' }}"
+                                 aria-label="Average completeness {{ avg_completeness|default:0|floatformat:'1' }} percent">
                             </div>
                         </div>
                     </div>
@@ -318,13 +316,11 @@
                                         </td>
                                         <td>{{ format.count }}</td>
                                         <td>
-                                            <div class="progress" style="height: 15px;">
+                                            <div class="progress progress-height-15">
                                                 {% widthratio format.count total_books 100 as width %}
-                                                <div class="progress-bar bg-info" role="progressbar"
-                                                     style="width: {{ width }}%;"
-                                                     aria-valuenow="{{ width }}"
-                                                     aria-valuemin="0"
-                                                     aria-valuemax="100">
+                                                <div class="progress-bar bg-info progress-bar-format" role="progressbar"
+                                                     data-width="{{ width }}"
+                                                     aria-label="File format distribution {{ width }} percent">
                                                     {{ width }}%
                                                 </div>
                                             </div>
@@ -529,4 +525,30 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Set progress bar widths using CSS custom properties
+    const confidenceBar = document.querySelector('.progress-bar-confidence');
+    if (confidenceBar) {
+        const width = confidenceBar.getAttribute('data-width');
+        confidenceBar.style.setProperty('--confidence-width', width + '%');
+    }
+    
+    const completenessBar = document.querySelector('.progress-bar-completeness');
+    if (completenessBar) {
+        const width = completenessBar.getAttribute('data-width');
+        completenessBar.style.setProperty('--completeness-width', width + '%');
+    }
+    
+    // Set format progress bars
+    const formatBars = document.querySelectorAll('.progress-bar-format');
+    formatBars.forEach(bar => {
+        const width = bar.getAttribute('data-width');
+        bar.style.setProperty('--format-width', width + '%');
+    });
+});
+</script>
 {% endblock %}

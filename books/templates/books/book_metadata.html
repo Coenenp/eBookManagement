@@ -160,7 +160,7 @@
                             <!-- Progress bar for upload -->
                             <div class="progress d-hidden" id="uploadProgress">
                                 <div class="progress-bar progress-bar-striped progress-bar-animated progress-bar-width-0" 
-                                     role="progressbar"></div>
+                                     role="progressbar" aria-label="Cover upload progress" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                             </div>
                         </div>
                     </div>
@@ -280,14 +280,15 @@
                 </button>
             </legend>
             <div class="card-body">
+                {% if not book.finalmetadata.final_series|default_if_none:"" and not has_series_number_only %}
                 <div class="form-check mb-2">
                     <input class="form-check-input" type="radio" name="final_series" 
-                           value="" id="series_none"
-                           {% if not book.finalmetadata.final_series|default_if_none:"" %}checked{% endif %}>
+                           value="" id="series_none" checked>
                     <label class="form-check-label" for="series_none">
                         <em class="text-muted">No Series</em>
                     </label>
                 </div>
+                {% endif %}
                 {% for s in all_series %}
                 <div class="form-check mb-2">
                     <input class="form-check-input" type="radio" name="final_series" 
@@ -315,6 +316,33 @@
                         </div>
                     </label>
                 </div>
+                {% empty %}
+                    <!-- Show series info if we have final metadata series but no series relationships -->
+                    {% if book.finalmetadata.final_series %}
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="final_series" 
+                            value="{{ book.finalmetadata.final_series }}" id="series_final" checked>
+                        <label class="form-check-label d-flex justify-content-between align-items-start" for="series_final">
+                            <span class="fw-bold">{{ book.finalmetadata.final_series }}</span>
+                            <div>
+                                <span class="badge bg-light text-dark me-2">Final Metadata</span>
+                                <span class="badge bg-primary ms-1">Final</span>
+                            </div>
+                        </label>
+                    </div>
+                    {% elif has_series_number_only and final_series_name %}
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="final_series" 
+                            value="{{ final_series_name }}" id="series_final" checked>
+                        <label class="form-check-label d-flex justify-content-between align-items-start" for="series_final">
+                            <span class="fw-bold">{{ final_series_name }}</span>
+                            <div>
+                                <span class="badge bg-light text-dark me-2">Final Metadata</span>
+                                <span class="badge bg-primary ms-1">Final</span>
+                            </div>
+                        </label>
+                    </div>
+                    {% endif %}
                 {% endfor %}
                 <div class="mt-3">
                     <div class="form-check mb-2">
@@ -717,12 +745,66 @@
                             <i class="fas fa-edit me-1"></i>Select from Dropdown
                         </label>
                     </div>
-                    <select name="manual_language" id="language_dropdown" class="form-select">
+                    <select name="manual_language" id="language_dropdown" class="form-select" aria-label="Select language from dropdown">
                         <option value="">Select a language...</option>
                         {% for code, name in language_choices %}
                         <option value="{{ code }}">{{ name }}</option>
                         {% endfor %}
                     </select>
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- Rescan External Metadata Section -->
+        <fieldset class="card mb-4 shadow-sm border-info" aria-labelledby="fieldset-rescan">
+            <legend id="fieldset-rescan" class="card-header bg-info text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-sync-alt me-2"></i>
+                    Rescan External Metadata
+                </h5>
+            </legend>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <p class="mb-2 text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Query external sources for updated metadata using current final values
+                        </p>
+                        <div class="small text-muted">
+                            <strong>Current search terms:</strong>
+                            <span class="badge bg-light text-dark me-1">{{ book.finalmetadata.final_title|default:"No title"|truncatechars:30 }}</span>
+                            <span class="badge bg-light text-dark me-1">{{ book.finalmetadata.final_author|default:"No author"|truncatechars:25 }}</span>
+                            {% if book.finalmetadata.isbn %}
+                            <span class="badge bg-light text-dark">ISBN: {{ book.finalmetadata.isbn|truncatechars:15 }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <button type="button" id="quickRescanBtn" class="btn btn-info">
+                            <i class="fas fa-sync-alt me-2"></i>
+                            Quick Rescan
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Progress Section (Initially Hidden) -->
+                <div id="quickRescanProgress" class="mt-3 d-none">
+                    <div class="progress mb-2">
+                        <div id="quickRescanProgressBar" class="progress-bar progress-bar-striped progress-bar-animated progress-bar-initial" 
+                             role="progressbar" aria-label="Quick rescan progress" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    <div id="quickRescanStatus" class="text-muted small">Initializing rescan...</div>
+                </div>
+                
+                <!-- Results Section (Initially Hidden) -->
+                <div id="quickRescanResults" class="mt-3 d-none">
+                    <div class="alert alert-success mb-0">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <span id="quickRescanSummary">Rescan complete!</span>
+                        <button type="button" class="btn btn-sm btn-outline-success ms-2" onclick="location.reload()">
+                            <i class="fas fa-refresh me-1"></i>Refresh to See New Data
+                        </button>
+                    </div>
                 </div>
             </div>
         </fieldset>
@@ -850,6 +932,7 @@ class MetadataFormHandler {
         this.setupLazyLoading();
         this.setupFormValidation();
         this.setupLanguageDropdown();
+        this.setupQuickRescan();
     }
 
     /**
@@ -1583,6 +1666,131 @@ class MetadataFormHandler {
         } else {
             return 'Low confidence match';
         }
+    }
+
+    /**
+     * Setup quick rescan functionality
+     */
+    setupQuickRescan() {
+        const quickRescanBtn = document.getElementById('quickRescanBtn');
+        if (quickRescanBtn) {
+            quickRescanBtn.addEventListener('click', () => this.startQuickRescan());
+        }
+    }
+
+    /**
+     * Start quick rescan with default settings
+     */
+    async startQuickRescan() {
+        const btn = document.getElementById('quickRescanBtn');
+        const progressDiv = document.getElementById('quickRescanProgress');
+        const resultsDiv = document.getElementById('quickRescanResults');
+        const progressBar = document.getElementById('quickRescanProgressBar');
+        const statusDiv = document.getElementById('quickRescanStatus');
+        const summarySpan = document.getElementById('quickRescanSummary');
+
+        // Hide results and show progress
+        resultsDiv.classList.add('d-none');
+        progressDiv.classList.remove('d-none');
+        
+        // Disable button and update text
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Rescanning...';
+        
+        try {
+            // Prepare search data using current final metadata
+            const searchData = {
+                sources: ['google', 'openlibrary', 'goodreads'],
+                options: {
+                    clearExisting: false,
+                    forceRefresh: true
+                },
+                searchTerms: {
+                    title: "{{ book.finalmetadata.final_title|escapejs }}",
+                    author: "{{ book.finalmetadata.final_author|escapejs }}",
+                    isbn: "{{ book.finalmetadata.isbn|escapejs }}",
+                    series: "{{ book.finalmetadata.final_series|escapejs }}"
+                }
+            };
+
+            // Get CSRF token
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            // Start the rescan
+            const response = await fetch(`/ajax/book/{{ book.id }}/rescan/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: JSON.stringify(searchData)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            
+            if (result.success) {
+                // Simulate progress for visual feedback
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    progress += 10;
+                    progressBar.style.width = progress + '%';
+                    
+                    if (progress <= 30) {
+                        statusDiv.textContent = 'Querying Google Books...';
+                    } else if (progress <= 60) {
+                        statusDiv.textContent = 'Querying Open Library...';
+                    } else if (progress <= 90) {
+                        statusDiv.textContent = 'Querying Goodreads...';
+                    } else {
+                        statusDiv.textContent = 'Processing results...';
+                    }
+                    
+                    if (progress >= 100) {
+                        clearInterval(progressInterval);
+                        this.showQuickRescanResults(result);
+                    }
+                }, 200);
+            } else {
+                throw new Error(result.error || 'Rescan failed');
+            }
+        } catch (error) {
+            console.error('Quick rescan error:', error);
+            statusDiv.textContent = 'Error: ' + error.message;
+            progressBar.classList.add('bg-danger');
+            
+            // Re-enable button after error
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Quick Rescan';
+                progressDiv.classList.add('d-none');
+            }, 3000);
+        }
+    }
+
+    /**
+     * Show quick rescan results
+     */
+    showQuickRescanResults(result) {
+        const btn = document.getElementById('quickRescanBtn');
+        const progressDiv = document.getElementById('quickRescanProgress');
+        const resultsDiv = document.getElementById('quickRescanResults');
+        const summarySpan = document.getElementById('quickRescanSummary');
+
+        // Hide progress and show results
+        progressDiv.classList.add('d-none');
+        resultsDiv.classList.remove('d-none');
+        
+        // Update summary
+        const newMetadata = result.new_metadata_count || 0;
+        summarySpan.textContent = `Rescan complete! Found ${newMetadata} new metadata entries.`;
+        
+        // Re-enable button
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Quick Rescan';
     }
 }
 

@@ -39,13 +39,13 @@ def extract(book):
                 book=book,
                 title=title_elem.text.strip(),
                 source=source,
-                defaults={'confidence': 0.95}
+                defaults={'confidence': source.trust_level}
             )
 
         # Authors
         creators = root.findall('.//dc:creator', ns)
         raw_names = [c.text.strip() for c in creators if c.text]
-        attach_authors(book, raw_names, source, confidence=0.95)
+        attach_authors(book, raw_names, source, confidence=source.trust_level)
 
         # Publisher (handled separately from OPF .xml)
         pub_elem = root.find('.//dc:publisher', ns)
@@ -62,7 +62,7 @@ def extract(book):
                     book=book,
                     publisher=pub_obj,
                     source=source,
-                    defaults={"confidence": 0.9}
+                    defaults={"confidence": source.trust_level}
                 )
 
         # Series metadata (Calibre-style)
@@ -79,7 +79,7 @@ def extract(book):
             BookSeries.objects.get_or_create(
                 book=book,
                 series=series_obj,
-                defaults={"volume_number": volume, "confidence": 0.9, "source": source}
+                defaults={"volume_number": volume, "confidence": source.trust_level, "source": source}
             )
 
         # Field extraction
@@ -107,14 +107,14 @@ def extract(book):
                             book=book,
                             field_name=model_field,
                             source=source,
-                            defaults={"field_value": match.group(), "confidence": 0.9}
+                            defaults={"field_value": match.group(), "confidence": source.trust_level}
                         )
                 else:
                     BookMetadata.objects.get_or_create(
                         book=book,
                         field_name=model_field,
                         source=source,
-                        defaults={"field_value": value, "confidence": 0.9}
+                        defaults={"field_value": value, "confidence": source.trust_level}
                     )
 
     except Exception as e:

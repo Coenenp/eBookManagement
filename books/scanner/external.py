@@ -364,12 +364,13 @@ def _process_open_library_metadata(book, source, result, confidence):
 
     if result.get("language"):
         lang = normalize_language(result["language"][0] if isinstance(result["language"], list) else result["language"])
-        BookMetadata.objects.get_or_create(
-            book=book,
-            field_name="language",
-            source=source,
-            defaults={"field_value": lang, "confidence": confidence}
-        )
+        if lang:  # Only save if we got a valid language code
+            BookMetadata.objects.get_or_create(
+                book=book,
+                field_name="language",
+                source=source,
+                defaults={"field_value": lang, "confidence": confidence}
+            )
 
     if result.get("first_publish_year"):
         year = result["first_publish_year"]
