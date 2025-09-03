@@ -1585,9 +1585,9 @@ class BookRenamerView(LoginRequiredMixin, ListView):
         ).select_related(
             'finalmetadata'
         ).prefetch_related(
-            'bookauthor_set__author',
-            'bookseries_set__series',
-            'bookgenre_set__genre'
+            'bookauthor__author',
+            'series_info__series',
+            'bookgenre__genre'
         )
 
         # Apply filters
