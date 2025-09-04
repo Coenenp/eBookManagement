@@ -61,15 +61,6 @@ class StandardWidgetMixin:
             attrs['placeholder'] = placeholder
         return cls.get_widget('number_input', **attrs)
 
-    @classmethod
-    def select_with_choices(cls, choices, empty_label=None):
-        """Select widget with predefined choices"""
-        if empty_label:
-            choices = [(None, empty_label)] + list(choices)
-        widget = cls.get_widget('select')
-        widget.choices = choices
-        return widget
-
 
 class BaseMetadataValidator:
     """Shared validation logic for metadata forms"""
@@ -158,20 +149,6 @@ class BaseMetadataValidator:
             return ''
 
         return ', '.join(item_list)
-
-    @staticmethod
-    def validate_file_path(value, must_exist=True):
-        """Validate file path"""
-        if not value:
-            return ''
-
-        import os
-        path = str(value).strip()
-
-        if must_exist and not os.path.exists(path):
-            raise forms.ValidationError(f"File does not exist: {path}")
-
-        return path
 
     @staticmethod
     def validate_integer_list(value, field_name="items"):

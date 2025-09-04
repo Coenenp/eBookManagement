@@ -1,20 +1,9 @@
-"""Django forms for ebook library management.
-
-This module contains form classes for user registration, book metadata editing,
-cover management, and scan folder configuration. Includes validation mixins
-and standardized form components.
-"""
 from django import forms
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
-from django.utils.safestring import mark_safe
 from .models import ScanFolder, Book, FinalMetadata, BookCover, LANGUAGE_CHOICES
 from .mixins import StandardFormMixin, MetadataFormMixin
 import os
-
-# ------------------------
-# User Registration Form
-# ------------------------
 
 
 class UserRegisterForm(UserCreationForm):
@@ -25,54 +14,15 @@ class UserRegisterForm(UserCreationForm):
         fields = ['username', 'email', 'password1', 'password2']
 
 
-# ------------------------
-# Scan Folder Form
-# ------------------------
-
-class FolderSelectWidget(forms.TextInput):
-    """Simple text input for folder paths with helpful guidance."""
-
-    def __init__(self, attrs=None):
-        default_attrs = {
-            'class': 'form-control',
-            'placeholder': 'Enter the full path to your folder (e.g., C:\\Users\\Pieter\\Documents\\eBooks)'
-        }
-        if attrs:
-            default_attrs.update(attrs)
-        super().__init__(default_attrs)
-
-    def render(self, name, value, attrs=None, renderer=None):
-        # Render the main input field
-        text_input = super().render(name, value, attrs, renderer)
-
-        # Simple widget with clear guidance
-        widget_html = f'''
-        <div class="folder-path-container">
-            {text_input}
-            <div class="form-text mt-2">
-                <i class="fas fa-info-circle text-primary"></i>
-                <strong>How to find your folder path:</strong>
-            </div>
-            <div class="form-text">
-                <ol class="mb-0 small">
-                    <li>Open File Explorer and navigate to your folder</li>
-                    <li>Click on the address bar at the top</li>
-                    <li>Copy the full path (e.g., C:\\Users\\Pieter\\Documents\\eBooks)</li>
-                    <li>Paste it in the field above</li>
-                </ol>
-            </div>
-        </div>
-        '''
-
-        return mark_safe(widget_html)
-
-
 class ScanFolderForm(StandardFormMixin, forms.ModelForm):
     class Meta:
         model = ScanFolder
         fields = ['name', 'path', 'language', 'is_active']
         widgets = {
-            'path': FolderSelectWidget(),
+            'path': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter the full path to your folder (e.g., C:\\Users\\Pieter\\Documents\\eBooks)'
+            }),
         }
 
     def clean_path(self):
@@ -88,10 +38,6 @@ class ScanFolderForm(StandardFormMixin, forms.ModelForm):
             raise forms.ValidationError(f"The specified path is not a directory: {path}")
         return path
 
-
-# ------------------------
-# Book Search Form
-# ------------------------
 
 class BookSearchForm(StandardFormMixin, forms.Form):
     search_query = forms.CharField(
@@ -146,15 +92,6 @@ class BookSearchForm(StandardFormMixin, forms.Form):
             ('false', 'No Cover'),
         ]
     )
-
-
-# ------------------------
-# Final Metadata Review Form (Enhanced for Radio/Dropdown Selection)
-# ------------------------
-
-
-# Remove the duplicate BaseMetadataValidator class - using the one from mixins
-# class BaseMetadataValidator: ... (removed)
 
 
 class MetadataReviewForm(MetadataFormMixin, forms.ModelForm):
@@ -215,27 +152,14 @@ class MetadataReviewForm(MetadataFormMixin, forms.ModelForm):
         # Update manual genres widget using mixin
         self.fields['manual_genres'].widget = self.text_with_placeholder('Enter additional genres...')
 
-    # The clean methods are now inherited from MetadataFormMixin, so we can remove the duplicates
 
-
-# ------------------------
-# Book Status Update Form
-# ------------------------
-
-class BookStatusForm(forms.ModelForm):
+class BookStatusForm(StandardFormMixin, forms.ModelForm):
     class Meta:
         model = Book
         fields = ['is_duplicate']
-        widgets = {
-            'is_duplicate': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        }
 
 
-# ------------------------
-# Book Edit Form
-# ------------------------
-
-class BookEditForm(forms.ModelForm):
+class BookEditForm(StandardFormMixin, forms.ModelForm):
     class Meta:
         model = Book
         fields = [
@@ -246,23 +170,10 @@ class BookEditForm(forms.ModelForm):
             'is_duplicate',
         ]
         widgets = {
-            'file_format': forms.Select(attrs={'class': 'form-select'}),
-            'cover_path': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Path to cover image'
-            }),
-            'opf_path': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Path to .opf metadata file'
-            }),
-            'is_placeholder': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'is_duplicate': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'cover_path': forms.TextInput(attrs={'placeholder': 'Path to cover image'}),
+            'opf_path': forms.TextInput(attrs={'placeholder': 'Path to .opf metadata file'}),
         }
 
-
-# ------------------------
-# Book Cover Form
-# ------------------------
 
 class BookCoverForm(StandardFormMixin, forms.ModelForm):
     class Meta:
@@ -294,10 +205,6 @@ class BookCoverForm(StandardFormMixin, forms.ModelForm):
             self.cleaned_data.get('confidence')
         )
 
-
-# ------------------------
-# Bulk Update Form
-# ------------------------
 
 class BulkUpdateForm(StandardFormMixin, forms.Form):
     ACTION_CHOICES = [
@@ -331,83 +238,55 @@ class BulkUpdateForm(StandardFormMixin, forms.Form):
         return BaseMetadataValidator.validate_integer_list(selected, 'book IDs')
 
 
-# ------------------------
-# Advanced Search Form
-# ------------------------
-
-class AdvancedSearchForm(forms.Form):
+class AdvancedSearchForm(StandardFormMixin, forms.Form):
     title = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Title contains...'
-        })
+        widget=forms.TextInput(attrs={'placeholder': 'Title contains...'})
     )
 
     author = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Author contains...'
-        })
+        widget=forms.TextInput(attrs={'placeholder': 'Author contains...'})
     )
 
     series = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Series contains...'
-        })
+        widget=forms.TextInput(attrs={'placeholder': 'Series contains...'})
     )
 
     isbn = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'ISBN'
-        })
+        widget=forms.TextInput(attrs={'placeholder': 'ISBN'})
     )
 
     publisher = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'Publisher contains...'
-        })
+        widget=forms.TextInput(attrs={'placeholder': 'Publisher contains...'})
     )
 
     publication_year_from = forms.IntegerField(
         required=False,
-        widget=forms.NumberInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'From year'
-        })
+        widget=forms.NumberInput(attrs={'placeholder': 'From year'})
     )
 
     publication_year_to = forms.IntegerField(
         required=False,
-        widget=forms.NumberInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'To year'
-        })
+        widget=forms.NumberInput(attrs={'placeholder': 'To year'})
     )
 
     language = forms.ChoiceField(
         choices=[('', 'All Languages')] + LANGUAGE_CHOICES,
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-select'})
+        required=False
     )
 
     file_format = forms.ChoiceField(
         choices=[('', 'All Formats')] + Book.FORMAT_CHOICES,
-        required=False,
-        widget=forms.Select(attrs={'class': 'form-select'})
+        required=False
     )
 
     confidence_min = forms.FloatField(
         required=False,
         widget=forms.NumberInput(attrs={
-            'class': 'form-control',
             'min': '0',
             'max': '1',
             'step': '0.1',
@@ -418,7 +297,6 @@ class AdvancedSearchForm(forms.Form):
     confidence_max = forms.FloatField(
         required=False,
         widget=forms.NumberInput(attrs={
-            'class': 'form-control',
             'min': '0',
             'max': '1',
             'step': '0.1',
