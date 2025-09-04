@@ -91,6 +91,9 @@ class ScanFolder(models.Model):
     # Optional: created_at for admin tracking
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def __str__(self):
+        return self.name
+
 
 class Book(models.Model):
     """Main book record with file paths"""

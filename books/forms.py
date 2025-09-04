@@ -9,7 +9,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
 from django.utils.safestring import mark_safe
 from .models import ScanFolder, Book, FinalMetadata, BookCover, LANGUAGE_CHOICES
-from .mixins import StandardFormMixin, BaseMetadataValidator
+from .mixins import StandardFormMixin, MetadataFormMixin
 import os
 
 # ------------------------
@@ -157,7 +157,7 @@ class BookSearchForm(StandardFormMixin, forms.Form):
 # class BaseMetadataValidator: ... (removed)
 
 
-class MetadataReviewForm(forms.ModelForm):
+class MetadataReviewForm(MetadataFormMixin, forms.ModelForm):
     """Form for reviewing and updating final metadata with dropdown + manual entry support."""
 
     # Cover upload field
@@ -196,104 +196,26 @@ class MetadataReviewForm(forms.ModelForm):
             'is_reviewed',
         ]
 
-        widgets = {
-            'final_title': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter title',
-                'required': True
-            }),
-            'final_author': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter author',
-                'required': True
-            }),
-            'final_series': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter series name'
-            }),
-            'final_series_number': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter series number',
-                'pattern': '[0-9]*',
-                'title': 'Please enter numbers only'
-            }),
-            'final_publisher': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter publisher'
-            }),
-            'final_cover_path': forms.HiddenInput(),
-            'language': forms.Select(attrs={'class': 'form-select'}),
-            'isbn': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter ISBN'
-            }),
-            'publication_year': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Enter publication year',
-                'min': '1000',
-                'max': '2030',
-                'title': 'Enter a 4-digit year'
-            }),
-            'description': forms.Textarea(attrs={
-                'class': 'form-control',
-                'rows': 5,
-                'placeholder': 'Enter description'
-            }),
-            'is_reviewed': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        }
-
     def __init__(self, *args, **kwargs):
         self.book = kwargs.pop('book', None)
         super().__init__(*args, **kwargs)
 
+        # Apply standard metadata widgets
+        standard_widgets = self.get_standard_metadata_widgets()
+        for field_name, widget in standard_widgets.items():
+            if field_name in self.fields:
+                self.fields[field_name].widget = widget
+
         # Set language choices including empty option
-        self.fields['language'].choices = [('', 'Select language')] + LANGUAGE_CHOICES
+        self.fields['language'].widget.choices = [('', 'Select language')] + LANGUAGE_CHOICES
 
-    def clean_final_title(self):
-        """Validate that title is provided."""
-        title = self.cleaned_data.get('final_title', '').strip()
-        if not title:
-            raise forms.ValidationError('Title is required.')
-        return title
+        # Update cover upload widget using mixin
+        self.fields['new_cover_upload'].widget = self.get_widget('image_input')
 
-    def clean_final_author(self):
-        """Validate that author is provided."""
-        author = self.cleaned_data.get('final_author', '').strip()
-        if not author:
-            raise forms.ValidationError('Author is required.')
-        return author
+        # Update manual genres widget using mixin
+        self.fields['manual_genres'].widget = self.text_with_placeholder('Enter additional genres...')
 
-    def clean_final_series_number(self):
-        value = self.cleaned_data.get('final_series_number')
-        if value is None or (isinstance(value, str) and value.strip() == ''):
-            return ''
-
-        # Allow alphanumeric series numbers (1, 1.5, 2a, etc.)
-        value_str = str(value).strip()
-        if len(value_str) > 20:  # Length check only
-            raise forms.ValidationError("Series number too long (max 20 characters).")
-
-        return value_str
-
-    def clean_publication_year(self):
-        return BaseMetadataValidator.validate_year(
-            self.cleaned_data.get('publication_year'),
-            "Publication year"
-        )
-
-    def clean_isbn(self):
-        return BaseMetadataValidator.validate_isbn(
-            self.cleaned_data.get('isbn')
-        )
-
-    def clean_manual_genres(self):
-        """Clean manual genres input."""
-        genres = self.cleaned_data.get('manual_genres', '').strip()
-        if genres:
-            # Split by comma and clean each genre
-            genre_list = [g.strip() for g in genres.split(',') if g.strip()]
-            return ', '.join(genre_list)
-        return ''
+    # The clean methods are now inherited from MetadataFormMixin, so we can remove the duplicates
 
 
 # ------------------------
@@ -342,7 +264,7 @@ class BookEditForm(forms.ModelForm):
 # Book Cover Form
 # ------------------------
 
-class BookCoverForm(forms.ModelForm):
+class BookCoverForm(StandardFormMixin, forms.ModelForm):
     class Meta:
         model = BookCover
         fields = [
@@ -352,37 +274,32 @@ class BookCoverForm(forms.ModelForm):
             'height',
             'format',
         ]
-        widgets = {
-            'cover_path': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Path to cover image or URL'
-            }),
-            'confidence': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'min': '0',
-                'max': '1',
-                'step': '0.1'
-            }),
-            'width': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Width in pixels'
-            }),
-            'height': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'Height in pixels'
-            }),
-            'format': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'jpg, png, gif, etc.'
-            }),
-        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Apply custom widgets using mixin
+        self.fields['cover_path'].widget = self.text_with_placeholder('Path to cover image or URL')
+        self.fields['confidence'].widget = self.number_with_range(
+            min_val=0, max_val=1, step=0.1, placeholder='Confidence score'
+        )
+        self.fields['width'].widget = self.text_with_placeholder('Width in pixels')
+        self.fields['height'].widget = self.text_with_placeholder('Height in pixels')
+        self.fields['format'].widget = self.text_with_placeholder('jpg, png, gif, etc.')
+
+    def clean_confidence(self):
+        """Validate confidence using base validator"""
+        from .mixins import BaseMetadataValidator
+        return BaseMetadataValidator.validate_confidence(
+            self.cleaned_data.get('confidence')
+        )
 
 
 # ------------------------
 # Bulk Update Form
 # ------------------------
 
-class BulkUpdateForm(forms.Form):
+class BulkUpdateForm(StandardFormMixin, forms.Form):
     ACTION_CHOICES = [
         ('', 'Select action'),
         ('mark_reviewed', 'Mark as reviewed'),
@@ -404,19 +321,14 @@ class BulkUpdateForm(forms.Form):
     )
 
     def clean_selected_books(self):
+        from .mixins import BaseMetadataValidator
+
         selected = self.cleaned_data.get('selected_books', '')
         if not selected:
             raise forms.ValidationError("No books selected.")
 
-        try:
-            book_ids = [int(id.strip()) for id in selected.split(',') if id.strip()]
-        except ValueError:
-            raise forms.ValidationError("Invalid book IDs selected.")
-
-        if not book_ids:
-            raise forms.ValidationError("No valid book IDs selected.")
-
-        return book_ids
+        # Use the validator from mixins
+        return BaseMetadataValidator.validate_integer_list(selected, 'book IDs')
 
 
 # ------------------------
@@ -518,6 +430,21 @@ class AdvancedSearchForm(forms.Form):
         cleaned_data = super().clean()
         year_from = cleaned_data.get('publication_year_from')
         year_to = cleaned_data.get('publication_year_to')
+
+        # Validate years using base validator
+        if year_from is not None:
+            from .mixins import BaseMetadataValidator
+            try:
+                BaseMetadataValidator.validate_year(year_from, "From year")
+            except forms.ValidationError:
+                self.add_error('publication_year_from', 'Invalid from year.')
+
+        if year_to is not None:
+            from .mixins import BaseMetadataValidator
+            try:
+                BaseMetadataValidator.validate_year(year_to, "To year")
+            except forms.ValidationError:
+                self.add_error('publication_year_to', 'Invalid to year.')
 
         if year_from and year_to and year_from > year_to:
             raise forms.ValidationError("'From year' must be less than or equal to 'To year'.")

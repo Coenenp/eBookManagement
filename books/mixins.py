@@ -129,6 +129,66 @@ class BaseMetadataValidator:
             raise forms.ValidationError(f'{field_name} is required.')
         return value.strip()
 
+    @staticmethod
+    def validate_series_number(value, max_length=20):
+        """Validate series number (alphanumeric)"""
+        if value is None or (isinstance(value, str) and value.strip() == ''):
+            return ''
+
+        # Allow alphanumeric series numbers (1, 1.5, 2a, etc.)
+        value_str = str(value).strip()
+        if len(value_str) > max_length:
+            raise forms.ValidationError(f"Series number too long (max {max_length} characters).")
+
+        return value_str
+
+    @staticmethod
+    def validate_comma_separated_list(value, field_name="items"):
+        """Validate and clean comma-separated input"""
+        if not value:
+            return ''
+
+        value_str = str(value).strip()
+        if not value_str:
+            return ''
+
+        # Split by comma and clean each item
+        item_list = [item.strip() for item in value_str.split(',') if item.strip()]
+        if not item_list:
+            return ''
+
+        return ', '.join(item_list)
+
+    @staticmethod
+    def validate_file_path(value, must_exist=True):
+        """Validate file path"""
+        if not value:
+            return ''
+
+        import os
+        path = str(value).strip()
+
+        if must_exist and not os.path.exists(path):
+            raise forms.ValidationError(f"File does not exist: {path}")
+
+        return path
+
+    @staticmethod
+    def validate_integer_list(value, field_name="items"):
+        """Validate comma-separated integer list"""
+        if not value:
+            return []
+
+        value_str = str(value).strip()
+        if not value_str:
+            return []
+
+        try:
+            item_list = [int(item.strip()) for item in value_str.split(',') if item.strip()]
+            return item_list
+        except ValueError:
+            raise forms.ValidationError(f"Invalid {field_name} - must be comma-separated integers.")
+
 
 class StandardFormMixin(StandardWidgetMixin):
     """Complete form mixin with common functionality"""
@@ -152,6 +212,74 @@ class StandardFormMixin(StandardWidgetMixin):
                 field.widget.attrs.update({'class': 'form-check-input'})
             elif isinstance(field.widget, forms.FileInput):
                 field.widget.attrs.update({'class': 'form-control'})
+
+
+class MetadataFormMixin(StandardFormMixin, BaseMetadataValidator):
+    """Specialized mixin for metadata forms with common validation"""
+
+    def get_standard_metadata_widgets(self):
+        """Get standard widget configuration for metadata fields"""
+        return {
+            'final_title': self.text_required_with_placeholder('Enter title'),
+            'final_author': self.text_required_with_placeholder('Enter author'),
+            'final_series': self.text_with_placeholder('Enter series name'),
+            'final_series_number': self.text_with_placeholder('Enter series number'),
+            'final_publisher': self.text_with_placeholder('Enter publisher'),
+            'final_cover_path': self.get_widget('hidden'),
+            'language': self.get_widget('select'),
+            'isbn': self.text_with_placeholder('Enter ISBN'),
+            'publication_year': self.number_with_range(
+                min_val=1000,
+                max_val=2030,
+                placeholder='Enter publication year'
+            ),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 5,
+                'placeholder': 'Enter description'
+            }),
+            'is_reviewed': self.get_widget('checkbox'),
+        }
+
+    def clean_final_title(self):
+        """Validate final title using base validator"""
+        return self.validate_required_text(
+            self.cleaned_data.get('final_title'),
+            'Title'
+        )
+
+    def clean_final_author(self):
+        """Validate final author using base validator"""
+        return self.validate_required_text(
+            self.cleaned_data.get('final_author'),
+            'Author'
+        )
+
+    def clean_final_series_number(self):
+        """Validate final series number using base validator"""
+        return self.validate_series_number(
+            self.cleaned_data.get('final_series_number')
+        )
+
+    def clean_publication_year(self):
+        """Validate publication year using base validator"""
+        return self.validate_year(
+            self.cleaned_data.get('publication_year'),
+            "Publication year"
+        )
+
+    def clean_isbn(self):
+        """Validate ISBN using base validator"""
+        return self.validate_isbn(
+            self.cleaned_data.get('isbn')
+        )
+
+    def clean_manual_genres(self):
+        """Validate manual genres using base validator"""
+        return self.validate_comma_separated_list(
+            self.cleaned_data.get('manual_genres', ''),
+            'genres'
+        )
 
 
 class FinalMetadataSyncMixin:
