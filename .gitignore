@@ -15,8 +15,14 @@ ENV/
 *.log
 local_settings.py
 db.sqlite3
+default_*.sqlite3  # Test database files
 media/
 staticfiles/
+
+# Debug and temporary files
+debug_*.py
+fix_*.py
+temp_*.py
 
 # Environment variables
 .env

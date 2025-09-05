@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -179,3 +180,6 @@ LOGGING = {
         },
     },
 }
+
+# Testing configuration
+TESTING = 'test' in sys.argv or 'pytest' in sys.modules
