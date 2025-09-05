@@ -18,24 +18,30 @@ def extract(book):
         meta = reader.metadata
 
         if meta.title:
-            BookTitle.objects.get_or_create(
-                book=book,
-                title=meta.title.strip(),
-                source=source,
-                defaults={'confidence': source.trust_level}
-            )
+            title_text = meta.title.strip()
+            if title_text:  # Only create if non-empty after stripping
+                BookTitle.objects.get_or_create(
+                    book=book,
+                    title=title_text,
+                    source=source,
+                    defaults={'confidence': source.trust_level}
+                )
 
         if meta.author:
-            raw_names = [meta.author.strip()]
-            attach_authors(book, raw_names, source, confidence=source.trust_level)
+            author_text = meta.author.strip()
+            if author_text:  # Only create if non-empty after stripping
+                raw_names = [author_text]
+                attach_authors(book, raw_names, source, confidence=source.trust_level)
 
         if meta.creator:
-            BookMetadata.objects.get_or_create(
-                book=book,
-                field_name='creator',
-                source=source,
-                defaults={'field_value': meta.creator.strip(), 'confidence': source.trust_level}
-            )
+            creator_text = meta.creator.strip()
+            if creator_text:  # Only create if non-empty after stripping
+                BookMetadata.objects.get_or_create(
+                    book=book,
+                    field_name='creator',
+                    source=source,
+                    defaults={'field_value': creator_text, 'confidence': source.trust_level}
+                )
 
     except Exception as e:
         logger.warning(f"PDF metadata extraction failed for {book.file_path}: {e}")

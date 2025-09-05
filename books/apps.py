@@ -13,7 +13,11 @@ class BooksConfig(AppConfig):
 
     def ready(self):
         from books.scanner.bootstrap import ensure_data_sources
-        post_migrate.connect(
-            lambda **kwargs: ensure_data_sources(),
-            sender=self
-        )
+        from django.conf import settings
+
+        # Only run bootstrap during production migrations, not tests
+        def bootstrap_handler(sender, **kwargs):
+            if not settings.TESTING and sender == self:
+                ensure_data_sources()
+
+        post_migrate.connect(bootstrap_handler, sender=self)

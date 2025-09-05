@@ -42,12 +42,14 @@ def extract(book):
 
         # Title
         if title:
-            BookTitle.objects.get_or_create(
-                book=book,
-                title=title.strip(),
-                source=source,
-                defaults={'confidence': source.trust_level}
-            )
+            title_text = title.strip()
+            if title_text:  # Only create if non-empty after stripping
+                BookTitle.objects.get_or_create(
+                    book=book,
+                    title=title_text,
+                    source=source,
+                    defaults={'confidence': source.trust_level}
+                )
 
         # Authors
         if author:
@@ -56,21 +58,21 @@ def extract(book):
         # Publisher
         if publisher:
             cleaned_name = publisher.strip()
-
-            existing_pub = Publisher.objects.filter(name__iexact=cleaned_name).first()
-            if existing_pub:
-                pub_obj = existing_pub
-            else:
-                pub_obj = Publisher.objects.create(name=cleaned_name)
-            try:
-                BookPublisher.objects.get_or_create(
-                    book=book,
-                    publisher=pub_obj,
-                    source=source,
-                    defaults={'confidence': source.trust_level}
-                )
-            except IntegrityError as e:
-                logger.warning(f"[BOOKPUBLISHER DUPLICATE] Could not create BookPublisher for {book.file_path}: {e}")
+            if cleaned_name:  # Only create if non-empty after stripping
+                existing_pub = Publisher.objects.filter(name__iexact=cleaned_name).first()
+                if existing_pub:
+                    pub_obj = existing_pub
+                else:
+                    pub_obj = Publisher.objects.create(name=cleaned_name)
+                try:
+                    BookPublisher.objects.get_or_create(
+                        book=book,
+                        publisher=pub_obj,
+                        source=source,
+                        defaults={'confidence': source.trust_level}
+                    )
+                except IntegrityError as e:
+                    logger.warning(f"[BOOKPUBLISHER DUPLICATE] Could not create BookPublisher for {book.file_path}: {e}")
 
         # Optional fields to record
         optional_fields = {

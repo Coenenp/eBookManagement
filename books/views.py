@@ -594,8 +594,10 @@ class BookDetailView(LoginRequiredMixin, DetailView):
         base_queryset = Book.objects.select_related('finalmetadata').filter(is_placeholder=False)
 
         # Navigation by chronological order (ID-based)
-        context['prev_book'] = base_queryset.filter(id__lt=book.id).order_by('-id').first()
-        context['next_book'] = base_queryset.filter(id__gt=book.id).order_by('id').first()
+        prev_book = base_queryset.filter(id__lt=book.id).order_by('-id').first()
+        next_book = base_queryset.filter(id__gt=book.id).order_by('id').first()
+        context['prev_book_id'] = prev_book.id if prev_book else None
+        context['next_book_id'] = next_book.id if next_book else None
 
         # Navigation by same author
         if current_author:
@@ -643,8 +645,10 @@ class BookDetailView(LoginRequiredMixin, DetailView):
             Q(titles__confidence__lt=0.7) |
             Q(series_info__confidence__lt=0.7)
         ).distinct()
-        context['prev_needs_review'] = needs_review_qs.filter(id__lt=book.id).order_by('-id').first()
-        context['next_needs_review'] = needs_review_qs.filter(id__gt=book.id).order_by('id').first()
+        prev_needs_review = needs_review_qs.filter(id__lt=book.id).order_by('-id').first()
+        next_needs_review = needs_review_qs.filter(id__gt=book.id).order_by('id').first()
+        context['prev_needsreview_id'] = prev_needs_review.id if prev_needs_review else None
+        context['next_needsreview_id'] = next_needs_review.id if next_needs_review else None
 
         return context
 

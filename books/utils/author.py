@@ -12,12 +12,18 @@ logger = logging.getLogger("books.scanner")
 
 def split_author_parts(raw_name):
     """Returns a tuple (first_name, last_name) from a raw author name"""
+    if not raw_name or not raw_name.strip():
+        return "", ""
+
     parts = raw_name.strip().replace(",", "").split()
+    if not parts:  # Handle case where only whitespace/commas
+        return "", ""
+
     if "," in raw_name and len(parts) >= 2:
         # Last, First format
         return " ".join(parts[1:]), parts[0]
     elif len(parts) == 1:
-        return parts[0], ""  # fallback
+        return parts[0], ""  # Single name goes to first_name
     else:
         return " ".join(parts[:-1]), parts[-1]
 

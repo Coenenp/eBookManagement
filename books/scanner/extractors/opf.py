@@ -35,12 +35,14 @@ def extract(book):
         # Title
         title_elem = root.find('.//dc:title', ns)
         if title_elem is not None and title_elem.text:
-            BookTitle.objects.get_or_create(
-                book=book,
-                title=title_elem.text.strip(),
-                source=source,
-                defaults={'confidence': source.trust_level}
-            )
+            title_text = title_elem.text.strip()
+            if title_text:  # Only create if non-empty after stripping
+                BookTitle.objects.get_or_create(
+                    book=book,
+                    title=title_text,
+                    source=source,
+                    defaults={'confidence': source.trust_level}
+                )
 
         # Authors
         creators = root.findall('.//dc:creator', ns)
@@ -51,7 +53,7 @@ def extract(book):
         pub_elem = root.find('.//dc:publisher', ns)
         if pub_elem is not None and pub_elem.text:
             pub_name = pub_elem.text.strip()
-            if pub_name:
+            if pub_name:  # Only create if non-empty after stripping
                 existing_pub = Publisher.objects.filter(name__iexact=pub_name).first()
                 if existing_pub:
                     pub_obj = existing_pub
@@ -75,11 +77,11 @@ def extract(book):
             if series_index_elem is not None and series_index_elem.get('content'):
                 volume = series_index_elem.get('content').strip()
 
-            series_obj, _ = Series.objects.get_or_create(name__iexact=series_name)
+            series_obj, _ = Series.objects.get_or_create(name=series_name)
             BookSeries.objects.get_or_create(
                 book=book,
                 series=series_obj,
-                defaults={"volume_number": volume, "confidence": source.trust_level, "source": source}
+                defaults={"series_number": volume, "confidence": source.trust_level, "source": source}
             )
 
         # Field extraction
@@ -98,8 +100,22 @@ def extract(book):
                     continue
                 if model_field == "language":
                     value = normalize_language(value)
+                    if value:  # Only create if normalization succeeded
+                        BookMetadata.objects.get_or_create(
+                            book=book,
+                            field_name=model_field,
+                            source=source,
+                            defaults={"field_value": value, "confidence": source.trust_level}
+                        )
                 elif model_field == "isbn":
                     value = normalize_isbn(value)
+                    if value:  # Only create if normalization succeeded
+                        BookMetadata.objects.get_or_create(
+                            book=book,
+                            field_name=model_field,
+                            source=source,
+                            defaults={"field_value": value, "confidence": source.trust_level}
+                        )
                 elif model_field == "publication_year":
                     match = re.search(r"\b\d{4}\b", value)
                     if match:
