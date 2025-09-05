@@ -59,6 +59,10 @@ class EbookScanner:
         status.scan_folders = json.dumps(folders_to_scan)
         status.save()
 
+        # Track if any failures occurred
+        has_failures = False
+        failure_messages = []
+
         total = len(folders_to_scan)
         for idx, path in enumerate(folders_to_scan, start=1):
             status.message = f"Scanning: {path}"
@@ -84,13 +88,18 @@ class EbookScanner:
                 logger.info(f"Completed scan of folder: {path}")
             except Exception as e:
                 logger.error(f"Error scanning folder {path}: {e}")
-                status.status = "Failed"
-                status.message = f"Error in scan: {e}"
-                status.save()
+                has_failures = True
+                failure_messages.append(f"Error scanning folder {path}: {e}")
 
-        status.status = "Completed"
-        status.progress = 100
-        status.message = "Scan complete."
+        # Set final status based on whether there were failures
+        if has_failures:
+            status.status = "Failed"
+            status.message = "; ".join(failure_messages)
+        else:
+            status.status = "Completed"
+            status.progress = 100
+            status.message = "Scan complete."
+
         status.save()
         logger.info("All folder scans completed.")
 
