@@ -45,6 +45,7 @@ urlpatterns = [
     path('rename-books/', views.BookRenamerView.as_view(), name='book_renamer'),
     path('rename-books/preview/', views.BookRenamerPreviewView.as_view(), name='book_renamer_preview'),
     path('rename-books/execute/', views.BookRenamerExecuteView.as_view(), name='book_renamer_execute'),
+    path('rename-books/file-details/', views.BookRenamerFileDetailsView.as_view(), name='book_renamer_file_details'),
     path('rename-books/revert/', views.BookRenamerRevertView.as_view(), name='book_renamer_revert'),
     path('rename-books/history/', views.BookRenamerHistoryView.as_view(), name='book_renamer_history'),
 

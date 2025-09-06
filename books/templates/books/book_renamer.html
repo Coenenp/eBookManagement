@@ -5,6 +5,47 @@
 
 {% block title %}Book File Organizer - {{ block.super }}{% endblock %}
 
+{% block extra_css %}
+<style>
+.table-col-narrow { width: 50px; }
+.table-col-status { width: 120px; }
+.text-truncate-title { max-width: 200px; }
+.text-truncate-author { max-width: 150px; }
+.text-truncate-series { max-width: 120px; }
+.alert-sm-custom { font-size: 0.75rem; }
+.cover-thumbnail { max-width: 150px; }
+.progress-bar-width-0 { width: 0%; }
+.progress-bar-width-100 { width: 100%; }
+.d-hidden { display: none !important; }
+.additional-files-section {
+    border-top: 1px solid #dee2e6;
+    margin-top: 1rem;
+    padding-top: 1rem;
+}
+.file-item {
+    transition: all 0.2s ease;
+}
+.file-item:hover {
+    background-color: #f8f9fa !important;
+}
+.file-action-group .btn {
+    font-size: 0.875rem;
+    padding: 0.375rem 0.75rem;
+}
+.file-action-group .btn-check:checked + .btn {
+    font-weight: 600;
+}
+.auto-rename-badge {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="row">
@@ -24,8 +65,11 @@
                     <button type="button" class="btn btn-warning" id="previewBtn" disabled>
                         <i class="fas fa-eye me-1"></i>Preview Changes
                     </button>
+                    <button type="button" class="btn btn-success" id="interactiveRenameBtn" disabled>
+                        <i class="fas fa-cog me-1"></i>Interactive Rename
+                    </button>
                     <button type="button" class="btn btn-success" id="executeBtn" disabled>
-                        <i class="fas fa-save me-1"></i>Execute Rename
+                        <i class="fas fa-save me-1"></i>Execute All
                     </button>
                     <a href="{% url 'books:book_renamer_history' %}" class="btn btn-outline-secondary">
                         <i class="fas fa-history me-1"></i>View History
@@ -179,22 +223,30 @@
             <form id="renameForm">
                 {% csrf_token %}
                 <div class="table-responsive">
-                    <table class="table table-striped table-hover">
+                    <table class="table table-striped table-hover table-sm">
                         <thead class="table-dark">
                             <tr>
                                 <th class="table-col-narrow">
                                     <label for="selectAllCheckbox" class="visually-hidden">Select all books</label>
                                     <input type="checkbox" id="selectAllCheckbox" class="form-check-input" aria-label="Select all books">
                                 </th>
-                                <th>Book Details</th>
-                                <th>Current Path</th>
-                                <th>New Organized Path</th>
-                                <th class="table-col-status">Status & Warnings</th>
+                                <th>Title</th>
+                                <th>Author</th>
+                                <th>Series</th>
+                                <th>Format</th>
+                                <th>Language</th>
+                                <th>Confidence</th>
+                                <th>Cover</th>
+                                <th class="table-col-status">Status</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for item in books_with_paths %}
-                            <tr>
+                            <tr data-book-id="{{ item.book.id }}" 
+                                data-current-path="{{ item.current_path }}"
+                                data-new-path="{{ item.new_path }}"
+                                data-can-rename="{{ item.can_rename|yesno:'true,false' }}"
+                                data-complete-series="{{ item.is_complete_series|yesno:'true,false' }}">
                                 <td>
                                     {% if item.can_rename %}
                                     <input type="checkbox" name="selected_books" value="{{ item.book.id }}" 
@@ -208,31 +260,53 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <div>
-                                        <strong>{{ item.book.finalmetadata.final_title|truncatechars:50 }}</strong>
-                                        {% if item.is_complete_series %}
-                                        <span class="badge bg-success ms-2">Complete Series</span>
-                                        {% endif %}
-                                        <br>
-                                        <small class="text-muted">by {{ item.book.finalmetadata.final_author|default:"Unknown" }}</small>
-                                        {% if item.book.finalmetadata.final_series %}
-                                        <br>
-                                        <small class="text-info">
-                                            <i class="fas fa-book-open me-1"></i>{{ item.book.finalmetadata.final_series }}
-                                            {% if item.book.finalmetadata.final_series_number %} #{{ item.book.finalmetadata.final_series_number }}{% endif %}
-                                        </small>
-                                        {% endif %}
-                                        <br>
-                                        <small class="text-secondary">
-                                            {{ item.book.file_format|upper }} • {{ item.book.finalmetadata.language|language_name }}
-                                        </small>
-                                    </div>
+                                    <strong class="text-truncate d-block text-truncate-title" title="{{ item.book.finalmetadata.final_title }}">
+                                        {{ item.book.finalmetadata.final_title|truncatechars:35 }}
+                                    </strong>
+                                    {% if item.is_complete_series %}
+                                    <span class="badge bg-success badge-sm">Complete Series</span>
+                                    {% endif %}
                                 </td>
                                 <td>
-                                    <small class="font-monospace text-break">{{ item.current_path|truncatechars:80 }}</small>
+                                    <span class="text-truncate d-block text-truncate-author" title="{{ item.book.finalmetadata.final_author }}">
+                                        {{ item.book.finalmetadata.final_author|default:"Unknown"|truncatechars:25 }}
+                                    </span>
                                 </td>
                                 <td>
-                                    <small class="font-monospace text-break text-primary">{{ item.new_path|truncatechars:80 }}</small>
+                                    {% if item.book.finalmetadata.final_series %}
+                                    <span class="text-truncate d-block text-truncate-series" title="{{ item.book.finalmetadata.final_series }}">
+                                        {{ item.book.finalmetadata.final_series|truncatechars:20 }}
+                                        {% if item.book.finalmetadata.final_series_number %}
+                                        <br><small class="text-muted">#{{ item.book.finalmetadata.final_series_number }}</small>
+                                        {% endif %}
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted">Standalone</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ item.book.file_format|upper }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">{{ item.book.finalmetadata.language|language_name }}</span>
+                                </td>
+                                <td>
+                                    {% if item.book.finalmetadata.overall_confidence %}
+                                    {% with confidence=item.book.finalmetadata.overall_confidence %}
+                                    <span class="badge {% if confidence >= 0.8 %}bg-success{% elif confidence >= 0.6 %}bg-warning{% else %}bg-danger{% endif %}">
+                                        {{ confidence|floatformat:1 }}
+                                    </span>
+                                    {% endwith %}
+                                    {% else %}
+                                    <span class="badge bg-secondary">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.book.finalmetadata.has_cover %}
+                                    <i class="fas fa-image text-success" title="Has cover"></i>
+                                    {% else %}
+                                    <i class="fas fa-image text-muted" title="No cover"></i>
+                                    {% endif %}
                                 </td>
                                 <td class="text-center">
                                     {% if item.can_rename %}
@@ -244,8 +318,8 @@
                                     {% if item.warnings %}
                                     <div class="mt-1">
                                         {% for warning in item.warnings %}
-                                        <div class="alert alert-{{ warning.type }} alert-sm alert-small p-1 mb-1">
-                                            {{ warning.message }}
+                                        <div class="alert alert-{{ warning.type }} alert-sm p-1 mb-1 alert-sm-custom">
+                                            {{ warning.message|truncatechars:30 }}
                                         </div>
                                         {% endfor %}
                                     </div>
@@ -299,6 +373,121 @@
                 <button type="button" class="btn btn-success" id="confirmExecuteBtn">
                     <i class="fas fa-save me-1"></i>Execute Changes
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Interactive Rename Modal -->
+<div class="modal fade" id="interactiveRenameModal" tabindex="-1" aria-labelledby="interactiveRenameModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="interactiveRenameModalLabel">
+                    <i class="fas fa-cog me-2"></i>Interactive File Rename
+                    <span id="queueProgress" class="badge bg-primary ms-2">1 of 0</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="interactiveContent">
+                    <!-- Current book details will be loaded here -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="border-bottom pb-2">Current Information</h6>
+                            <div class="mb-3">
+                                <strong>Title:</strong> <span id="currentTitle"></span>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Author:</strong> <span id="currentAuthor"></span>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Series:</strong> <span id="currentSeries"></span>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Current Path:</strong>
+                                <div class="font-monospace text-break bg-light p-2 rounded" id="currentPath"></div>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Current Cover:</strong>
+                                <div id="currentCoverContainer">
+                                    <img id="currentCover" src="" alt="Current cover" class="img-thumbnail d-none cover-thumbnail">
+                                    <span id="noCover" class="text-muted">No cover available</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="border-bottom pb-2">New Information</h6>
+                            <div class="mb-3">
+                                <strong>New Path:</strong>
+                                <div class="font-monospace text-break bg-success bg-opacity-10 p-2 rounded text-success" id="newPath"></div>
+                            </div>
+                            <div class="mb-3">
+                                <strong>New Filename:</strong>
+                                <div class="font-monospace text-break bg-info bg-opacity-10 p-2 rounded" id="newFilename"></div>
+                            </div>
+                            <div class="mb-3">
+                                <strong>Cover Status:</strong>
+                                <div id="newCoverInfo">
+                                    <span id="coverStatus"></span>
+                                </div>
+                            </div>
+                            <div class="mb-3" id="warningsContainer">
+                                <strong>Warnings:</strong>
+                                <div id="warningsList"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Additional Files Section -->
+                    <div id="additionalFilesSection" class="mt-4 d-none">
+                        <h6 class="border-bottom pb-2">
+                            <i class="fas fa-files me-2"></i>Additional Files
+                        </h6>
+                        
+                        <!-- Automatic Files -->
+                        <div id="automaticFilesContainer" class="mb-4 d-none">
+                            <div class="alert alert-info">
+                                <h6 class="alert-heading mb-2">
+                                    <i class="fas fa-magic me-2"></i>Files that will be automatically renamed
+                                </h6>
+                                <p class="mb-2">These files will be renamed with the book automatically (cover images, metadata files, etc.):</p>
+                                <div id="automaticFilesList"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Optional Files -->
+                        <div id="optionalFilesContainer" class="mb-4 d-none">
+                            <div class="alert alert-warning">
+                                <h6 class="alert-heading mb-2">
+                                    <i class="fas fa-question-circle me-2"></i>Additional files found - Choose action
+                                </h6>
+                                <p class="mb-3">These files were found in the same directory. Choose what to do with each:</p>
+                                <div id="optionalFilesList"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="d-flex justify-content-between w-100">
+                    <div>
+                        <button type="button" class="btn btn-danger" id="abortQueueBtn">
+                            <i class="fas fa-stop me-1"></i>Abort Queue
+                        </button>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-secondary" id="rejectBtn">
+                            <i class="fas fa-times me-1"></i>Reject
+                        </button>
+                        <button type="button" class="btn btn-warning" id="acceptAllBtn">
+                            <i class="fas fa-check-double me-1"></i>Accept All Remaining
+                        </button>
+                        <button type="button" class="btn btn-success" id="acceptBtn">
+                            <i class="fas fa-check me-1"></i>Accept
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -363,15 +552,27 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectAllCheckbox = document.getElementById('selectAllCheckbox');
     const previewBtn = document.getElementById('previewBtn');
     const executeBtn = document.getElementById('executeBtn');
+    const interactiveRenameBtn = document.getElementById('interactiveRenameBtn');
     const bookCheckboxes = document.querySelectorAll('.book-checkbox');
     const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
     const progressModal = new bootstrap.Modal(document.getElementById('progressModal'));
+    const interactiveModal = new bootstrap.Modal(document.getElementById('interactiveRenameModal'));
+    
+    // Interactive rename queue management
+    let renameQueue = [];
+    let currentBookIndex = 0;
+    let processedBooks = {
+        success: [],
+        errors: [],
+        skipped: []
+    };
 
     // Update button states based on selected books
     function updateButtonStates() {
         const selectedCount = document.querySelectorAll('.book-checkbox:checked').length;
         previewBtn.disabled = selectedCount === 0;
         executeBtn.disabled = selectedCount === 0;
+        interactiveRenameBtn.disabled = selectedCount === 0;
     }
 
     // Select All functionality
@@ -431,6 +632,537 @@ document.addEventListener('DOMContentLoaded', function() {
             updateButtonStates();
         });
     });
+
+    // Interactive rename functionality
+    interactiveRenameBtn.addEventListener('click', function() {
+        const selectedBooks = Array.from(document.querySelectorAll('.book-checkbox:checked'));
+        
+        if (selectedBooks.length === 0) {
+            alert('Please select books for interactive rename');
+            return;
+        }
+
+        // Build rename queue from selected books
+        renameQueue = selectedBooks.map(checkbox => {
+            const row = checkbox.closest('tr');
+            return {
+                id: checkbox.value,
+                title: row.querySelector('td:nth-child(2) strong').textContent.trim(),
+                author: row.querySelector('td:nth-child(3) span').textContent.trim(),
+                series: row.querySelector('td:nth-child(4) span').textContent.trim(),
+                currentPath: row.dataset.currentPath,
+                newPath: row.dataset.newPath,
+                canRename: row.dataset.canRename === 'true'
+            };
+        });
+
+        currentBookIndex = 0;
+        processedBooks = {
+            success: [],
+            errors: [],
+            skipped: []
+        };
+        showCurrentBook();
+        interactiveModal.show();
+    });
+
+    function showCurrentBook() {
+        if (currentBookIndex >= renameQueue.length) {
+            // Queue completed - show summary and exit gracefully
+            showCompletionSummary();
+            return;
+        }
+
+        const book = renameQueue[currentBookIndex];
+        
+        // Update progress
+        document.getElementById('queueProgress').textContent = `${currentBookIndex + 1} of ${renameQueue.length}`;
+        
+        // Update current info
+        document.getElementById('currentTitle').textContent = book.title;
+        document.getElementById('currentAuthor').textContent = book.author;
+        document.getElementById('currentSeries').textContent = book.series === 'Standalone' ? 'None' : book.series;
+        document.getElementById('currentPath').textContent = book.currentPath;
+        
+        // Update new info
+        document.getElementById('newPath').textContent = book.newPath;
+        const newFilename = book.newPath.split('/').pop();
+        document.getElementById('newFilename').textContent = newFilename;
+        
+        // Cover info - simplified for now
+        document.getElementById('coverStatus').innerHTML = book.canRename ? 
+            '<span class="badge bg-success">Will be preserved</span>' : 
+            '<span class="badge bg-warning">File missing</span>';
+            
+        // Hide cover elements for now - can be enhanced later
+        document.getElementById('currentCover').classList.add('d-none');
+        document.getElementById('noCover').classList.remove('d-none');
+        
+        // Load detailed file information
+        loadDetailedFileInfo(book.id);
+        
+        // Load warnings via AJAX call
+        loadBookWarnings(book.id);
+    }
+
+    function loadDetailedFileInfo(bookId) {
+        // Hide additional files section initially
+        document.getElementById('additionalFilesSection').classList.add('d-none');
+        document.getElementById('automaticFilesContainer').classList.add('d-none');
+        document.getElementById('optionalFilesContainer').classList.add('d-none');
+        
+        // Make AJAX request for detailed file info
+        const formData = new FormData();
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        formData.append('book_id', bookId);
+
+        fetch('{% url "books:book_renamer_file_details" %}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayAdditionalFiles(data.automatic_files, data.optional_files);
+            } else {
+                console.error('Error loading file details:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching file details:', error);
+        });
+    }
+
+    function displayAdditionalFiles(automaticFiles, optionalFiles) {
+        const hasAutomaticFiles = automaticFiles && automaticFiles.length > 0;
+        const hasOptionalFiles = optionalFiles && optionalFiles.length > 0;
+        
+        if (!hasAutomaticFiles && !hasOptionalFiles) {
+            document.getElementById('additionalFilesSection').classList.add('d-none');
+            return;
+        }
+        
+        document.getElementById('additionalFilesSection').classList.remove('d-none');
+        
+        // Display automatic files
+        if (hasAutomaticFiles) {
+            document.getElementById('automaticFilesContainer').classList.remove('d-none');
+            const automaticList = document.getElementById('automaticFilesList');
+            automaticList.innerHTML = automaticFiles.map(file => `
+                <div class="file-item d-flex justify-content-between align-items-center border rounded p-2 mb-2 bg-light">
+                    <div class="flex-grow-1">
+                        <div class="fw-bold">${file.original_name} → ${file.new_name}</div>
+                        <small class="text-muted">${file.description} (${file.size_formatted})</small>
+                    </div>
+                    <span class="auto-rename-badge">Auto-rename</span>
+                </div>
+            `).join('');
+        }
+        
+        // Display optional files
+        if (hasOptionalFiles) {
+            document.getElementById('optionalFilesContainer').classList.remove('d-none');
+            const optionalList = document.getElementById('optionalFilesList');
+            optionalList.innerHTML = optionalFiles.map((file, index) => `
+                <div class="file-item border rounded p-3 mb-3 bg-white">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="fw-bold mb-1">
+                                <i class="fas fa-file me-1"></i>${file.original_name}
+                            </div>
+                            <div class="text-muted mb-2">${file.description} (${file.size_formatted})</div>
+                            <div class="font-monospace small">
+                                <div class="mb-1">
+                                    <strong>Current:</strong> 
+                                    <span class="text-primary">${file.original}</span>
+                                </div>
+                                <div>
+                                    <strong>New:</strong> 
+                                    <span class="text-success">${file.new}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="file-action-group btn-group-vertical w-100" role="group">
+                                <input type="radio" class="btn-check" name="fileAction_${index}" id="rename_${index}" value="rename" checked>
+                                <label class="btn btn-outline-primary btn-sm" for="rename_${index}">
+                                    <i class="fas fa-edit me-1"></i>Rename with book
+                                </label>
+                                
+                                <input type="radio" class="btn-check" name="fileAction_${index}" id="delete_${index}" value="delete">
+                                <label class="btn btn-outline-danger btn-sm" for="delete_${index}">
+                                    <i class="fas fa-trash me-1"></i>Delete file
+                                </label>
+                                
+                                <input type="radio" class="btn-check" name="fileAction_${index}" id="skip_${index}" value="skip">
+                                <label class="btn btn-outline-secondary btn-sm" for="skip_${index}">
+                                    <i class="fas fa-times me-1"></i>Leave unchanged
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+    }
+
+    function showCompletionSummary() {
+        // Update modal content to show completion summary
+        const totalProcessed = processedBooks.success.length + processedBooks.errors.length + processedBooks.skipped.length;
+        
+        document.getElementById('interactiveContent').innerHTML = `
+            <div class="text-center">
+                <div class="mb-4">
+                    <i class="fas fa-check-circle text-success" style="font-size: 3rem;"></i>
+                </div>
+                <h4>Interactive Rename Completed!</h4>
+                <div class="row mt-4">
+                    <div class="col-md-4">
+                        <div class="card border-success">
+                            <div class="card-body text-center">
+                                <h5 class="card-title text-success">${processedBooks.success.length}</h5>
+                                <p class="card-text">Successfully Renamed</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-warning">
+                            <div class="card-body text-center">
+                                <h5 class="card-title text-warning">${processedBooks.skipped.length}</h5>
+                                <p class="card-text">Skipped</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-danger">
+                            <div class="card-body text-center">
+                                <h5 class="card-title text-danger">${processedBooks.errors.length}</h5>
+                                <p class="card-text">Errors</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                ${processedBooks.errors.length > 0 ? `
+                    <div class="mt-3">
+                        <h6>Error Details:</h6>
+                        <div class="text-start">
+                            ${processedBooks.errors.map(error => 
+                                `<div class="alert alert-danger alert-sm">${error.title}: ${error.error}</div>`
+                            ).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+        
+        // Update modal title
+        document.getElementById('interactiveRenameModalLabel').innerHTML = `
+            <i class="fas fa-check-circle me-2 text-success"></i>Rename Complete
+        `;
+        
+        // Update footer buttons
+        document.querySelector('#interactiveRenameModal .modal-footer').innerHTML = `
+            <div class="d-flex justify-content-center w-100">
+                <button type="button" class="btn btn-primary" id="returnToTableBtn">
+                    <i class="fas fa-table me-1"></i>Return to Table
+                </button>
+                <button type="button" class="btn btn-success ms-2" id="refreshPageBtn">
+                    <i class="fas fa-sync me-1"></i>Refresh Page
+                </button>
+            </div>
+        `;
+        
+        // Add event listeners for new buttons
+        document.getElementById('returnToTableBtn').addEventListener('click', function() {
+            interactiveModal.hide();
+            // Uncheck processed books and update UI
+            updateTableAfterCompletion();
+        });
+        
+        document.getElementById('refreshPageBtn').addEventListener('click', function() {
+            window.location.reload();
+        });
+    }
+
+    function updateTableAfterCompletion() {
+        // Uncheck all processed books
+        const allProcessedIds = [
+            ...processedBooks.success.map(book => book.id),
+            ...processedBooks.errors.map(book => book.id),
+            ...processedBooks.skipped.map(book => book.id)
+        ];
+        
+        allProcessedIds.forEach(bookId => {
+            const checkbox = document.querySelector(`input[value="${bookId}"]`);
+            if (checkbox) {
+                checkbox.checked = false;
+            }
+        });
+        
+        // Update button states
+        updateButtonStates();
+        
+        // Show a brief success message
+        if (processedBooks.success.length > 0) {
+            const successAlert = document.createElement('div');
+            successAlert.className = 'alert alert-success alert-dismissible fade show';
+            successAlert.innerHTML = `
+                <strong>Success!</strong> ${processedBooks.success.length} book(s) renamed successfully.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.querySelector('.container-fluid').prepend(successAlert);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                if (successAlert.parentNode) {
+                    successAlert.remove();
+                }
+            }, 5000);
+        }
+    }
+
+    function loadBookWarnings(bookId) {
+        // Simple implementation - in production, this would be an AJAX call
+        const warningsContainer = document.getElementById('warningsContainer');
+        const warningsList = document.getElementById('warningsList');
+        
+        // For now, show basic status
+        const book = renameQueue[currentBookIndex];
+        if (!book.canRename) {
+            warningsList.innerHTML = '<div class="alert alert-danger alert-sm">Original file not found</div>';
+            warningsContainer.classList.remove('d-none');
+        } else {
+            warningsContainer.classList.add('d-none');
+        }
+    }
+
+    // Interactive modal controls
+    document.getElementById('acceptBtn').addEventListener('click', function() {
+        const book = renameQueue[currentBookIndex];
+        performSingleRename(book.id, true);
+    });
+
+    document.getElementById('rejectBtn').addEventListener('click', function() {
+        // Skip this book
+        const book = renameQueue[currentBookIndex];
+        processedBooks.skipped.push({
+            id: book.id,
+            title: book.title
+        });
+        currentBookIndex++;
+        showCurrentBook();
+    });
+
+    document.getElementById('acceptAllBtn').addEventListener('click', function() {
+        if (confirm('Accept all remaining books in the queue?')) {
+            interactiveModal.hide();
+            const remainingBooks = renameQueue.slice(currentBookIndex).map(book => book.id);
+            performBatchRename(remainingBooks);
+        }
+    });
+
+    document.getElementById('abortQueueBtn').addEventListener('click', function() {
+        if (confirm('Abort the rename queue? No changes will be made.')) {
+            // Mark all remaining as skipped
+            const remainingBooks = renameQueue.slice(currentBookIndex);
+            remainingBooks.forEach(book => {
+                processedBooks.skipped.push({
+                    id: book.id,
+                    title: book.title,
+                    reason: 'Aborted by user'
+                });
+            });
+            
+            // Set current index to end and show completion
+            currentBookIndex = renameQueue.length;
+            showCompletionSummary();
+        }
+    });
+
+    function performSingleRename(bookId, accept) {
+        if (!accept) {
+            // Skip this book
+            const book = renameQueue[currentBookIndex];
+            processedBooks.skipped.push({
+                id: book.id,
+                title: book.title,
+                reason: 'Rejected by user'
+            });
+            currentBookIndex++;
+            showCurrentBook();
+            return;
+        }
+
+        const currentBook = renameQueue[currentBookIndex];
+
+        // Collect file actions for optional files
+        const fileActions = [];
+        const optionalFileInputs = document.querySelectorAll('input[name^="fileAction_"]:checked');
+        optionalFileInputs.forEach((input, index) => {
+            fileActions.push({
+                index: index,
+                action: input.value
+            });
+        });
+
+        // Perform single book rename via AJAX
+        const formData = new FormData();
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        formData.append('selected_books', bookId);
+        formData.append('file_actions', JSON.stringify(fileActions));
+
+        fetch('{% url "books:book_renamer_execute" %}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.success.length > 0) {
+                // Success - track it and move to next book
+                const result = data.success[0];
+                processedBooks.success.push({
+                    id: bookId,
+                    title: currentBook.title,
+                    newPath: result.new_path,
+                    additionalFiles: result.additional_files || [],
+                    fileActions: fileActions
+                });
+                currentBookIndex++;
+                showCurrentBook();
+            } else if (data.warnings && data.warnings.length > 0) {
+                // Warning - still successful but with issues
+                const result = data.warnings[0];
+                processedBooks.success.push({
+                    id: bookId,
+                    title: currentBook.title,
+                    newPath: result.new_path,
+                    warnings: result.warnings,
+                    additionalFiles: result.additional_files || [],
+                    fileActions: fileActions
+                });
+                currentBookIndex++;
+                showCurrentBook();
+            } else if (data.errors && data.errors.length > 0) {
+                // Error - track it and move to next book
+                processedBooks.errors.push({
+                    id: bookId,
+                    title: currentBook.title,
+                    error: data.errors[0].error
+                });
+                currentBookIndex++;
+                showCurrentBook();
+            } else {
+                // Unknown response - treat as error
+                processedBooks.errors.push({
+                    id: bookId,
+                    title: currentBook.title,
+                    error: 'Unknown response from server'
+                });
+                currentBookIndex++;
+                showCurrentBook();
+            }
+        })
+        .catch(error => {
+            // Network or other error - track it and move to next book
+            processedBooks.errors.push({
+                id: bookId,
+                title: currentBook.title,
+                error: error.toString()
+            });
+            currentBookIndex++;
+            showCurrentBook();
+        });
+    }
+
+    function performBatchRename(bookIds) {
+        // Mark remaining books as processed via batch
+        const remainingBooks = renameQueue.slice(currentBookIndex);
+        
+        // Use existing batch rename functionality
+        const formData = new FormData();
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        bookIds.forEach(id => formData.append('selected_books', id));
+
+        // Show progress modal and execute
+        progressModal.show();
+        document.getElementById('progressBar').className = 'progress-bar progress-bar-striped progress-bar-animated progress-bar-width-0';
+        document.getElementById('progressText').textContent = 'Processing remaining books...';
+        document.getElementById('progressResults').className = 'mt-3 d-hidden';
+        document.getElementById('closeProgressBtn').className = 'btn btn-primary d-hidden';
+
+        fetch('{% url "books:book_renamer_execute" %}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Track batch results
+            if (data.success) {
+                data.success.forEach(success => {
+                    const book = remainingBooks.find(b => b.id == success.id);
+                    if (book) {
+                        processedBooks.success.push({
+                            id: success.id,
+                            title: book.title,
+                            newPath: success.new_path
+                        });
+                    }
+                });
+            }
+            
+            if (data.errors) {
+                data.errors.forEach(error => {
+                    const book = remainingBooks.find(b => b.id == error.id);
+                    if (book) {
+                        processedBooks.errors.push({
+                            id: error.id,
+                            title: book.title,
+                            error: error.error
+                        });
+                    }
+                });
+            }
+            
+            if (data.warnings) {
+                data.warnings.forEach(warning => {
+                    const book = remainingBooks.find(b => b.id == warning.id);
+                    if (book) {
+                        processedBooks.success.push({
+                            id: warning.id,
+                            title: book.title,
+                            newPath: warning.new_path,
+                            warnings: warning.warnings
+                        });
+                    }
+                });
+            }
+            
+            // Hide progress modal and show completion
+            progressModal.hide();
+            
+            // Set current index to end to trigger completion
+            currentBookIndex = renameQueue.length;
+            
+            // Show interactive modal again with completion summary
+            showCompletionSummary();
+            interactiveModal.show();
+        })
+        .catch(error => {
+            // Mark all remaining as errors
+            remainingBooks.forEach(book => {
+                processedBooks.errors.push({
+                    id: book.id,
+                    title: book.title,
+                    error: `Batch rename failed: ${error}`
+                });
+            });
+            
+            progressModal.hide();
+            currentBookIndex = renameQueue.length;
+            showCompletionSummary();
+            interactiveModal.show();
+        });
+    }
 
     // Preview functionality with warnings check
     previewBtn.addEventListener('click', function() {

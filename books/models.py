@@ -525,7 +525,7 @@ class FinalMetadata(models.Model):
     final_author_confidence = models.FloatField(default=0.0)
 
     final_series = models.CharField(max_length=200, blank=True)
-    final_series_number = models.CharField(max_length=20, blank=True)
+    final_series_number = models.CharField(max_length=20, blank=True, null=True)
     final_series_confidence = models.FloatField(default=0.0)
 
     # Cover metadata
@@ -678,7 +678,8 @@ class FinalMetadata(models.Model):
         try:
             next_series = self.book.series_info.filter(is_active=True).order_by('-confidence').first()
             self.final_series = next_series.series.name if next_series and next_series.series else ''
-            self.final_series_number = next_series.series_number if next_series else ''
+            # Allow both None and empty string, but prefer empty string for consistency
+            self.final_series_number = next_series.series_number or '' if next_series else ''
             self.final_series_confidence = next_series.confidence if next_series else 0.0
         except Exception as e:
             logger.error(f"Error updating final series for book {self.book.id}: {e}")

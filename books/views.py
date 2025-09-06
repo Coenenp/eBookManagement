@@ -1715,7 +1715,7 @@ class BookRenamerView(LoginRequiredMixin, ListView):
                 }
 
             try:
-                series_num = float(fm.final_series_number)
+                series_num = float(fm.final_series_number) if fm.final_series_number else 0.0
                 series_data[key]['books'].append({
                     'book': book,
                     'number': series_num,
@@ -1822,12 +1822,15 @@ class BookRenamerView(LoginRequiredMixin, ListView):
                 })
 
         # Check for series consistency
-        if fm.final_series and not fm.final_series_number:
+        has_series = fm.final_series and fm.final_series.strip()
+        has_series_number = fm.final_series_number and fm.final_series_number.strip()
+        
+        if has_series and not has_series_number:
             warnings.append({
                 'type': 'warning',
                 'message': 'Series name present but missing series number'
             })
-        elif fm.final_series_number and not fm.final_series:
+        elif has_series_number and not has_series:
             warnings.append({
                 'type': 'warning',
                 'message': 'Series number present but missing series name'
@@ -2018,6 +2021,13 @@ class BookRenamerExecuteView(LoginRequiredMixin, View):
             is_placeholder=False
         ).select_related('finalmetadata')
 
+        # Get file actions for optional files (from interactive rename)
+        file_actions_json = request.POST.get('file_actions', '[]')
+        try:
+            file_actions = json.loads(file_actions_json)
+        except json.JSONDecodeError:
+            file_actions = []
+
         # Generate batch ID for this operation
         batch_id = uuid.uuid4()
 
@@ -2046,7 +2056,8 @@ class BookRenamerExecuteView(LoginRequiredMixin, View):
                 # Generate warnings before rename
                 warnings = self._generate_warnings(book)
 
-                success_data = self._rename_book_files(book, file_op)
+                # Pass file actions to rename function
+                success_data = self._rename_book_files(book, file_op, file_actions)
                 if success_data:
                     file_op.status = 'completed'
                     file_op.new_file_path = success_data['new_path']
@@ -2121,7 +2132,7 @@ class BookRenamerExecuteView(LoginRequiredMixin, View):
 
         return warnings
 
-    def _rename_book_files(self, book, file_op):
+    def _rename_book_files(self, book, file_op, file_actions=None):
         """Rename all files associated with a book with detailed tracking."""
         import os
         import shutil
@@ -2149,17 +2160,46 @@ class BookRenamerExecuteView(LoginRequiredMixin, View):
             if os.path.exists(book.file_path):
                 files_to_rename.append((book.file_path, new_path))
 
-            # Associated files (cover, opf, txt, etc.)
-            for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.opf', '.txt', '.json']:
+            # Associated files - automatically renamed with book
+            auto_rename_extensions = ['.opf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.json']
+            optional_extensions = ['.txt', '.md', '.pdf', '.doc', '.docx', '.rtf']
+            
+            automatic_files = []
+            optional_files = []
+            files_to_delete = []
+            
+            # Check for files with same base name but different extensions
+            for ext in auto_rename_extensions + optional_extensions:
                 old_file = old_base + ext
                 if os.path.exists(old_file):
                     new_file = new_base + ext
-                    files_to_rename.append((old_file, new_file))
-                    additional_files.append({
+                    file_info = {
                         'original': old_file,
                         'new': new_file,
-                        'type': ext.replace('.', '')
-                    })
+                        'type': ext.replace('.', ''),
+                        'action': 'auto_rename' if ext in auto_rename_extensions else 'optional',
+                        'size': os.path.getsize(old_file),
+                        'description': self._get_file_description(ext, old_file)
+                    }
+                    
+                    if ext in auto_rename_extensions:
+                        files_to_rename.append((old_file, new_file))
+                        automatic_files.append(file_info)
+                    else:
+                        # Handle user choice for optional files
+                        action = self._get_file_action(len(optional_files), file_actions)
+                        if action == 'rename':
+                            files_to_rename.append((old_file, new_file))
+                            file_info['action'] = 'renamed'
+                        elif action == 'delete':
+                            files_to_delete.append(old_file)
+                            file_info['action'] = 'deleted'
+                        else:  # skip
+                            file_info['action'] = 'skipped'
+                        
+                        optional_files.append(file_info)
+                    
+                    additional_files.append(file_info)
 
             # Look for other related files (different naming patterns)
             old_dir = os.path.dirname(book.file_path)
@@ -2167,17 +2207,36 @@ class BookRenamerExecuteView(LoginRequiredMixin, View):
 
             if os.path.exists(old_dir):
                 for filename in os.listdir(old_dir):
-                    if filename.startswith(old_filename) and filename != os.path.basename(book.file_path):
+                    if (filename.startswith(old_filename) and
+                            filename != os.path.basename(book.file_path) and
+                            not any(filename.endswith(ext) for ext in auto_rename_extensions + optional_extensions)):
+                        
                         old_file = os.path.join(old_dir, filename)
-                        new_filename = filename.replace(old_filename, os.path.splitext(os.path.basename(new_path))[0])
-                        new_file = os.path.join(new_dir, new_filename)
-
-                        files_to_rename.append((old_file, new_file))
-                        additional_files.append({
-                            'original': old_file,
-                            'new': new_file,
-                            'type': 'related'
-                        })
+                        if os.path.isfile(old_file):  # Only process files, not directories
+                            new_filename = filename.replace(old_filename, os.path.splitext(os.path.basename(new_path))[0])
+                            new_file = os.path.join(new_dir, new_filename)
+                            
+                            file_info = {
+                                'original': old_file,
+                                'new': new_file,
+                                'type': 'related',
+                                'size': os.path.getsize(old_file),
+                                'description': f"Related file: {filename}"
+                            }
+                            
+                            # Handle user choice for related files
+                            action = self._get_file_action(len(optional_files), file_actions)
+                            if action == 'rename':
+                                files_to_rename.append((old_file, new_file))
+                                file_info['action'] = 'renamed'
+                            elif action == 'delete':
+                                files_to_delete.append(old_file)
+                                file_info['action'] = 'deleted'
+                            else:  # skip
+                                file_info['action'] = 'skipped'
+                            
+                            optional_files.append(file_info)
+                            additional_files.append(file_info)
 
             # Perform the renames
             renamed_files = []
@@ -2185,6 +2244,14 @@ class BookRenamerExecuteView(LoginRequiredMixin, View):
                 for old_file, new_file in files_to_rename:
                     shutil.move(old_file, new_file)
                     renamed_files.append(new_file)
+
+                # Delete files marked for deletion
+                for file_to_delete in files_to_delete:
+                    try:
+                        os.remove(file_to_delete)
+                    except Exception as e:
+                        # Log deletion errors but don't fail the whole operation
+                        print(f"Warning: Could not delete {file_to_delete}: {e}")
 
                 # Update database
                 book.file_path = new_path
@@ -2209,7 +2276,9 @@ class BookRenamerExecuteView(LoginRequiredMixin, View):
                     'new_path': new_path,
                     'new_cover_path': new_cover_path,
                     'new_opf_path': new_opf_path,
-                    'additional_files': additional_files
+                    'additional_files': additional_files,
+                    'automatic_files': automatic_files,
+                    'optional_files': optional_files
                 }
 
             except Exception as e:
@@ -2223,6 +2292,173 @@ class BookRenamerExecuteView(LoginRequiredMixin, View):
 
         except Exception:
             return False
+
+    def _get_file_action(self, file_index, file_actions):
+        """Get the action for a specific optional file based on user choices."""
+        if not file_actions:
+            return 'rename'  # Default action
+        
+        for action_info in file_actions:
+            if action_info.get('index') == file_index:
+                return action_info.get('action', 'rename')
+        
+        return 'rename'  # Default action if not found
+
+    def _get_file_description(self, extension, file_path):
+        """Get a user-friendly description for file types."""
+        descriptions = {
+            '.opf': 'eBook metadata file (OPF)',
+            '.jpg': 'Book cover image (JPEG)',
+            '.jpeg': 'Book cover image (JPEG)',
+            '.png': 'Book cover image (PNG)',
+            '.gif': 'Book cover image (GIF)',
+            '.bmp': 'Book cover image (BMP)',
+            '.json': 'Metadata file (JSON)',
+            '.txt': 'Text file (may contain author info, synopsis, etc.)',
+            '.md': 'Markdown document',
+            '.pdf': 'PDF document',
+            '.doc': 'Word document',
+            '.docx': 'Word document',
+            '.rtf': 'Rich text document'
+        }
+        
+        default_desc = f"{extension.upper().replace('.', '')} file"
+        return descriptions.get(extension.lower(), default_desc)
+
+
+class BookRenamerFileDetailsView(LoginRequiredMixin, View):
+    """Get detailed file information for interactive rename modal."""
+    
+    def post(self, request):
+        try:
+            book_id = request.POST.get('book_id')
+            if not book_id:
+                return JsonResponse({'error': 'No book ID provided'}, status=400)
+            
+            book = get_object_or_404(Book, id=book_id)
+            
+            # Generate new path
+            renamer_view = BookRenamerView()
+            new_path = renamer_view._generate_new_file_path(book)
+            
+            if not book.file_path or not os.path.exists(book.file_path):
+                return JsonResponse({
+                    'error': 'Original file not found',
+                    'current_path': book.file_path or '',
+                    'new_path': new_path,
+                    'automatic_files': [],
+                    'optional_files': []
+                })
+            
+            # Get file information
+            old_base = os.path.splitext(book.file_path)[0]
+            new_base = os.path.splitext(new_path)[0]
+            
+            # Check for associated files
+            auto_rename_extensions = ['.opf', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.json']
+            optional_extensions = ['.txt', '.md', '.pdf', '.doc', '.docx', '.rtf']
+            
+            automatic_files = []
+            optional_files = []
+            
+            # Check for files with same base name
+            for ext in auto_rename_extensions + optional_extensions:
+                old_file = old_base + ext
+                if os.path.exists(old_file):
+                    new_file = new_base + ext
+                    file_info = {
+                        'original': old_file,
+                        'original_name': os.path.basename(old_file),
+                        'new': new_file,
+                        'new_name': os.path.basename(new_file),
+                        'type': ext.replace('.', ''),
+                        'extension': ext,
+                        'size': os.path.getsize(old_file),
+                        'size_formatted': self._format_file_size(os.path.getsize(old_file)),
+                        'description': self._get_file_description(ext, old_file)
+                    }
+                    
+                    if ext in auto_rename_extensions:
+                        automatic_files.append(file_info)
+                    else:
+                        optional_files.append(file_info)
+            
+            # Look for other related files
+            old_dir = os.path.dirname(book.file_path)
+            old_filename = os.path.splitext(os.path.basename(book.file_path))[0]
+            
+            if os.path.exists(old_dir):
+                for filename in os.listdir(old_dir):
+                    if (filename.startswith(old_filename) and
+                            filename != os.path.basename(book.file_path) and
+                            not any(filename.endswith(ext) for ext in auto_rename_extensions + optional_extensions)):
+                        
+                        old_file = os.path.join(old_dir, filename)
+                        if os.path.isfile(old_file):
+                            new_filename = filename.replace(old_filename, os.path.splitext(os.path.basename(new_path))[0])
+                            new_file = os.path.join(os.path.dirname(new_path), new_filename)
+                            
+                            file_info = {
+                                'original': old_file,
+                                'original_name': filename,
+                                'new': new_file,
+                                'new_name': new_filename,
+                                'type': 'related',
+                                'extension': os.path.splitext(filename)[1] or '(no extension)',
+                                'size': os.path.getsize(old_file),
+                                'size_formatted': self._format_file_size(os.path.getsize(old_file)),
+                                'description': f"Related file: {filename}"
+                            }
+                            
+                            optional_files.append(file_info)
+            
+            return JsonResponse({
+                'success': True,
+                'current_path': book.file_path,
+                'new_path': new_path,
+                'automatic_files': automatic_files,
+                'optional_files': optional_files,
+                'book_info': {
+                    'title': book.finalmetadata.final_title if hasattr(book, 'finalmetadata') else book.title,
+                    'author': book.finalmetadata.final_author if hasattr(book, 'finalmetadata') else 'Unknown Author',
+                    'series': book.finalmetadata.final_series if hasattr(book, 'finalmetadata') and book.finalmetadata.final_series else 'Standalone'
+                }
+            })
+            
+        except Exception as e:
+            return JsonResponse({'error': f'Error getting file details: {str(e)}'}, status=500)
+    
+    def _format_file_size(self, size_bytes):
+        """Format file size in human readable format."""
+        if size_bytes == 0:
+            return "0B"
+        size_names = ["B", "KB", "MB", "GB"]
+        import math
+        i = int(math.floor(math.log(size_bytes, 1024)))
+        p = math.pow(1024, i)
+        s = round(size_bytes / p, 2)
+        return f"{s} {size_names[i]}"
+    
+    def _get_file_description(self, extension, file_path):
+        """Get a user-friendly description for file types."""
+        descriptions = {
+            '.opf': 'eBook metadata file (OPF)',
+            '.jpg': 'Book cover image (JPEG)',
+            '.jpeg': 'Book cover image (JPEG)',
+            '.png': 'Book cover image (PNG)',
+            '.gif': 'Book cover image (GIF)',
+            '.bmp': 'Book cover image (BMP)',
+            '.json': 'Metadata file (JSON)',
+            '.txt': 'Text file (may contain author info, synopsis, etc.)',
+            '.md': 'Markdown document',
+            '.pdf': 'PDF document',
+            '.doc': 'Word document',
+            '.docx': 'Word document',
+            '.rtf': 'Rich text document'
+        }
+        
+        default_desc = f"{extension.upper().replace('.', '')} file"
+        return descriptions.get(extension.lower(), default_desc)
 
 
 class BookRenamerRevertView(LoginRequiredMixin, View):
