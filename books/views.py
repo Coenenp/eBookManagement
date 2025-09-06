@@ -2256,6 +2256,35 @@ class BookRenamerExecuteView(LoginRequiredMixin, View):
                 # Update database
                 book.file_path = new_path
 
+                # Generate OPF file with final metadata if enabled
+                # This creates a standards-compliant metadata file alongside the ebook
+                try:
+                    from books.utils.opf_generator import save_opf_file, get_opf_filename
+
+                    # Check if book has final metadata to export
+                    if hasattr(book, 'finalmetadata') and book.finalmetadata:
+                        opf_filename = get_opf_filename(os.path.basename(new_path))
+                        opf_path = os.path.join(os.path.dirname(new_path), opf_filename)
+
+                        # Generate OPF with reference to the ebook file
+                        ebook_filename = os.path.basename(new_path)
+                        if save_opf_file(book.finalmetadata, opf_path, ebook_filename):
+                            # Add to additional files list for reporting
+                            opf_file_info = {
+                                'original': 'Generated',
+                                'new': opf_path,
+                                'type': 'opf',
+                                'action': 'generated',
+                                'size': os.path.getsize(opf_path) if os.path.exists(opf_path) else 0,
+                                'description': 'Generated OPF metadata file'
+                            }
+                            additional_files.append(opf_file_info)
+                            automatic_files.append(opf_file_info)
+
+                except Exception as e:
+                    # Don't fail the rename if OPF generation fails
+                    print(f"Warning: Could not generate OPF file: {e}")
+
                 # Update cover path
                 if book.cover_path and book.cover_path.startswith(old_base):
                     new_cover_path = book.cover_path.replace(old_base, new_base)
