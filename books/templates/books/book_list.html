@@ -147,6 +147,18 @@
                                         </select>
                                     </div>
 
+                                    <div class="col-md-3">
+                                        <label for="datasource" class="form-label">Data Source</label>
+                                        <select class="form-select" id="datasource" name="datasource">
+                                            <option value="">All Sources</option>
+                                            {% for source_code, source_name in datasources %}
+                                            <option value="{{ source_code }}" {% if source_code == datasource_filter %}selected{% endif %}>
+                                                {{ source_name }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+
                                     <!-- Status Filters -->
                                     <div class="col-md-3">
                                         <label for="needs_review" class="form-label">Review Status</label>

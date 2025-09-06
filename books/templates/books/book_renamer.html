@@ -7,16 +7,39 @@
 
 {% block extra_css %}
 <style>
-.table-col-narrow { width: 50px; }
-.table-col-status { width: 120px; }
-.text-truncate-title { max-width: 200px; }
-.text-truncate-author { max-width: 150px; }
-.text-truncate-series { max-width: 120px; }
-.alert-sm-custom { font-size: 0.75rem; }
+.table-col-narrow { width: 40px; }
+.table-col-format { width: 60px; }
+.table-col-lang { width: 60px; }
+.table-col-confidence { width: 70px; }
+.table-col-cover { width: 30px; }
+.table-col-status { width: 80px; }
+.text-truncate-title { max-width: 300px; }
+.text-truncate-author { max-width: 200px; }
+.text-truncate-series { max-width: 150px; }
+.alert-sm-custom { font-size: 0.65rem; padding: 0.1rem 0.3rem; }
 .cover-thumbnail { max-width: 150px; }
 .progress-bar-width-0 { width: 0%; }
 .progress-bar-width-100 { width: 100%; }
 .d-hidden { display: none !important; }
+.badge-xs { font-size: 0.65rem; padding: 0.15rem 0.3rem; }
+.table-sm th, .table-sm td { padding: 0.3rem 0.4rem; vertical-align: middle; }
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 1200px) {
+    .text-truncate-title { max-width: 250px; }
+    .text-truncate-author { max-width: 150px; }
+    .text-truncate-series { max-width: 120px; }
+}
+
+@media (max-width: 992px) {
+    .text-truncate-title { max-width: 200px; }
+    .text-truncate-author { max-width: 120px; }
+    .text-truncate-series { max-width: 100px; }
+    .table-col-format { width: 50px; }
+    .table-col-lang { width: 50px; }
+    .table-col-confidence { width: 60px; }
+    .table-col-status { width: 70px; }
+}
 .additional-files-section {
     border-top: 1px solid #dee2e6;
     margin-top: 1rem;
@@ -233,10 +256,10 @@
                                 <th>Title</th>
                                 <th>Author</th>
                                 <th>Series</th>
-                                <th>Format</th>
-                                <th>Language</th>
-                                <th>Confidence</th>
-                                <th>Cover</th>
+                                <th class="table-col-format">Fmt</th>
+                                <th class="table-col-lang">Lang</th>
+                                <th class="table-col-confidence">Conf</th>
+                                <th class="table-col-cover"><i class="fas fa-image"></i></th>
                                 <th class="table-col-status">Status</th>
                             </tr>
                         </thead>
@@ -261,65 +284,65 @@
                                 </td>
                                 <td>
                                     <strong class="text-truncate d-block text-truncate-title" title="{{ item.book.finalmetadata.final_title }}">
-                                        {{ item.book.finalmetadata.final_title|truncatechars:35 }}
+                                        {{ item.book.finalmetadata.final_title|truncatechars:50 }}
                                     </strong>
                                     {% if item.is_complete_series %}
-                                    <span class="badge bg-success badge-sm">Complete Series</span>
+                                    <span class="badge bg-success badge-xs">Complete</span>
                                     {% endif %}
                                 </td>
                                 <td>
                                     <span class="text-truncate d-block text-truncate-author" title="{{ item.book.finalmetadata.final_author }}">
-                                        {{ item.book.finalmetadata.final_author|default:"Unknown"|truncatechars:25 }}
+                                        {{ item.book.finalmetadata.final_author|default:"Unknown"|truncatechars:30 }}
                                     </span>
                                 </td>
                                 <td>
                                     {% if item.book.finalmetadata.final_series %}
                                     <span class="text-truncate d-block text-truncate-series" title="{{ item.book.finalmetadata.final_series }}">
-                                        {{ item.book.finalmetadata.final_series|truncatechars:20 }}
+                                        {{ item.book.finalmetadata.final_series|truncatechars:25 }}
                                         {% if item.book.finalmetadata.final_series_number %}
                                         <br><small class="text-muted">#{{ item.book.finalmetadata.final_series_number }}</small>
                                         {% endif %}
                                     </span>
                                     {% else %}
-                                    <span class="text-muted">Standalone</span>
+                                    <span class="text-muted small">Standalone</span>
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <span class="badge bg-secondary">{{ item.book.file_format|upper }}</span>
+                                    <span class="badge bg-secondary badge-xs">{{ item.book.file_format|upper }}</span>
                                 </td>
                                 <td>
-                                    <span class="badge bg-info">{{ item.book.finalmetadata.language|language_name }}</span>
+                                    <span class="badge bg-info badge-xs">{{ item.book.finalmetadata.language|language_name|truncatechars:3 }}</span>
                                 </td>
                                 <td>
                                     {% if item.book.finalmetadata.overall_confidence %}
                                     {% with confidence=item.book.finalmetadata.overall_confidence %}
-                                    <span class="badge {% if confidence >= 0.8 %}bg-success{% elif confidence >= 0.6 %}bg-warning{% else %}bg-danger{% endif %}">
+                                    <span class="badge badge-xs {% if confidence >= 0.8 %}bg-success{% elif confidence >= 0.6 %}bg-warning{% else %}bg-danger{% endif %}">
                                         {{ confidence|floatformat:1 }}
                                     </span>
                                     {% endwith %}
                                     {% else %}
-                                    <span class="badge bg-secondary">N/A</span>
+                                    <span class="badge bg-secondary badge-xs">N/A</span>
                                     {% endif %}
                                 </td>
-                                <td>
+                                <td class="text-center">
                                     {% if item.book.finalmetadata.has_cover %}
                                     <i class="fas fa-image text-success" title="Has cover"></i>
                                     {% else %}
-                                    <i class="fas fa-image text-muted" title="No cover"></i>
+                                    <i class="far fa-image text-muted" title="No cover"></i>
                                     {% endif %}
                                 </td>
                                 <td class="text-center">
                                     {% if item.can_rename %}
-                                    <span class="badge bg-success">Ready</span>
+                                    <span class="badge bg-success badge-xs">Ready</span>
                                     {% else %}
-                                    <span class="badge bg-danger">Missing</span>
+                                    <span class="badge bg-danger badge-xs">Missing</span>
                                     {% endif %}
                                     
                                     {% if item.warnings %}
                                     <div class="mt-1">
                                         {% for warning in item.warnings %}
-                                        <div class="alert alert-{{ warning.type }} alert-sm p-1 mb-1 alert-sm-custom">
-                                            {{ warning.message|truncatechars:30 }}
+                                        <div class="alert alert-{{ warning.type }} alert-sm-custom mb-1">
+                                            <small>{{ warning.message|truncatechars:20 }}</small>
                                         </div>
                                         {% endfor %}
                                     </div>
@@ -1220,17 +1243,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // Display preview results
     function displayPreview(previewData) {
         let html = '<div class="table-responsive"><table class="table table-sm">';
-        html += '<thead><tr><th>Book</th><th>Current Path</th><th>New Path</th><th>Status</th></tr></thead><tbody>';
+        html += '<thead><tr><th style="width: 200px;">Book</th><th>Current Path</th><th>New Path</th><th style="width: 80px;">Status</th></tr></thead><tbody>';
         
         previewData.forEach(item => {
             const statusBadge = item.can_rename ? 
-                '<span class="badge bg-success">Ready</span>' : 
-                '<span class="badge bg-danger">Cannot Rename</span>';
+                '<span class="badge bg-success badge-xs">Ready</span>' : 
+                '<span class="badge bg-danger badge-xs">Cannot Rename</span>';
                 
             html += `<tr>
-                <td><strong>${item.title}</strong><br><small>${item.author}</small></td>
-                <td><small class="font-monospace">${item.current_path}</small></td>
-                <td><small class="font-monospace text-primary">${item.new_path}</small></td>
+                <td>
+                    <strong class="d-block" style="font-size: 0.9rem;">${item.title}</strong>
+                    <small class="text-muted">${item.author}</small>
+                </td>
+                <td><small class="font-monospace text-break" style="font-size: 0.75rem;">${item.current_path}</small></td>
+                <td><small class="font-monospace text-break text-primary" style="font-size: 0.75rem;">${item.new_path}</small></td>
                 <td>${statusBadge}</td>
             </tr>`;
         });
