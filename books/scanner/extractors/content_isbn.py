@@ -180,11 +180,16 @@ def _find_isbn_patterns(text):
     if not text:
         return isbn_candidates
 
-    # Pattern 1: ISBN prefix followed by number
-    isbn_pattern = r'(?i)ISBN[-:\s]*([0-9]{10}|[0-9]{13}|[0-9]{1,5}[-\s][0-9]{1,7}[-\s][0-9]{1,7}[-\s][0-9X])'
+    # Pattern 1: ISBN prefix followed by number (with or without hyphens)
+    # Matches ISBN: 9780134685991 or ISBN-13: 978-0-13-468599-1
+    isbn_pattern = r'(?i)ISBN(?:-?1[03])?[-:\s]*([0-9-\s]+[0-9Xx])'
     matches = re.finditer(isbn_pattern, text)
     for match in matches:
-        isbn_candidates.append(match.group(1))
+        # Remove hyphens and spaces for consistent format
+        clean_isbn = re.sub(r'[-\s]', '', match.group(1))
+        # Only keep if it's 10 or 13 digits (plus optional X)
+        if re.match(r'^[0-9]{9}[0-9Xx]$|^[0-9]{13}$', clean_isbn):
+            isbn_candidates.append(clean_isbn)
 
     # Pattern 2: 13-digit numbers starting with 978 or 979 (standard ISBN-13 prefixes)
     isbn13_pattern = r'\b(97[89][0-9]{10})\b'
@@ -194,10 +199,12 @@ def _find_isbn_patterns(text):
 
     # Pattern 3: 10-digit ISBN patterns (more restrictive to avoid false positives)
     # Look for 10-digit numbers with specific formatting or context
-    isbn10_context_pattern = r'(?i)(?:ISBN|International Standard Book Number)[-:\s]*([0-9]{1,5}[-\s][0-9]{1,7}[-\s][0-9]{1,7}[-\s][0-9X])'
+    isbn10_context_pattern = r'(?i)(?:ISBN|International\s+Standard\s+Book\s+Number)[-:\s]*([0-9-\s]+[0-9Xx])'
     matches = re.finditer(isbn10_context_pattern, text)
     for match in matches:
-        isbn_candidates.append(match.group(1))
+        clean_isbn = re.sub(r'[-\s]', '', match.group(1))
+        if re.match(r'^[0-9]{9}[0-9Xx]$|^[0-9]{13}$', clean_isbn):
+            isbn_candidates.append(clean_isbn)
 
     # Pattern 4: Look for numbers near copyright or publication info
     copyright_context = r'(?i)(?:copyright|published|edition|print).*?([0-9]{10,13})'

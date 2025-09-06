@@ -524,7 +524,7 @@ class FinalMetadata(models.Model):
     final_author = models.CharField(max_length=500, blank=True)
     final_author_confidence = models.FloatField(default=0.0)
 
-    final_series = models.CharField(max_length=200, blank=True)
+    final_series = models.CharField(max_length=200, blank=True, null=True)
     final_series_number = models.CharField(max_length=20, blank=True, null=True)
     final_series_confidence = models.FloatField(default=0.0)
 
