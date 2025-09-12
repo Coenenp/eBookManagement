@@ -9,13 +9,16 @@ charset-normalizer==3.4.2
 colorama==0.4.6
 crispy-bootstrap5==2025.6
 cryptography==45.0.4
-Django==5.2.3
+Django==5.2.6
 django-crispy-forms==2.4
 EbookLib==0.19
 idna==3.10
 loguru==0.6.0
 lxml==5.4.0
 mobi==0.3.3
+mysqlclient==2.2.4
+psycopg2-binary==2.9.9
+PyMySQL==1.1.1
 pdfminer.six==20250506
 pillow==11.2.1
 pycparser==2.22

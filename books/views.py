@@ -299,6 +299,25 @@ class BookListView(LoginRequiredMixin, ListView):
         if missing in missing_map:
             queryset = queryset.filter(missing_map[missing])
 
+        # Datasource filter
+        datasource = GET.get('datasource')
+        if datasource and datasource.strip():
+            # Filter books that have metadata from the specified source ID
+            queryset = queryset.filter(
+                Q(titles__source_id=datasource) |
+                Q(bookauthor__source_id=datasource) |
+                Q(covers__source_id=datasource) |
+                Q(series_info__source_id=datasource) |
+                Q(bookpublisher__source_id=datasource) |
+                Q(bookgenre__source_id=datasource) |
+                Q(metadata__source_id=datasource)
+            ).distinct()
+
+        # Scan folder filter
+        scan_folder = GET.get('scan_folder')
+        if scan_folder and scan_folder.strip():
+            queryset = queryset.filter(scan_folder_id=scan_folder)
+
         return queryset
 
     def _apply_sorting(self, queryset):
@@ -340,6 +359,8 @@ class BookListView(LoginRequiredMixin, ListView):
             'confidence_filter': self.request.GET.get('confidence', ''),
             'corrupted_filter': self.request.GET.get('corrupted', ''),
             'missing_filter': self.request.GET.get('missing', ''),
+            'datasource_filter': self.request.GET.get('datasource', ''),
+            'scan_folder_filter': self.request.GET.get('scan_folder', ''),
             'sort_by': self.request.GET.get('sort', 'last_scanned'),
             'sort_order': self.request.GET.get('order', 'desc'),
             'review_type': self.request.GET.get('review_type', ''),
@@ -381,6 +402,21 @@ class BookListView(LoginRequiredMixin, ListView):
         lang_dict = dict(LANGUAGE_CHOICES)
         context['languages'] = [(code, lang_dict[code]) for code in used_languages if code in lang_dict]
 
+        # Get all datasources that have been used for metadata
+        used_datasources = DataSource.objects.filter(
+            Q(booktitle__isnull=False) |
+            Q(bookauthor__isnull=False) |
+            Q(bookgenre__isnull=False) |
+            Q(bookseries__isnull=False) |
+            Q(bookpublisher__isnull=False) |
+            Q(bookcover__isnull=False) |
+            Q(bookmetadata__isnull=False)
+        ).distinct().values_list('name', 'name').order_by('name')
+        context['datasources'] = used_datasources
+
+        # Get all scan folders
+        context['scan_folders'] = ScanFolder.objects.all().order_by('name')
+
         metadata_stats = FinalMetadata.objects.aggregate(
             avg_confidence=Avg('overall_confidence'),
             avg_completeness=Avg('completeness_score')
@@ -398,6 +434,12 @@ class BookListView(LoginRequiredMixin, ListView):
         }
 
         context['first_review_target'] = Book.objects.filter(finalmetadata__is_reviewed__in=[False, None]).order_by('id').first()
+
+        # Add context for filter dropdowns
+        context['datasources'] = DataSource.objects.values_list('name', 'name').distinct().order_by('name')
+        context['scan_folders'] = ScanFolder.objects.all().order_by('path')
+        context['datasource_filter'] = self.request.GET.get('datasource', '')
+        context['scan_folder_filter'] = self.request.GET.get('scan_folder', '')
 
         context['review_tabs'] = [
             ('needs_review', 'Needs Review', context['review_counts']['needs_review'], 'primary'),

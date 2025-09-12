@@ -106,11 +106,11 @@ class Book(models.Model):
         ('placeholder', 'Placeholder'),
     ]
 
-    file_path = models.CharField(max_length=1000, unique=True)
+    file_path = models.CharField(max_length=191, unique=True)  # MySQL UTF8MB4 safe length
     file_format = models.CharField(max_length=20, choices=FORMAT_CHOICES)
     file_size = models.BigIntegerField(null=True, blank=True)
-    cover_path = models.CharField(max_length=1000, blank=True)  # Initial cover from scanning
-    opf_path = models.CharField(max_length=1000, blank=True)
+    cover_path = models.CharField(max_length=255, blank=True)  # Initial cover from scanning
+    opf_path = models.CharField(max_length=255, blank=True)
 
     # Scan metadata
     first_scanned = models.DateTimeField(auto_now_add=True)
