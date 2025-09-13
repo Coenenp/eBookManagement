@@ -2988,7 +2988,7 @@ def toggle_needs_review(request, book_id):
 def rescan_external_metadata(request, book_id):
     """Rescan external metadata using current final metadata as search terms."""
     import traceback
-    from django.http import JsonResponse
+    from django.http import JsonResponse, Http404
     from books.scanner.external import query_metadata_and_covers_with_terms
     from django.core.cache import cache
 
@@ -3149,6 +3149,9 @@ def rescan_external_metadata(request, book_id):
             'added_counts': added_counts,
         })
 
+    except Http404:
+        # Let Http404 exceptions propagate to return proper 404 status
+        raise
     except Exception as e:
         logger.error(f"Error in rescan_external_metadata: {e}")
         logger.error(traceback.format_exc())

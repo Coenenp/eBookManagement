@@ -106,11 +106,12 @@ class Book(models.Model):
         ('placeholder', 'Placeholder'),
     ]
 
-    file_path = models.CharField(max_length=191, unique=True)  # MySQL UTF8MB4 safe length
+    file_path = models.TextField()  # Full file path without length restrictions
+    file_path_hash = models.CharField(max_length=32, unique=True, editable=False, default='')  # MD5 hash for uniqueness
     file_format = models.CharField(max_length=20, choices=FORMAT_CHOICES)
     file_size = models.BigIntegerField(null=True, blank=True)
-    cover_path = models.CharField(max_length=255, blank=True)  # Initial cover from scanning
-    opf_path = models.CharField(max_length=255, blank=True)
+    cover_path = models.TextField(blank=True)  # Allow unlimited path length
+    opf_path = models.TextField(blank=True)  # Allow unlimited path length
 
     # Scan metadata
     first_scanned = models.DateTimeField(auto_now_add=True)
@@ -121,6 +122,30 @@ class Book(models.Model):
     is_placeholder = models.BooleanField(default=False)
     is_duplicate = models.BooleanField(default=False)
     is_corrupted = models.BooleanField(default=False)
+
+    def save(self, *args, **kwargs):
+        """Generate hash of file_path for unique constraint"""
+        import hashlib
+        if self.file_path:
+            self.file_path_hash = hashlib.md5(self.file_path.encode('utf-8')).hexdigest()
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_or_create_by_path(cls, file_path, defaults=None):
+        """Get or create book by file path, using hash for lookup"""
+        import hashlib
+        file_path_hash = hashlib.md5(file_path.encode('utf-8')).hexdigest()
+
+        try:
+            book = cls.objects.get(file_path_hash=file_path_hash)
+            return book, False
+        except cls.DoesNotExist:
+            if defaults is None:
+                defaults = {}
+            defaults['file_path'] = file_path
+            defaults['file_path_hash'] = file_path_hash
+            book = cls.objects.create(**defaults)
+            return book, True
 
     def __str__(self):
         if self.is_placeholder:
@@ -164,6 +189,15 @@ class Author(models.Model):
     is_reviewed = models.BooleanField(default=False, help_text="Mark authors you've verified or finalized")
 
     def save(self, *args, **kwargs):
+        # Ensure name field is populated from first_name and last_name if name is empty
+        if not self.name and (self.first_name or self.last_name):
+            name_parts = []
+            if self.first_name:
+                name_parts.append(self.first_name.strip())
+            if self.last_name:
+                name_parts.append(self.last_name.strip())
+            self.name = " ".join(name_parts)
+
         # Only extract if first and last aren't already set
         if not (self.first_name and self.last_name):
             name_clean = self.name.strip()
@@ -506,7 +540,7 @@ class BookMetadata(FinalMetadataSyncMixin, models.Model):
         self.post_deactivation_sync()
 
     class Meta:
-        unique_together = ['book', 'field_name', 'source']
+        unique_together = ['book', 'field_name', 'field_value', 'source']
         ordering = ['-confidence']
 
     def __str__(self):

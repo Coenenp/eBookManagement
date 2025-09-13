@@ -57,22 +57,22 @@ class EbookScanner:
 
         # Store scan configuration for potential resume
         status.scan_folders = json.dumps(folders_to_scan)
-        
+
         # Count total files across all directories first
         status.message = "Counting files..."
         status.progress = 0
         status.processed_files = 0
         status.save()
-        
+
         total_files_across_all_folders = 0
         for path in folders_to_scan:
             from books.scanner.folder import _collect_files
             ebook_files, _, _ = _collect_files(path, self.ebook_extensions, self.cover_extensions)
             total_files_across_all_folders += len(ebook_files)
-        
+
         status.total_files = total_files_across_all_folders
         status.save()
-        
+
         logger.info(f"Total files to process across all folders: {total_files_across_all_folders}")
 
         # Track if any failures occurred

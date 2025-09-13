@@ -156,7 +156,7 @@ def _collect_files(directory, ebook_exts, cover_exts):
 
 
 def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
-    book, created = Book.objects.get_or_create(
+    book, created = Book.get_or_create_by_path(
         file_path=file_path,
         defaults={
             "file_format": get_file_format(file_path),
@@ -305,7 +305,7 @@ def _handle_orphans(directory, cover_files, opf_files, ebook_files, scan_folder)
 
 def _create_placeholder_book(file_path, scan_folder):
     try:
-        book, created = Book.objects.get_or_create(
+        book, created = Book.get_or_create_by_path(
             file_path=file_path,
             defaults={
                 "file_format": "placeholder",

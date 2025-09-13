@@ -56,6 +56,9 @@ def query_metadata_and_covers(book):
 
 def query_metadata_and_covers_with_terms(book, search_title=None, search_author=None, search_isbn=None):
     """Query external metadata using specific search terms instead of book's existing metadata"""
+    metadata_list = []
+    covers_list = []
+
     try:
         # Use provided search terms, fall back to existing metadata
         title = search_title or _get_best_title(book)
@@ -65,6 +68,10 @@ def query_metadata_and_covers_with_terms(book, search_title=None, search_author=
         logger.info(f"Search terms - Title: '{title}', Author: '{author}', ISBN: '{search_isbn}'")
 
         if title or author or search_isbn:
+            # Count metadata and covers before queries
+            initial_metadata_count = BookMetadata.objects.filter(book=book).count()
+            initial_covers_count = BookCover.objects.filter(book=book).count()
+
             # Try ISBN search first if provided
             if search_isbn:
                 logger.info(f"[ISBN SEARCH] ISBN: {search_isbn}")
@@ -78,11 +85,27 @@ def query_metadata_and_covers_with_terms(book, search_title=None, search_author=
 
             logger.info(f"[GOODREADS COMBINED] Title: {title}, Author: {author}")
             _query_goodreads_combined(book, title, author)
+
+            # Collect new metadata and covers that were added
+            final_metadata_count = BookMetadata.objects.filter(book=book).count()
+            final_covers_count = BookCover.objects.filter(book=book).count()
+
+            # Get the newly added metadata and covers
+            if final_metadata_count > initial_metadata_count:
+                new_metadata = BookMetadata.objects.filter(book=book)[initial_metadata_count:]
+                metadata_list.extend(list(new_metadata))
+
+            if final_covers_count > initial_covers_count:
+                new_covers = BookCover.objects.filter(book=book)[initial_covers_count:]
+                covers_list.extend(list(new_covers))
         else:
             logger.warning(f"[QUERY SKIPPED] No usable search terms provided for book ID {book.id}")
+
     except Exception as e:
         logger.error(f"[QUERY_METADATA_AND_COVERS_WITH_TERMS EXCEPTION] {e}")
         traceback.print_exc()
+
+    return (metadata_list, covers_list)
 
 
 def _get_best_title(book):
