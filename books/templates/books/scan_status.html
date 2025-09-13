@@ -114,8 +114,8 @@
       // Initialize progress bar with CSS custom property
       const progressBar = document.getElementById("scan-progress-bar");
       if (progressBar) {
-          const width = progressBar.getAttribute("data-width") || "0%";
-          progressBar.style.setProperty("--scan-width", width);
+          const width = progressBar.getAttribute("data-width") || "0";
+          progressBar.style.setProperty("--scan-width", width + "%");
       }
 
       function fetchStatus() {
@@ -147,8 +147,10 @@
                           progressBar.style.setProperty("--scan-width", progress + "%");
                           progressBar.textContent = progress + "%";
                           progressBar.setAttribute("aria-valuenow", progress);
-                          progressBar.className = "progress-bar bg-" +
-                              (progress === 100 ? "success" : progress >= 50 ? "info" : "warning");
+                          
+                          // Update color class while preserving other classes
+                          const colorClass = "bg-" + (progress === 100 ? "success" : progress >= 50 ? "info" : "warning");
+                          progressBar.className = "progress-bar progress-bar-scan " + colorClass;
                       }
 
                       if (data.status !== "Running") clearInterval(intervalId);

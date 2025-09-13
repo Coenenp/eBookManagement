@@ -35,9 +35,9 @@ DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 't')
 
 ALLOWED_HOSTS = []
 
-# Allow testserver for Django tests
+# Allow common development hosts and testserver for Django tests
 if DEBUG:
-    ALLOWED_HOSTS.append('testserver')
+    ALLOWED_HOSTS.extend(['127.0.0.1', 'localhost', 'testserver'])
 
 
 # Application definition

@@ -26,17 +26,27 @@ def generate_opf_from_final_metadata(final_metadata, ebook_filename=None):
         str: Complete OPF XML content
     """
     try:
+        # Define namespace map for clean prefix output
+        nsmap = {
+            "opf": "http://www.idpf.org/2007/opf",
+            "dc": "http://purl.org/dc/elements/1.1/",
+            "dcterms": "http://purl.org/dc/terms/"
+        }
+
+        # Register namespace prefixes for clean output
+        ET.register_namespace("opf", "http://www.idpf.org/2007/opf")
+        ET.register_namespace("dc", "http://purl.org/dc/elements/1.1/")
+        ET.register_namespace("dcterms", "http://purl.org/dc/terms/")
+
         # Create root element with namespaces
         root = ET.Element("{http://www.idpf.org/2007/opf}package",
                           attrib={
                               "version": "2.0",
                               "unique-identifier": "BookId"
-                          })
+                          },
+                          nsmap=nsmap)
 
-        # Add namespace declarations
-        root.set("{http://www.w3.org/2000/xmlns/}opf", "http://www.idpf.org/2007/opf")
-        root.set("{http://www.w3.org/2000/xmlns/}dc", "http://purl.org/dc/elements/1.1/")
-        root.set("{http://www.w3.org/2000/xmlns/}dcterms", "http://purl.org/dc/terms/")
+        # The namespace declarations are automatically handled by nsmap
 
         # Metadata section
         metadata = ET.SubElement(root, "{http://www.idpf.org/2007/opf}metadata")
@@ -94,6 +104,10 @@ def generate_opf_from_final_metadata(final_metadata, ebook_filename=None):
         # Manifest section (simplified - just reference the ebook file if provided)
         manifest = ET.SubElement(root, "{http://www.idpf.org/2007/opf}manifest")
 
+        # Ensure manifest is not empty to avoid self-closing tag
+        if not ebook_filename:
+            manifest.text = ""  # Add empty text to prevent self-closing tag
+
         if ebook_filename:
             # Determine media type based on file extension
             file_ext = Path(ebook_filename).suffix.lower()
@@ -116,6 +130,11 @@ def generate_opf_from_final_metadata(final_metadata, ebook_filename=None):
 
         # Spine section (simplified)
         spine = ET.SubElement(root, "{http://www.idpf.org/2007/opf}spine")
+
+        # Ensure spine is not empty to avoid self-closing tag
+        if not ebook_filename:
+            spine.text = ""  # Add empty text to prevent self-closing tag
+
         if ebook_filename:
             ET.SubElement(spine, "{http://www.idpf.org/2007/opf}itemref",
                           attrib={"idref": "main-content"})
