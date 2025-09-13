@@ -18,7 +18,10 @@ def log_scan_error(message: str, file_path: str, scan_folder) -> None:
 
 def update_scan_progress(status, current: int, total: int, filename: str) -> None:
     """Update overall progress and status message"""
-    percent = int((current / total) * 100)
+    if total > 0:
+        percent = min(int((current / total) * 100), 100)  # Cap at 100%
+    else:
+        percent = 0
     status.progress = percent
     status.message = f"Scanning: {filename}"
     status.save()

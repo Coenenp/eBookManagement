@@ -448,6 +448,183 @@ class ViewFilteringTests(TestCase):
         book_ids = [book.id for book in books]
         self.assertIn(book_corrupted.id, book_ids)
 
+    def test_book_list_datasource_filter(self):
+        """Test filtering by data source."""
+        from books.models import DataSource, BookTitle, BookAuthor, Author
+
+        # Create different data sources
+        epub_source, _ = DataSource.objects.get_or_create(
+            name=DataSource.EPUB_INTERNAL,
+            defaults={'trust_level': 0.8}
+        )
+
+        filename_source, _ = DataSource.objects.get_or_create(
+            name=DataSource.FILENAME,
+            defaults={'trust_level': 0.3}
+        )
+
+        # Create authors
+        epub_author = Author.objects.create(name="EPUB Author")
+        filename_author = Author.objects.create(name="Filename Author")
+
+        # Create books
+        book1 = Book.objects.create(
+            file_path="/test/folder/book1.epub",
+            file_format="epub",
+            file_size=1000,
+            scan_folder=self.scan_folder
+        )
+
+        book2 = Book.objects.create(
+            file_path="/test/folder/book2.epub",
+            file_format="epub",
+            file_size=1000,
+            scan_folder=self.scan_folder
+        )
+
+        # Create metadata with different sources
+        BookTitle.objects.create(
+            book=book1,
+            title="Book with EPUB metadata",
+            source=epub_source,
+            confidence=0.8
+        )
+
+        BookTitle.objects.create(
+            book=book2,
+            title="Book with filename metadata",
+            source=filename_source,
+            confidence=0.3
+        )
+
+        BookAuthor.objects.create(
+            book=book1,
+            author=epub_author,
+            source=epub_source,
+            confidence=0.8
+        )
+
+        BookAuthor.objects.create(
+            book=book2,
+            author=filename_author,
+            source=filename_source,
+            confidence=0.3
+        )
+
+        # Test filtering by EPUB metadata source
+        response = self.client.get(reverse('books:book_list'), {'datasource': str(epub_source.id)})
+        self.assertEqual(response.status_code, 200)
+        books = response.context['books'] if 'books' in response.context else response.context['page_obj']
+        book_ids = [book.id for book in books]
+        self.assertIn(book1.id, book_ids)
+        self.assertNotIn(book2.id, book_ids)
+
+        # Test filtering by filename source
+        response = self.client.get(reverse('books:book_list'), {'datasource': str(filename_source.id)})
+        self.assertEqual(response.status_code, 200)
+        books = response.context['books'] if 'books' in response.context else response.context['page_obj']
+        book_ids = [book.id for book in books]
+        self.assertIn(book2.id, book_ids)
+        self.assertNotIn(book1.id, book_ids)
+
+    def test_book_list_scan_folder_filter(self):
+        """Test filtering by scan folder."""
+        # Create additional scan folder
+        scan_folder2 = ScanFolder.objects.create(
+            path="/test/folder2",
+            name="Test Folder 2",
+            is_active=True
+        )
+
+        # Create books in different scan folders
+        book1 = Book.objects.create(
+            file_path="/test/folder/book1.epub",
+            file_format="epub",
+            file_size=1000,
+            scan_folder=self.scan_folder
+        )
+
+        book2 = Book.objects.create(
+            file_path="/test/folder2/book2.epub",
+            file_format="epub",
+            file_size=1000,
+            scan_folder=scan_folder2
+        )
+
+        # Test filtering by first scan folder
+        response = self.client.get(reverse('books:book_list'), {'scan_folder': str(self.scan_folder.id)})
+        self.assertEqual(response.status_code, 200)
+        books = response.context['books'] if 'books' in response.context else response.context['page_obj']
+        book_ids = [book.id for book in books]
+        self.assertIn(book1.id, book_ids)
+        self.assertNotIn(book2.id, book_ids)
+
+        # Test filtering by second scan folder
+        response = self.client.get(reverse('books:book_list'), {'scan_folder': str(scan_folder2.id)})
+        self.assertEqual(response.status_code, 200)
+        books = response.context['books'] if 'books' in response.context else response.context['page_obj']
+        book_ids = [book.id for book in books]
+        self.assertIn(book2.id, book_ids)
+        self.assertNotIn(book1.id, book_ids)
+
+    def test_book_list_combined_filters(self):
+        """Test combining datasource and scan folder filters."""
+        from books.models import DataSource, BookTitle
+
+        # Create second scan folder
+        scan_folder2 = ScanFolder.objects.create(
+            path="/test/folder2",
+            name="Test Folder 2",
+            is_active=True
+        )
+
+        # Create data source
+        epub_source, _ = DataSource.objects.get_or_create(
+            name=DataSource.EPUB_INTERNAL,
+            defaults={'trust_level': 0.8}
+        )
+
+        # Create books
+        book1 = Book.objects.create(
+            file_path="/test/folder/book1.epub",
+            file_format="epub",
+            file_size=1000,
+            scan_folder=self.scan_folder
+        )
+
+        book2 = Book.objects.create(
+            file_path="/test/folder2/book2.epub",
+            file_format="epub",
+            file_size=1000,
+            scan_folder=scan_folder2
+        )
+
+        # Both books have same data source
+        BookTitle.objects.create(
+            book=book1,
+            title="Book 1",
+            source=epub_source,
+            confidence=0.8
+        )
+
+        BookTitle.objects.create(
+            book=book2,
+            title="Book 2",
+            source=epub_source,
+            confidence=0.8
+        )
+
+        # Test combined filters - should only return book1
+        response = self.client.get(reverse('books:book_list'), {
+            'datasource': str(epub_source.id),
+            'scan_folder': str(self.scan_folder.id)
+        })
+        self.assertEqual(response.status_code, 200)
+        books = response.context['books'] if 'books' in response.context else response.context['page_obj']
+        book_ids = [book.id for book in books]
+        self.assertIn(book1.id, book_ids)
+        self.assertNotIn(book2.id, book_ids)
+
 
 class ViewEdgeCaseTests(TestCase):
     """Test edge cases and potential issues in views."""

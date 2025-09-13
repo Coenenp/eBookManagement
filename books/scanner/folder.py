@@ -57,28 +57,21 @@ def scan_directory(directory, scan_folder, rescan=False, ebook_extensions=None, 
             if resume_index > 0:
                 logger.info(f"Resuming file processing from file #{resume_index + 1} out of {len(ebook_files)}")
                 ebook_files = ebook_files[resume_index:]
-                # Update status to reflect already processed files
-                scan_status.processed_files = resume_index
             else:
                 logger.info("Resume file not found in current directory, starting from beginning")
-                scan_status.processed_files = 0
         except Exception as e:
             logger.warning(f"Error processing resume point: {e}. Starting from beginning.")
-            scan_status.processed_files = 0
-    else:
-        scan_status.processed_files = 0
 
-    total_files = len(ebook_files) + scan_status.processed_files
-    scan_status.total_files = total_files
-    scan_status.save()
+    # Use existing total_files from scan_status (set by scanner_engine)
+    total_files = scan_status.total_files or len(ebook_files)
+    logger.info(f"Processing {len(ebook_files)} files in {directory}")
 
     for i, ebook_path in enumerate(ebook_files, 1):
         try:
             _process_book(ebook_path, scan_folder, cover_files, opf_files, rescan)
 
-            # Update progress tracking
-            current_processed = scan_status.processed_files + i
-            scan_status.processed_files = current_processed
+            # Update global progress tracking
+            scan_status.processed_files += 1
             scan_status.last_processed_file = ebook_path
 
         except Exception as e:
@@ -87,10 +80,9 @@ def scan_directory(directory, scan_folder, rescan=False, ebook_extensions=None, 
             log_scan_error(f"Failed to process: {str(e)}", ebook_path, scan_folder)
 
             # Still update progress even on error
-            current_processed = scan_status.processed_files + i
-            scan_status.processed_files = current_processed
+            scan_status.processed_files += 1
 
-        update_scan_progress(scan_status, current_processed, total_files, Path(ebook_path).name)
+        update_scan_progress(scan_status, scan_status.processed_files, total_files, Path(ebook_path).name)
 
     _handle_orphans(directory, cover_files, opf_files, ebook_files, scan_folder)
 

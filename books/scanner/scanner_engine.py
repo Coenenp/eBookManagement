@@ -57,16 +57,31 @@ class EbookScanner:
 
         # Store scan configuration for potential resume
         status.scan_folders = json.dumps(folders_to_scan)
+        
+        # Count total files across all directories first
+        status.message = "Counting files..."
+        status.progress = 0
+        status.processed_files = 0
         status.save()
+        
+        total_files_across_all_folders = 0
+        for path in folders_to_scan:
+            from books.scanner.folder import _collect_files
+            ebook_files, _, _ = _collect_files(path, self.ebook_extensions, self.cover_extensions)
+            total_files_across_all_folders += len(ebook_files)
+        
+        status.total_files = total_files_across_all_folders
+        status.save()
+        
+        logger.info(f"Total files to process across all folders: {total_files_across_all_folders}")
 
         # Track if any failures occurred
         has_failures = False
         failure_messages = []
 
-        total = len(folders_to_scan)
+        total_folders = len(folders_to_scan)
         for idx, path in enumerate(folders_to_scan, start=1):
-            status.message = f"Scanning: {path}"
-            status.progress = int((idx - 1) / total * 100)
+            status.message = f"Scanning folder {idx}/{total_folders}: {path}"
             status.save()
 
             scan_folder_obj, _ = ScanFolder.objects.get_or_create(
@@ -142,10 +157,9 @@ class EbookScanner:
         # First, handle metadata completion for books that exist but have incomplete metadata
         self._handle_metadata_completion(status, folders_to_scan)
 
-        total = len(folders_to_scan)
+        total_folders = len(folders_to_scan)
         for idx, path in enumerate(folders_to_scan, start=1):
-            status.message = f"Resuming scan: {path}"
-            status.progress = int((idx - 1) / total * 100)
+            status.message = f"Resuming folder {idx}/{total_folders}: {path}"
             status.save()
 
             scan_folder_obj, _ = ScanFolder.objects.get_or_create(

@@ -159,6 +159,18 @@
                                         </select>
                                     </div>
 
+                                    <div class="col-md-3">
+                                        <label for="scan_folder" class="form-label">Scan Folder</label>
+                                        <select class="form-select" id="scan_folder" name="scan_folder">
+                                            <option value="">All Folders</option>
+                                            {% for folder in scan_folders %}
+                                            <option value="{{ folder.id }}" {% if folder.id|stringformat:"s" == scan_folder_filter %}selected{% endif %}>
+                                                {{ folder.name }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+
                                     <!-- Status Filters -->
                                     <div class="col-md-3">
                                         <label for="needs_review" class="form-label">Review Status</label>
