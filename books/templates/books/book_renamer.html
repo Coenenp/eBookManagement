@@ -157,6 +157,17 @@
                                     <option value="true" {% if complete_series_filter == 'true' %}selected{% endif %}>Complete Series Only</option>
                                 </select>
                             </div>
+                            <div class="col-md-2">
+                                <label for="issue_type" class="form-label">Comic Type</label>
+                                <select class="form-select" id="issue_type" name="issue_type">
+                                    <option value="">All Types</option>
+                                    <option value="main_series" {% if request.GET.issue_type == 'main_series' %}selected{% endif %}>Main Series</option>
+                                    <option value="annual" {% if request.GET.issue_type == 'annual' %}selected{% endif %}>Annuals</option>
+                                    <option value="special" {% if request.GET.issue_type == 'special' %}selected{% endif %}>Specials</option>
+                                    <option value="collection" {% if request.GET.issue_type == 'collection' %}selected{% endif %}>Collections</option>
+                                    <option value="one_shot" {% if request.GET.issue_type == 'one_shot' %}selected{% endif %}>One-Shots</option>
+                                </select>
+                            </div>
                             <div class="col-md-3">
                                 <label for="genre" class="form-label">Genre</label>
                                 <input type="text" class="form-control" id="genre" name="genre" 
@@ -236,6 +247,106 @@
                             </div>
                             {% endfor %}
                         </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Comic Series Analysis -->
+            {% if comic_series_analysis and comic_series_analysis.total_series > 0 %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-book-open me-2"></i>Comic Series Analysis
+                        <span class="badge bg-primary ms-2">{{ comic_series_analysis.total_series }} Series</span>
+                        <button class="btn btn-sm btn-outline-secondary float-end" type="button" data-bs-toggle="collapse" data-bs-target="#comicSeriesCollapse"
+                               aria-label="Toggle comic series analysis" title="Toggle comic series analysis">
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                    </h5>
+                </div>
+                <div class="collapse" id="comicSeriesCollapse">
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <div class="alert alert-success">
+                                    <i class="fas fa-check-circle me-1"></i>
+                                    <strong>Complete:</strong> {{ comic_series_analysis.complete_count }} series
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>
+                                    <strong>Incomplete:</strong> {{ comic_series_analysis.incomplete_count }} series
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    <strong>Organization:</strong> By Issue Type
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Complete Comic Series -->
+                        {% if comic_series_analysis.complete_series %}
+                        <h6><i class="fas fa-check-circle text-success me-2"></i>Complete Comic Series</h6>
+                        <div class="row">
+                            {% for series in comic_series_analysis.complete_series %}
+                            <div class="col-md-6 col-lg-4 mb-2">
+                                <div class="card border-success">
+                                    <div class="card-body p-2">
+                                        <h6 class="card-title mb-1">{{ series.name }}</h6>
+                                        {% if series.publisher %}
+                                        <p class="card-text text-muted small mb-1">{{ series.publisher }}</p>
+                                        {% endif %}
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small class="text-success">
+                                                <i class="fas fa-book me-1"></i>{{ series.main_series_count }} Issues
+                                                {% if series.annuals_count > 0 %} | {{ series.annuals_count }} Annuals{% endif %}
+                                                {% if series.specials_count > 0 %} | {{ series.specials_count }} Specials{% endif %}
+                                            </small>
+                                            <span class="badge bg-success">{{ series.completeness_percentage }}% Complete</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Incomplete Comic Series -->
+                        {% if comic_series_analysis.incomplete_series %}
+                        <h6 class="mt-3"><i class="fas fa-exclamation-triangle text-warning me-2"></i>Incomplete Comic Series</h6>
+                        <div class="row">
+                            {% for series in comic_series_analysis.incomplete_series %}
+                            <div class="col-md-6 col-lg-4 mb-2">
+                                <div class="card border-warning">
+                                    <div class="card-body p-2">
+                                        <h6 class="card-title mb-1">{{ series.name }}</h6>
+                                        {% if series.publisher %}
+                                        <p class="card-text text-muted small mb-1">{{ series.publisher }}</p>
+                                        {% endif %}
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small class="text-warning">
+                                                <i class="fas fa-book me-1"></i>{{ series.main_series_count }} Issues
+                                                {% if series.missing_issues %}
+                                                    | Missing: {{ series.missing_issues|length }}
+                                                {% endif %}
+                                            </small>
+                                            <span class="badge bg-warning text-dark">{{ series.completeness_percentage }}% Complete</span>
+                                        </div>
+                                        {% if series.gap_analysis %}
+                                        <small class="text-muted d-block mt-1">
+                                            Gaps: {{ series.gap_analysis|join:", " }}
+                                        </small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>

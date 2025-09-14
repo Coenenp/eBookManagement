@@ -14,7 +14,7 @@ class EbookScanner:
         self.rescan = rescan
         self.resume = resume
         self.cover_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
-        self.ebook_extensions = {".epub", ".mobi", ".pdf", "azw", ".azw3", ".cbr", ".cbz"}
+        self.ebook_extensions = {".epub", ".mobi", ".pdf", ".azw", ".azw3", ".cbr", ".cbz"}
 
     def run(self, folder_path=None):
         # Handle resume mode

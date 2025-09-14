@@ -630,7 +630,6 @@ class BookDetailView(LoginRequiredMixin, DetailView):
         current_metadata = getattr(book, 'finalmetadata', None)
         current_author = current_metadata.final_author if current_metadata else None
         current_series = current_metadata.final_series if current_metadata else None
-        current_reviewed = current_metadata.is_reviewed if current_metadata else False
 
         # Base queryset for navigation
         base_queryset = Book.objects.select_related('finalmetadata').filter(is_placeholder=False)
@@ -638,6 +637,8 @@ class BookDetailView(LoginRequiredMixin, DetailView):
         # Navigation by chronological order (ID-based)
         prev_book = base_queryset.filter(id__lt=book.id).order_by('-id').first()
         next_book = base_queryset.filter(id__gt=book.id).order_by('id').first()
+        context['prev_book'] = prev_book
+        context['next_book'] = next_book
         context['prev_book_id'] = prev_book.id if prev_book else None
         context['next_book_id'] = next_book.id if next_book else None
 
@@ -654,31 +655,28 @@ class BookDetailView(LoginRequiredMixin, DetailView):
             context['prev_same_series'] = same_series_qs.filter(id__lt=book.id).order_by('-finalmetadata__final_series_number', '-id').first()
             context['next_same_series'] = same_series_qs.filter(id__gt=book.id).order_by('finalmetadata__final_series_number', 'id').first()
 
-        # Navigation by review status
-        if current_reviewed:
-            # Next unreviewed book
-            context['next_unreviewed'] = base_queryset.filter(
-                finalmetadata__is_reviewed=False,
-                id__gt=book.id
-            ).order_by('id').first()
+        # Navigation by review status - provide all review status navigation options
+        # Previous/next reviewed books
+        context['prev_reviewed'] = base_queryset.filter(
+            finalmetadata__is_reviewed=True,
+            id__lt=book.id
+        ).order_by('-id').first()
 
-            # Previous reviewed book
-            context['prev_reviewed'] = base_queryset.filter(
-                finalmetadata__is_reviewed=True,
-                id__lt=book.id
-            ).order_by('-id').first()
-        else:
-            # Next reviewed book
-            context['next_reviewed'] = base_queryset.filter(
-                finalmetadata__is_reviewed=True,
-                id__gt=book.id
-            ).order_by('id').first()
+        context['next_reviewed'] = base_queryset.filter(
+            finalmetadata__is_reviewed=True,
+            id__gt=book.id
+        ).order_by('id').first()
 
-            # Previous unreviewed book
-            context['prev_unreviewed'] = base_queryset.filter(
-                finalmetadata__is_reviewed=False,
-                id__lt=book.id
-            ).order_by('-id').first()
+        # Previous/next unreviewed books
+        context['prev_unreviewed'] = base_queryset.filter(
+            finalmetadata__is_reviewed=False,
+            id__lt=book.id
+        ).order_by('-id').first()
+
+        context['next_unreviewed'] = base_queryset.filter(
+            finalmetadata__is_reviewed=False,
+            id__gt=book.id
+        ).order_by('id').first()
 
         # Navigation by needs review (books with conflicts or low confidence)
         needs_review_qs = base_queryset.filter(
@@ -689,6 +687,8 @@ class BookDetailView(LoginRequiredMixin, DetailView):
         ).distinct()
         prev_needs_review = needs_review_qs.filter(id__lt=book.id).order_by('-id').first()
         next_needs_review = needs_review_qs.filter(id__gt=book.id).order_by('id').first()
+        context['prev_needs_review'] = prev_needs_review
+        context['next_needs_review'] = next_needs_review
         context['prev_needsreview_id'] = prev_needs_review.id if prev_needs_review else None
         context['next_needsreview_id'] = next_needs_review.id if next_needs_review else None
 
@@ -1645,6 +1645,7 @@ class BookRenamerView(LoginRequiredMixin, ListView):
         has_series = self.request.GET.get('has_series', '')
         genre = self.request.GET.get('genre', '')
         show_complete_series = self.request.GET.get('complete_series', '')
+        issue_type = self.request.GET.get('issue_type', '')
 
         if search:
             queryset = queryset.filter(
@@ -1676,6 +1677,14 @@ class BookRenamerView(LoginRequiredMixin, ListView):
         if genre:
             queryset = queryset.filter(bookgenre__genre__name__icontains=genre)
 
+        # Filter by comic issue type
+        if issue_type:
+            queryset = queryset.filter(
+                metadata__field_name='issue_type',
+                metadata__field_value=issue_type,
+                metadata__is_active=True
+            )
+
         # Filter for complete series only
         if show_complete_series == 'true':
             complete_series_books = self._get_complete_series_books()
@@ -1705,11 +1714,16 @@ class BookRenamerView(LoginRequiredMixin, ListView):
         context['series_filter'] = self.request.GET.get('has_series', '')
         context['genre_filter'] = self.request.GET.get('genre', '')
         context['complete_series_filter'] = self.request.GET.get('complete_series', '')
+        context['issue_type_filter'] = self.request.GET.get('issue_type', '')
 
         # Analyze series completion
         series_analysis = self._analyze_series_completion()
         context['complete_series'] = series_analysis['complete_series']
         context['incomplete_series'] = series_analysis['incomplete_series']
+
+        # Analyze comic series completion
+        comic_series_analysis = self._analyze_comic_series_completion()
+        context['comic_series_analysis'] = comic_series_analysis
 
         # Generate new file paths for each book with warnings
         books_with_paths = []
@@ -1805,6 +1819,51 @@ class BookRenamerView(LoginRequiredMixin, ListView):
         return {
             'complete_series': complete_series,
             'incomplete_series': incomplete_series
+        }
+
+    def _analyze_comic_series_completion(self):
+        """Analyze comic series for completeness and categorization."""
+        from books.scanner.extractors.comic import get_comic_series_list, analyze_comic_series
+
+        comic_series_list = get_comic_series_list()
+        analyzed_series = []
+
+        for series_info in comic_series_list:
+            analysis = analyze_comic_series(
+                series_info['name'],
+                series_info.get('publisher')
+            )
+
+            if analysis:
+                # Determine if series is complete
+                completeness = analysis.get('completeness_analysis', {})
+                is_complete = completeness.get('is_complete', False)
+
+                analyzed_series.append({
+                    'name': series_info['name'],
+                    'publisher': series_info.get('publisher'),
+                    'total_books': analysis['total_books'],
+                    'main_series_count': len(analysis['main_series_issues']),
+                    'annuals_count': len(analysis['annuals']),
+                    'specials_count': len(analysis['specials']),
+                    'collections_count': len(analysis['collections']),
+                    'is_complete': is_complete,
+                    'completeness_percentage': completeness.get('completeness_percentage', 0),
+                    'missing_issues': completeness.get('missing_issues', []),
+                    'gap_analysis': completeness.get('gap_analysis', [])
+                })
+
+        # Separate complete and incomplete series
+        complete_comic_series = [s for s in analyzed_series if s['is_complete']]
+        incomplete_comic_series = [s for s in analyzed_series if not s['is_complete']]
+
+        return {
+            'all_series': analyzed_series,
+            'complete_series': complete_comic_series,
+            'incomplete_series': incomplete_comic_series,
+            'total_series': len(analyzed_series),
+            'complete_count': len(complete_comic_series),
+            'incomplete_count': len(incomplete_comic_series)
         }
 
     def _is_book_in_complete_series(self, book, complete_series):
@@ -1913,6 +1972,11 @@ class BookRenamerView(LoginRequiredMixin, ListView):
     def _generate_new_file_path(self, book):
         """Generate the new organized file path based on the suggested structure."""
         try:
+            # Check if this is a comic book format
+            if book.file_format and book.file_format.lower() in ['cbr', 'cbz']:
+                return self._generate_comic_file_path(book)
+
+            # Standard ebook path generation
             fm = book.finalmetadata
             base_library = "eBooks Library"
 
@@ -2008,6 +2072,243 @@ class BookRenamerView(LoginRequiredMixin, ListView):
         cleaned = cleaned.strip()[:100]
 
         return cleaned if cleaned else "Unknown"
+
+    def _generate_comic_file_path(self, book):
+        """Generate file path specifically for comic book archives (CBR/CBZ) with issue type organization."""
+        try:
+            base_library = "Comics"
+            file_extension = book.file_format.lower() if book.file_format else "cbz"
+
+            # Get comic-specific metadata
+            comic_metadata = self._get_comic_metadata(book)
+
+            # Series name (required for comics)
+            series_name = comic_metadata.get('series') or self._extract_series_from_title(book)
+            if not series_name:
+                series_name = "Unknown Series"
+
+            # Get issue type to determine folder structure
+            issue_type = comic_metadata.get('issue_type', 'main_series')
+
+            # Publisher (optional grouping)
+            publisher = comic_metadata.get('publisher')
+
+            # Clean series name for folder
+            series_folder = self._clean_filename(series_name)
+
+            # Determine subfolder based on issue type
+            subfolder = self._get_comic_subfolder(issue_type, comic_metadata)
+
+            # Generate filename based on issue type
+            filename = self._generate_comic_filename(issue_type, comic_metadata, series_name, book)
+
+            # Construct full path
+            if publisher and publisher.strip():
+                # Structure: Comics/[Publisher]/[Series]/[Subfolder]/filename
+                publisher_folder = self._clean_filename(publisher)
+                folder_path = f"{base_library}/{publisher_folder}/{series_folder}/{subfolder}"
+            else:
+                # Structure: Comics/[Series]/[Subfolder]/filename
+                folder_path = f"{base_library}/{series_folder}/{subfolder}"
+
+            new_file_path = f"{folder_path}/{filename}.{file_extension}"
+            return new_file_path
+
+        except Exception:
+            # Fallback to basic comic organization
+            try:
+                title = book.finalmetadata.final_title or "Unknown Comic"
+                filename_base = self._clean_filename(title)
+                return f"Comics/Unknown Series/Unknown/{filename_base}.{book.file_format.lower() or 'cbz'}"
+            except Exception:
+                return f"Comics/Unknown Series/Unknown/unknown_comic.{book.file_format.lower() or 'cbz'}"
+
+    def _get_comic_metadata(self, book):
+        """Retrieve comic-specific metadata from BookMetadata model."""
+        metadata = {}
+
+        # Get all metadata for this book
+        book_metadata = book.metadata.filter(is_active=True).values('field_name', 'field_value')
+
+        for meta in book_metadata:
+            field_name = meta['field_name']
+            field_value = meta['field_value']
+
+            # Map metadata field names to our expected fields
+            if field_name == 'series':
+                metadata['series'] = field_value
+            elif field_name == 'issue_number':
+                try:
+                    metadata['issue_number'] = int(float(field_value))
+                except (ValueError, TypeError):
+                    metadata['issue_number'] = field_value
+            elif field_name == 'volume_number':
+                try:
+                    metadata['volume_number'] = int(float(field_value))
+                except (ValueError, TypeError):
+                    metadata['volume_number'] = field_value
+            elif field_name == 'publication_year':
+                try:
+                    metadata['year'] = int(field_value)
+                except (ValueError, TypeError):
+                    metadata['year'] = field_value
+            elif field_name == 'publisher':
+                metadata['publisher'] = field_value
+            elif field_name == 'issue_type':
+                metadata['issue_type'] = field_value
+            elif field_name == 'annual_number':
+                try:
+                    metadata['annual_number'] = int(field_value)
+                except (ValueError, TypeError):
+                    metadata['annual_number'] = field_value
+            elif field_name == 'title':
+                metadata['title'] = field_value
+            elif field_name == 'description':
+                metadata['title'] = field_value
+
+        # Also check final metadata for series info
+        fm = book.finalmetadata
+        if fm.final_series and 'series' not in metadata:
+            metadata['series'] = fm.final_series
+        if fm.final_series_number and 'issue_number' not in metadata:
+            try:
+                metadata['issue_number'] = int(float(fm.final_series_number))
+            except (ValueError, TypeError):
+                metadata['issue_number'] = fm.final_series_number
+
+        return metadata
+
+    def _extract_series_from_title(self, book):
+        """Extract series name from book title if no series metadata available."""
+        title = book.finalmetadata.final_title
+        if not title:
+            return None
+
+        import re
+
+        # Try to extract series from common patterns
+        # Pattern: "Series Name #123"
+        match = re.match(r'^(.+?)\s*#\d+', title)
+        if match:
+            return match.group(1).strip()
+
+        # Pattern: "Series Name Issue 123"
+        match = re.match(r'^(.+?)\s+Issue\s+\d+', title, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+
+        # Pattern: "Series Name (2023)"
+        match = re.match(r'^(.+?)\s*\(\d{4}\)', title)
+        if match:
+            return match.group(1).strip()
+
+        # Default: use the full title
+        return title
+
+    def _get_comic_volume_or_year(self, comic_metadata):
+        """Get volume or year for comic organization folder."""
+        # Prefer volume if available
+        volume = comic_metadata.get('volume_number')
+        if volume:
+            return f"Volume {volume}"
+
+        # Otherwise use year
+        year = comic_metadata.get('year')
+        if year:
+            return str(year)
+
+        # Default fallback
+        return "Unknown"
+
+    def _get_comic_subfolder(self, issue_type, comic_metadata):
+        """Determine subfolder for comic based on issue type."""
+        if issue_type == 'main_series':
+            # Main series goes in volume-based folders
+            return self._get_comic_volume_or_year(comic_metadata)
+        elif issue_type == 'annual':
+            return "Annuals"
+        elif issue_type in ['special', 'holiday_special', 'giant_size']:
+            return "Specials"
+        elif issue_type == 'collection':
+            return "Collections"
+        elif issue_type == 'one_shot':
+            return "One-Shots"
+        elif issue_type in ['preview', 'promo']:
+            return "Previews"
+        elif issue_type in ['alternate_reality', 'elseworlds']:
+            return "Alternate Reality"
+        elif issue_type in ['crossover', 'event']:
+            return "Events"
+        elif issue_type == 'mini_series':
+            return "Mini-Series"
+        else:
+            return "Other"
+
+    def _generate_comic_filename(self, issue_type, comic_metadata, series_name, book):
+        """Generate filename for comic based on issue type."""
+        clean_series = self._clean_filename(series_name)
+
+        # Get title
+        title = comic_metadata.get('title') or book.finalmetadata.final_title or ""
+        clean_title = self._clean_filename(title) if title and title != series_name else ""
+
+        if issue_type == 'main_series':
+            # Main series: [Series] #[Issue] - [Title]
+            issue_number = comic_metadata.get('issue_number')
+            if issue_number:
+                issue_str = f"#{issue_number:03d}" if isinstance(issue_number, (int, float)) else f"#{issue_number}"
+            else:
+                issue_str = "#001"
+
+            if clean_title:
+                return f"{clean_series} {issue_str} - {clean_title}"
+            else:
+                return f"{clean_series} {issue_str}"
+
+        elif issue_type == 'annual':
+            # Annual: [Series] Annual #[Number] - [Title]
+            annual_number = comic_metadata.get('annual_number', 1)
+            annual_str = f"Annual #{annual_number}"
+
+            if clean_title:
+                return f"{clean_series} {annual_str} - {clean_title}"
+            else:
+                return f"{clean_series} {annual_str}"
+
+        elif issue_type in ['special', 'holiday_special', 'giant_size']:
+            # Special: [Series] Special - [Title] or [Series] Holiday Special - [Title]
+            if issue_type == 'holiday_special':
+                special_type = "Holiday Special"
+            elif issue_type == 'giant_size':
+                special_type = "Giant Size"
+            else:
+                special_type = "Special"
+
+            if clean_title:
+                return f"{clean_series} {special_type} - {clean_title}"
+            else:
+                return f"{clean_series} {special_type}"
+
+        elif issue_type == 'collection':
+            # Collection: [Series] - [Title] (TPB/HC)
+            if clean_title:
+                return f"{clean_series} - {clean_title}"
+            else:
+                return f"{clean_series} Collection"
+
+        elif issue_type == 'one_shot':
+            # One-shot: [Series] One-Shot - [Title]
+            if clean_title:
+                return f"{clean_series} One-Shot - {clean_title}"
+            else:
+                return f"{clean_series} One-Shot"
+
+        else:
+            # Other types: [Series] - [Title] or fallback
+            if clean_title:
+                return f"{clean_series} - {clean_title}"
+            else:
+                return clean_series
 
     def _can_rename_book(self, book):
         """Check if book can be safely renamed."""
@@ -3243,3 +3544,95 @@ def update_trust(request, pk):
         'message': 'Trust level updated successfully',
         'new_trust_level': trust_level
     }
+
+
+@require_http_methods(["GET"])
+def isbn_lookup(request, isbn):
+    """Quick ISBN lookup to show what book this ISBN belongs to."""
+    import requests
+    from django.conf import settings
+    from django.core.cache import cache
+
+    try:
+        # Clean the ISBN
+        clean_isbn = isbn.replace('-', '').replace(' ', '')
+
+        # Validate ISBN
+        if len(clean_isbn) not in [10, 13]:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid ISBN length'
+            })
+
+        # Try cache first
+        cache_key = f"isbn_lookup_{clean_isbn}"
+        cached_result = cache.get(cache_key)
+        if cached_result:
+            return JsonResponse(cached_result)
+
+        # Try Google Books API first (usually has the best data)
+        result = {
+            'success': True,
+            'isbn': clean_isbn,
+            'sources': {}
+        }
+
+        # Google Books lookup
+        if settings.GOOGLE_BOOKS_API_KEY:
+            try:
+                url = f"https://www.googleapis.com/books/v1/volumes?q=isbn:{clean_isbn}&key={settings.GOOGLE_BOOKS_API_KEY}"
+                response = requests.get(url, timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    items = data.get('items', [])
+                    if items:
+                        book_info = items[0].get('volumeInfo', {})
+                        result['sources']['google_books'] = {
+                            'title': book_info.get('title', 'Unknown'),
+                            'authors': book_info.get('authors', []),
+                            'publisher': book_info.get('publisher', 'Unknown'),
+                            'published_date': book_info.get('publishedDate', 'Unknown'),
+                            'page_count': book_info.get('pageCount', 'Unknown'),
+                            'description': book_info.get('description', '')[:200] + '...' if book_info.get('description') else '',
+                            'thumbnail': book_info.get('imageLinks', {}).get('thumbnail', ''),
+                            'found': True
+                        }
+                    else:
+                        result['sources']['google_books'] = {'found': False}
+            except Exception as e:
+                result['sources']['google_books'] = {'found': False, 'error': str(e)}
+
+        # Open Library lookup
+        try:
+            url = f"https://openlibrary.org/search.json?isbn={clean_isbn}&limit=1"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                docs = data.get('docs', [])
+                if docs:
+                    book_info = docs[0]
+                    result['sources']['open_library'] = {
+                        'title': book_info.get('title', 'Unknown'),
+                        'authors': book_info.get('author_name', []),
+                        'publisher': book_info.get('publisher', ['Unknown'])[0] if book_info.get('publisher') else 'Unknown',
+                        'published_date': str(book_info.get('first_publish_year', 'Unknown')),
+                        'page_count': 'Unknown',
+                        'description': '',
+                        'thumbnail': f"https://covers.openlibrary.org/b/id/{book_info.get('cover_i')}-M.jpg" if book_info.get('cover_i') else '',
+                        'found': True
+                    }
+                else:
+                    result['sources']['open_library'] = {'found': False}
+        except Exception as e:
+            result['sources']['open_library'] = {'found': False, 'error': str(e)}
+
+        # Cache the result for 1 hour
+        cache.set(cache_key, result, timeout=3600)
+
+        return JsonResponse(result)
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'ISBN lookup failed: {str(e)}'
+        })

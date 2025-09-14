@@ -686,3 +686,94 @@ img[loading="lazy"].loaded {
     opacity: 0.5;
     transform: none !important;
 }
+
+/* ======================================
+   📖 Description Content Styling
+========================================= */
+
+/* Description content containers */
+.description-content {
+    line-height: 1.6;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+}
+
+/* Handle HTML content in descriptions */
+.description-content p {
+    margin-bottom: 0.75rem;
+}
+
+.description-content p:last-child {
+    margin-bottom: 0;
+}
+
+/* Remove unwanted HTML classes that might come from external sources */
+.description-content .description {
+    all: unset;
+    display: block;
+}
+
+/* Ensure clean text styling for descriptions */
+.description-content br {
+    margin-bottom: 0.5rem;
+}
+
+/* Style for description previews in metadata selection */
+.description-content.small {
+    font-size: 0.875rem;
+    max-height: 4.5rem;
+    overflow: hidden;
+    position: relative;
+}
+
+.description-content.small:after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 30%;
+    height: 1.2rem;
+    background: linear-gradient(to right, transparent, var(--bs-body-bg));
+}
+
+/* ======================================
+   📚 ISBN Lookup and Metadata Forms
+========================================= */
+
+/* ISBN lookup results container */
+.isbn-lookup-hidden {
+    display: none;
+}
+
+/* Thumbnail images in lookup results */
+.lookup-thumbnail {
+    max-width: 60px;
+}
+
+/* ======================================
+   ✅ Success States and Completion
+========================================= */
+
+/* Large success icons */
+.success-icon-large {
+    font-size: 3rem;
+}
+
+/* ======================================
+   📊 Table Layout Utilities
+========================================= */
+
+/* Table column width utilities for dynamic content */
+.table-col-book { width: 200px; }
+.table-col-status { width: 80px; }
+.table-book-title { font-size: 0.9rem; }
+.table-path-text { font-size: 0.75rem; }
+
+/* ======================================
+   🎨 Dynamic Font Sizes
+========================================= */
+
+/* Small text utilities */
+.text-size-09 { font-size: 0.9rem; }
+.text-size-075 { font-size: 0.75rem; }

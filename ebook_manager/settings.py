@@ -13,9 +13,24 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
+from dotenv import load_dotenv, dotenv_values
 
-load_dotenv()
+# Load .env file and force override system environment variables for specific keys
+env_file_path = Path(__file__).resolve().parent.parent / '.env'
+env_file_values = dotenv_values(env_file_path)
+
+# Load .env normally first
+load_dotenv(override=True)
+
+# Force override specific problematic environment variables with .env file values
+if 'USE_SQLITE_TEMPORARILY' in env_file_values:
+    # Convert the string value from .env file to ensure proper interpretation
+    old_value = os.getenv('USE_SQLITE_TEMPORARILY', 'unset')
+    env_value = env_file_values['USE_SQLITE_TEMPORARILY']
+    os.environ['USE_SQLITE_TEMPORARILY'] = str(env_value).lower()
+    print(f"🔧 Force overriding USE_SQLITE_TEMPORARILY: "
+          f"system had '{old_value}', "
+          f".env has '{env_value}', setting to '{str(env_value).lower()}'")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent

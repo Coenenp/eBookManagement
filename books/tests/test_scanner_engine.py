@@ -32,7 +32,7 @@ class EbookScannerTests(TestCase):
         self.assertFalse(scanner.rescan)
         self.assertFalse(scanner.resume)
         self.assertEqual(scanner.cover_extensions, {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"})
-        self.assertEqual(scanner.ebook_extensions, {".epub", ".mobi", ".pdf", "azw", ".azw3", ".cbr", ".cbz"})
+        self.assertEqual(scanner.ebook_extensions, {".epub", ".mobi", ".pdf", ".azw", ".azw3", ".cbr", ".cbz"})
 
     def test_init_custom_settings(self):
         """Test scanner initialization with custom settings."""

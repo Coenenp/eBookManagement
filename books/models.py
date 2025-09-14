@@ -2,7 +2,11 @@
 
 This module defines the database models for managing ebooks, metadata,
 authors, publishers, genres, and scan operations. Includes comprehensive
-relationship models for book metadata synchronization.
+relationship mo                surname_prefixes = {
+                    "o'", 'mac', 'mc', 'van', 'von', 'vander', 'vonder', 'van der',
+                    'von der', 'van den', 'von den', 'vanden', 'vonden', 'del', 'della',
+                    "d'", 'du', 'de', 'di', 'ter', 'lo', 'gel', 'van t'
+                }for book metadata synchronization.
 """
 from django.db import models
 from .mixins import FinalMetadataSyncMixin
@@ -106,12 +110,12 @@ class Book(models.Model):
         ('placeholder', 'Placeholder'),
     ]
 
-    file_path = models.TextField()  # Full file path without length restrictions
-    file_path_hash = models.CharField(max_length=32, unique=True, editable=False, default='')  # MD5 hash for uniqueness
+    file_path = models.CharField(max_length=1000, help_text="Full file path")  # Consistent with BookCover.cover_path
+    file_path_hash = models.CharField(max_length=64, unique=True, editable=False, default='')  # SHA256 hash for uniqueness
     file_format = models.CharField(max_length=20, choices=FORMAT_CHOICES)
     file_size = models.BigIntegerField(null=True, blank=True)
-    cover_path = models.TextField(blank=True)  # Allow unlimited path length
-    opf_path = models.TextField(blank=True)  # Allow unlimited path length
+    cover_path = models.CharField(max_length=1000, blank=True, help_text="Local cover file path")  # Consistent field type
+    opf_path = models.CharField(max_length=1000, blank=True, help_text="OPF metadata file path")  # Consistent field type
 
     # Scan metadata
     first_scanned = models.DateTimeField(auto_now_add=True)
@@ -127,14 +131,14 @@ class Book(models.Model):
         """Generate hash of file_path for unique constraint"""
         import hashlib
         if self.file_path:
-            self.file_path_hash = hashlib.md5(self.file_path.encode('utf-8')).hexdigest()
+            self.file_path_hash = hashlib.sha256(self.file_path.encode('utf-8')).hexdigest()
         super().save(*args, **kwargs)
 
     @classmethod
     def get_or_create_by_path(cls, file_path, defaults=None):
         """Get or create book by file path, using hash for lookup"""
         import hashlib
-        file_path_hash = hashlib.md5(file_path.encode('utf-8')).hexdigest()
+        file_path_hash = hashlib.sha256(file_path.encode('utf-8')).hexdigest()
 
         try:
             book = cls.objects.get(file_path_hash=file_path_hash)
@@ -219,18 +223,32 @@ class Author(models.Model):
                 first = []
                 last = []
 
-                i = 0
-                while i < len(parts):
-                    prefix_candidate = " ".join(parts[i:]).lower()
-                    if any(prefix_candidate.startswith(p + " ") or prefix_candidate == p for p in surname_prefixes):
-                        last = parts[i:]
+                # Look for surname prefixes starting from each position
+                found_prefix = False
+                for i in range(len(parts)):
+                    # Check if any prefix starts at position i
+                    for prefix in surname_prefixes:
+                        prefix_parts = prefix.split()
+                        # Check if we have enough remaining parts to match the prefix
+                        if i + len(prefix_parts) <= len(parts):
+                            # Check if the parts match the prefix (case insensitive)
+                            if all(parts[i + j].lower() == prefix_parts[j] for j in range(len(prefix_parts))):
+                                # Found a prefix, everything from here is last name
+                                first = parts[:i]
+                                last = parts[i:]
+                                found_prefix = True
+                                break
+                    if found_prefix:
                         break
-                    else:
-                        first.append(parts[i])
-                        i += 1
 
-                if not last and first:
-                    last = [first.pop()]  # fallback: last word is surname
+                # If no prefix found, use traditional splitting (last word as surname)
+                if not found_prefix:
+                    if len(parts) > 1:
+                        first = parts[:-1]
+                        last = [parts[-1]]
+                    else:
+                        first = []
+                        last = parts
 
                 self.first_name = " ".join(first).strip()
                 self.last_name = " ".join(last).strip()
@@ -307,6 +325,7 @@ class BookCover(FinalMetadataSyncMixin, models.Model):
     """Book covers from different sources with metadata"""
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='covers')
     cover_path = models.CharField(max_length=1000, help_text="Local file path or URL")
+    cover_path_hash = models.CharField(max_length=64, editable=False)  # SHA256 hash for uniqueness
     source = models.ForeignKey(DataSource, on_delete=models.CASCADE)
     confidence = models.FloatField(
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)]
@@ -327,6 +346,10 @@ class BookCover(FinalMetadataSyncMixin, models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
+        # Generate hash of cover_path for uniqueness constraints
+        import hashlib
+        self.cover_path_hash = hashlib.sha256(str(self.cover_path).encode('utf-8')).hexdigest()
+
         # Calculate aspect ratio if width and height are available
         if self.width and self.height:
             self.aspect_ratio = self.width / self.height
@@ -353,7 +376,7 @@ class BookCover(FinalMetadataSyncMixin, models.Model):
         return "Unknown"
 
     class Meta:
-        unique_together = ['book', 'cover_path', 'source']
+        unique_together = ['book', 'cover_path_hash', 'source']
         ordering = ['-confidence', '-is_high_resolution', '-width']
 
 
@@ -476,13 +499,6 @@ class BookGenre(models.Model):
 
     class Meta:
         unique_together = ['book', 'genre', 'source']
-        constraints = [
-            models.UniqueConstraint(
-                fields=['book', 'genre'],
-                condition=models.Q(is_active=True),
-                name='unique_active_book_genre'
-            )
-        ]
 
 
 class Publisher(models.Model):
@@ -525,6 +541,7 @@ class BookMetadata(FinalMetadataSyncMixin, models.Model):
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='metadata')
     field_name = models.CharField(max_length=100)
     field_value = models.TextField()
+    field_value_hash = models.CharField(max_length=64, editable=False)  # SHA256 hash for uniqueness
     source = models.ForeignKey(DataSource, on_delete=models.CASCADE)
     confidence = models.FloatField(
         validators=[MinValueValidator(0.0), MaxValueValidator(1.0)]
@@ -536,11 +553,14 @@ class BookMetadata(FinalMetadataSyncMixin, models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
+        # Generate hash of field_value for uniqueness constraints
+        import hashlib
+        self.field_value_hash = hashlib.sha256(str(self.field_value).encode('utf-8')).hexdigest()
         super().save(*args, **kwargs)
         self.post_deactivation_sync()
 
     class Meta:
-        unique_together = ['book', 'field_name', 'field_value', 'source']
+        unique_together = ['book', 'field_name', 'field_value_hash', 'source']
         ordering = ['-confidence']
 
     def __str__(self):
@@ -835,16 +855,16 @@ class FileOperation(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
 
     # Original state
-    original_file_path = models.TextField(blank=True)
-    original_cover_path = models.TextField(blank=True)
-    original_opf_path = models.TextField(blank=True)
-    original_folder_path = models.TextField(blank=True)
+    original_file_path = models.CharField(max_length=1000, blank=True)
+    original_cover_path = models.CharField(max_length=1000, blank=True)
+    original_opf_path = models.CharField(max_length=1000, blank=True)
+    original_folder_path = models.CharField(max_length=1000, blank=True)
 
     # New state
-    new_file_path = models.TextField(blank=True)
-    new_cover_path = models.TextField(blank=True)
-    new_opf_path = models.TextField(blank=True)
-    new_folder_path = models.TextField(blank=True)
+    new_file_path = models.CharField(max_length=1000, blank=True)
+    new_cover_path = models.CharField(max_length=1000, blank=True)
+    new_opf_path = models.CharField(max_length=1000, blank=True)
+    new_folder_path = models.CharField(max_length=1000, blank=True)
 
     # Additional files affected (JSON list)
     additional_files = models.TextField(default='[]', help_text='JSON list of additional files moved')

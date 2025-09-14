@@ -198,3 +198,22 @@ def has_finalmetadata(book):
         return hasattr(book, 'finalmetadata') and book.finalmetadata is not None
     except Exception:
         return False
+
+
+@register.filter
+def language_display(language_code):
+    """Convert language code to full language name for display"""
+    from books.models import LANGUAGE_CHOICES
+
+    if not language_code:
+        return ''
+
+    # Create a lookup dictionary from LANGUAGE_CHOICES
+    language_dict = dict(LANGUAGE_CHOICES)
+    return language_dict.get(language_code, language_code)
+
+
+@register.filter
+def language_name(language_code):
+    """Convert language code to full language name for display (alias for language_display)"""
+    return language_display(language_code)

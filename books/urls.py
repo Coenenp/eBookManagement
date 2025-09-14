@@ -70,6 +70,9 @@ urlpatterns = [
     path('ajax/book/<int:book_id>/upload_cover/', views.ajax_upload_cover, name='ajax_upload_cover'),
     path('ajax/book/<int:book_id>/manage_cover/', views.ajax_manage_cover, name='ajax_manage_cover'),
     path('ajax/book/<int:book_id>/rescan/', views.ajax_rescan_external_metadata, name='ajax_rescan_external_metadata'),
+
+    # ISBN lookup
+    path('ajax/isbn-lookup/<str:isbn>/', views.isbn_lookup, name='isbn_lookup'),
 ]
 
 # Serve media files during development

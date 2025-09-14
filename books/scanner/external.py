@@ -40,10 +40,10 @@ def query_metadata_and_covers(book):
 
         if title or author:
             logger.info(f"[OPEN LIBRARY COMBINED] Title: {title}, Author: {author}")
-            _query_open_library_combined(book, title, author)
+            _query_open_library_combined(book, title, author, None)  # No ISBN available in this context
 
             logger.info(f"[GOOGLE BOOKS COMBINED] Title: {title}, Author: {author}")
-            _query_google_books_combined(book, title, author)
+            _query_google_books_combined(book, title, author, None)  # No ISBN available in this context
 
             logger.info(f"[GOODREADS COMBINED] Title: {title}, Author: {author}")
             _query_goodreads_combined(book, title, author)
@@ -74,14 +74,13 @@ def query_metadata_and_covers_with_terms(book, search_title=None, search_author=
 
             # Try ISBN search first if provided
             if search_isbn:
-                logger.info(f"[ISBN SEARCH] ISBN: {search_isbn}")
-                # For now, just pass to existing functions - they can use the ISBN if they support it
+                logger.info(f"[ISBN SEARCH] Using ISBN for enhanced searches: {search_isbn}")
 
-            logger.info(f"[OPEN LIBRARY COMBINED] Title: {title}, Author: {author}")
-            _query_open_library_combined(book, title, author)
+            logger.info(f"[OPEN LIBRARY COMBINED] Title: {title}, Author: {author}, ISBN: {search_isbn}")
+            _query_open_library_combined(book, title, author, search_isbn)
 
-            logger.info(f"[GOOGLE BOOKS COMBINED] Title: {title}, Author: {author}")
-            _query_google_books_combined(book, title, author)
+            logger.info(f"[GOOGLE BOOKS COMBINED] Title: {title}, Author: {author}, ISBN: {search_isbn}")
+            _query_google_books_combined(book, title, author, search_isbn)
 
             logger.info(f"[GOODREADS COMBINED] Title: {title}, Author: {author}")
             _query_goodreads_combined(book, title, author)
@@ -145,18 +144,19 @@ def _calculate_final_confidence(source, match_confidence):
     return source.trust_level * match_confidence
 
 
-def _safe_google_request(url, cache_key=None, retries=3, backoff_factor=2, delay=1):
+def _safe_google_request(url, cache_key=None, retries=5, backoff_factor=2, delay=2):
     if cache_key:
         cached = cache.get(cache_key)
         if cached:
             return cached
 
     for attempt in range(retries):
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=15)
         if response.status_code == 429:
-            logger.warning(f"[THROTTLE] 429 from Google. Retrying in {delay}s (attempt {attempt+1})")
-            time.sleep(delay)
-            delay *= backoff_factor
+            # More aggressive backoff for rate limiting
+            wait_time = delay * (backoff_factor ** attempt)
+            logger.warning(f"[THROTTLE] 429 from Google. Retrying in {wait_time}s (attempt {attempt+1})")
+            time.sleep(wait_time)
             continue
         response.raise_for_status()
         data = response.json()
@@ -195,22 +195,29 @@ def get_image_metadata(url):
         return None, None, None, None
 
 
-def _query_open_library_combined(book, title, author):
+def _query_open_library_combined(book, title, author, isbn=None):
     """Combined Open Library query for both metadata and covers"""
     try:
         metadata_source = DataSource.objects.get(name=DataSource.OPEN_LIBRARY)
         cover_source = DataSource.objects.get(name=DataSource.OPEN_LIBRARY_COVERS)
 
-        query = []
-        if title:
-            query.append(f'title:"{title}"')
-        if author:
-            query.append(f'author:"{author}"')
-        if not query:
-            return
+        # Build query - prefer ISBN if available
+        if isbn:
+            qstring = f'isbn:{isbn}'
+            cache_key = f"openlib_combined_isbn:{make_cache_key(isbn)}"
+            logger.info(f"[OPEN LIBRARY ISBN SEARCH] Using ISBN: {isbn}")
+        else:
+            query = []
+            if title:
+                query.append(f'title:"{title}"')
+            if author:
+                query.append(f'author:"{author}"')
+            if not query:
+                return
+            qstring = " AND ".join(query)
+            cache_key = f"openlib_combined:{make_cache_key(title, author)}"
+            logger.info(f"[OPEN LIBRARY TITLE/AUTHOR SEARCH] Title: {title}, Author: {author}")
 
-        qstring = " AND ".join(query)
-        cache_key = f"openlib_combined:{make_cache_key(title, author)}"
         url = f"https://openlibrary.org/search.json?q={qstring}&limit=5"
 
         # Try cache first
@@ -223,15 +230,21 @@ def _query_open_library_combined(book, title, author):
 
         docs = data.get("docs", [])
         if not docs:
+            logger.info(f"[OPEN LIBRARY] No results found for query: {qstring}")
             return
 
         # Process metadata from best match
         best_match = docs[0]
-        match_confidence = _calculate_match_confidence(
-            title, author,
-            best_match.get("title", ""),
-            best_match.get("author_name", [])
-        )
+
+        # For ISBN searches, we have high confidence since it's an exact match
+        if isbn:
+            match_confidence = 0.95  # High confidence for ISBN matches
+        else:
+            match_confidence = _calculate_match_confidence(
+                title, author,
+                best_match.get("title", ""),
+                best_match.get("author_name", [])
+            )
 
         if match_confidence > 0.5:
             metadata_confidence = _calculate_final_confidence(metadata_source, match_confidence)
@@ -240,11 +253,15 @@ def _query_open_library_combined(book, title, author):
         # Process covers from all results
         for doc in docs:
             if doc.get("cover_i"):
-                doc_match_confidence = _calculate_match_confidence(
-                    title, author,
-                    doc.get("title", ""),
-                    doc.get("author_name", [])
-                )
+                if isbn:
+                    # High confidence for ISBN-based cover matches
+                    doc_match_confidence = 0.9
+                else:
+                    doc_match_confidence = _calculate_match_confidence(
+                        title, author,
+                        doc.get("title", ""),
+                        doc.get("author_name", [])
+                    )
 
                 if doc_match_confidence > 0.3:  # Lower threshold for covers
                     cover_confidence = _calculate_final_confidence(cover_source, doc_match_confidence)
@@ -254,34 +271,52 @@ def _query_open_library_combined(book, title, author):
         logger.warning(f"Open Library combined query failed for {book.file_path}: {str(e)}")
 
 
-def _query_google_books_combined(book, title, author):
+def _query_google_books_combined(book, title, author, isbn=None):
     """Combined Google Books query for both metadata and covers"""
     try:
-        if not settings.GOOGLE_BOOKS_API_KEY or not (title or author):
+        if not settings.GOOGLE_BOOKS_API_KEY or not (title or author or isbn):
             return
 
         metadata_source = DataSource.objects.get(name=DataSource.GOOGLE_BOOKS)
         cover_source = DataSource.objects.get(name=DataSource.GOOGLE_BOOKS_COVERS)
 
-        query = '+'.join(
-            f'{param}:"{value}"' for param, value in [('intitle', title), ('inauthor', author)] if value
-        )
+        # Build query - prefer ISBN if available, otherwise use title/author
+        if isbn:
+            query = f'isbn:{isbn}'
+            cache_key = f"gbooks_combined_isbn:{make_cache_key(isbn)}"
+            logger.info(f"[GOOGLE BOOKS ISBN SEARCH] Using ISBN: {isbn}")
+        else:
+            query = '+'.join(
+                f'{param}:"{value}"' for param, value in [('intitle', title), ('inauthor', author)] if value
+            )
+            cache_key = f"gbooks_combined:{make_cache_key(title, author)}"
+            logger.info(f"[GOOGLE BOOKS TITLE/AUTHOR SEARCH] Title: {title}, Author: {author}")
+
         url = f"https://www.googleapis.com/books/v1/volumes?q={query}&maxResults=5&key={settings.GOOGLE_BOOKS_API_KEY}"
-        cache_key = f"gbooks_combined:{make_cache_key(title, author)}"
 
         data = _safe_google_request(url, cache_key)
+
+        # Add small delay to respect rate limits
+        time.sleep(0.1)
+
         items = data.get("items", [])
 
         if not items:
+            logger.info(f"[GOOGLE BOOKS] No results found for query: {query}")
             return
 
         # Process metadata from best match
         best = items[0].get("volumeInfo", {})
-        match_confidence = _calculate_match_confidence(
-            title, author,
-            best.get("title", ""),
-            best.get("authors", [])
-        )
+
+        # For ISBN searches, we have high confidence since it's an exact match
+        if isbn:
+            match_confidence = 0.95  # High confidence for ISBN matches
+        else:
+            match_confidence = _calculate_match_confidence(
+                title, author,
+                best.get("title", ""),
+                best.get("authors", [])
+            )
 
         if match_confidence > 0.5:
             metadata_confidence = _calculate_final_confidence(metadata_source, match_confidence)
@@ -293,11 +328,15 @@ def _query_google_books_combined(book, title, author):
             image_links = info.get("imageLinks", {})
 
             if image_links.get("thumbnail"):
-                item_match_confidence = _calculate_match_confidence(
-                    title, author,
-                    info.get("title", ""),
-                    info.get("authors", [])
-                )
+                if isbn:
+                    # High confidence for ISBN-based cover matches
+                    item_match_confidence = 0.9
+                else:
+                    item_match_confidence = _calculate_match_confidence(
+                        title, author,
+                        info.get("title", ""),
+                        info.get("authors", [])
+                    )
 
                 if item_match_confidence > 0.3:  # Lower threshold for covers
                     cover_confidence = _calculate_final_confidence(cover_source, item_match_confidence)

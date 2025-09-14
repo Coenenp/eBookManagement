@@ -14,7 +14,7 @@ from books.models import (
     Series, BookSeries, ScanStatus
 )
 from books.scanner.file_ops import get_file_format, find_cover_file, find_opf_file
-from books.scanner.extractors import epub, mobi, pdf, opf
+from books.scanner.extractors import epub, mobi, pdf, opf, comic
 from books.scanner.parsing import parse_path_metadata
 from books.scanner.external import query_metadata_and_covers
 from books.scanner.resolver import resolve_final_metadata
@@ -271,13 +271,12 @@ def _extract_internal_metadata(book):
         elif fmt == "cbr":
             if not rarfile.is_rarfile(book.file_path):
                 raise ValueError("CBR file is not a valid RAR archive.")
-            with rarfile.RarFile(book.file_path) as rf:
-                rf.testrar()
+            extractor = comic.extract_cbr
 
         elif fmt == "cbz":
             if not zipfile.is_zipfile(book.file_path):
                 raise ValueError("CBZ file is not a valid ZIP archive.")
-            # extractor = cbz.extract
+            extractor = comic.extract_cbz
 
         else:
             logger.info(f"[SKIPPED] No extractor available for format: {fmt}")

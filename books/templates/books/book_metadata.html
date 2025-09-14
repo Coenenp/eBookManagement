@@ -2,6 +2,7 @@
 {% load crispy_forms_tags %}
 {% load static %}
 {% load book_extras %}
+{% load custom_filters %}
 
 {% block title %}{{ book.filename }} - Ebook Library Manager{% endblock %}
 
@@ -67,7 +68,7 @@
                     <i class="fas fa-image text-success me-2"></i>
                     Book Cover
                 </h5>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetCoverSelection()">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-cover">
                     <i class="fas fa-undo me-1"></i>Reset to Final
                 </button>
             </div>
@@ -146,7 +147,7 @@
                                 <div class="mb-3 text-center">
                                     <label for="cover_upload" class="form-label fw-bold">Upload Custom Cover</label>
                                     <input type="file" class="form-control" id="cover_upload" name="cover_upload" 
-                                           accept="image/*" onchange="uploadCoverImmediate(this)">
+                                           accept="image/*" data-action="upload-cover-immediate">
                                     <div class="form-text">JPG, PNG, GIF, WebP (max 5MB)</div>
                                 </div>
                                 <div class="form-check">
@@ -175,7 +176,7 @@
                     <i class="fas fa-heading text-primary me-2"></i>
                     Book Title
                 </h5>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetTitleSelection()">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-title">
                     <i class="fas fa-undo me-1"></i>Reset to Final
                 </button>
             </legend>
@@ -225,7 +226,7 @@
                     <i class="fas fa-user-edit text-info me-2"></i>
                     Author
                 </h5>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetAuthorSelection()">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-author">
                     <i class="fas fa-undo me-1"></i>Reset to Final
                 </button>
             </legend>
@@ -275,7 +276,7 @@
                     <i class="fas fa-list-ol text-warning me-2"></i>
                     Book Series
                 </h5>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetSeriesSelection()">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-series">
                     <i class="fas fa-undo me-1"></i>Reset to Final
                 </button>
             </legend>
@@ -365,7 +366,7 @@
                     <i class="fas fa-hashtag text-secondary me-2"></i>
                     Series Number
                 </h5>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetSeriesNumberSelection()">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-series-number">
                     <i class="fas fa-undo me-1"></i>Reset to Final
                 </button>
             </legend>
@@ -424,7 +425,7 @@
                     <i class="fas fa-tags text-success me-2"></i>
                     Genres
                 </h5>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetGenreSelection()">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-genre">
                     <i class="fas fa-undo me-1"></i>Reset to Final
                 </button>
             </legend>
@@ -465,7 +466,7 @@
                     <i class="fas fa-align-left text-info me-2"></i>
                     Description
                 </h5>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetDescriptionSelection()">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-description">
                     <i class="fas fa-undo me-1"></i>Reset to Final
                 </button>
             </legend>
@@ -492,7 +493,9 @@
                                 {% endif %}
                             </div>
                         </div>
-                        <div class="text-muted small">{{ meta.field_value|truncatechars:150 }}</div>
+                        <div class="description-content small text-muted">
+                            {{ meta.field_value|sanitize_description|truncatewords:20|safe }}
+                        </div>
                     </label>
                 </div>
                 {% empty %}
@@ -526,7 +529,7 @@
                     <i class="fas fa-barcode text-dark me-2"></i>
                     ISBN
                 </h5>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetISBNSelection()">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-isbn">
                     <i class="fas fa-undo me-1"></i>Reset to Final
                 </button>
             </legend>
@@ -546,7 +549,54 @@
                            aria-describedby="isbn_{{ forloop.counter }}_desc"
                            {% if meta.field_value == book.finalmetadata.isbn %}checked{% endif %}>
                     <label class="form-check-label d-flex justify-content-between align-items-start" for="isbn_{{ forloop.counter }}">
-                        <span class="fw-bold font-monospace">{{ meta.field_value }}</span>
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center">
+                                <span class="fw-bold font-monospace me-2">{{ meta.field_value }}</span>
+                                {% if meta.field_value|is_valid_isbn %}
+                                <button type="button" class="btn btn-sm btn-outline-info me-2" 
+                                        data-action="lookup-isbn" data-isbn="{{ meta.field_value }}" data-counter="{{ forloop.counter }}"
+                                        title="Look up this ISBN to see what book it represents">
+                                    <i class="fas fa-search"></i> Lookup
+                                </button>
+                                {% endif %}
+                            </div>
+                            <div class="small text-muted mt-1">
+                                {% load custom_filters %}
+                                {% with isbn_type=meta.field_value|isbn_type %}
+                                    {% if isbn_type == "ISBN-13" %}
+                                        <span class="badge bg-info text-white me-1">ISBN-13</span>
+                                    {% elif isbn_type == "ISBN-10" %}
+                                        <span class="badge bg-secondary text-white me-1">ISBN-10</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark me-1">{{ isbn_type }}</span>
+                                    {% endif %}
+                                {% endwith %}
+                                
+                                {% comment %}Add ISBN lookup information{% endcomment %}
+                                <span class="text-muted">
+                                    {% if meta.field_value|is_valid_isbn %}
+                                        <i class="fas fa-check-circle text-success me-1"></i>Valid for external lookups
+                                    {% else %}
+                                        <i class="fas fa-times-circle text-danger me-1"></i>Not valid for external lookups
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <!-- ISBN Lookup Results Container -->
+                            <div id="isbn_lookup_{{ forloop.counter }}" class="mt-2 isbn-lookup-hidden">
+                                <div class="alert alert-info" role="status">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <strong>ISBN Lookup Results:</strong>
+                                        <button type="button" class="btn-close btn-sm" data-action="hide-isbn-lookup" data-counter="{{ forloop.counter }}" aria-label="Close"></button>
+                                    </div>
+                                    <div id="isbn_lookup_content_{{ forloop.counter }}">
+                                        <div class="text-center py-2">
+                                            <div class="spinner-border spinner-border-sm text-info me-2" role="status" aria-hidden="true"></div>
+                                            Looking up ISBN...
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <div>
                             <span class="badge bg-light text-dark me-2" aria-label="Source: {{ meta.source.name }}">{{ meta.source.name }}</span>
                             
@@ -584,7 +634,7 @@
                     <i class="fas fa-building text-primary me-2"></i>
                     Publisher
                 </h5>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetPublisherSelection()">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-publisher">
                     <i class="fas fa-undo me-1"></i>Reset to Final
                 </button>
             </legend>
@@ -642,7 +692,7 @@
                     <i class="fas fa-calendar-alt text-warning me-2"></i>
                     Publication Year
                 </h5>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetYearSelection()">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-year">
                     <i class="fas fa-undo me-1"></i>Reset to Final
                 </button>
             </legend>
@@ -700,7 +750,7 @@
                     <i class="fas fa-globe text-success me-2"></i>
                     Language
                 </h5>
-                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetLanguageSelection()">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-language">
                     <i class="fas fa-undo me-1"></i>Reset to Final
                 </button>
             </legend>
@@ -769,6 +819,12 @@
                         <p class="mb-2 text-muted">
                             <i class="fas fa-info-circle me-1"></i>
                             Query external sources for updated metadata using current final values
+                            {% if book.finalmetadata.isbn %}
+                                <br><small class="text-success">
+                                    <i class="fas fa-barcode me-1"></i>
+                                    Will use ISBN for enhanced accuracy: {{ book.finalmetadata.isbn }}
+                                </small>
+                            {% endif %}
                         </p>
                         <div class="small text-muted">
                             <strong>Current search terms:</strong>
@@ -801,7 +857,7 @@
                     <div class="alert alert-success mb-0">
                         <i class="fas fa-check-circle me-2"></i>
                         <span id="quickRescanSummary">Rescan complete!</span>
-                        <button type="button" class="btn btn-sm btn-outline-success ms-2" onclick="location.reload()">
+                        <button type="button" class="btn btn-sm btn-outline-success ms-2" data-action="reload-page">
                             <i class="fas fa-refresh me-1"></i>Refresh to See New Data
                         </button>
                     </div>
@@ -870,948 +926,59 @@
     </fieldset>
 </div>
 
+<!-- Include external JavaScript files -->
+<script src="{% static 'book/js/book-metadata.js' %}"></script>
 <script>
-/**
- * Metadata Form Handler - Cleaned and optimized version
- * Handles form interactions for the book metadata review page
- */
-
-class MetadataFormHandler {
-    constructor() {
-        this.finalMetadata = this.loadFinalMetadata();
-        this.currentGenres = this.loadCurrentGenres();
-        this.languageChoices = this.loadLanguageChoices();
-        this.init();
-    }
-
-    /**
-     * Load final metadata values from template
-     */
-    loadFinalMetadata() {
-        return {
-            cover: "{{ book.finalmetadata.final_cover_path|escapejs }}",
+    // Initialize metadata functionality with Django template data
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize metadata form handler with Django template data
+        const finalMetadata = {
             title: "{{ book.finalmetadata.final_title|escapejs }}",
             author: "{{ book.finalmetadata.final_author|escapejs }}",
             series: "{{ book.finalmetadata.final_series|escapejs }}",
             seriesNumber: "{{ book.finalmetadata.final_series_number|escapejs }}",
-            description: "{{ book.finalmetadata.description|escapejs }}",
-            isbn: "{{ book.finalmetadata.isbn|escapejs }}",
+            genre: [],  // Will be populated below
+            description: "{{ book.finalmetadata.final_description|escapejs }}",
+            isbn: "{{ book.finalmetadata.final_isbn|escapejs }}",
             publisher: "{{ book.finalmetadata.final_publisher|escapejs }}",
-            year: "{{ book.finalmetadata.publication_year|escapejs }}",
-            language: "{{ book.finalmetadata.language|escapejs }}"
+            year: "{{ book.finalmetadata.final_publication_year|escapejs }}",
+            language: "{{ book.finalmetadata.final_language|escapejs }}",
+            cover: "{{ book.finalmetadata.final_cover_path|escapejs }}"
         };
-    }
 
-    /**
-     * Load current genres from template
-     */
-    loadCurrentGenres() {
-        return [{% for genre in current_genres %}"{{ genre|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}];
-    }
-
-    /**
-     * Load language choices for dropdown
-     */
-    loadLanguageChoices() {
-        return [
-            {% for code, name in language_choices %}
-            {code: "{{ code|escapejs }}", name: "{{ name|escapejs }}"}{% if not forloop.last %},{% endif %}
+        // Current genres from Django
+        const currentGenres = [
+            {% for genre in book.finalmetadata.final_genres.all %}
+                "{{ genre.name|escapejs }}"{% if not forloop.last %},{% endif %}
             {% endfor %}
         ];
-    }
 
-    /**
-     * Initialize event handlers
-     */
-    init() {
-        this.setupResetButtons();
-        this.setupCoverPreview();
-        this.setupSeriesAutoPopulation();
-        this.setupKeyboardNavigation();
-        this.setupTooltips();
-        this.setupLazyLoading();
-        this.setupFormValidation();
-        this.setupLanguageDropdown();
-        this.setupQuickRescan();
-    }
+        // Language choices from Django
+        const languageChoices = [
+            {% for code, name in form.final_language.field.choices %}
+                { code: "{{ code|escapejs }}", name: "{{ name|escapejs }}" }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ];
 
-    /**
-     * Setup language dropdown functionality
-     */
-    setupLanguageDropdown() {
-        const languageRadio = document.getElementById('language_manual');
-        const languageDropdown = document.getElementById('language_dropdown');
+        // CSRF token
+        const csrfToken = "{{ csrf_token }}";
         
-        if (languageRadio && languageDropdown) {
-            languageRadio.addEventListener('change', () => {
-                if (languageRadio.checked) {
-                    languageDropdown.focus();
-                }
-            });
-            
-            languageDropdown.addEventListener('change', () => {
-                if (languageDropdown.value) {
-                    languageRadio.checked = true;
-                }
-            });
-        }
-    }
-
-    /**
-     * Handle cover selection changes with visual feedback
-     */
-    handleCoverSelectionChange(radio) {
-        // Remove border highlight from all cover cards
-        document.querySelectorAll('.cover-section .card').forEach(card => {
-            card.classList.remove('border-primary', 'border-success');
-            card.classList.add('border-light');
-        });
-
-        // Highlight the selected cover card
-        if (radio.checked) {
-            const card = radio.closest('.card');
-            if (card) {
-                card.classList.remove('border-light');
-                card.classList.add('border-success');
-                
-                // Add a brief flash effect to show selection
-                card.style.transition = 'all 0.3s ease';
-                card.style.transform = 'scale(1.02)';
-                setTimeout(() => {
-                    card.style.transform = 'scale(1)';
-                }, 200);
-                
-                // Show a temporary notification to confirm selection
-                this.showCoverSelectionNotification(card);
-            }
-        }
-    }
-
-    /**
-     * Show a temporary notification when a cover is selected
-     */
-    showCoverSelectionNotification(card) {
-        // Create notification element
-        const notification = document.createElement('div');
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #28a745;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 5px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            z-index: 9999;
-            font-weight: bold;
-            animation: slideInRight 0.3s ease;
-        `;
-        notification.innerHTML = `
-            <i class="fas fa-check-circle me-2"></i>
-            Cover selected! Remember to save your changes.
-        `;
-        
-        // Add CSS animation
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideInRight {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-        `;
-        document.head.appendChild(style);
-        
-        // Add to page
-        document.body.appendChild(notification);
-        
-        // Remove after 3 seconds
-        setTimeout(() => {
-            notification.style.animation = 'slideInRight 0.3s ease reverse';
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 300);
-        }, 3000);
-    }
-
-    /**
-     * Setup form validation - especially for series number
-     */
-    setupFormValidation() {
-        const form = document.querySelector('form');
-        if (form) {
-            form.addEventListener('submit', (e) => {
-                if (!this.validateSeriesNumber()) {
-                    e.preventDefault();
-                    return false;
-                }
-            });
-        }
-    }
-
-    /**
-     * Validate series number has corresponding series
-     */
-    validateSeriesNumber() {
-        const seriesNumberRadios = document.querySelectorAll('input[name="final_series_number"]:checked');
-        const seriesRadios = document.querySelectorAll('input[name="final_series"]:checked');
-        const manualSeriesInput = document.getElementById('series_override');
-        const manualSeriesNumberInput = document.getElementById('series_number_override');
-        
-        let hasSeriesNumber = false;
-        let hasSeries = false;
-        
-        // Check if series number is selected
-        if (seriesNumberRadios.length > 0) {
-            const selectedValue = seriesNumberRadios[0].value;
-            if (selectedValue === '__manual__') {
-                hasSeriesNumber = manualSeriesNumberInput && manualSeriesNumberInput.value.trim();
-            } else if (selectedValue) {
-                hasSeriesNumber = true;
-            }
-        }
-        
-        // Check if series is selected
-        if (seriesRadios.length > 0) {
-            const selectedValue = seriesRadios[0].value;
-            if (selectedValue === '__manual__') {
-                hasSeries = manualSeriesInput && manualSeriesInput.value.trim();
-            } else if (selectedValue) {
-                hasSeries = true;
-            }
-        } else {
-            // Check if we have a final series already
-            hasSeries = this.finalMetadata.series && this.finalMetadata.series.trim();
-        }
-        
-        if (hasSeriesNumber && !hasSeries) {
-            alert('Please select or enter a series name when specifying a series number.');
-            return false;
-        }
-        
-        return true;
-    }
-
-    /**
-     * Lazy load images using IntersectionObserver
-     */
-    setupLazyLoading() {
-        if ('IntersectionObserver' in window) {
-            const imageObserver = new IntersectionObserver((entries, observer) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const img = entry.target;
-                        if (img.dataset.src) {
-                            img.src = img.dataset.src;
-                            img.classList.remove('lazy');
-                            observer.unobserve(img);
-                        }
-                    }
-                });
-            });
-
-            document.querySelectorAll('img[data-src]').forEach(img => {
-                imageObserver.observe(img);
-            });
-        }
-    }
-
-    /**
-     * Setup reset buttons for all metadata sections
-     */
-    setupResetButtons() {
-        const resetHandlers = {
-            'cover': () => this.resetSelection('final_cover_path', this.finalMetadata.cover),
-            'title': () => this.resetTitleSelection(),
-            'author': () => this.resetAuthorSelection(),
-            'series': () => this.resetSeriesSelection(),
-            'seriesNumber': () => this.resetSelection('final_series_number', this.finalMetadata.seriesNumber, 'series_number_override'),
-            'genre': () => this.resetGenreSelection(),
-            'description': () => this.resetSelection('final_description', this.finalMetadata.description, 'description_override'),
-            'isbn': () => this.resetSelection('final_isbn', this.finalMetadata.isbn, 'isbn_override'),
-            'publisher': () => this.resetSelection('final_publisher', this.finalMetadata.publisher, 'publisher_override'),
-            'year': () => this.resetSelection('final_publication_year', this.finalMetadata.year, 'year_override'),
-            'language': () => this.resetLanguageSelection()
-        };
-
-        // Attach global reset functions for backward compatibility
-        Object.entries(resetHandlers).forEach(([key, handler]) => {
-            const functionName = `reset${key.charAt(0).toUpperCase() + key.slice(1)}Selection`;
-            window[functionName] = handler;
-        });
-    }
-
-    /**
-     * Reset language selection - FIXED for dropdown
-     */
-    resetLanguageSelection() {
-        this.resetSelection('final_language', this.finalMetadata.language);
-        
-        // Also reset the dropdown
-        const dropdown = document.getElementById('language_dropdown');
-        if (dropdown) {
-            dropdown.value = '';
-        }
-    }
-
-    /**
-     * Generic reset function for radio button selections
-     */
-    resetSelection(fieldName, finalValue, overrideFieldId = null) {
-        const radios = document.querySelectorAll(`input[name="${fieldName}"]`);
-        radios.forEach(radio => {
-            radio.checked = radio.value === finalValue;
-        });
-        
-        if (overrideFieldId) {
-            const overrideField = document.getElementById(overrideFieldId);
-            if (overrideField) {
-                overrideField.value = '';
-            }
-        }
-    }
-
-    /**
-     * Reset title selection with manual entry handling
-     */
-    resetTitleSelection() {
-        this.resetSelection('final_title', this.finalMetadata.title);
-        this.clearField('title_override');
-    }
-
-    /**
-     * Reset author selection with manual entry handling
-     */
-    resetAuthorSelection() {
-        this.resetSelection('final_author', this.finalMetadata.author);
-        this.clearField('author_override');
-    }
-
-    /**
-     * Reset series selection with manual entry handling
-     */
-    resetSeriesSelection() {
-        this.resetSelection('final_series', this.finalMetadata.series);
-        this.clearField('series_override');
-    }
-
-    /**
-     * Reset genre selection to original state - FIXED
-     */
-    resetGenreSelection() {
-        const genreCheckboxes = document.querySelectorAll('input[name="final_genres"]');
-        genreCheckboxes.forEach(checkbox => {
-            checkbox.checked = this.currentGenres.includes(checkbox.value);
-        });
-        this.clearField('manual_genres');
-    }
-
-    /**
-     * Clear form field helper
-     */
-    clearField(fieldId) {
-        const field = document.getElementById(fieldId);
-        if (field) {
-            field.value = '';
-        }
-    }
-
-    /**
-     * Setup cover preview functionality - ENHANCED for immediate upload
-     */
-    setupCoverPreview() {
-        // Enhanced cover upload with AJAX
-        window.uploadCoverImmediate = async (input) => {
-            if (input.files && input.files[0]) {
-                const file = input.files[0];
-                
-                // Validate file
-                if (!this.validateCoverFile(file)) {
-                    input.value = '';
-                    return;
-                }
-                
-                // Show upload progress
-                this.showUploadProgress();
-                
-                try {
-                    // Upload via AJAX
-                    const result = await this.uploadCoverAjax(file);
-                    
-                    if (result.success) {
-                        // Create cover preview with radio button
-                        this.createUploadedCoverPreview(result);
-                        
-                        // Show success message
-                        this.showUploadSuccess(result.filename);
-                    } else {
-                        throw new Error(result.error || 'Upload failed');
-                    }
-                } catch (error) {
-                    console.error('Upload error:', error);
-                    this.showUploadError(error.message);
-                    input.value = '';
-                } finally {
-                    this.hideUploadProgress();
-                }
-            }
-        };
-
-        // Legacy function for fallback
-        window.previewCover = (input) => {
-            if (input.files && input.files[0]) {
-                const file = input.files[0];
-                
-                if (!this.validateCoverFile(file)) {
-                    input.value = '';
-                    return;
-                }
-                
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    this.updateCoverPreview(input, e.target.result);
-                };
-                reader.readAsDataURL(file);
-            }
-        };
-
-        window.resetCoverUpload = (button) => {
-            this.resetCoverUpload(button);
-        };
-
-        // Add event listeners for cover selection changes
-        document.addEventListener('change', (e) => {
-            if (e.target.name === 'final_cover_path') {
-                this.handleCoverSelectionChange(e.target);
-            }
-        });
-    }
-
-    /**
-     * Upload cover via AJAX
-     */
-    async uploadCoverAjax(file) {
+        // Book ID
         const bookId = {{ book.id }};
-        const formData = new FormData();
-        formData.append('cover_file', file);
-        
-        // Get CSRF token
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-        
-        const response = await fetch(`/ajax/book/${bookId}/upload_cover/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': csrfToken,
-            },
-            body: formData
-        });
-        
-        return await response.json();
-    }
 
-    /**
-     * Create preview for uploaded cover
-     */
-    createUploadedCoverPreview(result) {
-        const uploadCard = document.getElementById('uploadCoverCard');
-        const cardBody = document.getElementById('uploadCoverBody');
-        
-        // Improved filename formatting - truncate and wrap properly
-        let displayFilename = result.filename;
-        if (displayFilename.length > 25) {
-            displayFilename = displayFilename.substring(0, 22) + '...';
-        }
-        
-        // Replace upload interface with preview - PERFECTLY CENTERED LAYOUT
-        cardBody.innerHTML = `
-            <div class="text-center mb-3">
-                <div class="cover-container cover-medium">
-                    <img src="${result.cover_path}" alt="Uploaded cover" 
-                         class="cover-image">
-                </div>
-            </div>
-            <div class="w-100 d-flex flex-column align-items-center">
-                <div class="form-check text-center">
-                    <input class="form-check-input" type="radio" name="final_cover_path" 
-                           value="${result.cover_path}" id="cover_uploaded" checked>
-                    <label class="form-check-label fw-bold text-center d-block" for="cover_uploaded">
-                        <div class="mb-2">
-                            <i class="fas fa-upload me-1 text-success"></i>Uploaded Cover
-                        </div>
-                    </label>
-                </div>
-                <div class="text-center w-100">
-                    <div class="d-flex justify-content-center align-items-center flex-wrap gap-1 mb-2">
-                        <span class="badge bg-success">New</span>
-                    </div>
-                    <div class="mb-2">
-                        <small class="text-muted d-block text-center text-break-all" 
-                               title="${result.filename}">>
-                            ${displayFilename}
-                        </small>
-                    </div>
-                    <button type="button" class="btn btn-sm btn-outline-danger" 
-                            onclick="resetUploadedCover()">
-                        <i class="fas fa-times me-1"></i>Remove
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        // Update card styling
-        uploadCard.classList.remove('border-dashed', 'border-secondary');
-        uploadCard.classList.add('border-success');
-        
-        // Add visual feedback animation
-        uploadCard.style.transition = 'all 0.3s ease';
-        uploadCard.style.transform = 'scale(1.02)';
-        setTimeout(() => {
-            uploadCard.style.transform = 'scale(1)';
-        }, 300);
-        
-        // Trigger cover selection change
-        const radioButton = document.getElementById('cover_uploaded');
-        if (radioButton) {
-            this.handleCoverSelectionChange(radioButton);
-        }
-    }
-
-    /**
-     * Show upload progress
-     */
-    showUploadProgress() {
-        const progress = document.getElementById('uploadProgress');
-        const progressBar = progress.querySelector('.progress-bar');
-        
-        progress.style.display = 'block';
-        progressBar.style.width = '20%';
-        
-        // Animate progress
-        let width = 20;
-        const interval = setInterval(() => {
-            width += 10;
-            if (width <= 90) {
-                progressBar.style.width = width + '%';
-            } else {
-                clearInterval(interval);
-            }
-        }, 100);
-        
-        this.uploadProgressInterval = interval;
-    }
-
-    /**
-     * Hide upload progress
-     */
-    hideUploadProgress() {
-        if (this.uploadProgressInterval) {
-            clearInterval(this.uploadProgressInterval);
-        }
-        
-        const progress = document.getElementById('uploadProgress');
-        const progressBar = progress.querySelector('.progress-bar');
-        
-        progressBar.style.width = '100%';
-        
-        setTimeout(() => {
-            progress.style.display = 'none';
-            progressBar.style.width = '0%';
-        }, 500);
-    }
-
-    /**
-     * Show upload success message
-     */
-    showUploadSuccess(filename) {
-        this.showNotification(
-            `Cover "${filename}" uploaded successfully!`,
-            'success'
+        // Initialize the main metadata form handler
+        window.metadataHandler = new MetadataFormHandler(
+            finalMetadata,
+            currentGenres,
+            languageChoices,
+            csrfToken,
+            bookId
         );
-    }
 
-    /**
-     * Show upload error message
-     */
-    showUploadError(message) {
-        this.showNotification(
-            `Upload failed: ${message}`,
-            'danger'
-        );
-    }
-
-    /**
-     * Show notification
-     */
-    showNotification(message, type = 'info') {
-        const notification = document.createElement('div');
-        notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-        notification.style.cssText = `
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            min-width: 300px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        `;
-        notification.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        
-        document.body.appendChild(notification);
-        
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.remove();
-            }
-        }, 5000);
-    }
-
-    /**
-     * Reset uploaded cover to upload interface
-     */
-    resetUploadedCover() {
-        const uploadCard = document.getElementById('uploadCoverCard');
-        const cardBody = document.getElementById('uploadCoverBody');
-        
-        // Reset to original upload interface
-        cardBody.innerHTML = `
-            <div class="d-flex flex-column justify-content-center align-items-center text-center">
-                <i class="fas fa-upload fa-3x text-muted mb-3"></i>
-                <div class="mb-3">
-                    <label for="cover_upload_new" class="form-label fw-bold">Upload Custom Cover</label>
-                    <input type="file" class="form-control" id="cover_upload_new" name="cover_upload" 
-                           accept="image/*" onchange="uploadCoverImmediate(this)">
-                    <div class="form-text">JPG, PNG, GIF, WebP (max 5MB)</div>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="final_cover_path" 
-                           value="custom_upload" id="cover_custom_new">
-                    <label class="form-check-label" for="cover_custom_new">
-                        Use uploaded cover
-                    </label>
-                </div>
-            </div>
-        `;
-        
-        // Reset card styling
-        uploadCard.classList.remove('border-success');
-        uploadCard.classList.add('border-dashed', 'border-secondary');
-        
-        // Reset card transformation
-        uploadCard.style.transform = 'scale(1)';
-        
-        // Clear any existing radio button selection
-        const uploadRadio = document.getElementById('cover_custom_new');
-        if (uploadRadio) {
-            uploadRadio.checked = false;
-        }
-    }
-
-    /**
-     * Validate cover file
-     */
-    validateCoverFile(file) {
-        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-        const maxSize = 5 * 1024 * 1024; // 5MB
-
-        if (!allowedTypes.includes(file.type)) {
-            alert('Invalid file type. Please select a valid image file (JPEG, PNG, GIF, WebP).');
-            return false;
-        }
-
-        if (file.size > maxSize) {
-            alert('File too large. Please select an image under 5MB.');
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Update cover preview after file selection - FIXED
-     */
-    updateCoverPreview(input, imageSrc) {
-        const uploadCard = input.closest('.card');
-        const cardBody = uploadCard.querySelector('.card-body');
-        
-        cardBody.innerHTML = `
-            <div class="cover-container">
-                <img src="${imageSrc}" alt="Cover preview" class="card-img-top cover-image cover-large max-width-100 max-height-300 object-fit-contain">>
-            </div>
-            <div class="card-body p-2">
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="final_cover_path" 
-                           value="custom_upload" id="cover_custom" checked>
-                    <label class="form-check-label fw-bold" for="cover_custom">
-                        <i class="fas fa-upload me-1"></i>Custom Upload
-                    </label>
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-secondary mt-2" 
-                        onclick="resetCoverUpload(this)">
-                    <i class="fas fa-times me-1"></i>Remove
-                </button>
-            </div>
-        `;
-    }
-
-    /**
-     * Reset cover upload interface
-     */
-    resetCoverUpload(button) {
-        const uploadCard = button.closest('.card');
-        const cardBody = uploadCard.querySelector('.card-body');
-        
-        cardBody.innerHTML = `
-            <div class="d-flex flex-column justify-content-center align-items-center h-100">
-                <i class="fas fa-upload fa-3x text-muted mb-3"></i>
-                <div class="mb-3 text-center">
-                    <label for="cover_upload" class="form-label fw-bold">Upload Custom Cover</label>
-                    <input type="file" class="form-control" id="cover_upload" name="cover_upload" 
-                           accept="image/*" onchange="previewCover(this)">
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" name="final_cover_path" 
-                           value="custom_upload" id="cover_custom">
-                    <label class="form-check-label" for="cover_custom">
-                        Use uploaded cover
-                    </label>
-                </div>
-            </div>
-        `;
-    }
-
-    /**
-     * Setup auto-population of series number when series is selected
-     */
-    setupSeriesAutoPopulation() {
-        document.addEventListener('change', (e) => {
-            if (e.target.name === 'final_series' && e.target.checked && e.target.dataset.seriesNumber) {
-                const seriesNumberInput = document.getElementById('series_number_override');
-                const seriesNumberRadio = document.getElementById('series_num_manual');
-                
-                if (seriesNumberInput && seriesNumberRadio) {
-                    seriesNumberInput.value = e.target.dataset.seriesNumber;
-                    seriesNumberRadio.checked = true;
-                }
-            }
-        });
-    }
-
-    /**
-     * Setup keyboard navigation shortcuts
-     */
-    setupKeyboardNavigation() {
-        document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey || e.metaKey) {
-                switch(e.key) {
-                    case 'ArrowLeft':
-                        e.preventDefault();
-                        {% if prev_book_id %}
-                        window.location.href = "{% url 'books:book_metadata' prev_book_id %}";
-                        {% endif %}
-                        break;
-                    case 'ArrowRight':
-                        e.preventDefault();
-                        {% if next_book_id %}
-                        window.location.href = "{% url 'books:book_metadata' next_book_id %}";
-                        {% endif %}
-                        break;
-                    case 'ArrowUp':
-                        e.preventDefault();
-                        {% if next_needs_review_id %}
-                        window.location.href = "{% url 'books:book_metadata' next_needs_review_id %}";
-                        {% endif %}
-                        break;
-                    case 's':
-                        e.preventDefault();
-                        document.querySelector('form').submit();
-                        break;
-                }
-            }
-        });
-    }
-
-    /**
-     * Setup Bootstrap tooltips for confidence indicators
-     */
-    setupTooltips() {
-        const confidenceBadges = document.querySelectorAll('.badge');
-        confidenceBadges.forEach(badge => {
-            if (badge.textContent.includes('★')) {
-                const confidence = parseFloat(badge.textContent.replace('★', '').trim());
-                let tooltipText = this.getConfidenceTooltip(confidence);
-                
-                badge.setAttribute('title', tooltipText);
-                badge.setAttribute('data-bs-toggle', 'tooltip');
-            }
-        });
-        
-        // Initialize Bootstrap tooltips if available
-        if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
-            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            tooltipTriggerList.map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
-        }
-    }
-
-    /**
-     * Get tooltip text based on confidence score
-     */
-    getConfidenceTooltip(confidence) {
-        if (confidence >= 0.8) {
-            return 'High confidence match';
-        } else if (confidence >= 0.5) {
-            return 'Medium confidence match';
-        } else {
-            return 'Low confidence match';
-        }
-    }
-
-    /**
-     * Setup quick rescan functionality
-     */
-    setupQuickRescan() {
-        const quickRescanBtn = document.getElementById('quickRescanBtn');
-        if (quickRescanBtn) {
-            quickRescanBtn.addEventListener('click', () => this.startQuickRescan());
-        }
-    }
-
-    /**
-     * Start quick rescan with default settings
-     */
-    async startQuickRescan() {
-        const btn = document.getElementById('quickRescanBtn');
-        const progressDiv = document.getElementById('quickRescanProgress');
-        const resultsDiv = document.getElementById('quickRescanResults');
-        const progressBar = document.getElementById('quickRescanProgressBar');
-        const statusDiv = document.getElementById('quickRescanStatus');
-        const summarySpan = document.getElementById('quickRescanSummary');
-
-        // Hide results and show progress
-        resultsDiv.classList.add('d-none');
-        progressDiv.classList.remove('d-none');
-        
-        // Disable button and update text
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Rescanning...';
-        
-        try {
-            // Prepare search data using current final metadata
-            const searchData = {
-                sources: ['google', 'openlibrary', 'goodreads'],
-                options: {
-                    clearExisting: false,
-                    forceRefresh: true
-                },
-                searchTerms: {
-                    title: "{{ book.finalmetadata.final_title|escapejs }}",
-                    author: "{{ book.finalmetadata.final_author|escapejs }}",
-                    isbn: "{{ book.finalmetadata.isbn|escapejs }}",
-                    series: "{{ book.finalmetadata.final_series|escapejs }}"
-                }
-            };
-
-            // Get CSRF token
-            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-            
-            // Start the rescan
-            const response = await fetch(`/ajax/book/{{ book.id }}/rescan/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken,
-                },
-                body: JSON.stringify(searchData)
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const result = await response.json();
-            
-            if (result.success) {
-                // Simulate progress for visual feedback
-                let progress = 0;
-                const progressInterval = setInterval(() => {
-                    progress += 10;
-                    progressBar.style.width = progress + '%';
-                    
-                    if (progress <= 30) {
-                        statusDiv.textContent = 'Querying Google Books...';
-                    } else if (progress <= 60) {
-                        statusDiv.textContent = 'Querying Open Library...';
-                    } else if (progress <= 90) {
-                        statusDiv.textContent = 'Querying Goodreads...';
-                    } else {
-                        statusDiv.textContent = 'Processing results...';
-                    }
-                    
-                    if (progress >= 100) {
-                        clearInterval(progressInterval);
-                        this.showQuickRescanResults(result);
-                    }
-                }, 200);
-            } else {
-                throw new Error(result.error || 'Rescan failed');
-            }
-        } catch (error) {
-            console.error('Quick rescan error:', error);
-            statusDiv.textContent = 'Error: ' + error.message;
-            progressBar.classList.add('bg-danger');
-            
-            // Re-enable button after error
-            setTimeout(() => {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Quick Rescan';
-                progressDiv.classList.add('d-none');
-            }, 3000);
-        }
-    }
-
-    /**
-     * Show quick rescan results
-     */
-    showQuickRescanResults(result) {
-        const btn = document.getElementById('quickRescanBtn');
-        const progressDiv = document.getElementById('quickRescanProgress');
-        const resultsDiv = document.getElementById('quickRescanResults');
-        const summarySpan = document.getElementById('quickRescanSummary');
-
-        // Hide progress and show results
-        progressDiv.classList.add('d-none');
-        resultsDiv.classList.remove('d-none');
-        
-        // Update summary
-        const newMetadata = result.new_metadata_count || 0;
-        summarySpan.textContent = `Rescan complete! Found ${newMetadata} new metadata entries.`;
-        
-        // Re-enable button
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Quick Rescan';
-    }
-}
-
-// Initialize the metadata form handler when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    window.metadataHandler = new MetadataFormHandler();
-});
-
-// Global functions for backward compatibility
-function resetCoverSelection() { window.metadataHandler.resetSelection('final_cover_path', window.metadataHandler.finalMetadata.cover); }
-function resetTitleSelection() { window.metadataHandler.resetTitleSelection(); }
-function resetAuthorSelection() { window.metadataHandler.resetAuthorSelection(); }
-function resetSeriesSelection() { window.metadataHandler.resetSeriesSelection(); }
-function resetSeriesNumberSelection() { window.metadataHandler.resetSelection('final_series_number', window.metadataHandler.finalMetadata.seriesNumber, 'series_number_override'); }
-function resetGenreSelection() { window.metadataHandler.resetGenreSelection(); }
-function resetDescriptionSelection() { window.metadataHandler.resetSelection('final_description', window.metadataHandler.finalMetadata.description, 'description_override'); }
-function resetISBNSelection() { window.metadataHandler.resetSelection('final_isbn', window.metadataHandler.finalMetadata.isbn, 'isbn_override'); }
-function resetPublisherSelection() { window.metadataHandler.resetSelection('final_publisher', window.metadataHandler.finalMetadata.publisher, 'publisher_override'); }
-function resetYearSelection() { window.metadataHandler.resetSelection('final_publication_year', window.metadataHandler.finalMetadata.year, 'year_override'); }
-function resetLanguageSelection() { window.metadataHandler.resetLanguageSelection(); }
-function resetUploadedCover() { window.metadataHandler.resetUploadedCover(); }
+        // Initialize ISBN lookup functionality
+        window.isbnLookup = new ISBNLookup(csrfToken);
+    });
 </script>
 
 {% endblock %}
+

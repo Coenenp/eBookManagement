@@ -110,8 +110,39 @@ def sanitize_html(text):
     if not text:
         return ''
 
-    allowed_tags = ['b', 'i', 'em', 'strong']
-    return bleach.clean(text, tags=allowed_tags, strip=True)
+    allowed_tags = ['b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'ol', 'li']
+    allowed_attributes = {}  # No attributes allowed for safety
+    return bleach.clean(text, tags=allowed_tags, attributes=allowed_attributes, strip=True)
+
+
+@register.filter
+def sanitize_description(text):
+    """Sanitize description content, handling HTML properly and cleaning up common issues."""
+    if not text:
+        return ''
+
+    # Remove unwanted HTML class attributes and clean up common external content
+    import re
+
+    # Remove class attributes from p tags and other elements
+    text = re.sub(r'<([^>]+)\s+class="[^"]*"([^>]*)>', r'<\1\2>', text)
+
+    # Convert common HTML entities
+    text = text.replace('â€˜', ''').replace('â€™', ''').replace('â€œ', '"').replace('â€', '"')
+
+    # Clean up excessive line breaks
+    text = re.sub(r'<br\s*/?>\s*<br\s*/?>\s*<br\s*/?>', '<br><br>', text)
+
+    # Allow description-appropriate tags
+    allowed_tags = ['b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'ol', 'li']
+    allowed_attributes = {}  # No attributes for safety
+
+    cleaned_text = bleach.clean(text, tags=allowed_tags, attributes=allowed_attributes, strip=True)
+
+    # Clean up source citations at the end
+    cleaned_text = re.sub(r'\s*\(source:\s*[^)]+\)\s*$', '', cleaned_text, flags=re.IGNORECASE)
+
+    return cleaned_text
 
 
 @register.filter
@@ -130,3 +161,41 @@ def url_replace(context, **kwargs):
     for key, value in kwargs.items():
         query[key] = value
     return query.urlencode()
+
+
+@register.filter
+def is_valid_isbn(isbn):
+    """Check if an ISBN is valid for external API lookups."""
+    if not isbn:
+        return False
+
+    # Remove any formatting
+    clean_isbn = isbn.replace('-', '').replace(' ', '')
+
+    # Check if it's a valid length (10 or 13 digits)
+    if len(clean_isbn) not in [10, 13]:
+        return False
+
+    # Check if it contains only digits (and possibly 'X' for ISBN-10)
+    if len(clean_isbn) == 10:
+        return clean_isbn[:-1].isdigit() and (clean_isbn[-1].isdigit() or clean_isbn[-1].upper() == 'X')
+    else:  # 13 digits
+        return clean_isbn.isdigit()
+
+
+@register.filter
+def isbn_type(isbn):
+    """Return the type of ISBN (ISBN-10, ISBN-13, or Invalid)."""
+    if not isbn:
+        return "No ISBN"
+
+    clean_isbn = isbn.replace('-', '').replace(' ', '')
+
+    if len(clean_isbn) == 10:
+        if clean_isbn[:-1].isdigit() and (clean_isbn[-1].isdigit() or clean_isbn[-1].upper() == 'X'):
+            return "ISBN-10"
+    elif len(clean_isbn) == 13:
+        if clean_isbn.isdigit():
+            return "ISBN-13"
+
+    return "Invalid"
