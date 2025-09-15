@@ -7,7 +7,6 @@ information to enhance local book data.
 import logging
 import re
 import requests
-import time
 import traceback
 from PIL import Image
 from io import BytesIO
@@ -24,6 +23,7 @@ from books.utils.isbn import normalize_isbn
 from books.utils.language import normalize_language
 from books.utils.author import attach_authors
 from books.utils.cache_key import make_cache_key
+from books.scanner.rate_limiting import get_api_client
 
 logger = logging.getLogger("books.scanner")
 
@@ -144,28 +144,31 @@ def _calculate_final_confidence(source, match_confidence):
     return source.trust_level * match_confidence
 
 
-def _safe_google_request(url, cache_key=None, retries=5, backoff_factor=2, delay=2):
-    if cache_key:
-        cached = cache.get(cache_key)
-        if cached:
-            return cached
+def _safe_google_request(url, cache_key=None, retries=3):
+    """Make a rate-limited request to Google Books API."""
+    google_client = get_api_client('google_books')
+    if not google_client:
+        logger.error("Google Books API client not available")
+        return None
 
-    for attempt in range(retries):
-        response = requests.get(url, timeout=15)
-        if response.status_code == 429:
-            # More aggressive backoff for rate limiting
-            wait_time = delay * (backoff_factor ** attempt)
-            logger.warning(f"[THROTTLE] 429 from Google. Retrying in {wait_time}s (attempt {attempt+1})")
-            time.sleep(wait_time)
-            continue
-        response.raise_for_status()
-        data = response.json()
+    # Extract URL and params for the rate-limited client
+    if '?' in url:
+        base_url, query_string = url.split('?', 1)
+        params = {}
+        for param in query_string.split('&'):
+            if '=' in param:
+                key, value = param.split('=', 1)
+                params[key] = value
+    else:
+        base_url = url
+        params = {}
 
-        if cache_key:
-            cache.set(cache_key, data, timeout=10800)  # cache for 3 hours
-
-        return data
-    raise Exception("Google Books API exceeded retry limit (429 Too Many Requests)")
+    return google_client.make_request(
+        base_url,
+        params=params,
+        cache_key=cache_key,
+        cache_timeout=10800  # 3 hours
+    )
 
 
 def _safe_apify_request(actor_name, input_payload, cache_key, token, timeout=3600):
@@ -218,15 +221,25 @@ def _query_open_library_combined(book, title, author, isbn=None):
             cache_key = f"openlib_combined:{make_cache_key(title, author)}"
             logger.info(f"[OPEN LIBRARY TITLE/AUTHOR SEARCH] Title: {title}, Author: {author}")
 
-        url = f"https://openlibrary.org/search.json?q={qstring}&limit=5"
+        url = "https://openlibrary.org/search.json"
+        params = {'q': qstring, 'limit': 5}
 
-        # Try cache first
-        data = cache.get(cache_key)
+        # Use rate-limited client
+        open_library_client = get_api_client('open_library')
+        if not open_library_client:
+            logger.error("Open Library API client not available")
+            return
+
+        data = open_library_client.make_request(
+            url,
+            params=params,
+            cache_key=cache_key,
+            cache_timeout=3600  # 1 hour
+        )
+
         if not data:
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            cache.set(cache_key, data, timeout=3600)  # cache for 1 hour
+            logger.info(f"[OPEN LIBRARY] No response for query: {qstring}")
+            return
 
         docs = data.get("docs", [])
         if not docs:
@@ -292,12 +305,29 @@ def _query_google_books_combined(book, title, author, isbn=None):
             cache_key = f"gbooks_combined:{make_cache_key(title, author)}"
             logger.info(f"[GOOGLE BOOKS TITLE/AUTHOR SEARCH] Title: {title}, Author: {author}")
 
-        url = f"https://www.googleapis.com/books/v1/volumes?q={query}&maxResults=5&key={settings.GOOGLE_BOOKS_API_KEY}"
+        url = "https://www.googleapis.com/books/v1/volumes"
+        params = {
+            'q': query,
+            'maxResults': 5,
+            'key': settings.GOOGLE_BOOKS_API_KEY
+        }
 
-        data = _safe_google_request(url, cache_key)
+        # Use rate-limited client
+        google_client = get_api_client('google_books')
+        if not google_client:
+            logger.error("Google Books API client not available")
+            return
 
-        # Add small delay to respect rate limits
-        time.sleep(0.1)
+        data = google_client.make_request(
+            url,
+            params=params,
+            cache_key=cache_key,
+            cache_timeout=10800  # 3 hours
+        )
+
+        if not data:
+            logger.info(f"[GOOGLE BOOKS] No response for query: {query}")
+            return
 
         items = data.get("items", [])
 

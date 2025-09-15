@@ -2,7 +2,7 @@
 from django.test import TestCase
 from django.contrib.auth.models import User
 from unittest.mock import patch, MagicMock
-from books.models import Book, DataSource, BookMetadata, FinalMetadata
+from books.models import Book, DataSource, BookMetadata, FinalMetadata, ScanFolder
 from books.views import BookRenamerView
 
 
@@ -23,10 +23,20 @@ class ComicRenamerTests(TestCase):
 
     def create_comic_book(self, filename, series_name, issue_type='main_series', issue_number=None, publisher=None):
         """Helper to create a comic book with metadata"""
+        # Create scan folder if it doesn't exist
+        scan_folder, _ = ScanFolder.objects.get_or_create(
+            path="/test/comics/",
+            defaults={
+                'name': 'Test Comics',
+                'is_active': True
+            }
+        )
+
         book = Book.objects.create(
             file_path=f"/test/{filename}",
             file_size=1000000,
-            file_format="cbz"
+            file_format="cbz",
+            scan_folder=scan_folder  # Add required scan_folder
         )
 
         # Add final metadata
@@ -35,7 +45,8 @@ class ComicRenamerTests(TestCase):
             final_title=filename.replace('.cbz', ''),
             final_series=series_name,
             final_series_number=str(issue_number) if issue_number else None,
-            final_publisher=publisher
+            final_publisher=publisher or '',  # Provide empty string as default
+            is_reviewed=True  # Mark as reviewed for BookRenamerView filter
         )
 
         # Force update the title after auto-update
@@ -79,7 +90,7 @@ class ComicRenamerTests(TestCase):
         )
 
         result = view._generate_comic_file_path(book)
-        expected = "Comics/Marvel Comics/Spider-Man/Unknown/Spider-Man #001 - spider-man-001.cbz"
+        expected = "CBR/Nederlands/Stripalbums/Spider-Man/Spider-Man - Deel 01 - Compleet/Spider-Man - 01 - spider-man-001.cbz"
         self.assertEqual(result, expected)
 
     def test_generate_comic_file_path_annual(self):
@@ -103,7 +114,7 @@ class ComicRenamerTests(TestCase):
         )
 
         result = view._generate_comic_file_path(book)
-        expected = "Comics/Marvel Comics/Spider-Man/Annuals/Spider-Man Annual #1 - spider-man-annual-1.cbz"
+        expected = "CBR/Nederlands/Stripalbums/Spider-Man/Spider-Man - Deel 01 - Compleet/Spider-Man - A01 - spider-man-annual-1.cbz"
         self.assertEqual(result, expected)
 
     def test_generate_comic_file_path_special(self):
@@ -118,7 +129,7 @@ class ComicRenamerTests(TestCase):
         )
 
         result = view._generate_comic_file_path(book)
-        expected = "Comics/Marvel Comics/Spider-Man/Specials/Spider-Man Special - spider-man-special.cbz"
+        expected = "CBR/Nederlands/Stripalbums/Spider-Man/Spider-Man - Deel 01 - Compleet/Spider-Man - S01 - spider-man-special.cbz"
         self.assertEqual(result, expected)
 
     def test_generate_comic_file_path_collection(self):
@@ -133,7 +144,7 @@ class ComicRenamerTests(TestCase):
         )
 
         result = view._generate_comic_file_path(book)
-        expected = "Comics/Marvel Comics/Spider-Man/Collections/Spider-Man - spider-man-tpb-vol-1.cbz"
+        expected = "CBR/Nederlands/Stripalbums/Spider-Man/Spider-Man - Deel 01 - Compleet/Spider-Man - SP01 - spider-man-tpb-vol-1.cbz"
         self.assertEqual(result, expected)
 
     def test_get_comic_subfolder(self):

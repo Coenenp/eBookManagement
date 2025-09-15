@@ -20,7 +20,6 @@ from pathlib import Path
 from PIL import Image
 from django.conf import settings
 from books.models import Book, DataSource, BookTitle, BookCover, BookPublisher, Publisher, BookMetadata
-from books.utils.author import attach_authors
 
 logger = logging.getLogger("books.scanner")
 
@@ -35,15 +34,20 @@ def extract_cbr(book):
             logger.warning(f"CBR file is not a valid RAR archive: {book.file_path}")
             return None
 
-        # Extract metadata from filename
+        # Extract metadata from filename using comic-specific parsing
+        from books.scanner.parsing import parse_comic_metadata
+        filename_metadata = parse_comic_metadata(book.file_path)
+
         file_stem = Path(book.file_path).stem
-        title = _clean_comic_title(file_stem)
-        filename_metadata = _parse_filename_metadata(file_stem)
+        title = filename_metadata.get("title") or _clean_comic_title(file_stem)
 
         extracted_data = {
             "title": title,
             "source": source,
-            "format": "cbr"
+            "format": "cbr",
+            "series": filename_metadata.get("series"),
+            "series_number": filename_metadata.get("series_number"),
+            "authors": filename_metadata.get("authors", [])
         }
 
         with rarfile.RarFile(book.file_path, 'r') as rar_file:
@@ -59,6 +63,9 @@ def extract_cbr(book):
 
         # Save metadata to database
         _save_comic_metadata(book, extracted_data, filename_metadata, source)
+
+        # Try to enrich metadata with Comic Vine if available
+        _enrich_with_comicvine(book, extracted_data)
 
         logger.info(f"CBR metadata extracted: {title or 'Unknown'}")
         return extracted_data
@@ -78,15 +85,20 @@ def extract_cbz(book):
             logger.warning(f"CBZ file is not a valid ZIP archive: {book.file_path}")
             return None
 
-        # Extract metadata from filename
+        # Extract metadata from filename using comic-specific parsing
+        from books.scanner.parsing import parse_comic_metadata
+        filename_metadata = parse_comic_metadata(book.file_path)
+
         file_stem = Path(book.file_path).stem
-        title = _clean_comic_title(file_stem)
-        filename_metadata = _parse_filename_metadata(file_stem)
+        title = filename_metadata.get("title") or _clean_comic_title(file_stem)
 
         extracted_data = {
             "title": title,
             "source": source,
-            "format": "cbz"
+            "format": "cbz",
+            "series": filename_metadata.get("series"),
+            "series_number": filename_metadata.get("series_number"),
+            "authors": filename_metadata.get("authors", [])
         }
 
         with zipfile.ZipFile(book.file_path, 'r') as zip_file:
@@ -102,6 +114,9 @@ def extract_cbz(book):
 
         # Save metadata to database
         _save_comic_metadata(book, extracted_data, filename_metadata, source)
+
+        # Try to enrich metadata with Comic Vine if available
+        _enrich_with_comicvine(book, extracted_data)
 
         logger.info(f"CBZ metadata extracted: {title or 'Unknown'}")
         return extracted_data
@@ -451,6 +466,28 @@ def _save_comic_metadata(book, extracted_data, filename_metadata, source):
                 defaults={'title': title, 'confidence': source.trust_level}
             )
 
+        # Save series information if available
+        series_name = extracted_data.get('series')
+        series_number = extracted_data.get('series_number')
+        if series_name:
+            from books.models import Series, BookSeries
+            series_obj, _ = Series.objects.get_or_create(name=series_name)
+            BookSeries.objects.get_or_create(
+                book=book,
+                series=series_obj,
+                source=source,
+                defaults={
+                    'series_number': str(series_number) if series_number else '',
+                    'confidence': source.trust_level
+                }
+            )
+
+        # Save authors from filename parsing
+        authors_list = extracted_data.get('authors', [])
+        if authors_list:
+            from books.utils.author import attach_authors
+            attach_authors(book, authors_list, source, confidence=source.trust_level)
+
         # Save publisher if available
         publisher_name = extracted_data.get('publisher')
         if publisher_name:
@@ -462,19 +499,33 @@ def _save_comic_metadata(book, extracted_data, filename_metadata, source):
                 defaults={'confidence': source.trust_level}
             )
 
-        # Save authors if available (writers, pencillers, etc.)
+        # Save authors if available (writers, pencillers, etc. from ComicInfo.xml)
         author_fields = ['writer', 'penciller', 'inker', 'colorist', 'letterer']
-        all_authors = []
+        comic_info_authors = []
 
         for field in author_fields:
             if field in extracted_data:
                 # Split multiple authors by comma or semicolon
                 import re
                 authors = re.split(r'[,;]', extracted_data[field])
-                all_authors.extend([author.strip() for author in authors if author.strip()])
+                comic_info_authors.extend([author.strip() for author in authors if author.strip()])
 
-        if all_authors:
-            attach_authors(book, all_authors, source, confidence=source.trust_level)
+        # Add comic info authors to the main authors list if we don't have any from filename
+        if comic_info_authors and not authors_list:
+            from books.utils.author import attach_authors
+            attach_authors(book, comic_info_authors, source, confidence=source.trust_level)
+
+        # Add language from scan folder for comics
+        if hasattr(book, 'scan_folder') and book.scan_folder and book.scan_folder.language:
+            BookMetadata.objects.get_or_create(
+                book=book,
+                field_name='language',
+                source=source,
+                defaults={
+                    'field_value': book.scan_folder.language,
+                    'confidence': 0.9  # High confidence since it's user-configured
+                }
+            )
 
         # Save additional metadata
         metadata_fields = {
@@ -700,3 +751,52 @@ def get_comic_series_list():
         })
 
     return series_list
+
+
+def _enrich_with_comicvine(book, extracted_data):
+    """Enrich comic metadata using Comic Vine API"""
+    try:
+        from django.conf import settings
+
+        # Check if Comic Vine API key is configured
+        if not hasattr(settings, 'COMICVINE_API_KEY') or not settings.COMICVINE_API_KEY:
+            logger.debug("Comic Vine API key not configured, skipping Comic Vine enrichment")
+            return
+
+        # Import Comic Vine API wrapper
+        from books.scanner.extractors.comicvine import ComicVineAPI
+
+        api = ComicVineAPI()
+
+        # Build search query from extracted data
+        series_name = extracted_data.get('series')
+        issue_number = extracted_data.get('series_number') or extracted_data.get('issue')
+        title = extracted_data.get('title')
+
+        # Prefer series + issue number for search
+        if series_name and issue_number:
+            search_query = f"{series_name} #{issue_number}"
+        elif series_name:
+            search_query = series_name
+        elif title:
+            search_query = title
+        else:
+            logger.debug(f"No suitable search terms for Comic Vine API for book {book.id}")
+            return
+
+        logger.info(f"Searching Comic Vine for: {search_query}")
+
+        # Search for the issue
+        issue_result = api.search_issue(search_query)
+
+        if issue_result:
+            logger.info(f"Found Comic Vine match for {search_query}: {issue_result.get('name', 'Unknown')}")
+            # Save Comic Vine metadata to database
+            api.save_comic_metadata(book, issue_result)
+        else:
+            logger.debug(f"No Comic Vine results found for {search_query}")
+
+    except ImportError:
+        logger.warning("Comic Vine API wrapper not available, skipping Comic Vine enrichment")
+    except Exception as e:
+        logger.warning(f"Error enriching comic metadata with Comic Vine: {e}")

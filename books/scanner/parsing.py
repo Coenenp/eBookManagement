@@ -2,6 +2,7 @@
 
 This module provides functions for parsing ebook filenames to extract
 metadata like titles, authors, series information, and publication data.
+Enhanced with AI-powered pattern recognition.
 """
 import re
 from pathlib import Path
@@ -141,3 +142,165 @@ def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
             metadata["series_number"] = series_number
 
     return metadata
+
+
+def parse_comic_metadata(file_path: str) -> Dict[str, Optional[str]]:
+    """Specialized parsing for comic book files (CBR/CBZ).
+
+    Handles common comic filename patterns like:
+    - Series - Issue# - Title (extra info)
+    - Series Issue# Title
+
+    And extracts folder-based author information from known comic creators.
+    """
+    path = Path(file_path)
+    base_name = path.stem.replace('_', ' ').strip()
+
+    metadata = {
+        "title": None,
+        "authors": [],
+        "series": None,
+        "series_number": None
+    }
+
+    # Comic-specific patterns
+    comic_patterns = [
+        # "De Rode Ridder - 271 - De kruisvaarder (Digitale rip)"
+        r'^(?P<series>.+?)\s+-\s+(?P<num>\d{1,3}(?:\.\d+)?)\s+-\s+(?P<title>.+?)(?:\s+\([^)]*\))?$',
+        # "Batman 15 - The Dark Knight Returns"
+        r'^(?P<series>.+?)\s+(?P<num>\d{1,3}(?:\.\d+)?)\s+-\s+(?P<title>.+)$',
+        # "Superman #42 Return of Doomsday"
+        r'^(?P<series>.+?)\s+#(?P<num>\d{1,3}(?:\.\d+)?)\s+(?P<title>.+)$',
+        # "X-Men Issue 100"
+        r'^(?P<series>.+?)\s+Issue\s+(?P<num>\d{1,3}(?:\.\d+)?)\s+(?P<title>.+)$',
+    ]
+
+    # Try comic-specific patterns first
+    for pattern in comic_patterns:
+        match = re.match(pattern, base_name, re.IGNORECASE)
+        if match:
+            groups = match.groupdict()
+            metadata["series"] = groups.get("series", "").strip()
+            metadata["title"] = groups.get("title", "").strip()
+            if "num" in groups:
+                try:
+                    metadata["series_number"] = float(groups["num"])
+                except ValueError:
+                    pass
+            break
+
+    # If no comic pattern matched, fall back to basic extraction
+    if not metadata["series"] and not metadata["title"]:
+        # Extract series and issue number from any format
+        series_match = re.match(r'^(.+?)\s+(\d{1,3}(?:\.\d+)?)', base_name)
+        if series_match:
+            metadata["series"] = series_match.group(1).strip()
+            try:
+                metadata["series_number"] = float(series_match.group(2))
+            except ValueError:
+                pass
+        else:
+            metadata["title"] = base_name
+
+    # Extract author from folder structure for known comic creators
+    folder_clues = extract_folder_clues(path)
+    comic_authors = _extract_comic_author_from_folders(path)
+
+    # Prefer comic-specific author detection
+    metadata["authors"] = comic_authors or folder_clues.get("all_authors", [])
+
+    return metadata
+
+
+def _extract_comic_author_from_folders(path: Path) -> List[str]:
+    """Extract comic book author from folder structure using known creators."""
+    # Known comic creators and their series
+    known_creators = {
+        'willy vandersteen': ['de rode ridder', 'suske en wiske', 'bessy'],
+        'marc sleen': ['nero'],
+        'stan lee': ['spider-man', 'x-men', 'fantastic four', 'iron man', 'hulk'],
+        'frank miller': ['sin city', 'daredevil', 'batman dark knight'],
+        'alan moore': ['watchmen', 'v for vendetta', 'league of extraordinary gentlemen'],
+        'neil gaiman': ['sandman', 'american gods'],
+        'grant morrison': ['batman', 'new x-men'],
+        'hergé': ['tintin', 'kuifje'],
+        'peyo': ['smurf', 'smurfen'],
+        'morris': ['lucky luke'],
+        'goscinny': ['asterix', 'lucky luke'],
+        'uderzo': ['asterix'],
+    }
+
+    folders = [p.name.replace('_', ' ').strip().lower() for p in path.parents[:4]]
+
+    # Check folder names for creator names or series
+    for folder_name in folders:
+        # Direct creator name match
+        for creator, series_list in known_creators.items():
+            if creator in folder_name:
+                return [creator.title()]
+
+            # Check if any of the creator's series appear in folder structure
+            for series in series_list:
+                if series in folder_name:
+                    return [creator.title()]
+
+    return []
+
+
+def parse_path_metadata_with_ai(file_path: str, ai_recognizer=None) -> Dict[str, Optional[str]]:
+    """Enhanced parsing that combines traditional pattern matching with AI predictions."""
+    # Get traditional parsing results
+    traditional_metadata = parse_path_metadata(file_path)
+
+    # If AI recognizer is not available, return traditional results
+    if not ai_recognizer:
+        return traditional_metadata
+
+    try:
+        # Get AI predictions
+        filename = Path(file_path).stem
+        ai_predictions = ai_recognizer.predict_metadata(filename)
+
+        # Combine traditional and AI results with confidence-based selection
+        enhanced_metadata = traditional_metadata.copy()
+        ai_confidence_used = {}
+
+        for field, (ai_value, confidence) in ai_predictions.items():
+            # Map AI field names to our metadata keys
+            field_mapping = {
+                'title': 'title',
+                'author': 'authors',
+                'series': 'series',
+                'volume': 'series_number'
+            }
+
+            if field in field_mapping:
+                metadata_key = field_mapping[field]
+
+                # Use AI prediction if confident and traditional method didn't find anything
+                # or if AI is highly confident (> 0.8)
+                should_use_ai = (
+                    confidence >= ai_recognizer.confidence_threshold and
+                    (not enhanced_metadata.get(metadata_key) or confidence > 0.8)
+                )
+
+                if should_use_ai and ai_value.strip():
+                    if metadata_key == 'authors':
+                        # Handle authors specially - split and normalize
+                        enhanced_metadata[metadata_key] = normalize_surnames(split_authors(ai_value))
+                    else:
+                        enhanced_metadata[metadata_key] = ai_value.strip()
+
+                    ai_confidence_used[field] = confidence
+
+        # Add metadata source information
+        enhanced_metadata['_ai_used'] = ai_confidence_used
+
+        return enhanced_metadata
+
+    except Exception as e:
+        # If AI processing fails, fall back to traditional parsing
+        import logging
+        logger = logging.getLogger("books.scanner")
+        logger.warning(f"AI parsing failed for '{file_path}': {e}")
+        return traditional_metadata

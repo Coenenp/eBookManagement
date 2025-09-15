@@ -200,6 +200,9 @@ LOGIN_URL = '/login/'
 # Google Books API Key
 GOOGLE_BOOKS_API_KEY = os.getenv('GOOGLE_BOOKS_API_KEY')
 
+# Comic Vine API Key
+COMICVINE_API_KEY = os.getenv('COMICVINE_API_KEY')
+
 # Logging configuration
 LOGGING = {
     'version': 1,

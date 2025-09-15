@@ -184,12 +184,16 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
     logger.info(f"[INTERNAL METADATA PARSE] Path: {book.file_path}")
     _extract_internal_metadata(book)
 
-    logger.info(f"[CONTENT ISBN SCAN] Path: {book.file_path}")
-    try:
-        from books.scanner.extractors.content_isbn import save_content_isbns
-        save_content_isbns(book)
-    except Exception as e:
-        logger.warning(f"Content ISBN extraction failed: {str(e)}")
+    # Skip ISBN scanning for comic books (CBR/CBZ don't typically have ISBNs)
+    is_comic = book.file_format.lower() in ['cbr', 'cbz']
+
+    if not is_comic:
+        logger.info(f"[CONTENT ISBN SCAN] Path: {book.file_path}")
+        try:
+            from books.scanner.extractors.content_isbn import save_content_isbns
+            save_content_isbns(book)
+        except Exception as e:
+            logger.warning(f"Content ISBN extraction failed: {str(e)}")
 
     logger.info(f"[OPF PARSE] Path: {book.file_path}")
     if book.opf_path:
@@ -200,8 +204,12 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
             book.is_corrupted = True
             book.save()
 
-    logger.info(f"[METADATA and COVER CANDIDATES QUERY] Path: {book.file_path}")
-    query_metadata_and_covers(book)
+    # Skip external metadata queries for comic books
+    if not is_comic:
+        logger.info(f"[METADATA and COVER CANDIDATES QUERY] Path: {book.file_path}")
+        query_metadata_and_covers(book)
+    else:
+        logger.info(f"[SKIPPING EXTERNAL QUERIES] Comic book detected: {book.file_path}")
 
     try:
         logger.info(f"[FINAL METADATA RESOLVE] Path: {book.file_path}")
@@ -218,7 +226,14 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
 
 def _extract_filename_metadata(book):
     source = DataSource.objects.get(name=DataSource.FILENAME)
-    parsed = parse_path_metadata(book.file_path)
+
+    # Use comic-specific parsing for comic books
+    is_comic = book.file_format.lower() in ['cbr', 'cbz']
+    if is_comic:
+        from books.scanner.parsing import parse_comic_metadata
+        parsed = parse_comic_metadata(book.file_path)
+    else:
+        parsed = parse_path_metadata(book.file_path)
 
     # 🎯 Debug output for filename parsing
     logger.info(f"[FILENAME PARSE] Parsed title: {parsed.get('title')}")

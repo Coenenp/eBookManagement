@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from books.models import ScanStatus, ScanFolder
 from books.scanner.folder import scan_directory
+from books.scanner.ai import initialize_ai_system
 
 logger = logging.getLogger("books.scanner")
 
@@ -15,6 +16,10 @@ class EbookScanner:
         self.resume = resume
         self.cover_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
         self.ebook_extensions = {".epub", ".mobi", ".pdf", ".azw", ".azw3", ".cbr", ".cbz"}
+
+        # Initialize AI filename recognition system
+        self.ai_recognizer = None
+        self._initialize_ai_system()
 
     def run(self, folder_path=None):
         # Handle resume mode
@@ -260,3 +265,68 @@ class EbookScanner:
                     logger.info(f"Completed metadata for {i}/{len(all_incomplete_books)} books")
         else:
             logger.info("No incomplete metadata books found")
+
+    def _initialize_ai_system(self):
+        """Initialize the AI filename recognition system."""
+        try:
+            self.ai_recognizer = initialize_ai_system()
+            if self.ai_recognizer:
+                logger.info("AI filename recognition system initialized successfully")
+            else:
+                logger.info("AI system not available (insufficient training data)")
+        except Exception as e:
+            logger.error(f"Failed to initialize AI system: {e}")
+            self.ai_recognizer = None
+
+    def predict_metadata_with_ai(self, filename: str) -> dict:
+        """Use AI to predict metadata from filename."""
+        if not self.ai_recognizer:
+            return {}
+
+        try:
+            predictions = self.ai_recognizer.predict_metadata(filename)
+
+            # Convert to standard format and filter by confidence
+            ai_metadata = {}
+            for field, (value, confidence) in predictions.items():
+                if confidence >= self.ai_recognizer.confidence_threshold and value.strip():
+                    ai_metadata[field] = {
+                        'value': value.strip(),
+                        'confidence': confidence,
+                        'source': 'ai_prediction'
+                    }
+
+            if ai_metadata:
+                logger.info(f"AI predicted metadata for '{filename}': {list(ai_metadata.keys())}")
+
+            return ai_metadata
+
+        except Exception as e:
+            logger.error(f"AI prediction failed for '{filename}': {e}")
+            return {}
+
+    def is_ai_prediction_confident(self, filename: str) -> bool:
+        """Check if AI prediction is confident enough to trust."""
+        if not self.ai_recognizer:
+            return False
+
+        try:
+            predictions = self.ai_recognizer.predict_metadata(filename)
+            return self.ai_recognizer.is_prediction_confident(predictions)
+        except Exception as e:
+            logger.error(f"Error checking AI confidence for '{filename}': {e}")
+            return False
+
+    def retrain_ai_with_feedback(self, feedback_data: list):
+        """Retrain AI models with user feedback."""
+        if not self.ai_recognizer:
+            logger.warning("AI system not available for retraining")
+            return {}
+
+        try:
+            results = self.ai_recognizer.retrain_with_feedback(feedback_data)
+            logger.info(f"AI models retrained with feedback. Results: {results}")
+            return results
+        except Exception as e:
+            logger.error(f"AI retraining failed: {e}")
+            return {}

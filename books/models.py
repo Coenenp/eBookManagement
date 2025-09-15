@@ -51,6 +51,7 @@ class DataSource(models.Model):
     OPF_FILE = 'OPF File'
     OPEN_LIBRARY = 'Open Library'
     GOOGLE_BOOKS = 'Google Books'
+    COMICVINE = 'Comic Vine'
     OPEN_LIBRARY_COVERS = 'Open Library Covers'
     GOOGLE_BOOKS_COVERS = 'Google Books Covers'
     ORIGINAL_SCAN = 'Original Scan'
@@ -65,6 +66,7 @@ class DataSource(models.Model):
         (OPF_FILE, 'OPF File'),
         (OPEN_LIBRARY, 'Open Library'),
         (GOOGLE_BOOKS, 'Google Books'),
+        (COMICVINE, 'Comic Vine'),
         (OPEN_LIBRARY_COVERS, 'Open Library Covers'),
         (GOOGLE_BOOKS_COVERS, 'Google Books Covers'),
         (ORIGINAL_SCAN, 'Original Scan'),
@@ -884,3 +886,68 @@ class FileOperation(models.Model):
 
     def __str__(self):
         return f"{self.operation_type} - {self.book.finalmetadata.final_title if self.book.finalmetadata else self.book.id} - {self.status}"
+
+
+class AIFeedback(models.Model):
+    """Store user feedback on AI predictions for model improvement."""
+
+    RATING_CHOICES = [
+        (1, 'Poor - Completely wrong'),
+        (2, 'Fair - Some correct elements'),
+        (3, 'Good - Mostly correct'),
+        (4, 'Very Good - Almost perfect'),
+        (5, 'Excellent - Perfect prediction'),
+    ]
+
+    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='ai_feedback')
+    user = models.ForeignKey('auth.User', on_delete=models.CASCADE)
+
+    # Original context
+    original_filename = models.CharField(max_length=500, help_text='Original filename used for AI prediction')
+    ai_predictions = models.TextField(help_text='JSON of AI predictions for each field')
+    prediction_confidence = models.FloatField(null=True, blank=True, help_text='Overall AI prediction confidence')
+
+    # User corrections
+    user_corrections = models.TextField(help_text='JSON of user corrections to AI predictions')
+    feedback_rating = models.IntegerField(
+        choices=RATING_CHOICES,
+        help_text='User rating of AI prediction quality'
+    )
+    comments = models.TextField(blank=True, help_text='Additional user feedback or comments')
+
+    # Training status
+    needs_retraining = models.BooleanField(default=True, help_text='Whether this feedback should be used for retraining')
+    processed_for_training = models.BooleanField(default=False, help_text='Whether this feedback was used in training')
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'books_aifeedback'
+        ordering = ['-created_at']
+        unique_together = ['book', 'user']  # One feedback per book per user
+
+    def __str__(self):
+        return f"AI Feedback for {self.book.finalmetadata.final_title if self.book.finalmetadata else self.book.id} - Rating: {self.feedback_rating}"
+
+    def get_ai_predictions_dict(self):
+        """Parse AI predictions JSON safely."""
+        import json
+        try:
+            return json.loads(self.ai_predictions)
+        except (json.JSONDecodeError, ValueError):
+            return {}
+
+    def get_user_corrections_dict(self):
+        """Parse user corrections JSON safely."""
+        import json
+        try:
+            return json.loads(self.user_corrections)
+        except (json.JSONDecodeError, ValueError):
+            return {}
+
+    def get_accuracy_score(self):
+        """Calculate accuracy score based on rating."""
+        # Convert 1-5 rating to 0-1 accuracy score
+        return (self.feedback_rating - 1) / 4.0

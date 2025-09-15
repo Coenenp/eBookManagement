@@ -25,6 +25,7 @@ def ensure_data_sources():
     sources = [
         (DataSource.MANUAL, 1.0),              # Highest - Human verification
         (DataSource.OPEN_LIBRARY, 0.95),      # Very High - Curated database
+        (DataSource.COMICVINE, 0.9),          # Very High - Professional comic database
         (DataSource.OPF_FILE, 0.9),           # High - Official metadata files
         (DataSource.CONTENT_SCAN, 0.85),      # High - Direct from book content
         (DataSource.EPUB_INTERNAL, 0.8),      # Good - Well-structured format

@@ -2074,44 +2074,40 @@ class BookRenamerView(LoginRequiredMixin, ListView):
         return cleaned if cleaned else "Unknown"
 
     def _generate_comic_file_path(self, book):
-        """Generate file path specifically for comic book archives (CBR/CBZ) with issue type organization."""
+        """Generate file path specifically for comic book archives (CBR/CBZ) with hierarchical organization."""
         try:
-            base_library = "Comics"
+            base_library = "CBR"  # Changed from "Comics" to match your structure
             file_extension = book.file_format.lower() if book.file_format else "cbz"
 
             # Get comic-specific metadata
             comic_metadata = self._get_comic_metadata(book)
+
+            # Language detection (prefer from metadata, fallback to final_metadata)
+            language = self._get_comic_language(book, comic_metadata)
+            language_folder = self._map_language_to_folder(language)
+
+            # Content type organization (similar to ebook structure)
+            content_type = "Stripalbums"  # Could be expanded: Strips, Magazines, etc.
 
             # Series name (required for comics)
             series_name = comic_metadata.get('series') or self._extract_series_from_title(book)
             if not series_name:
                 series_name = "Unknown Series"
 
-            # Get issue type to determine folder structure
-            issue_type = comic_metadata.get('issue_type', 'main_series')
-
-            # Publisher (optional grouping)
-            publisher = comic_metadata.get('publisher')
-
             # Clean series name for folder
             series_folder = self._clean_filename(series_name)
 
-            # Determine subfolder based on issue type
-            subfolder = self._get_comic_subfolder(issue_type, comic_metadata)
+            # Determine collection status and subfolder
+            collection_status = self._analyze_series_completion_status(book, comic_metadata)
+            series_subfolder = f"{series_folder} - {collection_status}"
 
-            # Generate filename based on issue type
-            filename = self._generate_comic_filename(issue_type, comic_metadata, series_name, book)
+            # Generate filename based on issue type and numbering
+            filename = self._generate_comic_filename_enhanced(comic_metadata, series_name, book)
 
-            # Construct full path
-            if publisher and publisher.strip():
-                # Structure: Comics/[Publisher]/[Series]/[Subfolder]/filename
-                publisher_folder = self._clean_filename(publisher)
-                folder_path = f"{base_library}/{publisher_folder}/{series_folder}/{subfolder}"
-            else:
-                # Structure: Comics/[Series]/[Subfolder]/filename
-                folder_path = f"{base_library}/{series_folder}/{subfolder}"
-
+            # Construct hierarchical path: CBR/[Language]/[ContentType]/[Series]/[SeriesStatus]/filename
+            folder_path = f"{base_library}/{language_folder}/{content_type}/{series_folder}/{series_subfolder}"
             new_file_path = f"{folder_path}/{filename}.{file_extension}"
+
             return new_file_path
 
         except Exception:
@@ -2119,9 +2115,244 @@ class BookRenamerView(LoginRequiredMixin, ListView):
             try:
                 title = book.finalmetadata.final_title or "Unknown Comic"
                 filename_base = self._clean_filename(title)
-                return f"Comics/Unknown Series/Unknown/{filename_base}.{book.file_format.lower() or 'cbz'}"
+                return f"CBR/Nederlands/Stripalbums/Unknown Series/Unknown Series - Unknown/{filename_base}.{book.file_format.lower() or 'cbz'}"
             except Exception:
-                return f"Comics/Unknown Series/Unknown/unknown_comic.{book.file_format.lower() or 'cbz'}"
+                return f"CBR/Nederlands/Stripalbums/Unknown Series/Unknown Series - Unknown/unknown_comic.{book.file_format.lower() or 'cbz'}"
+
+    def _get_comic_language(self, book, comic_metadata):
+        """Determine comic language from metadata or final metadata."""
+        # Check metadata first
+        language = comic_metadata.get('language')
+        if language:
+            return language
+
+        # Check final metadata
+        if hasattr(book, 'finalmetadata') and book.finalmetadata:
+            if book.finalmetadata.language:
+                return book.finalmetadata.language
+
+        # Default to Dutch for comics (can be made configurable)
+        return 'nl'
+
+    def _map_language_to_folder(self, language_code):
+        """Map language codes to folder names."""
+        language_mapping = {
+            'nl': 'Nederlands',
+            'en': 'English',
+            'fr': 'Francais',
+            'de': 'Deutsch',
+            'es': 'Espanol',
+            'it': 'Italiano',
+            'pt': 'Portugues',
+            'ja': 'Japanese',
+            'ko': 'Korean',
+            'zh': 'Chinese',
+            'ru': 'Russian',
+            'pl': 'Polish',
+            'sv': 'Svenska',
+            'da': 'Dansk',
+            'no': 'Norsk'
+        }
+        return language_mapping.get(language_code, 'Nederlands')
+
+    def _analyze_series_completion_status(self, book, comic_metadata):
+        """Analyze series completion status for folder naming."""
+        series_name = comic_metadata.get('series')
+        if not series_name:
+            return "Unknown"
+
+        # Get all books in this series (including the current book being processed)
+        series_books = Book.objects.filter(
+            finalmetadata__final_series=series_name,
+            file_format__in=['cbr', 'cbz']
+        ).select_related('finalmetadata')
+
+        if not series_books.exists():
+            return "Unknown"
+
+        # For single book series, just use simple naming
+        if series_books.count() == 1:
+            # Check if we can extract an issue number
+            issue_num = self._extract_issue_number(comic_metadata, book)
+            return f"Deel {issue_num:02d} - Compleet"
+
+        # Analyze issue numbers to determine range and completeness
+        issue_numbers = []
+        total_books = series_books.count()
+
+        for series_book in series_books:
+            # Try to get issue number from metadata or series number
+            issue_num = None
+            series_book_metadata = self._get_comic_metadata(series_book)
+
+            if 'issue_number' in series_book_metadata:
+                try:
+                    issue_num = int(float(str(series_book_metadata['issue_number'])))
+                except (ValueError, TypeError):
+                    pass
+
+            if issue_num is None and series_book.finalmetadata.final_series_number:
+                try:
+                    issue_num = int(float(str(series_book.finalmetadata.final_series_number)))
+                except (ValueError, TypeError):
+                    pass
+
+            if issue_num is not None:
+                issue_numbers.append(issue_num)
+
+        if not issue_numbers:
+            return f"Deel 01-{total_books:02d} - (Unknown)"
+
+        # Sort and analyze range
+        issue_numbers.sort()
+        min_issue = min(issue_numbers)
+        max_issue = max(issue_numbers)
+
+        # Check for completeness (are all numbers in range present?)
+        expected_count = max_issue - min_issue + 1
+        is_complete = len(issue_numbers) == expected_count and len(set(issue_numbers)) == len(issue_numbers)
+
+        # Format the range
+        if min_issue == max_issue:
+            range_str = f"Deel {min_issue:02d}"
+        else:
+            range_str = f"Deel {min_issue:02d}-{max_issue:02d}"
+
+        # Add completion status
+        if is_complete:
+            status = "Compleet"
+        else:
+            # Check if we have significant gaps or it's clearly incomplete
+            missing_count = expected_count - len(issue_numbers)
+            if missing_count > len(issue_numbers) * 0.5:  # More than 50% missing
+                status = "Incomplete"
+            else:
+                status = f"({len(issue_numbers)}/{expected_count})"
+
+        return f"{range_str} - {status}"
+
+    def _generate_comic_filename_enhanced(self, comic_metadata, series_name, book):
+        """Generate enhanced filename for comics with proper numbering."""
+        from pathlib import Path
+
+        clean_series = self._clean_filename(series_name)
+
+        # Get the original title for the filename
+        title = comic_metadata.get('title') or book.finalmetadata.final_title or ""
+
+        # Try to extract issue number and title from various sources
+        issue_number = self._extract_issue_number(comic_metadata, book)
+
+        # Handle special issue types (annuals, specials, etc.)
+        issue_type = comic_metadata.get('issue_type', 'main_series')
+
+        if issue_type == 'annual':
+            annual_number = comic_metadata.get('annual_number', 1)
+            base_name = f"{clean_series} - A{annual_number:02d}"
+        elif issue_type in ['special', 'holiday_special']:
+            # For specials, use S prefix
+            special_number = self._extract_special_number(title, comic_metadata)
+            base_name = f"{clean_series} - S{special_number:02d}"
+        elif issue_type in ['collection', 'one_shot']:
+            base_name = f"{clean_series} - SP01"
+        else:
+            # Main series - use standard numbering
+            if issue_number:
+                base_name = f"{clean_series} - {issue_number:02d}"
+            else:
+                base_name = f"{clean_series} - 01"
+
+        # For the main filename, always include the original cleaned title
+        # This matches your example: "Spider-Man - 01 - spider-man-001"
+        original_filename = Path(book.file_path).stem if book.file_path else "unknown"
+        clean_original = self._clean_filename(original_filename)
+
+        filename = f"{base_name} - {clean_original}"
+
+        return filename
+
+    def _extract_issue_number(self, comic_metadata, book):
+        """Extract issue number from various sources."""
+        # Try metadata first
+        if 'issue_number' in comic_metadata:
+            try:
+                return int(float(str(comic_metadata['issue_number'])))
+            except (ValueError, TypeError):
+                pass
+
+        # Try final metadata series number
+        if book.finalmetadata.final_series_number:
+            try:
+                return int(float(str(book.finalmetadata.final_series_number)))
+            except (ValueError, TypeError):
+                pass
+
+        # Try to extract from title
+        title = comic_metadata.get('title') or book.finalmetadata.final_title or ""
+        import re
+
+        # Look for patterns like "Deel 03", "#03", "Issue 3", etc.
+        patterns = [
+            r'Deel\s+(\d+)',
+            r'#(\d+)',
+            r'Issue\s+(\d+)',
+            r'Nr\.?\s*(\d+)',
+            r'Number\s+(\d+)',
+            r'\b(\d+)\b'  # Any standalone number (last resort)
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, title, re.IGNORECASE)
+            if match:
+                try:
+                    return int(match.group(1))
+                except (ValueError, TypeError):
+                    continue
+
+        return 1  # Default to issue 1
+
+    def _extract_issue_title(self, full_title, series_name):
+        """Extract the specific issue title from the full title."""
+        if not full_title:
+            return ""
+
+        import re
+
+        # Remove series name from title if it's at the beginning
+        title = full_title
+        if series_name and title.lower().startswith(series_name.lower()):
+            title = title[len(series_name):].strip()
+
+        # Remove common prefixes like "Deel", "#", "Issue", etc.
+        title = re.sub(r'^(Deel\s+\d+\s*[-:]?\s*)', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'^(#\d+\s*[-:]?\s*)', '', title)
+        title = re.sub(r'^(Issue\s+\d+\s*[-:]?\s*)', '', title, flags=re.IGNORECASE)
+        title = re.sub(r'^(Nr\.?\s*\d+\s*[-:]?\s*)', '', title, flags=re.IGNORECASE)
+
+        # Clean up and return
+        title = title.strip(' -:')
+        return title if len(title) > 2 else ""  # Only return if meaningful
+
+    def _extract_special_number(self, title, comic_metadata):
+        """Extract special issue number or assign next available."""
+        import re
+
+        # Look for special numbering in title
+        patterns = [
+            r'S(\d+)',
+            r'Special\s+(\d+)',
+            r'Sp\.?\s*(\d+)'
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, title, re.IGNORECASE)
+            if match:
+                try:
+                    return int(match.group(1))
+                except (ValueError, TypeError):
+                    continue
+
+        return 1  # Default to special #1
 
     def _get_comic_metadata(self, book):
         """Retrieve comic-specific metadata from BookMetadata model."""
@@ -3636,3 +3867,277 @@ def isbn_lookup(request, isbn):
             'success': False,
             'error': f'ISBN lookup failed: {str(e)}'
         })
+
+
+# =============================================================================
+# AI FEEDBACK VIEWS
+# =============================================================================
+
+
+class AIFeedbackListView(LoginRequiredMixin, ListView):
+    """View for displaying AI predictions that need user feedback."""
+    model = Book
+    template_name = 'books/ai_feedback_list.html'
+    context_object_name = 'books'
+    paginate_by = 50
+
+    def get_queryset(self):
+        """Get books with AI predictions that need feedback."""
+
+        # Get books that have AI predictions but may need correction
+        ai_books = Book.objects.filter(
+            metadata__source__name='filename_ai',
+            metadata__is_active=True,
+            finalmetadata__isnull=False
+        ).select_related('finalmetadata').distinct()
+
+        # Filter by confidence if specified
+        confidence_filter = self.request.GET.get('confidence')
+        if confidence_filter == 'low':
+            ai_books = ai_books.filter(finalmetadata__overall_confidence__lt=0.6)
+        elif confidence_filter == 'medium':
+            ai_books = ai_books.filter(
+                finalmetadata__overall_confidence__gte=0.6,
+                finalmetadata__overall_confidence__lt=0.8
+            )
+        elif confidence_filter == 'high':
+            ai_books = ai_books.filter(finalmetadata__overall_confidence__gte=0.8)
+
+        # Filter by review status
+        review_status = self.request.GET.get('status')
+        if review_status == 'needs_review':
+            ai_books = ai_books.filter(finalmetadata__is_reviewed=False)
+        elif review_status == 'reviewed':
+            ai_books = ai_books.filter(finalmetadata__is_reviewed=True)
+
+        return ai_books.order_by('-finalmetadata__overall_confidence')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Add filter options
+        context['confidence_filter'] = self.request.GET.get('confidence', '')
+        context['status_filter'] = self.request.GET.get('status', '')
+
+        # Add statistics
+
+        ai_books = Book.objects.filter(
+            metadata__source__name='filename_ai',
+            metadata__is_active=True,
+            finalmetadata__isnull=False
+        ).select_related('finalmetadata').distinct()
+
+        context['stats'] = {
+            'total_ai_predictions': ai_books.count(),
+            'low_confidence': ai_books.filter(finalmetadata__overall_confidence__lt=0.6).count(),
+            'medium_confidence': ai_books.filter(
+                finalmetadata__overall_confidence__gte=0.6,
+                finalmetadata__overall_confidence__lt=0.8
+            ).count(),
+            'high_confidence': ai_books.filter(finalmetadata__overall_confidence__gte=0.8).count(),
+            'needs_review': ai_books.filter(finalmetadata__is_reviewed=False).count(),
+            'reviewed': ai_books.filter(finalmetadata__is_reviewed=True).count(),
+        }
+
+        return context
+
+
+class AIFeedbackDetailView(LoginRequiredMixin, DetailView):
+    """Detailed view for reviewing and correcting AI predictions."""
+    model = Book
+    template_name = 'books/ai_feedback_detail.html'
+    context_object_name = 'book'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        book = self.object
+
+        # Get AI predictions
+        ai_metadata = book.metadata.filter(
+            source__name='filename_ai',
+            is_active=True
+        ).values('field_name', 'field_value', 'confidence')
+
+        # Organize AI predictions by field
+        ai_predictions = {}
+        for meta in ai_metadata:
+            field_name = meta['field_name']
+            if field_name.startswith('ai_'):
+                field_name = field_name[3:]  # Remove 'ai_' prefix
+
+            ai_predictions[field_name] = {
+                'value': meta['field_value'],
+                'confidence': meta['confidence']
+            }
+
+        context['ai_predictions'] = ai_predictions
+
+        # Get original filename for context
+        context['original_filename'] = os.path.basename(book.file_path) if book.file_path else book.filename
+
+        # Get current final metadata
+        if hasattr(book, 'finalmetadata'):
+            context['current_metadata'] = {
+                'title': book.finalmetadata.final_title,
+                'author': book.finalmetadata.final_author,
+                'series': book.finalmetadata.final_series,
+                'volume': book.finalmetadata.final_series_number,
+                'is_reviewed': book.finalmetadata.is_reviewed,
+                'confidence': book.finalmetadata.overall_confidence
+            }
+        else:
+            context['current_metadata'] = {}
+
+        return context
+
+
+@ajax_response_handler
+@require_POST
+def ajax_submit_ai_feedback(request, book_id):
+    """Submit feedback for AI predictions."""
+    try:
+        book = get_object_or_404(Book, id=book_id)
+        data = request.json
+
+        corrections = data.get('corrections', {})
+        rating = data.get('rating')  # Overall rating of AI prediction quality
+        comments = data.get('comments', '')
+
+        # Store the feedback
+        from books.models import AIFeedback
+
+        feedback = AIFeedback.objects.create(
+            book=book,
+            user=request.user,
+            original_filename=os.path.basename(book.file_path) if book.file_path else book.filename,
+            ai_predictions=json.dumps(data.get('ai_predictions', {})),
+            user_corrections=json.dumps(corrections),
+            feedback_rating=rating,
+            comments=comments,
+            prediction_confidence=data.get('prediction_confidence')
+        )
+
+        # Update final metadata with corrections if provided
+        if corrections and hasattr(book, 'finalmetadata'):
+            fm = book.finalmetadata
+
+            if 'title' in corrections:
+                fm.final_title = corrections['title']
+            if 'author' in corrections:
+                fm.final_author = corrections['author']
+            if 'series' in corrections:
+                fm.final_series = corrections['series']
+            if 'volume' in corrections:
+                fm.final_series_number = corrections['volume']
+
+            fm.is_reviewed = True
+            fm.save()
+
+        # Mark this feedback for model retraining
+        feedback.needs_retraining = True
+        feedback.save()
+
+        return {
+            'success': True,
+            'message': 'Feedback submitted successfully',
+            'feedback_id': feedback.id
+        }
+
+    except Exception as e:
+        logger.error(f"Error submitting AI feedback for book {book_id}: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+@ajax_response_handler
+@require_POST
+def ajax_retrain_ai_models(request):
+    """Trigger AI model retraining with user feedback."""
+    try:
+        from django.core.management import call_command
+        from books.models import AIFeedback
+
+        # Check if there's enough feedback for retraining
+        feedback_count = AIFeedback.objects.filter(needs_retraining=True).count()
+
+        if feedback_count < 5:  # Minimum feedback threshold
+            return {
+                'success': False,
+                'error': f'Need at least 5 feedback entries for retraining (have {feedback_count})'
+            }
+
+        # Trigger retraining in background
+        import threading
+
+        def retrain_models():
+            try:
+                call_command('train_ai_models', '--use-feedback')
+
+                # Mark feedback as processed
+                AIFeedback.objects.filter(needs_retraining=True).update(
+                    needs_retraining=False,
+                    processed_for_training=True
+                )
+
+            except Exception as e:
+                logger.error(f"Error during AI model retraining: {e}")
+
+        training_thread = threading.Thread(target=retrain_models)
+        training_thread.daemon = True
+        training_thread.start()
+
+        return {
+            'success': True,
+            'message': f'Started retraining with {feedback_count} feedback entries',
+            'feedback_count': feedback_count
+        }
+
+    except Exception as e:
+        logger.error(f"Error triggering AI retraining: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+@ajax_response_handler
+def ajax_ai_model_status(request):
+    """Get current AI model training status and statistics."""
+    try:
+        from books.scanner.ai.filename_recognizer import FilenamePatternRecognizer
+        from books.models import AIFeedback
+
+        recognizer = FilenamePatternRecognizer()
+
+        # Check if models exist
+        models_exist = recognizer.models_exist()
+
+        # Get training data statistics
+        training_stats = recognizer.get_training_data_stats() if models_exist else {}
+
+        # Get feedback statistics
+        feedback_stats = {
+            'total_feedback': AIFeedback.objects.count(),
+            'pending_retraining': AIFeedback.objects.filter(needs_retraining=True).count(),
+            'processed_feedback': AIFeedback.objects.filter(processed_for_training=True).count(),
+            'average_rating': AIFeedback.objects.aggregate(
+                avg_rating=Avg('feedback_rating')
+            )['avg_rating'] or 0
+        }
+
+        return {
+            'success': True,
+            'models_exist': models_exist,
+            'training_stats': training_stats,
+            'feedback_stats': feedback_stats,
+            'can_retrain': feedback_stats['pending_retraining'] >= 5
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting AI model status: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
