@@ -22,6 +22,17 @@ def mul(value, arg):
 
 
 @register.filter
+def div(value, arg):
+    try:
+        arg_float = float(arg)
+        if arg_float == 0:
+            return 0
+        return float(value) / arg_float
+    except (ValueError, TypeError):
+        return 0
+
+
+@register.filter
 def field_label(value):
     return value.replace('_', ' ').title()
 
@@ -42,6 +53,14 @@ def getattr_safe(obj, attr_name):
 @register.filter
 def get_item(dictionary, key):
     return dictionary.get(key)
+
+
+@register.filter
+def lookup(dictionary, key):
+    """Look up a key in a dictionary."""
+    if isinstance(dictionary, dict):
+        return dictionary.get(key)
+    return None
 
 
 @register.simple_tag
@@ -110,6 +129,13 @@ def sanitize_html(text):
     if not text:
         return ''
 
+    # First remove dangerous tags and their content entirely
+    import re
+    # Remove script tags and all their content
+    text = re.sub(r'<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>', '', text, flags=re.IGNORECASE)
+    # Remove style tags and all their content
+    text = re.sub(r'<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>', '', text, flags=re.IGNORECASE)
+
     allowed_tags = ['b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'ol', 'li']
     allowed_attributes = {}  # No attributes allowed for safety
     return bleach.clean(text, tags=allowed_tags, attributes=allowed_attributes, strip=True)
@@ -127,8 +153,12 @@ def sanitize_description(text):
     # Remove class attributes from p tags and other elements
     text = re.sub(r'<([^>]+)\s+class="[^"]*"([^>]*)>', r'<\1\2>', text)
 
-    # Convert common HTML entities
-    text = text.replace('â€˜', ''').replace('â€™', ''').replace('â€œ', '"').replace('â€', '"')
+    # Convert common HTML entities and encoding issues
+    # Do specific pattern replacements in correct order
+    text = text.replace('â€œ', '"')    # Left double quote
+    text = text.replace('â€™', "'")    # Right single quote (do before â€)
+    text = text.replace('â€˜', "'")    # Left single quote (do before â€)
+    text = text.replace('â€', '"')     # Right double quote (do last)
 
     # Clean up excessive line breaks
     text = re.sub(r'<br\s*/?>\s*<br\s*/?>\s*<br\s*/?>', '<br><br>', text)

@@ -17,7 +17,7 @@ class UserRegisterForm(UserCreationForm):
 class ScanFolderForm(StandardFormMixin, forms.ModelForm):
     class Meta:
         model = ScanFolder
-        fields = ['name', 'path', 'language', 'is_active']
+        fields = ['name', 'path', 'content_type', 'language', 'is_active']
         widgets = {
             'path': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -334,3 +334,45 @@ class AdvancedSearchForm(StandardFormMixin, forms.Form):
             raise forms.ValidationError("Minimum confidence must be less than or equal to maximum confidence.")
 
         return cleaned_data
+
+
+class UserProfileForm(StandardFormMixin, forms.ModelForm):
+    """Form for user preferences and settings"""
+
+    class Meta:
+        from .models import UserProfile
+        model = UserProfile
+        fields = ['theme', 'items_per_page', 'show_covers_in_list', 'default_view_mode', 'share_reading_progress']
+        widgets = {
+            'theme': forms.Select(attrs={
+                'class': 'form-select',
+                'data-bs-toggle': 'tooltip',
+                'data-bs-placement': 'top',
+                'title': 'Select your preferred theme'
+            }),
+            'items_per_page': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '10',
+                'max': '200',
+                'step': '10'
+            }),
+            'show_covers_in_list': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'default_view_mode': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'share_reading_progress': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Add help text and labels
+        self.fields['theme'].help_text = 'Choose your preferred visual theme'
+        self.fields['items_per_page'].help_text = 'Number of books to display per page (10-200)'
+        self.fields['show_covers_in_list'].help_text = 'Display book cover thumbnails in list views'
+        self.fields['default_view_mode'].help_text = 'Default layout for browsing books'
+        self.fields['share_reading_progress'].help_text = 'Allow other users to see your reading progress'

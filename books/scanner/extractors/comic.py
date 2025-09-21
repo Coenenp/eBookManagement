@@ -416,11 +416,22 @@ def _extract_first_image_as_cover(archive_file, book, format_type):
             image_data = archive_file.read(first_image)
 
         # Save image using PIL to ensure it's in a standard format
-        with tempfile.NamedTemporaryFile() as temp_file:
-            temp_file.write(image_data)
-            temp_file.flush()
+        # Use Windows-compatible temporary file handling
+        temp_path = None
+        try:
+            # Create temp file in cover cache directory to avoid permission issues
+            temp_fd, temp_path = tempfile.mkstemp(
+                suffix='.tmp',
+                dir=cover_cache_dir,
+                prefix='cover_temp_'
+            )
 
-            with Image.open(temp_file.name) as img:
+            # Write image data to temp file
+            with os.fdopen(temp_fd, 'wb') as f:
+                f.write(image_data)
+
+            # Process with PIL
+            with Image.open(temp_path) as img:
                 # Convert to RGB if necessary (for JPEG)
                 if img.mode in ('RGBA', 'LA', 'P'):
                     img = img.convert('RGB')
@@ -430,6 +441,20 @@ def _extract_first_image_as_cover(archive_file, book, format_type):
 
                 # Get image dimensions
                 width, height = img.size
+
+        finally:
+            # Clean up temporary file
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except PermissionError:
+                    # On Windows, sometimes files are locked briefly
+                    import time
+                    time.sleep(0.1)
+                    try:
+                        os.unlink(temp_path)
+                    except Exception:
+                        logger.warning(f"Could not remove temporary file: {temp_path}")
 
         # Save cover to database
         source = DataSource.objects.get(name=DataSource.CONTENT_SCAN)

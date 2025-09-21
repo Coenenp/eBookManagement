@@ -519,6 +519,7 @@ class AdminIntegrationTestCase(TestCase):
         response = self.client.post('/admin/books/scanfolder/add/', {
             'name': 'Integration Test Folder',
             'path': '/integration/test',
+            'content_type': 'ebooks',
             'language': 'en',
             'is_active': True
         })

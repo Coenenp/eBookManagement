@@ -23,6 +23,14 @@
     </div>
 
     <div class="mb-3">
+        {{ form.content_type.label_tag }}
+        {{ form.content_type }}
+        {% if form.content_type.errors %}
+            <div class="text-danger">{{ form.content_type.errors }}</div>
+        {% endif %}
+    </div>
+
+    <div class="mb-3">
         {{ form.language.label_tag }}
         {{ form.language }}
         {% if form.language.errors %}

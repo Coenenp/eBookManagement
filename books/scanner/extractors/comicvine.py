@@ -124,6 +124,29 @@ class ComicVineAPI:
             return result['results']
         return None
 
+    def search_issue(self, query: str, limit: int = 5) -> Optional[Dict]:
+        """Search for issues by query string."""
+        params = {
+            'query': query,
+            'resources': 'issue',
+            'limit': limit,
+            'field_list': 'id,name,issue_number,cover_date,store_date,deck,description,image,person_credits,volume'
+        }
+
+        result = self._make_request('search', params)
+        if result and result.get('results'):
+            # Return the first (best match) issue
+            return result['results'][0] if result['results'] else None
+        return None
+
+    def save_comic_metadata(self, book: Book, issue_data: Dict):
+        """Save Comic Vine issue metadata to the database."""
+        try:
+            source = DataSource.objects.get(name=DataSource.COMICVINE)
+            _save_issue_metadata(book, issue_data, source)
+        except Exception as e:
+            logger.error(f"[COMICVINE] Error saving comic metadata: {e}")
+
 
 def query_comicvine_metadata(book: Book, series_name: str, issue_number: Optional[int] = None) -> bool:
     """Query Comic Vine API for comic book metadata."""

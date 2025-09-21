@@ -20,7 +20,7 @@ class StandardAjaxResponseMixin:
         """Standard success response"""
         response_data = {'success': True, 'message': message}
         response_data.update(extra_data)
-        return response_data
+        return JsonResponse(response_data)
 
     @staticmethod
     def error_response(message="Error occurred", status=400, **extra_data):
@@ -112,7 +112,7 @@ class BookFilterMixin:
         search_query = search_params.get('search_query')
         if search_query:
             queryset = queryset.filter(
-                Q(title__icontains=search_query) |
+                Q(finalmetadata__final_title__icontains=search_query) |
                 Q(finalmetadata__final_author__icontains=search_query) |
                 Q(finalmetadata__final_series__icontains=search_query)
             )

@@ -77,7 +77,7 @@ class BackgroundScanner:
         self.job_id = job_id
         self.progress = ScanProgress(job_id)
 
-    def scan_folder(self, folder_path: str, language: str = None, enable_external_apis: bool = True) -> Dict:
+    def scan_folder(self, folder_path: str, language: str = None, enable_external_apis: bool = True, content_type: str = None) -> Dict:
         """Scan a folder for books in the background."""
         try:
             logger.info(f"[BACKGROUND SCAN] Starting scan of {folder_path}")
@@ -89,8 +89,14 @@ class BackgroundScanner:
                 scan_folder = ScanFolder.objects.create(
                     path=folder_path,
                     language=language or 'en',
+                    content_type=content_type or 'mixed',
                     name=folder_path.split('/')[-1] or folder_path.split('\\')[-1]
                 )
+            else:
+                # Update content_type if provided
+                if content_type:
+                    scan_folder.content_type = content_type
+                    scan_folder.save()
 
             # Discover books
             self.progress.update(10, 100, "Discovering files", "Finding book files...")
@@ -275,10 +281,10 @@ class BackgroundScanner:
 
 
 # Background job functions for Django-RQ
-def background_scan_folder(job_id: str, folder_path: str, language: str = None, enable_external_apis: bool = True):
+def background_scan_folder(job_id: str, folder_path: str, language: str = None, enable_external_apis: bool = True, content_type: str = None):
     """Background job for scanning a folder."""
     scanner = BackgroundScanner(job_id)
-    return scanner.scan_folder(folder_path, language, enable_external_apis)
+    return scanner.scan_folder(folder_path, language, enable_external_apis, content_type)
 
 
 def background_rescan_books(job_id: str, book_ids: List[int], enable_external_apis: bool = True):

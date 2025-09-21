@@ -4,19 +4,22 @@ def normalize_language(value):
     lang_map = {
         # English
         'en': 'en', 'eng': 'en', 'english': 'en',
-        'en-us': 'en', 'en-gb': 'en',
+        'en-us': 'en', 'en-gb': 'en', 'en-au': 'en',
 
         # French
         'fr': 'fr', 'fra': 'fr', 'fre': 'fr', 'french': 'fr', 'fr-fr': 'fr',
+        'français': 'fr', 'fr-ca': 'fr', 'fr-be': 'fr',
 
         # German
         'de': 'de', 'deu': 'de', 'ger': 'de', 'german': 'de', 'de-de': 'de',
+        'de-at': 'de', 'de-ch': 'de',
 
         # Dutch
         'nl': 'nl', 'nld': 'nl', 'dut': 'nl', 'dutch': 'nl', 'nl-nl': 'nl',
 
         # Spanish
         'es': 'es', 'spa': 'es', 'spanish': 'es',
+        'español': 'es', 'es-mx': 'es', 'es-ar': 'es',
 
         # Portuguese
         'pt': 'pt', 'por': 'pt', 'pt-br': 'pt', 'portuguese': 'pt',
@@ -26,12 +29,15 @@ def normalize_language(value):
 
         # Japanese
         'ja': 'ja', 'jpn': 'ja', 'japanese': 'ja',
+        '日本語': 'ja',
 
         # Korean
         'ko': 'ko', 'kor': 'ko', 'korean': 'ko',
 
         # Chinese
         'zh': 'zh', 'chi': 'zh', 'zho': 'zh', 'chinese': 'zh',
+        'zh-hans': 'zh', 'zh-hant': 'zh', 'zh-cn': 'zh', 'zh-tw': 'zh',
+        '中文': 'zh',
 
         # Additional languages to match LANGUAGE_CHOICES
         # Hebrew
@@ -45,6 +51,7 @@ def normalize_language(value):
 
         # Russian
         'ru': 'ru', 'rus': 'ru', 'russian': 'ru',
+        'русский': 'ru',
 
         # Turkish
         'tr': 'tr', 'tur': 'tr', 'turkish': 'tr',

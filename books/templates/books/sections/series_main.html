@@ -1,0 +1,553 @@
+{% extends "books/base_split_pane.html" %}
+{% load static %}
+
+{% block title %}Series - {{ block.super }}{% endblock %}
+
+{% block list_icon %}fas fa-layer-group{% endblock %}
+{% block list_title %}Series{% endblock %}
+{% block item_count %}{{ series_count }}{% endblock %}
+
+{% block search_placeholder %}Search series by name, author...{% endblock %}
+
+{% block format_options %}
+<option value="epub">EPUB</option>
+<option value="mobi">MOBI</option>
+<option value="pdf">PDF</option>
+<option value="cbr">CBR</option>
+<option value="cbz">CBZ</option>
+{% endblock %}
+
+{% block items_list %}
+<div id="series-list-container">
+    <!-- Series will be loaded via AJAX -->
+</div>
+{% endblock %}
+
+{% block detail_content %}
+<div id="series-detail-container">
+    <div class="d-flex align-items-center justify-content-center h-100 text-muted">
+        <div class="text-center">
+            <i class="fas fa-layer-group fa-4x mb-4 text-primary"></i>
+            <h4 class="mb-3">Explore Your Book Series</h4>
+            <p class="mb-2 lead">Select a series or book to view details</p>
+            <p class="text-muted">Choose from {{ series_count }} available series</p>
+            <div class="mt-4">
+                <div class="row text-center">
+                    <div class="col-4">
+                        <i class="fas fa-expand-arrows-alt fa-2x text-info mb-2"></i>
+                        <p class="small mb-0">Expandable Series</p>
+                    </div>
+                    <div class="col-4">
+                        <i class="fas fa-sort-amount-down fa-2x text-success mb-2"></i>
+                        <p class="small mb-0">Organized Books</p>
+                    </div>
+                    <div class="col-4">
+                        <i class="fas fa-chart-line fa-2x text-warning mb-2"></i>
+                        <p class="small mb-0">Reading Progress</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+// Series-specific functionality
+let currentSeriesData = [];
+let filteredSeries = [];
+let expandedSeries = new Set();
+
+function customLoadItems() {
+    showLoadingState(document.getElementById('series-list-container'), 'Loading series...');
+    
+    fetch('{% url "books:series_ajax_list" %}')
+        .then(response => response.json())
+        .then(data => {
+            currentSeriesData = data.series || [];
+            filteredSeries = [...currentSeriesData];
+            renderSeriesList();
+            updateItemCount(filteredSeries.length);
+        })
+        .catch(error => {
+            console.error('Error loading series:', error);
+            showEmptyState(
+                document.getElementById('series-list-container'), 
+                'fas fa-exclamation-triangle', 
+                'Error loading series. Please try again.'
+            );
+        });
+}
+
+function customFilterItems(searchTerm, sortBy, formatFilter, statusFilter) {
+    filteredSeries = currentSeriesData.filter(series => {
+        // Search filter
+        const matchesSearch = !searchTerm || 
+            series.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            series.authors.some(author => author.toLowerCase().includes(searchTerm.toLowerCase()));
+        
+        // Format filter
+        const matchesFormat = !formatFilter || series.formats.includes(formatFilter);
+        
+        // Status filter (based on books in series)
+        const matchesStatus = !statusFilter || 
+            (statusFilter === 'read' && series.books.every(book => book.is_read)) ||
+            (statusFilter === 'unread' && series.books.every(book => !book.is_read)) ||
+            (statusFilter === 'reading' && series.books.some(book => book.reading_progress > 0 && !book.is_read));
+        
+        return matchesSearch && matchesFormat && matchesStatus;
+    });
+    
+    // Sort results
+    filteredSeries.sort((a, b) => {
+        switch(sortBy) {
+            case 'title':
+                return a.name.localeCompare(b.name);
+            case 'author':
+                return (a.authors[0] || '').localeCompare(b.authors[0] || '');
+            case 'date':
+                // Sort by most recent book in series
+                const aLatest = Math.max(...a.books.map(book => new Date(book.last_scanned || 0)));
+                const bLatest = Math.max(...b.books.map(book => new Date(book.last_scanned || 0)));
+                return bLatest - aLatest;
+            case 'size':
+                return b.total_size - a.total_size;
+            default:
+                return a.name.localeCompare(b.name);
+        }
+    });
+    
+    renderSeriesList();
+    updateItemCount(filteredSeries.length);
+}
+
+function customRenderView(viewType) {
+    renderSeriesList(viewType);
+}
+
+function customRefreshItems() {
+    customLoadItems();
+}
+
+function renderSeriesList(viewType = null) {
+    const container = document.getElementById('series-list-container');
+    const currentView = viewType || (document.getElementById('view-container')?.className.includes('grid') ? 'grid' : 'list');
+    
+    if (filteredSeries.length === 0) {
+        showEmptyState(container, 'fas fa-layer-group', 'No series found');
+        return;
+    }
+    
+    // Add table header for condensed view
+    const headerHtml = `
+        <div class="list-header">
+            <div class="list-header-title">Series</div>
+            <div class="list-header-author">Authors</div>
+            <div class="list-header-info">Books • Size</div>
+        </div>
+    `;
+    
+    const html = filteredSeries.map(series => {
+        const isExpanded = expandedSeries.has(series.name);
+        const booksHtml = isExpanded ? series.books.map(book => `
+            <div class="series-book-item" data-item-id="${book.id}" data-item-type="book" onclick="selectItem(${book.id}, 'book')">
+                <div class="item-cover-tiny">
+                    ${book.cover_url ? `
+                        <img src="${book.cover_url}" alt="Book Cover">
+                    ` : `
+                        <div class="placeholder-cover">
+                            <i class="fas fa-book"></i>
+                        </div>
+                    `}
+                </div>
+                <div class="item-title">${escapeHtml(book.title)}</div>
+                <div class="item-subtitle">${escapeHtml(book.author)}</div>
+                <div class="item-info">
+                    <div class="item-badges">
+                        <span class="badge bg-secondary">${book.file_format.toUpperCase()}</span>
+                        ${book.is_read ? '<span class="badge bg-success">✓</span>' : ''}
+                    </div>
+                    <div class="text-muted small">${formatFileSize(book.file_size)}</div>
+                </div>
+            </div>
+        `).join('') : '';
+        
+        return `
+            <div class="series-item ${isExpanded ? 'expanded' : ''}" data-series-name="${escapeHtml(series.name)}">
+                <div class="list-item" data-item-id="${series.name}" data-item-type="series" onclick="toggleSeries('${escapeHtml(series.name)}')">
+                    <div class="item-cover-tiny">
+                        ${series.cover_url ? `
+                            <img src="${series.cover_url}" alt="Series Cover">
+                        ` : `
+                            <div class="placeholder-cover">
+                                <i class="fas fa-layer-group"></i>
+                            </div>
+                        `}
+                    </div>
+                    <div class="item-title">
+                        <i class="fas ${isExpanded ? 'fa-minus' : 'fa-plus'} me-2 text-muted"></i>
+                        ${escapeHtml(series.name)}
+                    </div>
+                    <div class="item-subtitle">${series.authors.join(', ')}</div>
+                    <div class="item-info">
+                        <div class="item-badges">
+                            <span class="badge bg-primary">${series.book_count}</span>
+                            ${series.formats.map(format => `<span class="badge bg-secondary">${format.toUpperCase()}</span>`).slice(0, 2).join('')}
+                        </div>
+                        <div class="text-muted small">${formatFileSize(series.total_size)}</div>
+                    </div>
+                </div>
+                ${isExpanded ? `<div class="series-books">${booksHtml}</div>` : ''}
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = headerHtml + html;
+    container.classList.add('fade-in');
+}
+
+function toggleSeries(seriesName) {
+    if (expandedSeries.has(seriesName)) {
+        expandedSeries.delete(seriesName);
+    } else {
+        expandedSeries.add(seriesName);
+    }
+    
+    renderSeriesList();
+    
+    // If expanding, also select the series for detail view
+    if (expandedSeries.has(seriesName)) {
+        selectItem(seriesName, 'series');
+    }
+}
+
+function selectItem(itemId, itemType = 'book') {
+    // Remove previous selection
+    document.querySelectorAll('.list-item.selected, .series-book-item.selected').forEach(el => {
+        el.classList.remove('selected');
+    });
+    
+    // Add selection to clicked item
+    if (itemType === 'series') {
+        const item = document.querySelector(`[data-item-id="${itemId}"][data-item-type="series"]`);
+        if (item) {
+            item.classList.add('selected');
+        }
+        customLoadSeriesDetail(itemId);
+    } else {
+        const item = document.querySelector(`[data-item-id="${itemId}"][data-item-type="book"]`);
+        if (item) {
+            item.classList.add('selected');
+        }
+        customLoadBookDetail(itemId);
+    }
+}
+
+function customLoadDetail(itemId) {
+    // This is called by the base template, but we override with specific functions
+    customLoadBookDetail(itemId);
+}
+
+function customLoadSeriesDetail(seriesName) {
+    const container = document.getElementById('series-detail-container');
+    
+    // Find the series data
+    const series = currentSeriesData.find(s => s.name === seriesName);
+    if (!series) {
+        container.innerHTML = `
+            <div class="alert alert-warning m-3">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Series not found.
+            </div>
+        `;
+        return;
+    }
+    
+    const html = `
+        <div class="detail-content">
+            <div class="detail-header">
+                <h2 class="detail-title">${escapeHtml(series.name)}</h2>
+                <h5 class="detail-subtitle">by ${series.authors.join(', ')}</h5>
+                <div class="detail-meta">
+                    <div class="detail-meta-item">
+                        <div class="detail-meta-label">Books</div>
+                        <div class="detail-meta-value">${series.book_count}</div>
+                    </div>
+                    <div class="detail-meta-item">
+                        <div class="detail-meta-label">Total Size</div>
+                        <div class="detail-meta-value">${formatFileSize(series.total_size)}</div>
+                    </div>
+                    <div class="detail-meta-item">
+                        <div class="detail-meta-label">Formats</div>
+                        <div class="detail-meta-value">${series.formats.join(', ').toUpperCase()}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-12">
+                    <h6 class="fw-bold mb-3">Books in Series</h6>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Position</th>
+                                    <th>Title</th>
+                                    <th>Format</th>
+                                    <th>Size</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${series.books.map(book => `
+                                    <tr onclick="customLoadBookDetail(${book.id})" class="clickable-row">
+                                        <td>
+                                            ${book.position ? `#${book.position}` : '-'}
+                                        </td>
+                                        <td>
+                                            <strong>${escapeHtml(book.title)}</strong><br>
+                                            <small class="text-muted">${escapeHtml(book.author)}</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-secondary">${book.file_format.toUpperCase()}</span>
+                                        </td>
+                                        <td>${formatFileSize(book.file_size)}</td>
+                                        <td>
+                                            <a href="{% url 'books:book_detail' 0 %}".replace('0', '${book.id}') class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="detail-actions">
+                <button class="btn btn-primary" onclick="viewAllBooksInSeries('${escapeHtml(series.name)}')">
+                    <i class="fas fa-list me-1"></i>View All Books
+                </button>
+                <button class="btn btn-outline-success" onclick="rescanSeries('${escapeHtml(series.name)}')">
+                    <i class="fas fa-sync me-1"></i>Rescan Series
+                </button>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+    container.classList.add('fade-in');
+    
+    // Handle mobile layout
+    if (window.innerWidth <= 768) {
+        SplitPane.handleMobileLayout();
+        SplitPane.addMobileBackButton();
+    }
+}
+
+function customLoadBookDetail(bookId) {
+    const container = document.getElementById('series-detail-container');
+    showLoadingState(container, 'Loading book details...');
+    
+    fetch(`{% url "books:ebooks_ajax_detail" 0 %}`.replace('0', bookId))
+        .then(response => response.json())
+        .then(data => {
+            renderBookDetailInSeries(data.ebook);
+            
+            // Handle mobile layout
+            if (window.innerWidth <= 768) {
+                SplitPane.handleMobileLayout();
+                SplitPane.addMobileBackButton();
+            }
+        })
+        .catch(error => {
+            console.error('Error loading book detail:', error);
+            container.innerHTML = `
+                <div class="alert alert-danger m-3">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error loading book details. Please try again.
+                </div>
+            `;
+        });
+}
+
+function renderBookDetailInSeries(book) {
+    const container = document.getElementById('series-detail-container');
+    
+    const html = `
+        <div class="detail-content">
+            <div class="detail-header">
+                <h2 class="detail-title">${escapeHtml(book.title)}</h2>
+                <h5 class="detail-subtitle">by ${escapeHtml(book.author)}</h5>
+                ${book.series_name ? `
+                    <div class="alert alert-info">
+                        <i class="fas fa-layer-group me-2"></i>
+                        Part of series: <strong>${escapeHtml(book.series_name)}</strong>
+                        ${book.series_position ? ` (Book #${book.series_position})` : ''}
+                    </div>
+                ` : ''}
+                <div class="detail-meta">
+                    <div class="detail-meta-item">
+                        <div class="detail-meta-label">Format</div>
+                        <div class="detail-meta-value">${book.file_format.toUpperCase()}</div>
+                    </div>
+                    <div class="detail-meta-item">
+                        <div class="detail-meta-label">File Size</div>
+                        <div class="detail-meta-value">${formatFileSize(book.file_size)}</div>
+                    </div>
+                    <div class="detail-meta-item">
+                        <div class="detail-meta-label">Publisher</div>
+                        <div class="detail-meta-value">${escapeHtml(book.publisher || 'Unknown')}</div>
+                    </div>
+                    <div class="detail-meta-item">
+                        <div class="detail-meta-label">Language</div>
+                        <div class="detail-meta-value">${escapeHtml(book.language || 'Unknown')}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    ${book.cover_url ? `
+                        <img src="${book.cover_url}" alt="Book Cover" class="detail-cover img-fluid">
+                    ` : `
+                        <div class="detail-cover bg-light d-flex align-items-center justify-content-center detail-cover-placeholder">
+                            <i class="fas fa-book fa-3x text-muted"></i>
+                        </div>
+                    `}
+                </div>
+                <div class="col-md-8">
+                    ${book.description ? `
+                        <h6 class="fw-bold">Description</h6>
+                        <p class="text-muted">${escapeHtml(book.description)}</p>
+                    ` : ''}
+                    
+                    ${book.isbn ? `
+                        <div class="mb-2">
+                            <strong>ISBN:</strong> ${escapeHtml(book.isbn)}
+                        </div>
+                    ` : ''}
+                    
+                    ${book.publication_date ? `
+                        <div class="mb-2">
+                            <strong>Publication Date:</strong> ${formatDate(book.publication_date)}
+                        </div>
+                    ` : ''}
+                    
+                    ${book.genres && book.genres.length > 0 ? `
+                        <div class="mb-3">
+                            <strong>Genres:</strong>
+                            ${book.genres.map(genre => `<span class="badge bg-secondary me-1">${escapeHtml(genre)}</span>`).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+            
+            <div class="detail-actions">
+                <a href="{% url 'books:book_detail' 0 %}".replace('0', '${book.id}') class="btn btn-primary">
+                    <i class="fas fa-eye me-1"></i>View Full Details
+                </a>
+                <a href="{% url 'books:book_metadata' 0 %}".replace('0', '${book.id}') class="btn btn-outline-info">
+                    <i class="fas fa-edit me-1"></i>Edit Metadata
+                </a>
+                ${book.series_name ? `
+                    <button class="btn btn-outline-secondary" onclick="viewSeriesBooks('${escapeHtml(book.series_name)}')">
+                        <i class="fas fa-layer-group me-1"></i>View Series
+                    </button>
+                ` : ''}
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+    container.classList.add('fade-in');
+}
+
+function viewSeriesBooks(seriesName) {
+    // Expand the series in the list and select it
+    expandedSeries.add(seriesName);
+    renderSeriesList();
+    selectItem(seriesName, 'series');
+}
+
+function viewAllBooksInSeries(seriesName) {
+    // Navigate to ebooks section with series filter
+    window.location.href = `{% url 'books:ebooks_main' %}?series=${encodeURIComponent(seriesName)}`;
+}
+
+function rescanSeries(seriesName) {
+    if (!confirm(`Are you sure you want to rescan all books in the series "${seriesName}"? This will fetch fresh metadata from external sources.`)) {
+        return;
+    }
+    
+    showToast(`Rescanning series "${seriesName}"...`, 'info');
+    
+    // Find all books in the series and rescan them
+    const series = currentSeriesData.find(s => s.name === seriesName);
+    if (series) {
+        const bookIds = series.books.map(book => book.id);
+        rescanMultipleBooks(bookIds);
+    }
+}
+
+function rescanMultipleBooks(bookIds) {
+    // This would need to be implemented as a batch operation
+    showToast('Batch rescanning is not yet implemented', 'warning');
+}
+
+// Utility functions (same as in ebooks_main.html)
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatFileSize(bytes) {
+    if (!bytes) return 'Unknown';
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+function formatDate(dateString) {
+    if (!dateString) return 'Unknown';
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type} position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" onclick="this.parentElement.remove()" aria-label="Close"></button>
+    `;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.remove();
+        }
+    }, 5000);
+}
+
+// Handle item activation (double-click or Enter)
+function onItemActivate(itemId) {
+    // Determine if it's a series or book based on the selected element
+    const selectedElement = document.querySelector('.selected');
+    if (selectedElement) {
+        const itemType = selectedElement.getAttribute('data-item-type');
+        if (itemType === 'series') {
+            viewAllBooksInSeries(itemId);
+        } else {
+            window.location.href = `{% url 'books:book_detail' 0 %}`.replace('0', itemId);
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -9,6 +9,7 @@
         <tr>
             <th>Name</th>
             <th>Path</th>
+            <th>Content Type</th>
             <th>Language</th>
             <th>Active</th>
             <th>Last Scanned</th>
@@ -20,6 +21,16 @@
         <tr>
             <td>{{ folder.name }}</td>
             <td>{{ folder.path }}</td>
+            <td>
+                <span class="badge 
+                    {% if folder.content_type == 'ebooks' %}bg-primary
+                    {% elif folder.content_type == 'comics' %}bg-warning
+                    {% elif folder.content_type == 'audiobooks' %}bg-info
+                    {% elif folder.content_type == 'mixed' %}bg-secondary
+                    {% else %}bg-light text-dark{% endif %}">
+                    {{ folder.get_content_type_display }}
+                </span>
+            </td>
             <td>{{ folder.get_language_display }}</td>
             <td>{{ folder.is_active|yesno:"Yes,No" }}</td>
             <td>{{ folder.last_scanned|date:"F d, Y H:i"|default:"Never" }}</td>
@@ -31,7 +42,7 @@
         </tr>
         {% empty %}
         <tr>
-            <td colspan="6">No scan folders found.</td>
+            <td colspan="7">No scan folders found.</td>
         </tr>
         {% endfor %}
     </tbody>

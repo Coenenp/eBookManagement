@@ -24,6 +24,29 @@
 .badge-xs { font-size: 0.65rem; padding: 0.15rem 0.3rem; }
 .table-sm th, .table-sm td { padding: 0.3rem 0.4rem; vertical-align: middle; }
 
+/* Success icon styling */
+.success-icon-large {
+    font-size: 3rem !important;
+}
+
+/* Rename table column widths */
+.rename-table-col-book {
+    width: 200px;
+}
+
+.rename-table-col-status {
+    width: 80px;
+}
+
+/* Rename table text sizes */
+.rename-title-text {
+    font-size: 0.9rem;
+}
+
+.rename-path-text {
+    font-size: 0.75rem;
+}
+
 /* Responsive adjustments for smaller screens */
 @media (max-width: 1200px) {
     .text-truncate-title { max-width: 250px; }
@@ -947,7 +970,7 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('interactiveContent').innerHTML = `
             <div class="text-center">
                 <div class="mb-4">
-                    <i class="fas fa-check-circle text-success" style="font-size: 3rem;"></i>
+                    <i class="fas fa-check-circle text-success success-icon-large"></i>
                 </div>
                 <h4>Interactive Rename Completed!</h4>
                 <div class="row mt-4">
@@ -1042,7 +1065,7 @@ document.addEventListener('DOMContentLoaded', function() {
             successAlert.className = 'alert alert-success alert-dismissible fade show';
             successAlert.innerHTML = `
                 <strong>Success!</strong> ${processedBooks.success.length} book(s) renamed successfully.
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             `;
             document.querySelector('.container-fluid').prepend(successAlert);
             
@@ -1354,7 +1377,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Display preview results
     function displayPreview(previewData) {
         let html = '<div class="table-responsive"><table class="table table-sm">';
-        html += '<thead><tr><th style="width: 200px;">Book</th><th>Current Path</th><th>New Path</th><th style="width: 80px;">Status</th></tr></thead><tbody>';
+        html += '<thead><tr><th class="rename-table-col-book">Book</th><th>Current Path</th><th>New Path</th><th class="rename-table-col-status">Status</th></tr></thead><tbody>';
         
         previewData.forEach(item => {
             const statusBadge = item.can_rename ? 
@@ -1363,11 +1386,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 
             html += `<tr>
                 <td>
-                    <strong class="d-block" style="font-size: 0.9rem;">${item.title}</strong>
+                    <strong class="d-block rename-title-text">${item.title}</strong>
                     <small class="text-muted">${item.author}</small>
                 </td>
-                <td><small class="font-monospace text-break" style="font-size: 0.75rem;">${item.current_path}</small></td>
-                <td><small class="font-monospace text-break text-primary" style="font-size: 0.75rem;">${item.new_path}</small></td>
+                <td><small class="font-monospace text-break rename-path-text">${item.current_path}</small></td>
+                <td><small class="font-monospace text-break text-primary rename-path-text">${item.new_path}</small></td>
                 <td>${statusBadge}</td>
             </tr>`;
         });

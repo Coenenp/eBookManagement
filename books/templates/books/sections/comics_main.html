@@ -1,0 +1,659 @@
+{% extends "books/base_split_pane.html" %}
+{% load static %}
+
+{% block title %}Comics - {{ block.super }}{% endblock %}
+
+{% block list_icon %}fas fa-mask{% endblock %}
+{% block list_title %}Comics{% endblock %}
+{% block item_count %}{{ comics_count }}{% endblock %}
+
+{% block search_placeholder %}Search comics by title, series...{% endblock %}
+
+{% block format_options %}
+<option value="cbr">CBR</option>
+<option value="cbz">CBZ</option>
+{% endblock %}
+
+{% block items_list %}
+<div id="comics-list-container">
+    <!-- Comics will be loaded via AJAX -->
+</div>
+{% endblock %}
+
+{% block detail_content %}
+<div id="comic-detail-container">
+    <div class="d-flex align-items-center justify-content-center h-100 text-muted">
+        <div class="text-center">
+            <i class="fas fa-mask fa-4x mb-4 text-warning"></i>
+            <h4 class="mb-3">Discover Your Comic Collection</h4>
+            <p class="mb-2 lead">Select a comic series or issue to view details</p>
+            <p class="text-muted">Choose from {{ comics_count }} available comics</p>
+            <div class="mt-4">
+                <div class="row text-center">
+                    <div class="col-4">
+                        <i class="fas fa-list-ol fa-2x text-info mb-2"></i>
+                        <p class="small mb-0">Issue Numbers</p>
+                    </div>
+                    <div class="col-4">
+                        <i class="fas fa-images fa-2x text-success mb-2"></i>
+                        <p class="small mb-0">Cover Gallery</p>
+                    </div>
+                    <div class="col-4">
+                        <i class="fas fa-book-reader fa-2x text-danger mb-2"></i>
+                        <p class="small mb-0">Reading Mode</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+// Comics-specific functionality
+let currentComicsData = [];
+let currentStandaloneComics = [];
+let filteredComics = [];
+let filteredStandalone = [];
+let expandedSeries = new Set();
+
+function customLoadItems() {
+    showLoadingState(document.getElementById('comics-list-container'), 'Loading comics...');
+    
+    fetch('{% url "books:comics_ajax_list" %}')
+        .then(response => response.json())
+        .then(data => {
+            currentComicsData = data.series || [];
+            currentStandaloneComics = data.standalone || [];
+            filteredComics = [...currentComicsData];
+            filteredStandalone = [...currentStandaloneComics];
+            renderComicsList();
+            updateItemCount(filteredComics.length + filteredStandalone.length);
+        })
+        .catch(error => {
+            console.error('Error loading comics:', error);
+            showEmptyState(
+                document.getElementById('comics-list-container'), 
+                'fas fa-exclamation-triangle', 
+                'Error loading comics. Please try again.'
+            );
+        });
+}
+
+function customFilterItems(searchTerm, sortBy, formatFilter, statusFilter) {
+    // Filter series
+    filteredComics = currentComicsData.filter(series => {
+        const matchesSearch = !searchTerm || 
+            series.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            series.books.some(book => 
+                book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                book.author.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        
+        const matchesFormat = !formatFilter || 
+            series.books.some(book => book.file_format === formatFilter);
+        
+        const matchesStatus = !statusFilter || 
+            (statusFilter === 'read' && series.books.every(book => book.is_read)) ||
+            (statusFilter === 'unread' && series.books.every(book => !book.is_read)) ||
+            (statusFilter === 'reading' && series.books.some(book => book.reading_progress > 0 && !book.is_read));
+        
+        return matchesSearch && matchesFormat && matchesStatus;
+    });
+    
+    // Filter standalone comics
+    filteredStandalone = currentStandaloneComics.filter(comic => {
+        const matchesSearch = !searchTerm || 
+            comic.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            comic.author.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        const matchesFormat = !formatFilter || comic.file_format === formatFilter;
+        
+        const matchesStatus = !statusFilter || 
+            (statusFilter === 'read' && comic.is_read) ||
+            (statusFilter === 'unread' && !comic.is_read) ||
+            (statusFilter === 'reading' && comic.reading_progress > 0 && !comic.is_read);
+        
+        return matchesSearch && matchesFormat && matchesStatus;
+    });
+    
+    // Sort results
+    filteredComics.sort((a, b) => {
+        switch(sortBy) {
+            case 'title':
+                return a.name.localeCompare(b.name);
+            case 'author':
+                // Use first book's author for series
+                const aAuthor = a.books[0]?.author || '';
+                const bAuthor = b.books[0]?.author || '';
+                return aAuthor.localeCompare(bAuthor);
+            case 'date':
+                const aLatest = Math.max(...a.books.map(book => new Date(book.last_scanned || 0)));
+                const bLatest = Math.max(...b.books.map(book => new Date(book.last_scanned || 0)));
+                return bLatest - aLatest;
+            case 'size':
+                return b.total_size - a.total_size;
+            default:
+                return a.name.localeCompare(b.name);
+        }
+    });
+    
+    filteredStandalone.sort((a, b) => {
+        switch(sortBy) {
+            case 'title':
+                return a.title.localeCompare(b.title);
+            case 'author':
+                return a.author.localeCompare(b.author);
+            case 'date':
+                return new Date(b.last_scanned || 0) - new Date(a.last_scanned || 0);
+            case 'size':
+                return (b.file_size || 0) - (a.file_size || 0);
+            default:
+                return a.title.localeCompare(b.title);
+        }
+    });
+    
+    renderComicsList();
+    updateItemCount(filteredComics.length + filteredStandalone.length);
+}
+
+function customRenderView(viewType) {
+    renderComicsList(viewType);
+}
+
+function customRefreshItems() {
+    customLoadItems();
+}
+
+function renderComicsList(viewType = null) {
+    const container = document.getElementById('comics-list-container');
+    const currentView = viewType || (document.getElementById('view-container')?.className.includes('grid') ? 'grid' : 'list');
+    
+    if (filteredComics.length === 0 && filteredStandalone.length === 0) {
+        showEmptyState(container, 'fas fa-mask', 'No comics found');
+        return;
+    }
+
+    let html = '';
+    
+    // Render series
+    if (filteredComics.length > 0) {
+        html += `
+            <div class="section-header p-2 bg-light border-bottom fw-bold text-muted">Comic Series</div>
+            <div class="list-header">
+                <div class="list-header-title">Series</div>
+                <div class="list-header-author">Type</div>
+                <div class="list-header-info">Issues • Size</div>
+            </div>
+        `;
+        html += filteredComics.map(series => {
+            const isExpanded = expandedSeries.has(series.name);
+            const issuesHtml = isExpanded ? series.books.map(comic => `
+                <div class="series-book-item" data-item-id="${comic.id}" data-item-type="comic" onclick="selectItem(${comic.id}, 'comic')">
+                    <div class="item-cover-tiny">
+                        ${comic.cover_url ? `
+                            <img src="${comic.cover_url}" alt="Comic Cover">
+                        ` : `
+                            <div class="placeholder-cover">
+                                <i class="fas fa-mask"></i>
+                            </div>
+                        `}
+                    </div>
+                    <div class="item-title">${escapeHtml(comic.title)}</div>
+                    <div class="item-subtitle">${comic.position ? `Issue #${comic.position}` : escapeHtml(comic.author)}</div>
+                    <div class="item-info">
+                        <div class="item-badges">
+                            <span class="badge bg-info">${comic.file_format.toUpperCase()}</span>
+                        </div>
+                        <div class="text-muted small">${formatFileSize(comic.file_size)}</div>
+                    </div>
+                </div>
+            `).join('') : '';
+            
+            return `
+                <div class="series-item ${isExpanded ? 'expanded' : ''}" data-series-name="${escapeHtml(series.name)}">
+                    <div class="list-item" data-item-id="${series.name}" data-item-type="series" onclick="toggleSeries('${escapeHtml(series.name)}')">
+                        <div class="item-cover-tiny">
+                            ${series.cover_url ? `
+                                <img src="${series.cover_url}" alt="Series Cover">
+                            ` : `
+                                <div class="placeholder-cover">
+                                    <i class="fas fa-layer-group"></i>
+                                </div>
+                            `}
+                        </div>
+                        <div class="item-title">
+                            <i class="fas ${isExpanded ? 'fa-minus' : 'fa-plus'} me-2 text-muted"></i>
+                            ${escapeHtml(series.name)}
+                        </div>
+                        <div class="item-subtitle">Comic Series</div>
+                        <div class="item-info">
+                            <div class="item-badges">
+                                <span class="badge bg-info">${series.book_count}</span>
+                                <span class="badge bg-warning text-dark">Comic</span>
+                            </div>
+                            <div class="text-muted small">${formatFileSize(series.total_size)}</div>
+                        </div>
+                    </div>
+                    ${isExpanded ? `<div class="series-books">${issuesHtml}</div>` : ''}
+                </div>
+            `;
+        }).join('');
+    }
+    
+    // Render standalone comics
+    if (filteredStandalone.length > 0) {
+        html += `
+            <div class="section-header p-2 bg-light border-bottom fw-bold text-muted">Standalone Comics</div>
+            <div class="list-header">
+                <div class="list-header-title">Title</div>
+                <div class="list-header-author">Author</div>
+                <div class="list-header-info">Format • Size</div>
+            </div>
+        `;
+        html += filteredStandalone.map(comic => `
+            <div class="list-item" data-item-id="${comic.id}" data-item-type="comic" onclick="selectItem(${comic.id}, 'comic')">
+                <div class="item-cover-tiny">
+                    ${comic.cover_url ? `
+                        <img src="${comic.cover_url}" alt="Comic Cover">
+                    ` : `
+                        <div class="placeholder-cover">
+                            <i class="fas fa-mask"></i>
+                        </div>
+                    `}
+                </div>
+                <div class="item-title">${escapeHtml(comic.title)}</div>
+                <div class="item-subtitle">${escapeHtml(comic.author)}</div>
+                <div class="item-info">
+                    <div class="item-badges">
+                        <span class="badge bg-info">${comic.file_format.toUpperCase()}</span>
+                        <span class="badge bg-warning text-dark">Comic</span>
+                    </div>
+                    <div class="text-muted small">${formatFileSize(comic.file_size)}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    container.innerHTML = html;
+    container.classList.add('fade-in');
+}
+
+function toggleSeries(seriesName) {
+    if (expandedSeries.has(seriesName)) {
+        expandedSeries.delete(seriesName);
+    } else {
+        expandedSeries.add(seriesName);
+    }
+    
+    renderComicsList();
+    
+    // If expanding, also select the series for detail view
+    if (expandedSeries.has(seriesName)) {
+        selectItem(seriesName, 'series');
+    }
+}
+
+function selectItem(itemId, itemType = 'comic') {
+    // Remove previous selection
+    document.querySelectorAll('.list-item.selected, .series-book-item.selected').forEach(el => {
+        el.classList.remove('selected');
+    });
+    
+    // Add selection to clicked item
+    const item = document.querySelector(`[data-item-id="${itemId}"][data-item-type="${itemType}"]`);
+    if (item) {
+        item.classList.add('selected');
+    }
+    
+    if (itemType === 'series') {
+        customLoadSeriesDetail(itemId);
+    } else {
+        customLoadComicDetail(itemId);
+    }
+}
+
+function customLoadDetail(itemId) {
+    // This is called by the base template, but we override with specific functions
+    customLoadComicDetail(itemId);
+}
+
+function customLoadSeriesDetail(seriesName) {
+    const container = document.getElementById('comic-detail-container');
+    
+    // Find the series data
+    const series = currentComicsData.find(s => s.name === seriesName);
+    if (!series) {
+        container.innerHTML = `
+            <div class="alert alert-warning m-3">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Comic series not found.
+            </div>
+        `;
+        return;
+    }
+    
+    const html = `
+        <div class="detail-content">
+            <div class="detail-header">
+                <h2 class="detail-title">
+                    <i class="fas fa-mask me-2 text-warning"></i>
+                    ${escapeHtml(series.name)}
+                </h2>
+                <h5 class="detail-subtitle">Comic Series</h5>
+                <div class="detail-meta">
+                    <div class="detail-meta-item">
+                        <div class="detail-meta-label">Issues</div>
+                        <div class="detail-meta-value">${series.book_count}</div>
+                    </div>
+                    <div class="detail-meta-item">
+                        <div class="detail-meta-label">Total Size</div>
+                        <div class="detail-meta-value">${formatFileSize(series.total_size)}</div>
+                    </div>
+                    <div class="detail-meta-item">
+                        <div class="detail-meta-label">Format</div>
+                        <div class="detail-meta-value">Comic Archive</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-12">
+                    <h6 class="fw-bold mb-3">Issues in Series</h6>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Issue</th>
+                                    <th>Title</th>
+                                    <th>Format</th>
+                                    <th>Size</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${series.books.map(comic => `
+                                    <tr onclick="customLoadComicDetail(${comic.id})" class="clickable-row">
+                                        <td>
+                                            ${comic.position ? `#${comic.position}` : '-'}
+                                        </td>
+                                        <td>
+                                            <strong>${escapeHtml(comic.title)}</strong><br>
+                                            <small class="text-muted">${escapeHtml(comic.author)}</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info">${comic.file_format.toUpperCase()}</span>
+                                        </td>
+                                        <td>${formatFileSize(comic.file_size)}</td>
+                                        <td>
+                                            <a href="{% url 'books:book_detail' 0 %}".replace('0', '${comic.id}') class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="detail-actions">
+                <button class="btn btn-primary" onclick="readFirstIssue('${series.books[0]?.id}')">
+                    <i class="fas fa-book-open me-1"></i>Read First Issue
+                </button>
+                <button class="btn btn-outline-info" onclick="viewAllIssues('${escapeHtml(series.name)}')">
+                    <i class="fas fa-list me-1"></i>View All Issues
+                </button>
+                <button class="btn btn-outline-success" onclick="rescanSeries('${escapeHtml(series.name)}')">
+                    <i class="fas fa-sync me-1"></i>Rescan Series
+                </button>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+    container.classList.add('fade-in');
+    
+    // Handle mobile layout
+    if (window.innerWidth <= 768) {
+        SplitPane.handleMobileLayout();
+        SplitPane.addMobileBackButton();
+    }
+}
+
+function customLoadComicDetail(comicId) {
+    const container = document.getElementById('comic-detail-container');
+    showLoadingState(container, 'Loading comic details...');
+    
+    fetch(`{% url "books:ebooks_ajax_detail" 0 %}`.replace('0', comicId))
+        .then(response => response.json())
+        .then(data => {
+            renderComicDetail(data.ebook);
+            
+            // Handle mobile layout
+            if (window.innerWidth <= 768) {
+                SplitPane.handleMobileLayout();
+                SplitPane.addMobileBackButton();
+            }
+        })
+        .catch(error => {
+            console.error('Error loading comic detail:', error);
+            container.innerHTML = `
+                <div class="alert alert-danger m-3">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error loading comic details. Please try again.
+                </div>
+            `;
+        });
+}
+
+function renderComicDetail(comic) {
+    const container = document.getElementById('comic-detail-container');
+    
+    const html = `
+        <div class="detail-content">
+            <div class="detail-header">
+                <h2 class="detail-title">
+                    <i class="fas fa-mask me-2 text-warning"></i>
+                    ${escapeHtml(comic.title)}
+                </h2>
+                <h5 class="detail-subtitle">by ${escapeHtml(comic.author)}</h5>
+                ${comic.series_name ? `
+                    <div class="alert alert-info">
+                        <i class="fas fa-layer-group me-2"></i>
+                        Part of series: <strong>${escapeHtml(comic.series_name)}</strong>
+                        ${comic.series_position ? ` (Issue #${comic.series_position})` : ''}
+                    </div>
+                ` : ''}
+                <div class="detail-meta">
+                    <div class="detail-meta-item">
+                        <div class="detail-meta-label">Format</div>
+                        <div class="detail-meta-value">${comic.file_format.toUpperCase()}</div>
+                    </div>
+                    <div class="detail-meta-item">
+                        <div class="detail-meta-label">File Size</div>
+                        <div class="detail-meta-value">${formatFileSize(comic.file_size)}</div>
+                    </div>
+                    <div class="detail-meta-item">
+                        <div class="detail-meta-label">Publisher</div>
+                        <div class="detail-meta-value">${escapeHtml(comic.publisher || 'Unknown')}</div>
+                    </div>
+                    <div class="detail-meta-item">
+                        <div class="detail-meta-label">Language</div>
+                        <div class="detail-meta-value">${escapeHtml(comic.language || 'Unknown')}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    ${comic.cover_url ? `
+                        <img src="${comic.cover_url}" alt="Comic Cover" class="detail-cover img-fluid">
+                    ` : `
+                        <div class="detail-cover bg-light d-flex align-items-center justify-content-center detail-cover-placeholder">
+                            <i class="fas fa-mask fa-3x text-muted"></i>
+                        </div>
+                    `}
+                </div>
+                <div class="col-md-8">
+                    ${comic.description ? `
+                        <h6 class="fw-bold">Description</h6>
+                        <p class="text-muted">${escapeHtml(comic.description)}</p>
+                    ` : ''}
+                    
+                    ${comic.isbn ? `
+                        <div class="mb-2">
+                            <strong>ISBN:</strong> ${escapeHtml(comic.isbn)}
+                        </div>
+                    ` : ''}
+                    
+                    ${comic.publication_date ? `
+                        <div class="mb-2">
+                            <strong>Publication Date:</strong> ${formatDate(comic.publication_date)}
+                        </div>
+                    ` : ''}
+                    
+                    ${comic.genres && comic.genres.length > 0 ? `
+                        <div class="mb-3">
+                            <strong>Genres:</strong>
+                            ${comic.genres.map(genre => `<span class="badge bg-secondary me-1">${escapeHtml(genre)}</span>`).join('')}
+                        </div>
+                    ` : ''}
+                    
+                    <div class="comic-specific-info">
+                        <h6 class="fw-bold">Comic Information</h6>
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted">Archive Type:</small><br>
+                                <strong>${comic.file_format.toUpperCase()}</strong>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">File Size:</small><br>
+                                <strong>${formatFileSize(comic.file_size)}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="detail-actions">
+                <button class="btn btn-primary" onclick="readComic(${comic.id})">
+                    <i class="fas fa-book-open me-1"></i>Read Comic
+                </button>
+                <a href="{% url 'books:book_detail' 0 %}".replace('0', '${comic.id}') class="btn btn-outline-primary">
+                    <i class="fas fa-eye me-1"></i>View Full Details
+                </a>
+                <a href="{% url 'books:book_metadata' 0 %}".replace('0', '${comic.id}') class="btn btn-outline-info">
+                    <i class="fas fa-edit me-1"></i>Edit Metadata
+                </a>
+                ${comic.series_name ? `
+                    <button class="btn btn-outline-secondary" onclick="viewSeriesIssues('${escapeHtml(comic.series_name)}')">
+                        <i class="fas fa-layer-group me-1"></i>View Series
+                    </button>
+                ` : ''}
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+    container.classList.add('fade-in');
+}
+
+function readComic(comicId) {
+    // This would open a comic reader - for now just show a placeholder
+    showToast('Comic reader functionality not yet implemented', 'info');
+}
+
+function readFirstIssue(comicId) {
+    if (comicId) {
+        readComic(comicId);
+    }
+}
+
+function viewSeriesIssues(seriesName) {
+    // Expand the series in the list and select it
+    expandedSeries.add(seriesName);
+    renderComicsList();
+    selectItem(seriesName, 'series');
+}
+
+function viewAllIssues(seriesName) {
+    // Navigate to comics section with series filter
+    window.location.href = `{% url 'books:comics_main' %}?series=${encodeURIComponent(seriesName)}`;
+}
+
+function rescanSeries(seriesName) {
+    if (!confirm(`Are you sure you want to rescan all issues in the series "${seriesName}"? This will fetch fresh metadata from external sources.`)) {
+        return;
+    }
+    
+    showToast(`Rescanning comic series "${seriesName}"...`, 'info');
+    
+    // Find all comics in the series and rescan them
+    const series = currentComicsData.find(s => s.name === seriesName);
+    if (series) {
+        const comicIds = series.books.map(comic => comic.id);
+        rescanMultipleComics(comicIds);
+    }
+}
+
+function rescanMultipleComics(comicIds) {
+    // This would need to be implemented as a batch operation
+    showToast('Batch rescanning is not yet implemented', 'warning');
+}
+
+// Utility functions (same as in other templates)
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatFileSize(bytes) {
+    if (!bytes) return 'Unknown';
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+function formatDate(dateString) {
+    if (!dateString) return 'Unknown';
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type} position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" onclick="this.parentElement.remove()" aria-label="Close"></button>
+    `;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.remove();
+        }
+    }, 5000);
+}
+
+// Handle item activation (double-click or Enter)
+function onItemActivate(itemId) {
+    const selectedElement = document.querySelector('.selected');
+    if (selectedElement) {
+        const itemType = selectedElement.getAttribute('data-item-type');
+        if (itemType === 'series') {
+            viewAllIssues(itemId);
+        } else {
+            readComic(itemId);
+        }
+    }
+}
+</script>
+{% endblock %}

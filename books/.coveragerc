@@ -1,0 +1,14 @@
+[run]
+source = books
+
+[report]
+omit =
+    */migrations/*
+    */tests/*
+    */__init__.py
+    books/static/*
+    books/templates/*
+    manage.py
+
+[html]
+directory = htmlcov

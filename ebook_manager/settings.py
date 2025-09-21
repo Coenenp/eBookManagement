@@ -92,6 +92,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'books.context_processors.theme_context',
             ],
         },
     },
@@ -202,6 +203,9 @@ GOOGLE_BOOKS_API_KEY = os.getenv('GOOGLE_BOOKS_API_KEY')
 
 # Comic Vine API Key
 COMICVINE_API_KEY = os.getenv('COMICVINE_API_KEY')
+
+# Apify API Token for Goodreads scraping (optional)
+APIFY_API_TOKEN = os.getenv('APIFY_API_TOKEN')
 
 # Logging configuration
 LOGGING = {

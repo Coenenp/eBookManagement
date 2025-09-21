@@ -123,10 +123,23 @@ class PublisherAdmin(admin.ModelAdmin):
 
 @admin.register(ScanFolder)
 class ScanFolderAdmin(admin.ModelAdmin):
-    list_display = ('name', 'path', 'language', 'created_at', 'is_active', 'last_scanned')
-    list_filter = ('language', 'is_active', 'created_at')
+    list_display = ('name', 'path', 'content_type', 'language', 'created_at', 'is_active', 'last_scanned')
+    list_filter = ('content_type', 'language', 'is_active', 'created_at')
     search_fields = ('name', 'path')
     readonly_fields = ('created_at', 'last_scanned')
+
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'path', 'content_type', 'language')
+        }),
+        ('Status', {
+            'fields': ('is_active',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'last_scanned'),
+            'classes': ('collapse',)
+        }),
+    )
 
 
 @admin.register(Book)

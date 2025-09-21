@@ -38,8 +38,11 @@ def scan_dashboard(request):
             'healthy': api_health.get(api_name, False)
         }
 
-    # Get recent scan folders
-    recent_folders = ScanFolder.objects.order_by('-created_at')[:10]
+    # Get recent scan folders with book count annotation
+    from django.db.models import Count
+    recent_folders = ScanFolder.objects.annotate(
+        book_count=Count('book')
+    ).order_by('-created_at')[:10]
 
     context = {
         'active_scans': active_scans,
@@ -56,24 +59,25 @@ def scan_dashboard(request):
 def start_folder_scan(request):
     """Start a background folder scan."""
     folder_path = request.POST.get('folder_path')
+    content_type = request.POST.get('content_type', 'ebooks')
     language = request.POST.get('language', 'en')
     enable_external_apis = request.POST.get('enable_external_apis') == 'on'
 
     if not folder_path:
         messages.error(request, "Folder path is required")
-        return redirect('scan_dashboard')
+        return redirect('books:scan_dashboard')
 
     # Generate job ID
     job_id = str(uuid.uuid4())
 
     try:
         # Start background scan
-        background_scan_folder(job_id, folder_path, language, enable_external_apis)
+        background_scan_folder(job_id, folder_path, language, enable_external_apis, content_type)
         messages.success(request, f"Background scan started for {folder_path} (Job ID: {job_id})")
     except Exception as e:
         messages.error(request, f"Failed to start scan: {str(e)}")
 
-    return redirect('scan_dashboard')
+    return redirect('books:scan_dashboard')
 
 
 @login_required
@@ -98,21 +102,21 @@ def start_book_rescan(request):
             scan_description = f"{len(book_ids)} books in {folder.name}"
         except ScanFolder.DoesNotExist:
             messages.error(request, "Folder not found")
-            return redirect('scan_dashboard')
+            return redirect('books:scan_dashboard')
     elif book_ids_str:
         try:
             book_ids = [int(id_str.strip()) for id_str in book_ids_str.split(',') if id_str.strip()]
             scan_description = f"{len(book_ids)} selected books"
         except ValueError:
             messages.error(request, "Invalid book IDs")
-            return redirect('scan_dashboard')
+            return redirect('books:scan_dashboard')
     else:
         messages.error(request, "Must specify books to rescan")
-        return redirect('scan_dashboard')
+        return redirect('books:scan_dashboard')
 
     if not book_ids:
         messages.warning(request, "No books found to rescan")
-        return redirect('scan_dashboard')
+        return redirect('books:scan_dashboard')
 
     # Generate job ID
     job_id = str(uuid.uuid4())
@@ -124,7 +128,7 @@ def start_book_rescan(request):
     except Exception as e:
         messages.error(request, f"Failed to start rescan: {str(e)}")
 
-    return redirect('scan_dashboard')
+    return redirect('books:scan_dashboard')
 
 
 @login_required

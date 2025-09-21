@@ -4,13 +4,351 @@
 {% load book_extras %}
 {% block title %}Dashboard - Ebook Library Manager{% endblock %}
 
+{% block extra_css %}
+<style>
+.stat-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+    border: none;
+    border-radius: 0.75rem;
+    overflow: hidden;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.stat-card .card-body {
+    padding: 1.5rem;
+}
+
+.stat-icon {
+    font-size: 2.5rem;
+    opacity: 0.8;
+}
+
+.stat-number {
+    font-size: 2.8rem;
+    font-weight: 700;
+    line-height: 1;
+    margin: 0.5rem 0;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    opacity: 0.9;
+    margin-bottom: 0.25rem;
+}
+
+.stat-progress {
+    margin-top: 0.75rem;
+    height: 6px !important;
+}
+
+/* Dynamic progress bar widths using CSS custom properties */
+.progress-bar-ebook {
+    width: var(--ebook-width, 0%);
+}
+
+.progress-bar-comic {
+    width: var(--comic-width, 0%);
+}
+
+.progress-bar-audiobook {
+    width: var(--audiobook-width, 0%);
+}
+
+.progress-bar-series {
+    width: var(--series-width, 0%);
+}
+
+.progress-bar-author {
+    width: var(--author-width, 85%);
+}
+
+.chart-container {
+    position: relative;
+    height: 300px;
+    margin: 1rem 0;
+}
+
+.chart-container canvas {
+    max-height: 300px;
+}
+
+.issue-card {
+    border-left: 4px solid;
+    transition: all 0.2s ease;
+}
+
+.issue-card:hover {
+    transform: translateX(4px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+/* Use Bootstrap theme colors for issue severity */
+.issue-high { 
+    border-left-color: var(--bs-danger, #dc3545); 
+}
+
+.issue-medium { 
+    border-left-color: var(--bs-warning, #fd7e14); 
+}
+
+.issue-low { 
+    border-left-color: var(--bs-warning, #ffc107); 
+}
+
+.issue-info { 
+    border-left-color: var(--bs-info, #0dcaf0); 
+}
+
+.activity-item {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--bs-border-color, #e9ecef);
+    transition: background-color 0.2s ease;
+}
+
+.activity-item:hover {
+    background-color: var(--bs-light, #f8f9fa);
+}
+
+.quality-score {
+    position: relative;
+    display: inline-block;
+}
+
+.quality-score .progress {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, var(--bs-gray-300, #e9ecef) 0deg, var(--bs-gray-300, #e9ecef) 360deg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.filter-section {
+    background: linear-gradient(135deg, var(--bs-primary, #667eea) 0%, var(--bs-purple, #764ba2) 100%);
+    border-radius: 1rem;
+    color: white;
+    margin-bottom: 2rem;
+}
+
+.filter-section .form-control,
+.filter-section .form-select {
+    background: rgba(255,255,255,0.9);
+    border: none;
+    border-radius: 0.5rem;
+}
+
+.filter-dropdown {
+    min-width: 250px;
+}
+
+/* Purple color using Bootstrap purple if available, fallback to custom */
+.bg-purple {
+    background-color: var(--bs-purple, #6f42c1) !important;
+}
+
+@media (max-width: 768px) {
+    .stat-number {
+        font-size: 2rem;
+    }
+    
+    .chart-container {
+        height: 250px;
+    }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
-    <!-- Page Header -->
+    <!-- Header Section -->
     <div class="row mb-4">
         <div class="col-12">
-            <h1 class="mb-0">Library Dashboard</h1>
-            <p class="text-muted">Overview of your ebook library management system</p>
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h2 mb-1">
+                        <i class="fas fa-tachometer-alt text-primary me-2"></i>
+                        Library Analytics Dashboard
+                    </h1>
+                    <p class="text-muted mb-0">
+                        Comprehensive overview of your ebook library with {{ total_books }} books
+                    </p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-outline-primary" id="refreshDashboard">
+                        <i class="fas fa-sync-alt me-1"></i>Refresh
+                    </button>
+                    <div class="dropdown">
+                        <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-filter me-1"></i>Filters
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end p-3 filter-dropdown">
+                            <form id="dashboardFilters">
+                                <div class="mb-3">
+                                    <label for="content_type" class="form-label small">Content Type</label>
+                                    <select class="form-select form-select-sm" name="content_type" id="content_type" aria-label="Filter by content type">
+                                        <option value="">All Content</option>
+                                        <option value="ebook">E-books</option>
+                                        <option value="comic">Comics</option>
+                                        <option value="audiobook">Audiobooks</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="review_status" class="form-label small">Review Status</label>
+                                    <select class="form-select form-select-sm" name="review_status" id="review_status" aria-label="Filter by review status">
+                                        <option value="">All Books</option>
+                                        <option value="reviewed">Reviewed</option>
+                                        <option value="unreviewed">Needs Review</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm w-100">Apply Filters</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Statistics Cards -->
+    <div class="row mb-4">
+        <!-- Total Books -->
+        <div class="col-lg-2 col-md-4 col-6 mb-3">
+            <div class="card stat-card h-100 bg-primary text-white" onclick="navigateToBooks()" role="button" tabindex="0" aria-label="Navigate to all books">
+                <div class="card-body text-center">
+                    <i class="fas fa-book stat-icon" aria-hidden="true"></i>
+                    <div class="stat-number">{{ total_books|default:0 }}</div>
+                    <div class="stat-label">Total Books</div>
+                    <div class="progress stat-progress">
+                        <div class="progress-bar bg-light w-100" aria-label="100% of library"></div>
+                    </div>
+                    <small class="opacity-75 mt-1 d-block">All formats</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- E-books -->
+        <div class="col-lg-2 col-md-4 col-6 mb-3">
+            <div class="card stat-card h-100 bg-success text-white" onclick="navigateToEbooks()" role="button" tabindex="0" aria-label="Navigate to ebooks">
+                <div class="card-body text-center">
+                    <i class="fas fa-book-open stat-icon" aria-hidden="true"></i>
+                    <div class="stat-number">{{ ebook_count|default:0 }}</div>
+                    <div class="stat-label">E-books</div>
+                    {% widthratio ebook_count total_books 100 as ebook_percentage %}
+                    <div class="progress stat-progress">
+                        <div class="progress-bar bg-light progress-bar-ebook" data-width="{{ ebook_percentage }}" aria-label="{{ ebook_percentage }}% of library are ebooks"></div>
+                    </div>
+                    <small class="opacity-75 mt-1 d-block">{{ ebook_percentage }}% of library</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comics -->
+        <div class="col-lg-2 col-md-4 col-6 mb-3">
+            <div class="card stat-card h-100 bg-info text-white" onclick="navigateToComics()" role="button" tabindex="0" aria-label="Navigate to comics">
+                <div class="card-body text-center">
+                    <i class="fas fa-mask stat-icon" aria-hidden="true"></i>
+                    <div class="stat-number">{{ comic_count|default:0 }}</div>
+                    <div class="stat-label">Comics</div>
+                    {% widthratio comic_count total_books 100 as comic_percentage %}
+                    <div class="progress stat-progress">
+                        <div class="progress-bar bg-light progress-bar-comic" data-width="{{ comic_percentage }}" aria-label="{{ comic_percentage }}% of library are comics"></div>
+                    </div>
+                    <small class="opacity-75 mt-1 d-block">{{ comic_percentage }}% of library</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Audiobooks -->
+        <div class="col-lg-2 col-md-4 col-6 mb-3">
+            <div class="card stat-card h-100 bg-warning text-white" onclick="navigateToAudiobooks()" role="button" tabindex="0" aria-label="Navigate to audiobooks">
+                <div class="card-body text-center">
+                    <i class="fas fa-headphones stat-icon" aria-hidden="true"></i>
+                    <div class="stat-number">{{ audiobook_count|default:0 }}</div>
+                    <div class="stat-label">Audiobooks</div>
+                    {% widthratio audiobook_count total_books 100 as audiobook_percentage %}
+                    <div class="progress stat-progress">
+                        <div class="progress-bar bg-light progress-bar-audiobook" data-width="{{ audiobook_percentage }}" aria-label="{{ audiobook_percentage }}% of library are audiobooks"></div>
+                    </div>
+                    <small class="opacity-75 mt-1 d-block">{{ audiobook_percentage }}% of library</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Series -->
+        <div class="col-lg-2 col-md-4 col-6 mb-3">
+            <div class="card stat-card h-100 bg-purple text-white" onclick="navigateToSeries()" role="button" tabindex="0" aria-label="Navigate to series">
+                <div class="card-body text-center">
+                    <i class="fas fa-layer-group stat-icon" aria-hidden="true"></i>
+                    <div class="stat-number">{{ series_count|default:0 }}</div>
+                    <div class="stat-label">Series</div>
+                    {% if series_count > 0 %}
+                        {% widthratio series_with_books series_count 100 as series_filled_percentage %}
+                    {% else %}
+                        {% widthratio 0 1 100 as series_filled_percentage %}
+                    {% endif %}
+                    <div class="progress stat-progress">
+                        <div class="progress-bar bg-light progress-bar-series" data-width="{{ series_filled_percentage }}" aria-label="{{ series_filled_percentage }}% of series have books"></div>
+                    </div>
+                    <small class="opacity-75 mt-1 d-block">{{ series_with_books }} with books</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Authors -->
+        <div class="col-lg-2 col-md-4 col-6 mb-3">
+            <div class="card stat-card h-100 bg-secondary text-white" onclick="navigateToAuthors()" role="button" tabindex="0" aria-label="Navigate to authors">
+                <div class="card-body text-center">
+                    <i class="fas fa-users stat-icon" aria-hidden="true"></i>
+                    <div class="stat-number">{{ author_count|default:0 }}</div>
+                    <div class="stat-label">Authors</div>
+                    <div class="progress stat-progress">
+                        <div class="progress-bar bg-light progress-bar-author" data-width="85" aria-label="Author data completeness"></div>
+                    </div>
+                    <small class="opacity-75 mt-1 d-block">{{ genre_count }} genres</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analytics Charts Section -->
+    <div class="row mb-4">
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-pie text-primary me-2"></i>Format Distribution
+                    </h5>
+                    <small class="text-muted">{{ total_books }} total files</small>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="formatChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-bar text-success me-2"></i>Metadata Completeness
+                    </h5>
+                    <small class="text-muted">{{ completion_percentage|floatformat:1 }}% complete</small>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="metadataChart"></canvas>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -352,6 +690,7 @@
                                 <thead class="table-light">
                                     <tr>
                                         <th>Path</th>
+                                        <th>Content Type</th>
                                         <th>Books</th>
                                         <th>Status</th>
                                     </tr>
@@ -361,6 +700,17 @@
                                     <tr>
                                         <td>
                                             <small class="text-muted font-monospace">{{ folder.path|truncatechars:30 }}</small>
+                                        </td>
+                                        <td>
+                                            {% if folder.content_type == 'ebooks' %}
+                                                <span class="badge bg-primary">{{ folder.get_content_type_display }}</span>
+                                            {% elif folder.content_type == 'comics' %}
+                                                <span class="badge bg-warning">{{ folder.get_content_type_display }}</span>
+                                            {% elif folder.content_type == 'audiobooks' %}
+                                                <span class="badge bg-info">{{ folder.get_content_type_display }}</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">{{ folder.get_content_type_display|default:"Mixed" }}</span>
+                                            {% endif %}
                                         </td>
                                         <td>
                                             <span class="badge bg-secondary">{{ folder.book_count }}</span>
@@ -530,7 +880,38 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Set progress bar widths using CSS custom properties
+    // Set progress bar widths using CSS custom properties for stat cards
+    const ebookBar = document.querySelector('.progress-bar-ebook');
+    if (ebookBar) {
+        const width = ebookBar.getAttribute('data-width');
+        document.documentElement.style.setProperty('--ebook-width', width + '%');
+    }
+    
+    const comicBar = document.querySelector('.progress-bar-comic');
+    if (comicBar) {
+        const width = comicBar.getAttribute('data-width');
+        document.documentElement.style.setProperty('--comic-width', width + '%');
+    }
+    
+    const audiobookBar = document.querySelector('.progress-bar-audiobook');
+    if (audiobookBar) {
+        const width = audiobookBar.getAttribute('data-width');
+        document.documentElement.style.setProperty('--audiobook-width', width + '%');
+    }
+    
+    const seriesBar = document.querySelector('.progress-bar-series');
+    if (seriesBar) {
+        const width = seriesBar.getAttribute('data-width');
+        document.documentElement.style.setProperty('--series-width', width + '%');
+    }
+    
+    const authorBar = document.querySelector('.progress-bar-author');
+    if (authorBar) {
+        const width = authorBar.getAttribute('data-width');
+        document.documentElement.style.setProperty('--author-width', width + '%');
+    }
+
+    // Set progress bar widths for quality metrics
     const confidenceBar = document.querySelector('.progress-bar-confidence');
     if (confidenceBar) {
         const width = confidenceBar.getAttribute('data-width');
@@ -549,6 +930,43 @@ document.addEventListener('DOMContentLoaded', function() {
         const width = bar.getAttribute('data-width');
         bar.style.setProperty('--format-width', width + '%');
     });
+});
+
+// Navigation functions for dashboard cards
+function navigateToBooks() {
+    window.location.href = '{% url "books:book_list" %}';
+}
+
+function navigateToEbooks() {
+    window.location.href = '{% url "books:ebooks_main" %}';
+}
+
+function navigateToComics() {
+    window.location.href = '{% url "books:comics_main" %}';
+}
+
+function navigateToAudiobooks() {
+    window.location.href = '{% url "books:audiobooks_main" %}';
+}
+
+function navigateToSeries() {
+    window.location.href = '{% url "books:series_main" %}';
+}
+
+function navigateToAuthors() {
+    window.location.href = '{% url "books:author_list" %}';
+}
+
+// Dashboard refresh functionality
+document.getElementById('refreshDashboard')?.addEventListener('click', function() {
+    location.reload();
+});
+
+// Filter form handling
+document.getElementById('dashboardFilters')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    // In future implementation, update dashboard with filters via AJAX
+    console.log('Filters applied:', new FormData(this));
 });
 </script>
 {% endblock %}

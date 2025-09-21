@@ -472,7 +472,7 @@ class ScanFolderModelTests(TestCase):
 
     def test_scan_folder_str_representation(self):
         """Test scan folder string representation"""
-        self.assertEqual(str(self.scan_folder), "Test Scan Folder")
+        self.assertEqual(str(self.scan_folder), "Test Scan Folder (Ebooks)")
 
     def test_scan_folder_default_language(self):
         """Test default language setting"""

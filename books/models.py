@@ -89,8 +89,21 @@ class DataSource(models.Model):
 
 
 class ScanFolder(models.Model):
+    CONTENT_TYPE_CHOICES = [
+        ('ebooks', 'Ebooks'),
+        ('comics', 'Comics'),
+        ('audiobooks', 'Audiobooks'),
+        ('mixed', 'Mixed Content'),  # For folders that contain multiple types
+    ]
+
     name = models.CharField(max_length=100, default='Untitled', blank=False, null=False)
     path = models.CharField(max_length=500)
+    content_type = models.CharField(
+        max_length=20,
+        choices=CONTENT_TYPE_CHOICES,
+        default='ebooks',
+        help_text="Type of content in this scan folder"
+    )
     language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, default='en')
     is_active = models.BooleanField(default=True)
     last_scanned = models.DateTimeField(null=True, blank=True)
@@ -98,7 +111,7 @@ class ScanFolder(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.get_content_type_display()})"
 
 
 class Book(models.Model):
@@ -124,6 +137,10 @@ class Book(models.Model):
     last_scanned = models.DateTimeField(auto_now=True)
     scan_folder = models.ForeignKey(ScanFolder, on_delete=models.CASCADE, null=True)
 
+    # Timestamp fields for compatibility with tests
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+
     # Status flags
     is_placeholder = models.BooleanField(default=False)
     is_duplicate = models.BooleanField(default=False)
@@ -132,14 +149,44 @@ class Book(models.Model):
     def save(self, *args, **kwargs):
         """Generate hash of file_path for unique constraint"""
         import hashlib
+        from django.db import IntegrityError
+
         if self.file_path:
             self.file_path_hash = hashlib.sha256(self.file_path.encode('utf-8')).hexdigest()
-        super().save(*args, **kwargs)
+
+        try:
+            super().save(*args, **kwargs)
+        except IntegrityError as e:
+            if 'file_path_hash' in str(e):
+                # Handle duplicate file_path_hash by checking if book already exists
+                import logging
+                logger = logging.getLogger("books.models")
+                logger.warning(f"Duplicate file_path_hash for {self.file_path}: {e}")
+
+                # If this is an update operation (book has pk), check if file_path changed
+                if self.pk:
+                    existing = Book.objects.get(pk=self.pk)
+                    if existing.file_path != self.file_path:
+                        # File path changed and conflicts with another book
+                        raise IntegrityError(f"File path {self.file_path} already exists in database")
+                else:
+                    # New book creation - check if book already exists
+                    try:
+                        existing_book = Book.objects.get(file_path_hash=self.file_path_hash)
+                        raise IntegrityError(f"Book with file path {self.file_path} already exists (ID: {existing_book.id})")
+                    except Book.DoesNotExist:
+                        # Hash collision or other integrity issue
+                        raise
+            else:
+                # Different integrity error
+                raise
 
     @classmethod
     def get_or_create_by_path(cls, file_path, defaults=None):
         """Get or create book by file path, using hash for lookup"""
         import hashlib
+        from django.db import IntegrityError
+
         file_path_hash = hashlib.sha256(file_path.encode('utf-8')).hexdigest()
 
         try:
@@ -150,8 +197,23 @@ class Book(models.Model):
                 defaults = {}
             defaults['file_path'] = file_path
             defaults['file_path_hash'] = file_path_hash
-            book = cls.objects.create(**defaults)
-            return book, True
+
+            try:
+                book = cls.objects.create(**defaults)
+                return book, True
+            except IntegrityError:
+                # Handle race condition where another process created the book
+                # between our check and creation attempt
+                try:
+                    book = cls.objects.get(file_path_hash=file_path_hash)
+                    return book, False
+                except cls.DoesNotExist:
+                    # If still not found, there might be a different integrity issue
+                    # Try with a slightly modified path to avoid infinite loops
+                    import logging
+                    logger = logging.getLogger("books.models")
+                    logger.warning(f"Integrity error creating book for path: {file_path}")
+                    raise
 
     def __str__(self):
         if self.is_placeholder:
@@ -951,3 +1013,76 @@ class AIFeedback(models.Model):
         """Calculate accuracy score based on rating."""
         # Convert 1-5 rating to 0-1 accuracy score
         return (self.feedback_rating - 1) / 4.0
+
+
+class UserProfile(models.Model):
+    """User preferences and settings"""
+    THEME_CHOICES = [
+        ('flatly', 'Flatly'),
+        ('cosmo', 'Cosmo'),
+        ('bootstrap', 'Bootstrap Default'),
+        ('cerulean', 'Cerulean'),
+        ('cyborg', 'Cyborg'),
+        ('darkly', 'Darkly'),
+        ('journal', 'Journal'),
+        ('litera', 'Litera'),
+        ('lumen', 'Lumen'),
+        ('lux', 'Lux'),
+        ('materia', 'Materia'),
+        ('minty', 'Minty'),
+        ('morph', 'Morph'),
+        ('pulse', 'Pulse'),
+        ('quartz', 'Quartz'),
+        ('sandstone', 'Sandstone'),
+        ('simplex', 'Simplex'),
+        ('sketchy', 'Sketchy'),
+        ('slate', 'Slate'),
+        ('solar', 'Solar'),
+        ('spacelab', 'Spacelab'),
+        ('superhero', 'Superhero'),
+        ('united', 'United'),
+        ('vapor', 'Vapor'),
+        ('yeti', 'Yeti'),
+        ('zephyr', 'Zephyr'),
+    ]
+
+    user = models.OneToOneField('auth.User', on_delete=models.CASCADE, related_name='profile')
+
+    # Theme preferences
+    theme = models.CharField(
+        max_length=20,
+        choices=THEME_CHOICES,
+        default='flatly',
+        help_text='Selected Bootswatch theme'
+    )
+
+    # Other UI preferences
+    items_per_page = models.IntegerField(default=50, help_text='Number of items to show per page')
+    show_covers_in_list = models.BooleanField(default=True, help_text='Show book covers in list views')
+    default_view_mode = models.CharField(
+        max_length=10,
+        choices=[('table', 'Table'), ('grid', 'Grid')],
+        default='table',
+        help_text='Default view mode for lists'
+    )
+
+    # Privacy preferences
+    share_reading_progress = models.BooleanField(default=False, help_text='Share reading progress with other users')
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'books_userprofile'
+        verbose_name = 'User Profile'
+        verbose_name_plural = 'User Profiles'
+
+    def __str__(self):
+        return f"{self.user.username}'s Profile"
+
+    @classmethod
+    def get_or_create_for_user(cls, user):
+        """Get or create profile for user"""
+        profile, created = cls.objects.get_or_create(user=user)
+        return profile

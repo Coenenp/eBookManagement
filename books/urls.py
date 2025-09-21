@@ -33,6 +33,11 @@ urlpatterns = [
     # Dashboard
     path('dashboard/', views.DashboardView.as_view(), name='dashboard'),
 
+    # User settings and preferences
+    path('settings/', views.UserSettingsView.as_view(), name='user_settings'),
+    path('settings/preview-theme/', views.preview_theme, name='preview_theme'),
+    path('settings/clear-theme-preview/', views.clear_theme_preview, name='clear_theme_preview'),
+
     # Book management
     path('books/', views.BookListView.as_view(), name='book_list'),
 
@@ -111,10 +116,90 @@ urlpatterns = [
     path('ajax/book/<int:book_id>/manage_cover/', views.ajax_manage_cover, name='ajax_manage_cover'),
     path('ajax/book/<int:book_id>/rescan/', views.ajax_rescan_external_metadata, name='ajax_rescan_external_metadata'),
 
+    # Book management AJAX
+    path('ajax/create-book/', views.ajax_create_book, name='ajax_create_book'),
+    path('ajax/update-book/', views.ajax_update_book, name='ajax_update_book'),
+    path('ajax/delete-book/', views.ajax_delete_book, name='ajax_delete_book'),
+    path('ajax/create-book-metadata/', views.ajax_create_book_metadata, name='ajax_create_book_metadata'),
+    path('ajax/update-book-metadata/', views.ajax_update_book_metadata, name='ajax_update_book_metadata'),
+    path('ajax/batch-update-metadata/', views.ajax_batch_update_metadata, name='ajax_batch_update_metadata'),
+    path('ajax/bulk-update-books/', views.ajax_bulk_update_books, name='ajax_bulk_update_books'),
+
+    # Scanning AJAX
+    path('ajax/trigger-scan/', views.ajax_trigger_scan, name='ajax_trigger_scan'),
+    path('ajax/add-scan-folder/', views.ajax_add_scan_folder, name='ajax_add_scan_folder'),
+
+    # File operations AJAX
+    path('ajax/upload-file/', views.ajax_upload_file, name='ajax_upload_file'),
+    path('ajax/upload-multiple-files/', views.ajax_upload_multiple_files, name='ajax_upload_multiple_files'),
+    path('ajax/upload-progress/', views.ajax_upload_progress, name='ajax_upload_progress'),
+    path('ajax/copy-book-file/', views.ajax_copy_book_file, name='ajax_copy_book_file'),
+    path('ajax/delete-book-file/', views.ajax_delete_book_file, name='ajax_delete_book_file'),
+    path('ajax/validate-file-format/', views.ajax_validate_file_format, name='ajax_validate_file_format'),
+    path('ajax/validate-file-integrity/', views.ajax_validate_file_integrity, name='ajax_validate_file_integrity'),
+    path('ajax/check-file-corruption/', views.ajax_check_file_corruption, name='ajax_check_file_corruption'),
+    path('ajax/processing-status/', views.ajax_processing_status, name='ajax_processing_status'),
+    path('ajax/add-to-processing-queue/', views.ajax_add_to_processing_queue, name='ajax_add_to_processing_queue'),
+
+    # User settings AJAX
+    path('ajax/update-theme-settings/', views.ajax_update_theme_settings, name='ajax_update_theme_settings'),
+    path('ajax/preview-theme/', views.ajax_preview_theme, name='ajax_preview_theme'),
+    path('ajax/reset-theme/', views.ajax_reset_theme, name='ajax_reset_theme'),
+    path('ajax/update-language/', views.ajax_update_language, name='ajax_update_language'),
+    path('ajax/get-supported-languages/', views.ajax_get_supported_languages, name='ajax_get_supported_languages'),
+    path('ajax/update-display-options/', views.ajax_update_display_options, name='ajax_update_display_options'),
+    path('ajax/clear-user-cache/', views.ajax_clear_user_cache, name='ajax_clear_user_cache'),
+    path('ajax/update-dashboard-layout/', views.ajax_update_dashboard_layout, name='ajax_update_dashboard_layout'),
+    path('ajax/update-favorite-genres/', views.ajax_update_favorite_genres, name='ajax_update_favorite_genres'),
+    path('ajax/update-reading-progress/', views.ajax_update_reading_progress, name='ajax_update_reading_progress'),
+    path('ajax/update-custom-tags/', views.ajax_update_custom_tags, name='ajax_update_custom_tags'),
+    path('ajax/export-preferences/', views.ajax_export_preferences, name='ajax_export_preferences'),
+    path('ajax/import-preferences/', views.ajax_import_preferences, name='ajax_import_preferences'),
+    path('ajax/update-user-preferences/', views.ajax_update_user_preferences, name='ajax_update_user_preferences'),
+
+    # Library management AJAX
+    path('ajax/create-library-folder/', views.ajax_create_library_folder, name='ajax_create_library_folder'),
+    path('ajax/check-disk-space/', views.ajax_check_disk_space, name='ajax_check_disk_space'),
+    path('ajax/test-connection/', views.ajax_test_connection, name='ajax_test_connection'),
+    path('ajax/search-books/', views.ajax_search_books, name='ajax_search_books'),
+    path('ajax/get-statistics/', views.ajax_get_statistics, name='ajax_get_statistics'),
+    path('ajax/clear-cache/', views.ajax_clear_cache, name='ajax_clear_cache'),
+
+    # Error handling and debugging AJAX
+    path('ajax/trigger-error/', views.ajax_trigger_error, name='ajax_trigger_error'),
+    path('ajax/force-error/', views.ajax_force_error, name='ajax_force_error'),
+    path('ajax/debug-operation/', views.ajax_debug_operation, name='ajax_debug_operation'),
+    path('ajax/long-running-operation/', views.ajax_long_running_operation, name='ajax_long_running_operation'),
+
+    # Cover handling AJAX
+    path('ajax/fetch-cover-image/', views.ajax_fetch_cover_image, name='ajax_fetch_cover_image'),
+
     # AI AJAX endpoints
     path('ajax/book/<int:book_id>/ai-feedback/', views.ajax_submit_ai_feedback, name='ajax_submit_ai_feedback'),
     path('ajax/ai/retrain/', views.ajax_retrain_ai_models, name='ajax_retrain_ai_models'),
     path('ajax/ai/status/', views.ajax_ai_model_status, name='ajax_ai_model_status'),
+    path('ajax/ai-suggest-metadata/', views.ajax_ai_suggest_metadata, name='ajax_ai_suggest_metadata'),
+
+    # Management views AJAX
+    path('ajax/bulk-rename-preview/', views.ajax_bulk_rename_preview, name='ajax_bulk_rename_preview'),
+    path('ajax/bulk-rename-execute/', views.ajax_bulk_rename_execute, name='ajax_bulk_rename_execute'),
+
+    # Legacy view name mappings for existing URLs
+    path('book_create/', views.ajax_create_book, name='book_create'),
+    path('preview_rename/', views.ajax_bulk_rename_preview, name='preview_rename'),
+    path('bulk_rename_preview/', views.ajax_bulk_rename_preview, name='bulk_rename_preview'),
+    path('bulk_rename_execute/', views.ajax_bulk_rename_execute, name='bulk_rename_execute'),
+    path('rename_book/', views.ajax_update_book, name='rename_book'),
+    path('upload_file/', views.ajax_upload_file, name='upload_file'),
+    path('delete_file/', views.ajax_delete_book_file, name='delete_file'),
+    path('clear_cache/', views.ajax_clear_cache, name='clear_cache'),
+    path('debug_view/', views.ajax_debug_operation, name='debug_view'),
+    path('system_status/', views.ajax_get_statistics, name='system_status'),
+    path('ai_suggest_metadata/<int:book_id>/', views.ajax_ai_suggest_metadata, name='ai_suggest_metadata'),
+    path('submit_ai_feedback/', views.ajax_submit_ai_feedback, name='submit_ai_feedback'),
+    path('logout/', views.logout_view, name='logout'),
+    path('metadata_list/', views.BookMetadataView.as_view(), name='metadata_list'),
+    path('dashboard/', views.DashboardView.as_view(), name='dashboard'),
 
     # ISBN lookup
     path('ajax/isbn-lookup/<str:isbn>/', views.isbn_lookup, name='isbn_lookup'),
