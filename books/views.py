@@ -174,7 +174,7 @@ try:
 except ImportError:
     # Create placeholder scanning status views
     class ScanStatusView(LoginRequiredMixin, TemplateView):
-        template_name = 'books/scan_status.html'
+        template_name = 'books/scanning/status.html'
 
     class TriggerScanView(LoginRequiredMixin, TemplateView):
         template_name = 'books/trigger_scan.html'

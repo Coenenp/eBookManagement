@@ -117,6 +117,75 @@ EbookLibrary.Forms = {
 };
 
 /**
+ * Ajax utilities - consolidated AJAX functionality
+ */
+EbookLibrary.Ajax = {
+    getCSRFToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+    },
+
+    async makeRequest(url, options = {}) {
+        const defaultOptions = {
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': this.getCSRFToken()
+            }
+        };
+
+        const mergedOptions = {
+            ...defaultOptions,
+            ...options,
+            headers: {
+                ...defaultOptions.headers,
+                ...options.headers
+            }
+        };
+
+        return fetch(url, mergedOptions);
+    }
+};
+
+/**
+ * UI utilities - user interface helpers
+ */
+EbookLibrary.UI = {
+    showAlert(message, type = 'info', duration = 5000) {
+        // Create alert element
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+        alertDiv.style.cssText = `
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            min-width: 300px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        `;
+        
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        // Add to page
+        document.body.appendChild(alertDiv);
+        
+        // Auto-remove after duration
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, duration);
+        
+        return alertDiv;
+    },
+
+    showToast(title, message, type = 'info') {
+        // Simple toast implementation using Bootstrap alert
+        return this.showAlert(`<strong>${title}</strong><br>${message}`, type);
+    }
+};
+
+/**
  * Progress bar utilities - consolidated progress bar initialization
  */
 EbookLibrary.ProgressBars = {

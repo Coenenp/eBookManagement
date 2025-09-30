@@ -68,7 +68,7 @@ class ScanningDashboard {
             }
         });
 
-        // Handle scan folder buttons
+        // Handle scan folder buttons and dropdown options
         document.addEventListener('click', (e) => {
             // Handle main scan buttons (default with external APIs)
             if (e.target.classList.contains('scan-folder-btn') || e.target.closest('.scan-folder-btn')) {
@@ -100,6 +100,47 @@ class ScanningDashboard {
                 
                 if (confirm(`Rescan folder "${folderName}"? This will update existing books.`)) {
                     this.startRescan(folderId);
+                }
+            }
+            
+            // Handle dropdown scan options
+            if (e.target.classList.contains('scan-with-api-btn')) {
+                e.preventDefault();
+                const folderId = e.target.getAttribute('data-folder-id');
+                const folderName = e.target.getAttribute('data-folder-name');
+                
+                if (confirm(`Start scanning folder "${folderName}" with external APIs?`)) {
+                    this.startFolderScanById(folderId, true);
+                }
+            }
+            
+            if (e.target.classList.contains('scan-without-api-btn')) {
+                e.preventDefault();
+                const folderId = e.target.getAttribute('data-folder-id');
+                const folderName = e.target.getAttribute('data-folder-name');
+                
+                if (confirm(`Start scanning folder "${folderName}" without external APIs?`)) {
+                    this.startFolderScanById(folderId, false);
+                }
+            }
+            
+            if (e.target.classList.contains('rescan-with-api-btn')) {
+                e.preventDefault();
+                const folderId = e.target.getAttribute('data-folder-id');
+                const folderName = e.target.getAttribute('data-folder-name');
+                
+                if (confirm(`Start rescanning folder "${folderName}" with external APIs? This will update existing books.`)) {
+                    this.startFolderRescanById(folderId, true);
+                }
+            }
+            
+            if (e.target.classList.contains('rescan-without-api-btn')) {
+                e.preventDefault();
+                const folderId = e.target.getAttribute('data-folder-id');
+                const folderName = e.target.getAttribute('data-folder-name');
+                
+                if (confirm(`Start rescanning folder "${folderName}" without external APIs? This will update existing books.`)) {
+                    this.startFolderRescanById(folderId, false);
                 }
             }
         });
@@ -400,17 +441,99 @@ class ScanningDashboard {
             const response = await fetch(url);
             const data = await response.json();
             
-            if (data.scans) {
-                // Update scan progress for each active scan
+            const activeScanContainer = document.querySelector('#active-scans-container');
+            if (!activeScanContainer) return;
+            
+            // Track if we had active scans before this update
+            const hadActiveScans = activeScanContainer.querySelectorAll('.scan-card').length > 0;
+            
+            // Check if there are any completed scans still showing success messages
+            const completedScans = activeScanContainer.querySelectorAll('.scan-card.completed, .scan-card.error');
+            const hasCompletedScans = completedScans.length > 0;
+            
+            if (data.scans && data.scans.length > 0) {
+                // Hide "no active scans" message
+                const noScansAlert = activeScanContainer.querySelector('.alert-info');
+                if (noScansAlert) {
+                    noScansAlert.style.display = 'none';
+                }
+                
+                // Update existing scans and add new ones
                 data.scans.forEach(scan => {
-                    this.updateScanProgress(scan.job_id);
+                    let scanCard = document.querySelector(`[data-job-id="${scan.job_id}"]`);
+                    if (!scanCard) {
+                        // Create new scan card if it doesn't exist
+                        this.createScanCard(scan, activeScanContainer);
+                    } else {
+                        // Update existing scan progress
+                        this.updateScanProgress(scan.job_id);
+                    }
                 });
-            } else if (data.status === 'success') {
-                this.renderActiveScans(data.active_scans);
+            } else {
+                // No active scans
+                if (hadActiveScans && !hasCompletedScans) {
+                    // Only refresh if we don't have completion messages showing
+                    console.log('All scans completed - refreshing to update folder states');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 8000); // Longer delay to let users see completion status
+                    return;
+                } else if (hasCompletedScans) {
+                    // Don't refresh yet - let completion messages show
+                    console.log('Scans completed but showing completion messages - delaying refresh');
+                    return;
+                }
+                
+                // Show "no active scans" message only if no completion messages
+                if (!hasCompletedScans) {
+                    const noScansAlert = activeScanContainer.querySelector('.alert-info');
+                    if (noScansAlert) {
+                        noScansAlert.style.display = 'block';
+                    }
+                    // Remove all scan cards
+                    activeScanContainer.querySelectorAll('.scan-card').forEach(card => card.remove());
+                }
             }
         } catch (error) {
             console.error('Failed to update active scans:', error);
         }
+    }
+
+    createScanCard(scan, container) {
+        const scanCard = document.createElement('div');
+        scanCard.className = 'card scan-card mb-2';
+        scanCard.setAttribute('data-job-id', scan.job_id);
+        scanCard.innerHTML = `
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h6 class="card-title mb-1">${scan.status || 'Scanning'}</h6>
+                        <div class="progress mb-2">
+                            <div class="progress-bar scan-progress-bar" role="progressbar"
+                                 style="width: ${scan.percentage || 0}%"
+                                 aria-label="Scan progress: ${scan.percentage || 0}% complete"
+                                 aria-valuenow="${scan.percentage || 0}"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100"
+                                 data-width="${scan.percentage || 0}">
+                                ${scan.percentage || 0}%
+                            </div>
+                        </div>
+                        <small class="text-muted scan-details">${scan.details || 'Processing...'}</small>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <button class="btn btn-outline-danger btn-sm cancel-scan-btn" 
+                                data-job-id="${scan.job_id}">
+                            <i class="fas fa-stop me-1"></i>Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Insert new card at the beginning
+        const firstChild = container.firstChild;
+        container.insertBefore(scanCard, firstChild);
     }
 
     /**
@@ -713,13 +836,104 @@ class ScanningDashboard {
     }
 }
 
-// Global instance
+// Global instance and initialization
 let scanningDashboard;
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     scanningDashboard = new ScanningDashboard();
+    
+    // Initialize progress bars immediately
+    initializeProgressBars();
+    
+    // Auto-refresh API status every 30 seconds
+    setInterval(updateAPIStatus, 30000);
+    
+    // Handle rescan type changes
+    document.querySelectorAll('input[name="rescan_type"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const folderGroup = document.getElementById('folder-select-group');
+            const bookIdsGroup = document.getElementById('book-ids-group');
+            
+            if (this.value === 'folder') {
+                folderGroup.classList.remove('hidden-group');
+                bookIdsGroup.classList.add('hidden-group');
+            } else if (this.value === 'specific') {
+                folderGroup.classList.add('hidden-group');
+                bookIdsGroup.classList.remove('hidden-group');
+            } else {
+                folderGroup.classList.add('hidden-group');
+                bookIdsGroup.classList.add('hidden-group');
+            }
+        });
+    });
 });
+
+// Global functions for backward compatibility and HTML onclick handlers
+window.initializeProgressBars = function() {
+    // Set width for API rate progress bars
+    document.querySelectorAll('.api-rate-progress').forEach(progressBar => {
+        const width = progressBar.getAttribute('data-width');
+        if (width !== null) {
+            progressBar.style.width = width + '%';
+        }
+    });
+    
+    // Set width for scan progress bars
+    document.querySelectorAll('.scan-progress-bar').forEach(progressBar => {
+        const width = progressBar.getAttribute('data-width');
+        if (width !== null) {
+            progressBar.style.width = width + '%';
+            // Update ARIA attributes for accessibility
+            if (progressBar.hasAttribute('role') && progressBar.getAttribute('role') === 'progressbar') {
+                progressBar.setAttribute('aria-valuenow', width);
+                progressBar.setAttribute('aria-label', `Scan progress: ${width}% complete`);
+            }
+        }
+    });
+};
+
+window.updateActiveScans = function() {
+    if (typeof scanningDashboard !== 'undefined' && scanningDashboard) {
+        scanningDashboard.updateActiveScans();
+    }
+};
+
+window.updateAPIStatus = function() {
+    if (typeof scanningDashboard !== 'undefined' && scanningDashboard) {
+        scanningDashboard.updateAPIStatus();
+    }
+};
+
+window.cancelScan = function(jobId) {
+    if (typeof scanningDashboard !== 'undefined' && scanningDashboard) {
+        scanningDashboard.cancelScanJob(jobId);
+    }
+};
+
+window.startFolderScanById = function(folderId, enableExternalApis = true) {
+    if (typeof scanningDashboard !== 'undefined' && scanningDashboard) {
+        scanningDashboard.startFolderScanById(folderId, enableExternalApis);
+    }
+};
+
+window.startFolderRescanById = function(folderId, enableExternalApis = true) {
+    if (typeof scanningDashboard !== 'undefined' && scanningDashboard) {
+        scanningDashboard.startFolderRescanById(folderId, enableExternalApis);
+    }
+};
+
+window.disableFolderButton = function(folderId) {
+    if (typeof scanningDashboard !== 'undefined' && scanningDashboard) {
+        scanningDashboard.disableFolderButton(folderId);
+    }
+};
+
+window.enableFolderButton = function(folderId) {
+    if (typeof scanningDashboard !== 'undefined' && scanningDashboard) {
+        scanningDashboard.enableFolderButton(folderId);
+    }
+};
 
 // Clean up when page is unloaded
 window.addEventListener('beforeunload', function() {
@@ -730,7 +944,7 @@ window.addEventListener('beforeunload', function() {
 
 /**
  * Scan Status Monitor - Live status updates for scan progress
- * Extracted from scan_status.html inline JavaScript
+ * Extracted from scanning/status.html inline JavaScript
  */
 class ScanStatusMonitor {
     constructor(statusUrl) {
@@ -948,9 +1162,203 @@ class ScanningQueue {
             }
         }
     }
+
+    // Enhanced folder scanning methods with API options
+    startFolderScanById(folderId, enableExternalApis = true) {
+        this.disableFolderButton(folderId);
+        
+        const formData = new FormData();
+        formData.append('csrfmiddlewaretoken', this.config.csrfToken);
+        formData.append('folder_id', folderId);
+        if (enableExternalApis) {
+            formData.append('enable_external_apis', 'on');
+        }
+        
+        fetch(this.config.startFolderScanUrl, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.text())
+        .then(data => {
+            this.updateActiveScans();
+            this.startAggressivePolling();
+            setTimeout(() => this.enableFolderButton(folderId), 3000);
+        })
+        .catch(error => {
+            console.error('Error starting scan:', error);
+            alert('Failed to start scan');
+            this.enableFolderButton(folderId);
+        });
+    }
+
+    startFolderRescanById(folderId, enableExternalApis = true) {
+        this.disableFolderButton(folderId);
+        
+        const formData = new FormData();
+        formData.append('csrfmiddlewaretoken', this.config.csrfToken);
+        formData.append('rescan_all', 'on');
+        formData.append('folder_id', folderId);
+        if (enableExternalApis) {
+            formData.append('enable_external_apis', 'on');
+        }
+        
+        fetch(this.config.startBookRescanUrl, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.text())
+        .then(data => {
+            this.updateActiveScans();
+            this.startAggressivePolling();
+            setTimeout(() => this.enableFolderButton(folderId), 3000);
+        })
+        .catch(error => {
+            console.error('Error starting rescan:', error);
+            alert('Failed to start rescan');
+            this.enableFolderButton(folderId);
+        });
+    }
+
+    disableFolderButton(folderId) {
+        const scanBtn = document.getElementById(`folder-${folderId}-scan-btn`);
+        const rescanBtn = document.getElementById(`folder-${folderId}-rescan-btn`);
+        
+        const btn = scanBtn || rescanBtn;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Starting...';
+            btn.classList.add('disabled');
+        }
+    }
+
+    enableFolderButton(folderId) {
+        const scanBtn = document.getElementById(`folder-${folderId}-scan-btn`);
+        const rescanBtn = document.getElementById(`folder-${folderId}-rescan-btn`);
+        
+        const btn = scanBtn || rescanBtn;
+        if (btn) {
+            btn.disabled = false;
+            btn.classList.remove('disabled');
+            if (btn.classList.contains('scan-folder-btn')) {
+                btn.innerHTML = '<i class="fas fa-play me-1"></i>Scan';
+            } else if (btn.classList.contains('rescan-folder-btn')) {
+                btn.innerHTML = '<i class="fas fa-redo me-1"></i>Rescan';
+            }
+        }
+    }
+
+    startAggressivePolling() {
+        let pollCount = 0;
+        const aggressivePoll = setInterval(() => {
+            this.updateActiveScans();
+            pollCount++;
+            if (pollCount >= 20) {
+                clearInterval(aggressivePoll);
+            }
+        }, 500);
+    }
 }
+
+/**
+ * Scan Status Page Monitor - Handles scan status page specific functionality
+ */
+class ScanStatusPageMonitor {
+    constructor(statusUrl) {
+        this.statusUrl = statusUrl;
+        this.intervalId = null;
+        this.init();
+    }
+
+    init() {
+        this.initializeProgressBar();
+        this.startPolling();
+    }
+
+    initializeProgressBar() {
+        // Initialize progress bar with CSS custom property
+        const progressBar = document.getElementById("scan-progress-bar");
+        if (progressBar) {
+            const width = progressBar.getAttribute("data-width") || "0";
+            progressBar.style.setProperty("--scan-width", width + "%");
+        }
+    }
+
+    async fetchStatus() {
+        try {
+            const response = await fetch(this.statusUrl);
+            const data = await response.json();
+            
+            if (data.status) {
+                // Update status badge classes
+                const statusBadge = document.getElementById("scan-status");
+                if (statusBadge) {
+                    statusBadge.textContent = data.status;
+                    statusBadge.className = "badge " + (
+                        data.status === "Running" ? "bg-primary" :
+                        data.status === "Completed" ? "bg-success" :
+                        data.status === "Failed" ? "bg-danger" : "bg-secondary"
+                    );
+                }
+                
+                const startedEl = document.getElementById("scan-started");
+                if (startedEl) startedEl.textContent = data.started;
+
+                const messageEl = document.getElementById("scan-message");
+                if (messageEl) messageEl.textContent = data.message;
+
+                const progressBar = document.getElementById("scan-progress-bar");
+                if (progressBar) {
+                    const progress = data.progress || 0;
+                    progressBar.style.setProperty("--scan-width", progress + "%");
+                    progressBar.textContent = progress + "%";
+                    progressBar.setAttribute("aria-valuenow", progress);
+                    
+                    // Update color class while preserving other classes
+                    const colorClass = "bg-" + (progress === 100 ? "success" : progress >= 50 ? "info" : "warning");
+                    progressBar.className = "progress-bar progress-bar-scan " + colorClass;
+                }
+
+                // Stop polling if scan is not running
+                if (data.status !== "Running") {
+                    this.stopPolling();
+                }
+            }
+        } catch (error) {
+            console.error("Status fetch error:", error);
+        }
+    }
+
+    startPolling() {
+        // Start immediately
+        this.fetchStatus();
+        
+        // Keep polling every 5 seconds
+        this.intervalId = setInterval(() => {
+            this.fetchStatus();
+        }, 5000);
+    }
+
+    stopPolling() {
+        if (this.intervalId) {
+            clearInterval(this.intervalId);
+            this.intervalId = null;
+        }
+    }
+
+    destroy() {
+        this.stopPolling();
+    }
+}
+
+// Clean up when page is unloaded
+window.addEventListener('beforeunload', function() {
+    if (scanningDashboard) {
+        scanningDashboard.destroy();
+    }
+});
 
 // Export for global access
 window.ScanningDashboard = ScanningDashboard;
 window.ScanStatusMonitor = ScanStatusMonitor;
+window.ScanStatusPageMonitor = ScanStatusPageMonitor;
 window.ScanningQueue = ScanningQueue;

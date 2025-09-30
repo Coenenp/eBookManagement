@@ -7,12 +7,12 @@
    🎨 Form Cards & Containers
 ========================================= */
 
-/* Main form containers */
+/* Main form containers - Compatible with all Bootstrap themes */
 .form-card {
     border: none;
-    border-radius: var(--theme-border-radius);
+    border-radius: var(--bs-border-radius, 0.375rem);
     box-shadow: var(--bs-box-shadow-sm);
-    transition: var(--theme-transition);
+    transition: box-shadow 0.15s ease-in-out;
 }
 
 .form-card:hover {
@@ -22,7 +22,7 @@
 .form-card .card-header {
     background: var(--bs-primary-bg-subtle);
     border: none;
-    border-radius: var(--theme-border-radius) var(--theme-border-radius) 0 0;
+    border-radius: var(--bs-border-radius, 0.375rem) var(--bs-border-radius, 0.375rem) 0 0;
 }
 
 .form-card .card-header h5,
@@ -49,20 +49,17 @@
     width: 16px;
 }
 
-/* Form control enhancements */
+/* Form control enhancements - Let Bootswatch themes handle base styling */
 .form-control,
 .form-select {
-    border: 1px solid var(--bs-border-color);
-    border-radius: var(--theme-border-radius);
-    padding: 0.75rem;
-    transition: var(--theme-transition);
-    box-shadow: none;
+    /* Only add enhancements, don't override theme base styles */
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
 
-.form-control:focus,
-.form-select:focus {
-    border-color: var(--bs-primary);
-    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+/* Only apply custom styling if theme variables aren't available */
+.form-control:where(:not([class*="form-control-"])),
+.form-select:where(:not([class*="form-select-"])) {
+    border-radius: var(--bs-border-radius, 0.375rem);
 }
 
 /* Form text and help text */
@@ -294,6 +291,182 @@
 [data-bs-theme="dark"] .status-toggle {
     background: var(--bs-dark);
     border-color: var(--bs-border-color);
+}
+
+/* ======================================
+   🎨 Bootswatch Theme Priority
+========================================= */
+
+/* Ensure Bootswatch themes take precedence over custom form styles */
+.form-control,
+.form-select,
+.form-check-input {
+    /* Reset any overly specific styles to let themes apply properly */
+    border-color: var(--bs-border-color) !important;
+    background-color: var(--bs-body-bg) !important;
+    color: var(--bs-body-color) !important;
+}
+
+/* Focus states should respect theme colors */
+.form-control:focus,
+.form-select:focus,
+.form-check-input:focus {
+    border-color: var(--bs-primary) !important;
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25) !important;
+}
+
+/* Ensure dropdown indicators use theme colors */
+.form-select {
+    background-image: var(--bs-form-select-bg-img, url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e")) !important;
+}
+
+/* Dropdown menu items should respect theme colors */
+.dropdown-menu {
+    background-color: var(--bs-body-bg) !important;
+    border-color: var(--bs-border-color) !important;
+}
+
+.dropdown-menu .dropdown-item {
+    color: var(--bs-body-color) !important;
+}
+
+.dropdown-menu .dropdown-item:hover,
+.dropdown-menu .dropdown-item:focus {
+    background-color: var(--bs-primary) !important;
+    color: var(--bs-white, #fff) !important;
+}
+
+.dropdown-menu .dropdown-item:active {
+    background-color: var(--bs-primary) !important;
+    color: var(--bs-white, #fff) !important;
+}
+
+/* For themes that use different primary colors, ensure proper contrast */
+.dropdown-menu .dropdown-item:hover,
+.dropdown-menu .dropdown-item:focus,
+.dropdown-menu .dropdown-item:active {
+    color: color-contrast(var(--bs-primary)) !important;
+}
+
+/* Aggressive native select option styling - multiple approaches */
+.form-select option {
+    background-color: var(--bs-body-bg) !important;
+    color: var(--bs-body-color) !important;
+    padding: 0.375rem 0.75rem !important;
+}
+
+/* Multiple hover selectors for maximum browser compatibility */
+.form-select option:hover,
+.form-select option:focus,
+.form-select option:active {
+    background-color: var(--bs-primary) !important;
+    background: var(--bs-primary) !important;
+    color: var(--bs-white, #fff) !important;
+    /* Force override system colors */
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+}
+
+/* Try to override system highlight colors */
+.form-select option::selection {
+    background-color: var(--bs-primary) !important;
+    color: var(--bs-white, #fff) !important;
+}
+
+.form-select option::-moz-selection {
+    background-color: var(--bs-primary) !important;
+    color: var(--bs-white, #fff) !important;
+}
+
+.form-select option:checked,
+.form-select option[selected] {
+    background-color: var(--bs-primary) !important;
+    background: var(--bs-primary) !important;
+    color: var(--bs-white, #fff) !important;
+    font-weight: bold !important;
+}
+
+/* Try to override browser-specific option styling */
+.form-select option {
+    /* Chrome/Webkit */
+    background-image: none !important;
+    /* Standard properties */
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+}
+
+/* CSS Custom Properties for system colors override attempt */
+.form-select {
+    /* Override system highlight colors where supported */
+    color-scheme: light dark;
+}
+
+/* Browser-specific system color overrides */
+@media (prefers-color-scheme: light) {
+    .form-select option:hover {
+        background-color: var(--bs-primary) !important;
+        color: var(--bs-white, #fff) !important;
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    .form-select option:hover {
+        background-color: var(--bs-primary) !important;
+        color: var(--bs-white, #fff) !important;
+    }
+}
+
+/* Force system colors using accent-color where supported */
+.form-select {
+    accent-color: var(--bs-primary);
+    color-scheme: normal;
+}
+
+/* Enhanced select styling with theme support */
+.form-select {
+    /* Webkit browsers */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    
+    /* Custom background for consistency */
+    background-color: var(--bs-body-bg) !important;
+    color: var(--bs-body-color) !important;
+    border-color: var(--bs-border-color) !important;
+}
+
+/* Enhanced hover and focus states for select */
+.form-select:hover {
+    border-color: var(--bs-primary) !important;
+    background-color: var(--bs-primary-bg-subtle, rgba(var(--bs-primary-rgb), 0.1)) !important;
+}
+
+.form-select:focus {
+    border-color: var(--bs-primary) !important;
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25) !important;
+    background-color: var(--bs-body-bg) !important;
+}
+
+/* Additional browser-specific option styling (where supported) */
+.form-select option {
+    /* Force theme colors in supported browsers */
+    background: var(--bs-body-bg) !important;
+    border: none !important;
+}
+
+/* Webkit-specific select dropdown styling */
+.form-select::-webkit-scrollbar {
+    width: 8px;
+}
+
+.form-select::-webkit-scrollbar-track {
+    background: var(--bs-secondary-bg);
+}
+
+.form-select::-webkit-scrollbar-thumb {
+    background: var(--bs-primary);
+    border-radius: 4px;
 }
 
 /* High contrast mode support */

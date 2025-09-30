@@ -12,13 +12,79 @@
 <div class="container-fluid">
     <div class="row mb-4">
         <div class="col">
-            <h1><i class="fas fa-cogs me-2"></i>Scanning Dashboard</h1>
-            <p class="text-muted">Monitor background scanning operations and API status</p>
+            <h1><i class="fas fa-cogs me-2"></i>Scanning Control Center</h1>
+            <p class="text-muted">Start and manage scanning operations • Monitor active scans • Control scan queue</p>
         </div>
         <div class="col-auto">
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newScanModal">
-                <i class="fas fa-plus me-2"></i>Start New Scan
-            </button>
+            <div class="btn-group" role="group">
+                <a href="{% url 'books:scan_status' %}" class="btn btn-outline-primary">
+                    <i class="fas fa-chart-line me-2"></i>Full Monitoring
+                </a>
+                <a href="{% url 'books:scan_history' %}" class="btn btn-outline-primary">
+                    <i class="fas fa-history me-2"></i>Scan History
+                </a>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newScanModal">
+                    <i class="fas fa-plus me-2"></i>Start New Scan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Status Overview -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="alert alert-light border">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="d-flex align-items-center justify-content-center">
+                            {% if active_scans %}
+                                <span class="badge bg-primary fs-6 me-2">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                </span>
+                                <strong>{{ active_scans|length }} Active Scan{{ active_scans|length|pluralize }}</strong>
+                            {% else %}
+                                <span class="badge bg-success fs-6 me-2">
+                                    <i class="fas fa-check-circle"></i>
+                                </span>
+                                <strong>System Ready</strong>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <span class="badge bg-info fs-6 me-2">
+                                <i class="fas fa-clock"></i>
+                            </span>
+                            <strong>{{ scan_queue|length|default:0 }} Queued</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex align-items-center justify-content-center">
+                            {% if recent_scan_history %}
+                                {% with last_scan=recent_scan_history.0 %}
+                                <span class="badge {% if last_scan.status == 'completed' %}bg-success{% elif last_scan.status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %} fs-6 me-2">
+                                    <i class="fas {% if last_scan.status == 'completed' %}fa-check{% elif last_scan.status == 'failed' %}fa-times{% else %}fa-pause{% endif %}"></i>
+                                </span>
+                                <strong>Last: {{ last_scan.get_status_display }}</strong>
+                                {% endwith %}
+                            {% else %}
+                                <span class="badge bg-secondary fs-6 me-2">
+                                    <i class="fas fa-minus-circle"></i>
+                                </span>
+                                <strong>No History</strong>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex align-items-center justify-content-center">
+                            <span class="badge bg-success fs-6 me-2">
+                                <i class="fas fa-server"></i>
+                            </span>
+                            <strong>APIs Operational</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -103,10 +169,11 @@
         </div>
     </div>
 
-    <!-- Recent Folders -->
+    <!-- Quick Scan Actions -->
     <div class="row">
         <div class="col-12">
-            <h3>Recent Scan Folders</h3>
+            <h3><i class="fas fa-bolt me-2"></i>Quick Scan Actions</h3>
+            <p class="text-muted">One-click scanning for previously configured folders</p>
         </div>
         <div class="col-12">
             {% if recent_folders %}
@@ -118,7 +185,7 @@
                                 <th>Path</th>
                                 <th>Content Type</th>
                                 <th>Language</th>
-                                <th>Books</th>
+                                <th>Progress <small class="text-muted">(scanned/total)</small></th>
                                 <th>Last Scanned</th>
                                 <th>Actions</th>
                             </tr>
@@ -139,7 +206,33 @@
                                     </span>
                                 </td>
                                 <td>{{ folder.language|upper }}</td>
-                                <td>{{ folder.book_count }}</td>
+                                <td>
+                                    {% if folder.progress_info %}
+                                        <div class="d-flex align-items-center">
+                                            <span class="me-2">
+                                                {{ folder.progress_info.scanned }}/{{ folder.progress_info.total_files }}
+                                            </span>
+                                            {% if folder.progress_info.needs_scan %}
+                                                <div class="progress flex-grow-1 me-2 progress-thin">
+                                                    <div class="progress-bar bg-info progress-bar-dynamic" role="progressbar"
+                                                         data-width="{{ folder.progress_info.percentage|default:0 }}"
+                                                         aria-label="Folder scan progress"
+                                                         aria-valuemin="0"
+                                                         aria-valuemax="100"
+                                                         title="{{ folder.progress_info.percentage|default:0 }}% scanned">
+                                                    </div>
+                                                </div>
+                                                <small class="text-muted">{{ folder.progress_info.percentage }}%</small>
+                                            {% else %}
+                                                <span class="badge bg-success ms-2">
+                                                    <i class="fas fa-check"></i> Complete
+                                                </span>
+                                            {% endif %}
+                                        </div>
+                                    {% else %}
+                                        {{ folder.book_count }}
+                                    {% endif %}
+                                </td>
                                 <td>
                                     {% if folder.last_scanned %}
                                         {{ folder.last_scanned|timesince }} ago
@@ -148,11 +241,63 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <button class="btn btn-outline-primary btn-sm rescan-folder-btn" 
-                                            data-folder-id="{{ folder.id }}" 
-                                            data-folder-name="{{ folder.name }}">
-                                        <i class="fas fa-redo me-1"></i>Rescan
-                                    </button>
+                                    <div class="btn-group" role="group">
+                                        {% if folder.last_scanned %}
+                                            <button class="btn btn-outline-primary btn-sm rescan-folder-btn btn-min-width" 
+                                                    data-folder-id="{{ folder.id }}" 
+                                                    data-folder-name="{{ folder.name }}"
+                                                    id="folder-{{ folder.id }}-rescan-btn">
+                                                <i class="fas fa-redo me-1"></i>Rescan
+                                            </button>
+                                            <div class="btn-group" role="group">
+                                                <button class="btn btn-outline-primary btn-sm dropdown-toggle dropdown-toggle-split" 
+                                                        data-bs-toggle="dropdown" aria-expanded="false">
+                                                    <span class="visually-hidden">Toggle Dropdown</span>
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    <li><a class="dropdown-item rescan-with-api-btn" href="#" 
+                                                           data-folder-id="{{ folder.id }}" 
+                                                           data-folder-name="{{ folder.name }}"
+                                                           data-external-apis="true">
+                                                        <i class="fas fa-cloud me-2"></i>Rescan with External APIs
+                                                    </a></li>
+                                                    <li><a class="dropdown-item rescan-without-api-btn" href="#" 
+                                                           data-folder-id="{{ folder.id }}" 
+                                                           data-folder-name="{{ folder.name }}"
+                                                           data-external-apis="false">
+                                                        <i class="fas fa-database me-2"></i>Rescan without External APIs
+                                                    </a></li>
+                                                </ul>
+                                            </div>
+                                        {% else %}
+                                            <button class="btn btn-primary btn-sm scan-folder-btn btn-min-width" 
+                                                    data-folder-id="{{ folder.id }}" 
+                                                    data-folder-name="{{ folder.name }}"
+                                                    id="folder-{{ folder.id }}-scan-btn">
+                                                <i class="fas fa-play me-1"></i>Scan
+                                            </button>
+                                            <div class="btn-group" role="group">
+                                                <button class="btn btn-primary btn-sm dropdown-toggle dropdown-toggle-split" 
+                                                        data-bs-toggle="dropdown" aria-expanded="false">
+                                                    <span class="visually-hidden">Toggle Dropdown</span>
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    <li><a class="dropdown-item scan-with-api-btn" href="#" 
+                                                           data-folder-id="{{ folder.id }}" 
+                                                           data-folder-name="{{ folder.name }}"
+                                                           data-external-apis="true">
+                                                        <i class="fas fa-cloud me-2"></i>Scan with External APIs
+                                                    </a></li>
+                                                    <li><a class="dropdown-item scan-without-api-btn" href="#" 
+                                                           data-folder-id="{{ folder.id }}" 
+                                                           data-folder-name="{{ folder.name }}"
+                                                           data-external-apis="false">
+                                                        <i class="fas fa-database me-2"></i>Scan without External APIs
+                                                    </a></li>
+                                                </ul>
+                                            </div>
+                                        {% endif %}
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -200,7 +345,13 @@
                         <form method="post" action="{% url 'books:start_folder_scan' %}">
                             {% csrf_token %}
                             <div class="mb-3">
-                                <label for="folder_path" class="form-label">Folder Path</label>
+                                <label for="folder_name" class="form-label">Name</label>
+                                <input type="text" class="form-control" id="folder_name" name="folder_name" 
+                                       placeholder="My Books Collection">
+                                <div class="form-text">Display name for this folder (leave blank to use name from folder path)</div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="folder_path" class="form-label">Path</label>
                                 <input type="text" class="form-control" id="folder_path" name="folder_path" 
                                        placeholder="/path/to/books" required>
                                 <div class="form-text">Full path to the folder containing book files</div>
@@ -208,12 +359,11 @@
                             <div class="mb-3">
                                 <label for="content_type" class="form-label">Content Type</label>
                                 <select class="form-control" id="content_type" name="content_type">
-                                    <option value="ebooks">Ebooks</option>
-                                    <option value="comics">Comics</option>
-                                    <option value="audiobooks">Audiobooks</option>
-                                    <option value="mixed">Mixed Content</option>
+                                    <option value="ebooks">📘 Ebooks</option>
+                                    <option value="comics">🖼️ Comics</option>
+                                    <option value="audiobooks">🔊 Audiobooks</option>
                                 </select>
-                                <div class="form-text">Type of content in this folder</div>
+                                <div class="form-text">Choose the primary content type for this folder</div>
                             </div>
                             <div class="mb-3">
                                 <label for="language" class="form-label">Default Language</label>
@@ -336,7 +486,10 @@ window.scanningDashboardConfig = {
     activeScanUrl: '{% url "books:active_scans_ajax" %}',
     scanProgressUrl: '{% url "books:scan_progress_ajax" job_id="PLACEHOLDER" %}',
     apiStatusUrl: '{% url "books:api_status_ajax" %}',
-    cancelScanUrl: '{% url "books:cancel_scan_ajax" job_id="PLACEHOLDER" %}'
+    cancelScanUrl: '{% url "books:cancel_scan_ajax" job_id="PLACEHOLDER" %}',
+    startFolderScanUrl: '{% url "books:start_folder_scan" %}',
+    startBookRescanUrl: '{% url "books:start_book_rescan" %}',
+    csrfToken: '{{ csrf_token }}'
 };
 </script>
 <script src="{% static 'book/js/scanning-dashboard.js' %}"></script>

@@ -84,6 +84,42 @@ class DataSource(models.Model):
     def __str__(self):
         return self.get_name_display()
 
+    @property
+    def title_count(self):
+        """Count of titles from this data source"""
+        return self.booktitle_set.filter(is_active=True).count()
+
+    @property
+    def author_count(self):
+        """Count of authors from this data source"""
+        return self.bookauthor_set.filter(is_active=True).count()
+
+    @property
+    def genre_count(self):
+        """Count of genres from this data source"""
+        return self.bookgenre_set.filter(is_active=True).count()
+
+    @property
+    def series_count(self):
+        """Count of series from this data source"""
+        return self.bookseries_set.filter(is_active=True).count()
+
+    @property
+    def cover_count(self):
+        """Count of covers from this data source"""
+        return self.bookcover_set.filter(is_active=True).count()
+
+    @property
+    def metadata_count(self):
+        """Total count of all metadata entries from this data source"""
+        return (
+            self.title_count +
+            self.author_count +
+            self.genre_count +
+            self.series_count +
+            self.cover_count
+        )
+
     class Meta:
         ordering = ['-trust_level', 'name']
 

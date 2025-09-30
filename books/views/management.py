@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 class ScanFolderListView(LoginRequiredMixin, BookNavigationMixin, ListView):
     """List all configured scan folders with statistics."""
-    template_name = 'books/scan_folder_list.html'
+    template_name = 'books/scanning/folder_list.html'
     # Using default context_object_name which will be 'scanfolder_list'
 
     def get_model(self):
@@ -118,6 +118,24 @@ class DataSourceListView(LoginRequiredMixin, BookNavigationMixin, ListView):
     def get_queryset(self):
         DataSource = self.get_model()
         return DataSource.objects.all().order_by('name')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        data_sources = context['data_sources']
+
+        # Calculate summary statistics
+        total_sources = len(data_sources)
+        if total_sources > 0:
+            high_trust_sources = [source for source in data_sources if source.trust_level >= 0.8]
+            context['high_trust_count'] = len(high_trust_sources)
+
+            total_trust = sum(source.trust_level for source in data_sources)
+            context['avg_trust_level'] = total_trust / total_sources
+        else:
+            context['high_trust_count'] = 0
+            context['avg_trust_level'] = 0.0
+
+        return context
 
 
 class DataSourceCreateView(LoginRequiredMixin, BookNavigationMixin, CreateView):
@@ -480,7 +498,7 @@ class TriggerScanView(LoginRequiredMixin, BookNavigationMixin, ListView):
 
 class ScanStatusView(LoginRequiredMixin, BookNavigationMixin, ListView):
     """Display current scan status."""
-    template_name = 'books/scan_status.html'
+    template_name = 'books/scanning/status.html'
     context_object_name = 'scan_folders'
 
     def get_model(self):

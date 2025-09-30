@@ -23,6 +23,10 @@ class ScanFolderForm(StandardFormMixin, forms.ModelForm):
                 'class': 'form-control',
                 'placeholder': 'Enter the full path to your folder (e.g., C:\\Users\\Pieter\\Documents\\eBooks)'
             }),
+            'is_active': forms.CheckboxInput(attrs={
+                'class': 'form-check-input',
+                'checked': True
+            }),
         }
 
     def __init__(self, *args, **kwargs):
@@ -30,6 +34,10 @@ class ScanFolderForm(StandardFormMixin, forms.ModelForm):
         # Set default for content_type and make it not required
         self.fields['content_type'].initial = 'ebooks'
         self.fields['content_type'].required = False
+
+        # Ensure is_active defaults to True for new instances
+        if not self.instance.pk:
+            self.fields['is_active'].initial = True
 
     def clean_path(self):
         path = self.cleaned_data.get('path', '')

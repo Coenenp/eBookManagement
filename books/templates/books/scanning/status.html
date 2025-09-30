@@ -1,13 +1,29 @@
 {% extends 'books/base.html' %}
+{% load static %}
 
 {% block title %}Scan Status - Ebook Library Manager{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-  <h2>📚 Scan Status</h2>
+  <div class="row mb-4">
+    <div class="col">
+      <h2><i class="fas fa-chart-line me-2"></i>Scan Monitoring & Analysis</h2>
+      <p class="text-muted">Comprehensive scan history, diagnostics, and performance monitoring</p>
+    </div>
+    <div class="col-auto">
+      <div class="btn-group" role="group">
+        <a href="{% url 'books:scan_dashboard' %}" class="btn btn-primary">
+            <i class="fas fa-tachometer-alt"></i> Back to Control Center
+        </a>
+      </div>
+    </div>
+  </div>
 
+  <!-- Current Active Scan Status -->
   {% if scan_status %}
-  <div class="card shadow-sm mt-3">
+  <div class="mb-4">
+    <h4><i class="fas fa-pulse me-2"></i>Current Active Scan</h4>
+    <div class="card shadow-sm mt-3">
     <div class="card-body">
       <p><strong>Status:</strong>
         <span id="scan-status" class="badge
@@ -50,18 +66,30 @@
     </div>
   </div>
   {% else %}
-  <div class="alert alert-info mt-3">No active scans running.</div>
+  <div class="alert alert-info mt-3">
+    <i class="fas fa-info-circle me-2"></i>
+    No active scans running. <a href="{% url 'books:scan_dashboard' %}" class="alert-link">Start a new scan</a>
+  </div>
   {% endif %}
-
-  <a href="{% url 'books:book_list' %}" class="btn btn-outline-primary mt-4">
-    <i class="fas fa-arrow-left"></i> Back to Books
-  </a>
+  
 </div>
-<!-- 🚨 Error and Warning Logs -->
-<div class="card mt-5">
+
+<!-- Diagnostic Center - Error and Warning Analysis -->
+<div class="container mt-5">
+  <div class="row mb-3">
+    <div class="col">
+      <h4><i class="fas fa-exclamation-triangle me-2"></i>Diagnostic Center</h4>
+      <p class="text-muted">Error analysis, warnings, and troubleshooting information</p>
+    </div>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header">
+    <h5 class="mb-0"><i class="fas fa-list-alt me-2"></i>Recent Scan Logs</h5>
+    <small class="text-muted">Errors and warnings from recent scan operations</small>
+  </div>
   <div class="card-body">
-    <h5>⚠️ Scan Logs — Errors & Warnings</h5>
-    <p class="text-muted">Recent scan issues related to file or folder operations.</p>
 
     <table class="table table-sm table-hover table-bordered">
       <thead class="table-light">
@@ -107,17 +135,20 @@
     </table>
   </div>
 </div>
+{% endblock %}
 
-
+{% block extra_js %}
 <script src="{% static 'book/js/scanning-dashboard.js' %}"></script>
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-    // Initialize scan status monitor
-    const statusMonitor = new ScanStatusMonitor("{% url 'books:live_scan_status' %}");
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize scan status page monitor
+    const scanStatusMonitor = new ScanStatusPageMonitor("{% url 'books:live_scan_status' %}");
     
     // Clean up on page unload
     window.addEventListener('beforeunload', function() {
-        statusMonitor.destroy();
+        if (scanStatusMonitor) {
+            scanStatusMonitor.destroy();
+        }
     });
 });
 </script>

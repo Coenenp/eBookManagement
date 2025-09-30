@@ -2938,7 +2938,7 @@ class ScanStatusViewTests(BaseViewTestCase):
         """Test basic access to scan status view."""
         response = self.client.get(reverse('books:scan_status'))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, 'books/scan_status.html')
+        self.assertTemplateUsed(response, 'books/scanning/status.html')
 
     def test_scan_status_context_data(self):
         """Test scan status view context data."""
@@ -3166,7 +3166,7 @@ class ScanFolderManagementTests(BaseViewTestCase):
 
         response = self.client.get(reverse('books:scan_folder_list'))
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, 'books/scan_folder_list.html')
+        self.assertTemplateUsed(response, 'books/scanning/folder_list.html')
 
         # Check that folders are in context
         folders = response.context['scanfolder_list']
