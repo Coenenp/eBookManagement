@@ -37,6 +37,7 @@ urlpatterns = [
     path('settings/', views.UserSettingsView.as_view(), name='user_settings'),
     path('settings/preview-theme/', views.preview_theme, name='preview_theme'),
     path('settings/clear-theme-preview/', views.clear_theme_preview, name='clear_theme_preview'),
+    path('settings/reset-to-defaults/', views.reset_to_defaults, name='reset_to_defaults'),
 
     # Book management
     path('books/', views.BookListView.as_view(), name='book_list'),
@@ -250,6 +251,7 @@ urlpatterns = [
     path('ajax/add-metadata/', views.ajax_add_metadata, name='ajax_add_metadata'),
     path('ajax/restore-backup/', views.ajax_restore_backup, name='ajax_restore_backup'),
     path('ajax/generate-report/', views.ajax_generate_report, name='ajax_generate_report'),
+    path('ajax/update-trust-level/', views.ajax_update_trust_level, name='ajax_update_trust_level'),
 ]
 
 # Serve media files during development

@@ -16,6 +16,7 @@ from django.http import JsonResponse
 
 # Import mixins and utilities
 from ..mixins.navigation import BookNavigationMixin
+from ..forms import ScanFolderForm
 
 
 # Get models dynamically to avoid circular imports
@@ -62,8 +63,7 @@ class ScanFolderListView(LoginRequiredMixin, BookNavigationMixin, ListView):
 class AddScanFolderView(LoginRequiredMixin, BookNavigationMixin, CreateView):
     """Add a new scan folder."""
     template_name = 'books/add_scan_folder.html'
-    # form_class = ScanFolderForm  # TODO: Create ScanFolderForm
-    fields = ['name', 'path', 'is_active']
+    form_class = ScanFolderForm
     success_url = reverse_lazy('books:scan_folder_list')
 
     def get_model(self):

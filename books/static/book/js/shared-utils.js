@@ -84,6 +84,11 @@ EbookLibrary.Images = {
 EbookLibrary.Forms = {
     addLoadingStates() {
         document.querySelectorAll('form').forEach(form => {
+            // Skip forms that handle their own loading states
+            if (form.id === 'settingsForm' || form.classList.contains('no-auto-loading')) {
+                return;
+            }
+            
             form.addEventListener('submit', function() {
                 const submitBtn = form.querySelector('button[type="submit"]');
                 if (submitBtn) {

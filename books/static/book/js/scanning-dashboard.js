@@ -10,6 +10,9 @@ class ScanningDashboard {
             apiStatus: null
         };
         
+        // Configuration for URL endpoints (will be injected from template)
+        this.config = window.scanningDashboardConfig || {};
+        
         this.init();
     }
 
@@ -20,7 +23,23 @@ class ScanningDashboard {
     }
 
     initializeProgressBars() {
-        // Initialize progress bars from data attributes
+        // Set width for API rate progress bars
+        document.querySelectorAll('.api-rate-progress').forEach(progressBar => {
+            const width = progressBar.getAttribute('data-width');
+            if (width !== null) {
+                progressBar.style.width = width + '%';
+            }
+        });
+        
+        // Set width for scan progress bars  
+        document.querySelectorAll('.scan-progress-bar').forEach(progressBar => {
+            const width = progressBar.getAttribute('data-width');
+            if (width !== null) {
+                progressBar.style.width = width + '%';
+            }
+        });
+
+        // Initialize progress bars from data attributes (legacy support)
         const progressBars = document.querySelectorAll('.progress-bar[data-width]');
         progressBars.forEach(bar => {
             const width = bar.getAttribute('data-width');
@@ -35,9 +54,7 @@ class ScanningDashboard {
 
     bindEvents() {
         // Handle rescan type changes
-        document.querySelectorAll('input[name="rescan_type"]').forEach(radio => {
-            radio.addEventListener('change', (e) => this.handleRescanTypeChange(e.target.value));
-        });
+        this.setupRescanFormHandling();
 
         // Handle cancel scan buttons
         document.addEventListener('click', (e) => {
@@ -46,7 +63,7 @@ class ScanningDashboard {
                 const jobId = btn.getAttribute('data-job-id');
                 
                 if (confirm('Are you sure you want to cancel this scan?')) {
-                    this.cancelScan(jobId);
+                    this.cancelScanJob(jobId);
                 }
             }
         });
@@ -87,26 +104,206 @@ class ScanningDashboard {
             }
         });
 
-        // Handle rescan form submission
-        const rescanForm = document.getElementById('rescanForm');
+        // Handle rescan form submission (find form by action URL)
+        const rescanForm = document.querySelector('form[action*="start_book_rescan"]');
         if (rescanForm) {
-            rescanForm.addEventListener('submit', (e) => this.handleRescanForm(e));
+            rescanForm.addEventListener('submit', (e) => this.handleRescanFormSubmission(e));
         }
     }
 
+    /**
+     * Setup rescan form visibility and validation handling
+     */
+    setupRescanFormHandling() {
+        const updateRescanFormVisibility = () => {
+            const folderGroup = document.getElementById('folder-select-group');
+            const bookIdsGroup = document.getElementById('book-ids-group');
+            const folderSelect = document.getElementById('folder_id');
+            const bookIdsInput = document.getElementById('book_ids');
+            const checkedRadio = document.querySelector('input[name="rescan_type"]:checked');
+            
+            if (!folderGroup || !bookIdsGroup) return;
+            
+            // Remove required attributes first
+            if (folderSelect) folderSelect.removeAttribute('required');
+            if (bookIdsInput) bookIdsInput.removeAttribute('required');
+            
+            // Clear any previous validation states
+            if (folderSelect) folderSelect.setCustomValidity('');
+            if (bookIdsInput) bookIdsInput.setCustomValidity('');
+            
+            if (checkedRadio) {
+                const rescanType = checkedRadio.value;
+                
+                if (rescanType === 'all') {
+                    // Rescan all books - hide both folder selector and book IDs
+                    folderGroup.classList.add('hidden-group');
+                    bookIdsGroup.classList.add('hidden-group');
+                } else if (rescanType === 'folder') {
+                    // Rescan books in specific folder - show folder selector, hide book IDs
+                    folderGroup.classList.remove('hidden-group');
+                    bookIdsGroup.classList.add('hidden-group');
+                    if (folderSelect) folderSelect.setAttribute('required', 'required');
+                } else if (rescanType === 'specific') {
+                    // Rescan specific books by ID - hide folder selector, show book IDs
+                    folderGroup.classList.add('hidden-group');
+                    bookIdsGroup.classList.remove('hidden-group');
+                    if (bookIdsInput) bookIdsInput.setAttribute('required', 'required');
+                }
+            } else {
+                // Default state - show folder selector (since "folder" is the default checked option)
+                folderGroup.classList.remove('hidden-group');
+                bookIdsGroup.classList.add('hidden-group');
+                if (folderSelect) folderSelect.setAttribute('required', 'required');
+            }
+        };
+
+        // Initialize the form visibility on page load
+        // Wait a bit to ensure DOM is fully rendered
+        setTimeout(updateRescanFormVisibility, 50);
+        
+        // Add event listeners to radio buttons
+        document.querySelectorAll('input[name="rescan_type"]').forEach(radio => {
+            radio.addEventListener('change', updateRescanFormVisibility);
+        });
+        
+        // Also update when the tab becomes active (important for Bootstrap tabs)
+        const rescanTab = document.getElementById('book-rescan-tab');
+        if (rescanTab) {
+            rescanTab.addEventListener('shown.bs.tab', () => {
+                // Delay to ensure tab content is visible before updating
+                setTimeout(updateRescanFormVisibility, 100);
+            });
+        }
+        
+        // Also update when the modal is shown (important for Bootstrap modals)
+        const newScanModal = document.getElementById('newScanModal');
+        if (newScanModal) {
+            newScanModal.addEventListener('shown.bs.modal', () => {
+                // Delay to ensure modal content is visible before updating
+                setTimeout(updateRescanFormVisibility, 100);
+            });
+        }
+        
+        // Add form validation for book IDs
+        const bookIdsInput = document.getElementById('book_ids');
+        if (bookIdsInput) {
+            bookIdsInput.addEventListener('input', function() {
+                const value = this.value.trim();
+                if (value && !/^(\d+)(,\s*\d+)*$/.test(value)) {
+                    this.setCustomValidity('Please enter valid book IDs separated by commas (e.g., 1,2,3)');
+                } else {
+                    this.setCustomValidity('');
+                }
+            });
+        }
+    }
+
+    /**
+     * Handle rescan form submission with client-side validation
+     */
+    handleRescanFormSubmission(e) {
+        const formData = new FormData(e.target);
+        const rescanType = formData.get('rescan_type');
+        
+        // Validate based on rescan type
+        let isValid = true;
+        let errorMessage = '';
+        
+        if (rescanType === 'folder') {
+            const folderId = formData.get('folder_id');
+            if (!folderId) {
+                isValid = false;
+                errorMessage = 'Must select a folder to rescan';
+            }
+        } else if (rescanType === 'specific') {
+            const bookIds = formData.get('book_ids');
+            if (!bookIds || !bookIds.trim()) {
+                isValid = false;
+                errorMessage = 'Must specify book IDs to rescan';
+            } else {
+                // Validate book IDs format
+                const bookIdPattern = /^(\d+)(,\s*\d+)*$/;
+                if (!bookIdPattern.test(bookIds.trim())) {
+                    isValid = false;
+                    errorMessage = 'Please enter valid book IDs separated by commas (e.g., 1,2,3)';
+                }
+            }
+        }
+        // 'all' rescan type doesn't need additional validation
+        
+        if (!isValid) {
+            e.preventDefault();
+            this.showValidationError(errorMessage);
+            return false;
+        }
+        
+        // If we get here, validation passed - let the form submit normally
+        return true;
+    }
+
+    /**
+     * Show validation error message with warning styling
+     */
+    showValidationError(message) {
+        // Remove any existing validation errors first
+        const existingError = document.querySelector('.alert-validation-error');
+        if (existingError) {
+            existingError.remove();
+        }
+        
+        // Find the modal body to insert the error
+        const modalBody = document.querySelector('#newScanModal .modal-body');
+        if (!modalBody) return;
+        
+        // Create error alert
+        const errorAlert = document.createElement('div');
+        errorAlert.className = 'alert alert-warning alert-dismissible fade show alert-validation-error';
+        errorAlert.innerHTML = `
+            <strong><i class="fas fa-exclamation-triangle me-2"></i>Validation Error:</strong> ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        // Insert at the top of modal body
+        modalBody.insertBefore(errorAlert, modalBody.firstChild);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (errorAlert.parentElement) {
+                errorAlert.remove();
+            }
+        }, 5000);
+        
+        // Also scroll to top of modal to ensure error is visible
+        modalBody.scrollTop = 0;
+    }
+
     handleRescanTypeChange(value) {
+        // This method is kept for backward compatibility
+        // The actual functionality is now in setupRescanFormHandling
         const folderGroup = document.getElementById('folder-select-group');
         const bookIdsGroup = document.getElementById('book-ids-group');
+        const folderSelect = document.getElementById('folder_id');
+        const bookIdsInput = document.getElementById('book_ids');
         
-        if (value === 'folder') {
+        // Clear previous required states
+        if (folderSelect) folderSelect.removeAttribute('required');
+        if (bookIdsInput) bookIdsInput.removeAttribute('required');
+        
+        if (value === 'all') {
+            // Rescan all books - hide both fields
+            folderGroup?.classList.add('hidden-group');
+            bookIdsGroup?.classList.add('hidden-group');
+        } else if (value === 'folder') {
+            // Rescan books in folder - show folder selector only
             folderGroup?.classList.remove('hidden-group');
             bookIdsGroup?.classList.add('hidden-group');
+            if (folderSelect) folderSelect.setAttribute('required', 'required');
         } else if (value === 'specific') {
+            // Rescan specific books by ID - show book IDs only
             folderGroup?.classList.add('hidden-group');
             bookIdsGroup?.classList.remove('hidden-group');
-        } else {
-            folderGroup?.classList.add('hidden-group');
-            bookIdsGroup?.classList.add('hidden-group');
+            if (bookIdsInput) bookIdsInput.setAttribute('required', 'required');
         }
     }
 
@@ -199,14 +396,115 @@ class ScanningDashboard {
 
     async updateActiveScans() {
         try {
-            const response = await fetch('/books/api/active-scans/');
+            const url = this.config.activeScanUrl || '/books/api/active-scans/';
+            const response = await fetch(url);
             const data = await response.json();
             
-            if (data.status === 'success') {
+            if (data.scans) {
+                // Update scan progress for each active scan
+                data.scans.forEach(scan => {
+                    this.updateScanProgress(scan.job_id);
+                });
+            } else if (data.status === 'success') {
                 this.renderActiveScans(data.active_scans);
             }
         } catch (error) {
             console.error('Failed to update active scans:', error);
+        }
+    }
+
+    /**
+     * Update individual scan progress
+     */
+    async updateScanProgress(jobId) {
+        try {
+            const baseUrl = this.config.scanProgressUrl || '/books/scanning/progress/PLACEHOLDER/';
+            const url = baseUrl.replace('PLACEHOLDER', jobId);
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            const scanCard = document.querySelector(`[data-job-id="${jobId}"]`);
+            if (!scanCard) return;
+            
+            // Update progress bar
+            const progressBar = scanCard.querySelector('.scan-progress-bar');
+            if (progressBar) {
+                progressBar.style.width = `${data.percentage || 0}%`;
+                progressBar.textContent = `${data.percentage || 0}%`;
+            }
+            
+            // Update status and details
+            const titleElement = scanCard.querySelector('.card-title');
+            const detailsElement = scanCard.querySelector('.scan-details');
+            
+            if (titleElement) {
+                titleElement.textContent = data.status || 'Scanning';
+            }
+            
+            if (detailsElement) {
+                detailsElement.textContent = data.details || 'Processing...';
+            }
+            
+            // Handle completion
+            if (data.completed) {
+                scanCard.classList.add(data.success ? 'completed' : 'error');
+                
+                // Remove cancel button
+                const cancelBtn = scanCard.querySelector('.cancel-scan-btn');
+                if (cancelBtn) {
+                    cancelBtn.remove();
+                }
+                
+                // Show completion message
+                if (detailsElement) {
+                    detailsElement.textContent = data.success ? data.message : data.error;
+                }
+                
+                // Auto-remove completed scans after 30 seconds
+                setTimeout(() => {
+                    if (scanCard.parentElement) {
+                        scanCard.remove();
+                    }
+                }, 30000);
+            }
+        } catch (error) {
+            console.error('Error updating scan progress:', error);
+        }
+    }
+
+    /**
+     * Cancel a scan job (new method for template compatibility)
+     */
+    async cancelScanJob(jobId) {
+        try {
+            const baseUrl = this.config.cancelScanUrl || '/books/scanning/cancel/PLACEHOLDER/';
+            const url = baseUrl.replace('PLACEHOLDER', jobId);
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Remove the scan card
+                const scanCard = document.querySelector(`[data-job-id="${jobId}"]`);
+                if (scanCard) {
+                    scanCard.remove();
+                }
+                
+                this.showToast('Scan cancelled successfully', 'success');
+            } else {
+                this.showToast('Failed to cancel scan: ' + data.error, 'error');
+            }
+        } catch (error) {
+            console.error('Error canceling scan:', error);
+            this.showToast('Failed to cancel scan', 'error');
         }
     }
 
@@ -268,8 +566,12 @@ class ScanningDashboard {
 
     async updateAPIStatus() {
         try {
-            const response = await fetch('/books/api/status/');
+            const url = this.config.apiStatusUrl || '/books/api/status/';
+            const response = await fetch(url);
             const data = await response.json();
+            
+            // Update API status indicators and progress bars
+            console.log('Updated API status:', data);
             
             if (data.status === 'success') {
                 this.renderAPIStatus(data.api_status);
@@ -277,6 +579,66 @@ class ScanningDashboard {
         } catch (error) {
             console.error('Failed to update API status:', error);
         }
+    }
+
+    /**
+     * Show toast notification
+     */
+    showToast(message, type = 'info') {
+        // Try to use EbookLibrary.UI if available, otherwise create toast manually
+        if (typeof EbookLibrary !== 'undefined' && EbookLibrary.UI && EbookLibrary.UI.showAlert) {
+            const alertType = type === 'error' ? 'danger' : type;
+            EbookLibrary.UI.showAlert(message, alertType);
+            return;
+        }
+
+        // Fallback: Create toast manually
+        let toastContainer = document.querySelector('.toast-container');
+        if (!toastContainer) {
+            toastContainer = document.createElement('div');
+            toastContainer.className = 'toast-container position-fixed bottom-0 end-0 p-3';
+            document.body.appendChild(toastContainer);
+        }
+        
+        // Create toast
+        const toast = document.createElement('div');
+        const bgClass = type === 'error' ? 'text-bg-danger' : 
+                       type === 'success' ? 'text-bg-success' : 
+                       type === 'warning' ? 'text-bg-warning' : 'text-bg-info';
+        
+        toast.className = `toast show align-items-center ${bgClass} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-${this.getToastIcon(type)} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        
+        toastContainer.appendChild(toast);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.remove();
+            }
+        }, 5000);
+    }
+
+    /**
+     * Get appropriate icon for toast type
+     */
+    getToastIcon(type) {
+        const icons = {
+            success: 'check-circle',
+            error: 'exclamation-circle',
+            warning: 'exclamation-triangle',
+            info: 'info-circle'
+        };
+        return icons[type] || 'info-circle';
     }
 
     renderAPIStatus(apiStatus) {

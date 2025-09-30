@@ -247,44 +247,63 @@
                         <form method="post" action="{% url 'books:start_book_rescan' %}">
                             {% csrf_token %}
                             <div class="mb-3">
-                                <label class="form-label">Rescan Options</label>
+                                <label class="form-label fw-semibold">
+                                    <i class="fas fa-redo text-muted me-2"></i>Rescan Options
+                                </label>
                                 <div class="form-check">
                                     <input class="form-check-input" type="radio" name="rescan_type" 
                                            id="rescan_all" value="all">
                                     <label class="form-check-label" for="rescan_all">
-                                        Rescan all books
+                                        <strong>Rescan all books</strong>
+                                        <small class="d-block text-muted">Process all books in the library</small>
                                     </label>
                                 </div>
                                 <div class="form-check">
                                     <input class="form-check-input" type="radio" name="rescan_type" 
                                            id="rescan_folder" value="folder" checked>
                                     <label class="form-check-label" for="rescan_folder">
-                                        Rescan books in folder
+                                        <strong>Rescan books in folder</strong>
+                                        <small class="d-block text-muted">Process books from a specific folder</small>
                                     </label>
                                 </div>
                                 <div class="form-check">
                                     <input class="form-check-input" type="radio" name="rescan_type" 
                                            id="rescan_specific" value="specific">
                                     <label class="form-check-label" for="rescan_specific">
-                                        Rescan specific books (enter IDs)
+                                        <strong>Rescan specific books (enter IDs)</strong>
+                                        <small class="d-block text-muted">Process only specified book IDs</small>
                                     </label>
                                 </div>
                             </div>
                             
-                            <div class="mb-3" id="folder-select-group">
-                                <label for="folder_id" class="form-label">Select Folder</label>
-                                <select class="form-control" id="folder_id" name="folder_id">
+                            <div class="mb-3 form-group-transition" id="folder-select-group">
+                                <label for="folder_id" class="form-label fw-semibold">
+                                    <i class="fas fa-folder-open text-muted me-2"></i>Select Folder
+                                </label>
+                                <select class="form-select" id="folder_id" name="folder_id" required>
+                                    <option value="">Choose a folder...</option>
                                     {% for folder in recent_folders %}
-                                    <option value="{{ folder.id }}">{{ folder.name }} ({{ folder.book_count }} book{{ folder.book_count|pluralize }})</option>
+                                    <option value="{{ folder.id }}">
+                                        {{ folder.name }} ({{ folder.book_count }} book{{ folder.book_count|pluralize }})
+                                    </option>
                                     {% endfor %}
                                 </select>
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle text-info me-1"></i>
+                                    Select which folder's books should be rescanned
+                                </div>
                             </div>
                             
-                            <div class="mb-3 hidden-group" id="book-ids-group">
-                                <label for="book_ids" class="form-label">Book IDs</label>
+                            <div class="mb-3 form-group-transition hidden-group" id="book-ids-group">
+                                <label for="book_ids" class="form-label fw-semibold">
+                                    <i class="fas fa-hashtag text-muted me-2"></i>Book IDs
+                                </label>
                                 <input type="text" class="form-control" id="book_ids" name="book_ids" 
                                        placeholder="1,2,3,4">
-                                <div class="form-text">Comma-separated list of book IDs</div>
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle text-info me-1"></i>
+                                    Comma-separated list of book IDs (e.g., 1,5,12,25)
+                                </div>
                             </div>
                             
                             <div class="mb-3">
@@ -312,163 +331,13 @@
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize progress bars from data attributes
-    initializeProgressBars();
-    
-    // Auto-refresh active scans every 5 seconds
-    setInterval(updateActiveScans, 5000);
-    
-    // Auto-refresh API status every 30 seconds
-    setInterval(updateAPIStatus, 30000);
-    
-    // Handle rescan type changes
-    document.querySelectorAll('input[name="rescan_type"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-            const folderGroup = document.getElementById('folder-select-group');
-            const bookIdsGroup = document.getElementById('book-ids-group');
-            
-            if (this.value === 'folder') {
-                folderGroup.classList.remove('hidden-group');
-                bookIdsGroup.classList.add('hidden-group');
-            } else if (this.value === 'specific') {
-                folderGroup.classList.add('hidden-group');
-                bookIdsGroup.classList.remove('hidden-group');
-            } else {
-                folderGroup.classList.add('hidden-group');
-                bookIdsGroup.classList.add('hidden-group');
-            }
-        });
-    });
-    
-    // Handle cancel scan buttons
-    document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('cancel-scan-btn') || e.target.closest('.cancel-scan-btn')) {
-            const btn = e.target.classList.contains('cancel-scan-btn') ? e.target : e.target.closest('.cancel-scan-btn');
-            const jobId = btn.getAttribute('data-job-id');
-            
-            if (confirm('Are you sure you want to cancel this scan?')) {
-                cancelScan(jobId);
-            }
-        }
-    });
-});
-
-function initializeProgressBars() {
-    // Set width for API rate progress bars
-    document.querySelectorAll('.api-rate-progress').forEach(progressBar => {
-        const width = progressBar.getAttribute('data-width');
-        if (width !== null) {
-            progressBar.style.width = width + '%';
-        }
-    });
-    
-    // Set width for scan progress bars
-    document.querySelectorAll('.scan-progress-bar').forEach(progressBar => {
-        const width = progressBar.getAttribute('data-width');
-        if (width !== null) {
-            progressBar.style.width = width + '%';
-        }
-    });
-}
-
-function updateActiveScans() {
-    fetch('{% url "books:active_scans_ajax" %}')
-        .then(response => response.json())
-        .then(data => {
-            // Update scan progress for each active scan
-            data.scans.forEach(scan => {
-                updateScanProgress(scan.job_id);
-            });
-        })
-        .catch(error => console.error('Error updating active scans:', error));
-}
-
-function updateScanProgress(jobId) {
-    fetch(`{% url 'books:scan_progress_ajax' job_id='PLACEHOLDER' %}`.replace('PLACEHOLDER', jobId))
-        .then(response => response.json())
-        .then(data => {
-            const scanCard = document.querySelector(`[data-job-id="${jobId}"]`);
-            if (!scanCard) return;
-            
-            // Update progress bar
-            const progressBar = scanCard.querySelector('.scan-progress-bar');
-            if (progressBar) {
-                progressBar.style.width = `${data.percentage || 0}%`;
-                progressBar.textContent = `${data.percentage || 0}%`;
-            }
-            
-            // Update status and details
-            const titleElement = scanCard.querySelector('.card-title');
-            const detailsElement = scanCard.querySelector('.scan-details');
-            
-            if (titleElement) {
-                titleElement.textContent = data.status || 'Scanning';
-            }
-            
-            if (detailsElement) {
-                detailsElement.textContent = data.details || 'Processing...';
-            }
-            
-            // Handle completion
-            if (data.completed) {
-                scanCard.classList.add(data.success ? 'completed' : 'error');
-                
-                // Remove cancel button
-                const cancelBtn = scanCard.querySelector('.cancel-scan-btn');
-                if (cancelBtn) {
-                    cancelBtn.remove();
-                }
-                
-                // Show completion message
-                if (detailsElement) {
-                    detailsElement.textContent = data.success ? data.message : data.error;
-                }
-                
-                // Auto-remove completed scans after 30 seconds
-                setTimeout(() => {
-                    scanCard.remove();
-                }, 30000);
-            }
-        })
-        .catch(error => console.error('Error updating scan progress:', error));
-}
-
-function updateAPIStatus() {
-    fetch('{% url "books:api_status_ajax" %}')
-        .then(response => response.json())
-        .then(data => {
-            // Update API status indicators and progress bars
-            // This would update the API status cards
-            console.log('Updated API status:', data);
-        })
-        .catch(error => console.error('Error updating API status:', error));
-}
-
-function cancelScan(jobId) {
-    fetch(`{% url 'books:cancel_scan_ajax' job_id='PLACEHOLDER' %}`.replace('PLACEHOLDER', jobId), {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Remove the scan card
-            const scanCard = document.querySelector(`[data-job-id="${jobId}"]`);
-            if (scanCard) {
-                scanCard.remove();
-            }
-        } else {
-            alert('Failed to cancel scan: ' + data.error);
-        }
-    })
-    .catch(error => {
-        console.error('Error canceling scan:', error);
-        alert('Failed to cancel scan');
-    });
-}
+// Configuration for scanning dashboard
+window.scanningDashboardConfig = {
+    activeScanUrl: '{% url "books:active_scans_ajax" %}',
+    scanProgressUrl: '{% url "books:scan_progress_ajax" job_id="PLACEHOLDER" %}',
+    apiStatusUrl: '{% url "books:api_status_ajax" %}',
+    cancelScanUrl: '{% url "books:cancel_scan_ajax" job_id="PLACEHOLDER" %}'
+};
 </script>
+<script src="{% static 'book/js/scanning-dashboard.js' %}"></script>
 {% endblock %}

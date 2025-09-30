@@ -130,10 +130,10 @@
                 <!-- Save Button -->
                 <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                     <button type="button" class="btn btn-outline-secondary me-md-2" id="resetForm">
-                        <i class="fas fa-undo me-2"></i>Reset
+                        Reset
                     </button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save me-2"></i>Save Settings
+                    <button type="submit" class="btn btn-primary" id="saveForm" disabled>
+                        Save Settings
                     </button>
                 </div>
             </form>
@@ -184,211 +184,16 @@
 {% block extra_js %}
 <script src="{% static 'book/js/user-settings.js' %}"></script>
 <script>
-// Initialize user settings when DOM is loaded  
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('settingsForm');
-    const themeSelect = document.getElementById('{{ form.theme.id_for_label }}');
-    const previewCards = document.querySelectorAll('.theme-preview-card');
-    const previewControls = document.getElementById('previewControls');
-    const savePreview = document.getElementById('savePreview');
-    const cancelPreview = document.getElementById('cancelPreview');
-    const resetButton = document.getElementById('resetForm');
-    
-    let isPreviewMode = false;
-    let originalTheme = '{{ current_theme }}';
-    
-    // Theme preview functionality
-    previewCards.forEach(card => {
-        card.addEventListener('click', function() {
-            const theme = this.dataset.theme;
-            previewTheme(theme);
-        });
-    });
-    
-    // Form submission
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        saveSettings();
-    });
-    
-    // Reset form
-    resetButton.addEventListener('click', function() {
-        if (confirm('Are you sure you want to reset all settings to their default values?')) {
-            form.reset();
-            clearPreview();
-        }
-    });
-    
-    // Preview controls
-    savePreview.addEventListener('click', function() {
-        const selectedTheme = previewControls.dataset.selectedTheme;
-        if (selectedTheme) {
-            // Update the form field
-            themeSelect.value = selectedTheme;
-            
-            // Save the settings
-            saveSettings();
-            
-            // Update original theme reference
-            originalTheme = selectedTheme;
-        }
-    });
-    
-    cancelPreview.addEventListener('click', function() {
-        clearPreview();
-    });
-    
-    function previewTheme(theme) {
-        // Update active card
-        previewCards.forEach(card => card.classList.remove('active'));
-        document.querySelector(`[data-theme="${theme}"]`).classList.add('active');
-        
-        // Show preview controls immediately
-        isPreviewMode = true;
-        previewControls.classList.add('show');
-        
-        // Send preview request
-        fetch('{% url "books:preview_theme" %}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: `theme=${theme}`
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Store the selected theme for later saving
-                previewControls.dataset.selectedTheme = theme;
-                
-                // Apply theme by updating CSS link
-                applyThemeCSS(theme);
-                
-                // Show success feedback
-                console.log(`Previewing ${theme} theme`);
-            } else {
-                console.error('Error previewing theme:', data.error);
-                clearPreview();
-            }
-        })
-        .catch(error => {
-            console.error('Error previewing theme:', error);
-            clearPreview();
-        });
+// Pass Django template variables to JavaScript
+window.userSettingsConfig = {
+    currentTheme: '{{ current_theme }}',
+    csrfToken: '{{ csrf_token }}',
+    urls: {
+        previewTheme: '{% url "books:preview_theme" %}',
+        clearThemePreview: '{% url "books:clear_theme_preview" %}',
+        resetToDefaults: '{% url "books:reset_to_defaults" %}',
+        userSettings: '{% url "books:user_settings" %}'
     }
-    
-    function clearPreview() {
-        // Reset active card to original theme
-        previewCards.forEach(card => card.classList.remove('active'));
-        const originalCard = document.querySelector(`[data-theme="${originalTheme}"]`);
-        if (originalCard) {
-            originalCard.classList.add('active');
-        }
-        
-        fetch('{% url "books:clear_theme_preview" %}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-CSRFToken': '{{ csrf_token }}'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Restore original theme CSS
-                applyThemeCSS(originalTheme);
-            }
-        })
-        .catch(error => {
-            console.error('Error clearing preview:', error);
-        });
-        
-        isPreviewMode = false;
-        previewControls.classList.remove('show');
-    }
-    
-    function applyThemeCSS(theme) {
-        // Find the Bootstrap CSS link
-        const existingLink = document.querySelector('link[href*="bootswatch"], link[href*="bootstrap"]');
-        
-        if (existingLink) {
-            // Create new link element
-            const newLink = document.createElement('link');
-            newLink.rel = 'stylesheet';
-            
-            if (theme === 'bootstrap') {
-                newLink.href = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css';
-            } else {
-                newLink.href = `https://cdn.jsdelivr.net/npm/bootswatch@5.3.0/dist/${theme}/bootstrap.min.css`;
-            }
-            
-            // Replace the existing link
-            existingLink.parentNode.insertBefore(newLink, existingLink.nextSibling);
-            existingLink.remove();
-        }
-    }
-    
-    function saveSettings() {
-        const formData = new FormData(form);
-        
-        fetch('{% url "books:user_settings" %}', {
-            method: 'POST',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Show success message
-                showAlert('success', data.message);
-                
-                // Clear preview mode
-                isPreviewMode = false;
-                previewControls.classList.remove('show');
-                
-                // Update original theme reference
-                originalTheme = themeSelect.value;
-                
-                // No need to reload - theme is already applied via CSS
-                console.log('Settings saved successfully');
-            } else {
-                showAlert('danger', 'Error saving settings: ' + (data.error || 'Unknown error'));
-            }
-        })
-        .catch(error => {
-            console.error('Error saving settings:', error);
-            showAlert('danger', 'Error saving settings. Please try again.');
-        });
-    }
-    
-    function showAlert(type, message) {
-        const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-        alertDiv.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        
-        const container = document.querySelector('.container-fluid');
-        container.insertBefore(alertDiv, container.firstChild);
-        
-        // Auto-dismiss after 8 seconds (increased from 5)
-        setTimeout(() => {
-            if (alertDiv.parentNode) {
-                alertDiv.classList.remove('show');
-                alertDiv.classList.add('fade');
-                setTimeout(() => {
-                    if (alertDiv.parentNode) {
-                        alertDiv.remove();
-                    }
-                }, 300);
-            }
-        }, 8000);
-    }
-});
+};
 </script>
 {% endblock %}

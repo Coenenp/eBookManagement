@@ -1,0 +1,359 @@
+/* ======================================
+   📝 Form Components & Enhancements
+   Bootstrap-compatible form styling
+========================================= */
+
+/* ======================================
+   🎨 Form Cards & Containers
+========================================= */
+
+/* Main form containers */
+.form-card {
+    border: none;
+    border-radius: var(--theme-border-radius);
+    box-shadow: var(--bs-box-shadow-sm);
+    transition: var(--theme-transition);
+}
+
+.form-card:hover {
+    box-shadow: var(--bs-box-shadow);
+}
+
+.form-card .card-header {
+    background: var(--bs-primary-bg-subtle);
+    border: none;
+    border-radius: var(--theme-border-radius) var(--theme-border-radius) 0 0;
+}
+
+.form-card .card-header h5,
+.form-card .card-header h6 {
+    color: var(--bs-primary-text-emphasis);
+    font-weight: 600;
+}
+
+/* ======================================
+   📋 Enhanced Form Fields
+========================================= */
+
+/* Label styling with icons */
+.form-label {
+    color: var(--bs-body-color);
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+}
+
+.form-label i {
+    opacity: 0.7;
+    width: 16px;
+}
+
+/* Form control enhancements */
+.form-control,
+.form-select {
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--theme-border-radius);
+    padding: 0.75rem;
+    transition: var(--theme-transition);
+    box-shadow: none;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+/* Form text and help text */
+.form-text {
+    color: var(--bs-secondary);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+    display: flex;
+    align-items: center;
+}
+
+.form-text i {
+    margin-right: 0.25rem;
+    opacity: 0.8;
+}
+
+/* ======================================
+   ⚠️ Validation & Error States
+========================================= */
+
+/* Enhanced error styling */
+.invalid-feedback {
+    color: var(--bs-danger);
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+    display: flex;
+    align-items: flex-start;
+}
+
+.invalid-feedback i {
+    margin-right: 0.25rem;
+    margin-top: 0.125rem;
+    flex-shrink: 0;
+}
+
+.form-control.is-invalid,
+.form-select.is-invalid {
+    border-color: var(--bs-danger);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-danger-rgb), 0.25);
+}
+
+.form-control.is-valid,
+.form-select.is-valid {
+    border-color: var(--bs-success);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-success-rgb), 0.25);
+}
+
+/* ======================================
+   🔘 Switch & Checkbox Enhancements
+========================================= */
+
+/* Form switch styling */
+.form-switch .form-check-input {
+    width: 2.5rem;
+    height: 1.25rem;
+    background-color: var(--bs-gray-300);
+    border: none;
+    transition: var(--theme-transition);
+}
+
+.form-switch .form-check-input:checked {
+    background-color: var(--bs-success);
+    border-color: var(--bs-success);
+}
+
+.form-switch .form-check-input:focus {
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-success-rgb), 0.25);
+}
+
+/* Checkbox and radio enhancements */
+.form-check-input {
+    border: 1px solid var(--bs-border-color);
+    transition: var(--theme-transition);
+}
+
+.form-check-input:checked {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+}
+
+.form-check-input:focus {
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+.form-check-label {
+    color: var(--bs-body-color);
+    cursor: pointer;
+}
+
+/* ======================================
+   🎯 Form Actions & Buttons
+========================================= */
+
+/* Form action area */
+.form-actions {
+    border-top: 1px solid var(--bs-border-color);
+    padding-top: 1rem;
+    margin-top: 1.5rem;
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+
+/* Button spacing in forms */
+.form-actions .btn {
+    min-width: 120px;
+    font-weight: 500;
+}
+
+.form-actions .btn:first-child {
+    margin-left: auto;
+}
+
+/* ======================================
+   💡 Help & Info Sections
+========================================= */
+
+/* Help cards */
+.help-card {
+    background: var(--bs-info-bg-subtle);
+    border: 1px solid var(--bs-info-border-subtle);
+    border-radius: var(--theme-border-radius);
+}
+
+.help-card .card-body {
+    padding: 1rem;
+}
+
+.help-card h6 {
+    color: var(--bs-info-text-emphasis);
+    font-weight: 600;
+}
+
+.help-card .list-unstyled li {
+    color: var(--bs-info-text-emphasis);
+    margin-bottom: 0.5rem;
+}
+
+.help-card .list-unstyled i {
+    width: 16px;
+    opacity: 0.8;
+}
+
+/* Info boxes */
+.info-box {
+    background: var(--bs-light);
+    border: 1px solid var(--bs-border-color);
+    border-left: 4px solid var(--bs-primary);
+    border-radius: 0 var(--theme-border-radius) var(--theme-border-radius) 0;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+.info-box h6 {
+    color: var(--bs-primary);
+    margin-bottom: 0.5rem;
+}
+
+/* Status indicators */
+.status-toggle {
+    background: var(--bs-light);
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--theme-border-radius);
+    padding: 1rem;
+}
+
+.status-toggle .badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* ======================================
+   📱 Responsive Form Layout
+========================================= */
+
+@media (max-width: 768px) {
+    .form-actions {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .form-actions .btn {
+        width: 100%;
+        min-width: unset;
+    }
+    
+    .form-actions .btn:first-child {
+        margin-left: 0;
+        order: 2;
+    }
+    
+    .help-card .row {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 576px) {
+    .card-body {
+        padding: 1.5rem;
+    }
+    
+    .form-label {
+        font-size: 0.9rem;
+    }
+    
+    .form-control,
+    .form-select {
+        padding: 0.625rem;
+    }
+}
+
+/* ======================================
+   🎨 Theme Compatibility
+========================================= */
+
+/* Ensure form elements work with all Bootswatch themes */
+[data-bs-theme="dark"] .form-card {
+    background: var(--bs-dark);
+    border: 1px solid var(--bs-border-color);
+}
+
+[data-bs-theme="dark"] .form-control,
+[data-bs-theme="dark"] .form-select {
+    background-color: var(--bs-dark);
+    border-color: var(--bs-border-color);
+    color: var(--bs-body-color);
+}
+
+[data-bs-theme="dark"] .status-toggle {
+    background: var(--bs-dark);
+    border-color: var(--bs-border-color);
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .form-control,
+    .form-select {
+        border-width: 2px;
+    }
+    
+    .form-control:focus,
+    .form-select:focus {
+        box-shadow: 0 0 0 0.3rem rgba(var(--bs-primary-rgb), 0.4);
+    }
+}
+
+/* ======================================
+   ✨ Animations & Micro-interactions
+========================================= */
+
+/* Smooth field transitions */
+.form-floating {
+    position: relative;
+}
+
+.form-floating .form-control,
+.form-floating .form-select {
+    padding: 1rem 0.75rem 0.25rem;
+}
+
+/* Loading states for form submissions */
+.form-submitting .btn[type="submit"] {
+    opacity: 0.6;
+    cursor: not-allowed;
+    position: relative;
+}
+
+.form-submitting .btn[type="submit"]::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    margin: auto;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    top: 0;
+    bottom: 0;
+    right: 1rem;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Focus management for accessibility */
+.form-control:focus-visible,
+.form-select:focus-visible,
+.form-check-input:focus-visible {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 2px;
+}

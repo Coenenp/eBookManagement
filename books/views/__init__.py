@@ -68,7 +68,7 @@ from .ai_feedback import (  # noqa: F401
 
 # User Settings views - COMPLETED
 from .user_settings import (  # noqa: F401
-    UserSettingsView, preview_theme, clear_theme_preview
+    UserSettingsView, preview_theme, clear_theme_preview, reset_to_defaults
 )
 
 # Scanning views - COMPLETED (moved from views_modules/scanning.py)
