@@ -258,14 +258,15 @@ def ebooks_ajax_detail(request, book_id):
             'id': book.id,
             'title': metadata.get('title', 'Unknown Title'),
             'author': metadata.get('author', 'Unknown Author'),
+            'narrator': metadata.get('narrator', ''),
             'publisher': metadata.get('publisher', ''),
             'description': metadata.get('description', ''),
             'isbn': metadata.get('isbn', ''),
             'language': metadata.get('language', ''),
             'publication_date': metadata.get('publication_date'),
-            'file_format': book.file_format or 'Unknown',
-            'file_size': book.file_size or 0,
-            'file_path': book.file_path or '',
+            'file_format': book.file_format or 'UNKNOWN',
+            'file_size': book.file_size,
+            'file_path': book.file_path,
             'last_scanned': book.last_scanned.isoformat() if book.last_scanned else None,
             'series_name': series_name,
             'series_position': series_position,
@@ -386,7 +387,8 @@ class ComicsMainView(LoginRequiredMixin, TemplateView):
         # Count comics from scan folders designated as 'comics' or 'mixed'
         comics_from_final = FinalMetadata.objects.filter(
             book__scan_folder__content_type__in=['comics', 'mixed'],
-            book__scan_folder__is_active=True
+            book__scan_folder__is_active=True,
+            book__file_format__in=['cbr', 'cbz']
         ).select_related('book')
 
         # Count unique series + standalone comics
@@ -405,7 +407,8 @@ class ComicsMainView(LoginRequiredMixin, TemplateView):
         if comics_count == 0:
             comics_count = Book.objects.filter(
                 scan_folder__content_type__in=['comics', 'mixed'],
-                scan_folder__is_active=True
+                scan_folder__is_active=True,
+                file_format__in=['cbr', 'cbz']
             ).count()
 
         context['comics_count'] = comics_count
@@ -420,7 +423,8 @@ def comics_ajax_list(request):
         # Get comics from FinalMetadata - filter by scan folder content type
         comics_from_final = FinalMetadata.objects.filter(
             book__scan_folder__content_type__in=['comics', 'mixed'],
-            book__scan_folder__is_active=True
+            book__scan_folder__is_active=True,
+            book__file_format__in=['cbr', 'cbz']
         ).select_related('book', 'book__scan_folder')
 
         # Group by series if available

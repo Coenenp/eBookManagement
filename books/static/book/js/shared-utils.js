@@ -112,6 +112,41 @@ EbookLibrary.Forms = {
 };
 
 /**
+ * Progress bar utilities - consolidated progress bar initialization
+ */
+EbookLibrary.ProgressBars = {
+    initializeAll() {
+        // Initialize all progress bars with data-width attributes
+        document.querySelectorAll('[data-width]').forEach(element => {
+            const width = element.getAttribute('data-width');
+            if (width !== null && width !== '') {
+                // Set width via CSS custom property or direct style
+                if (element.classList.contains('reading-progress-bar')) {
+                    element.style.setProperty('--reading-width', width + '%');
+                } else {
+                    element.style.width = width + '%';
+                }
+            }
+        });
+    },
+
+    setProgress(element, width) {
+        if (typeof element === 'string') {
+            element = document.querySelector(element);
+        }
+        
+        if (element) {
+            if (element.classList.contains('reading-progress-bar')) {
+                element.style.setProperty('--reading-width', width + '%');
+            } else {
+                element.style.width = width + '%';
+            }
+            element.setAttribute('data-width', width);
+        }
+    }
+};
+
+/**
  * Notification system - consolidated UI feedback
  */
 EbookLibrary.Notifications = {
@@ -228,6 +263,7 @@ EbookLibrary.init = function() {
     
     // Setup form loading states
     this.Forms.addLoadingStates();
+    this.ProgressBars.initializeAll();
     
     console.log('Ebook Library shared utilities initialized');
 };

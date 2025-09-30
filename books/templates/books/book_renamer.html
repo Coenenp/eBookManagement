@@ -6,90 +6,8 @@
 {% block title %}Book File Organizer - {{ block.super }}{% endblock %}
 
 {% block extra_css %}
-<style>
-.table-col-narrow { width: 40px; }
-.table-col-format { width: 60px; }
-.table-col-lang { width: 60px; }
-.table-col-confidence { width: 70px; }
-.table-col-cover { width: 30px; }
-.table-col-status { width: 80px; }
-.text-truncate-title { max-width: 300px; }
-.text-truncate-author { max-width: 200px; }
-.text-truncate-series { max-width: 150px; }
-.alert-sm-custom { font-size: 0.65rem; padding: 0.1rem 0.3rem; }
-.cover-thumbnail { max-width: 150px; }
-.progress-bar-width-0 { width: 0%; }
-.progress-bar-width-100 { width: 100%; }
-.d-hidden { display: none !important; }
-.badge-xs { font-size: 0.65rem; padding: 0.15rem 0.3rem; }
-.table-sm th, .table-sm td { padding: 0.3rem 0.4rem; vertical-align: middle; }
-
-/* Success icon styling */
-.success-icon-large {
-    font-size: 3rem !important;
-}
-
-/* Rename table column widths */
-.rename-table-col-book {
-    width: 200px;
-}
-
-.rename-table-col-status {
-    width: 80px;
-}
-
-/* Rename table text sizes */
-.rename-title-text {
-    font-size: 0.9rem;
-}
-
-.rename-path-text {
-    font-size: 0.75rem;
-}
-
-/* Responsive adjustments for smaller screens */
-@media (max-width: 1200px) {
-    .text-truncate-title { max-width: 250px; }
-    .text-truncate-author { max-width: 150px; }
-    .text-truncate-series { max-width: 120px; }
-}
-
-@media (max-width: 992px) {
-    .text-truncate-title { max-width: 200px; }
-    .text-truncate-author { max-width: 120px; }
-    .text-truncate-series { max-width: 100px; }
-    .table-col-format { width: 50px; }
-    .table-col-lang { width: 50px; }
-    .table-col-confidence { width: 60px; }
-    .table-col-status { width: 70px; }
-}
-.additional-files-section {
-    border-top: 1px solid #dee2e6;
-    margin-top: 1rem;
-    padding-top: 1rem;
-}
-.file-item {
-    transition: all 0.2s ease;
-}
-.file-item:hover {
-    background-color: #f8f9fa !important;
-}
-.file-action-group .btn {
-    font-size: 0.875rem;
-    padding: 0.375rem 0.75rem;
-}
-.file-action-group .btn-check:checked + .btn {
-    font-weight: 600;
-}
-.auto-rename-badge {
-    background: linear-gradient(45deg, #28a745, #20c997);
-    color: white;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.375rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-</style>
+{% load static %}
+<link rel="stylesheet" href="{% static 'book/css/file-management.css' %}">
 {% endblock %}
 
 {% block content %}
@@ -701,7 +619,9 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'book/js/book-renamer.js' %}"></script>
 <script>
+// Initialize book renamer when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     const selectAllBtn = document.getElementById('selectAllBtn');
     const selectNoneBtn = document.getElementById('selectNoneBtn');

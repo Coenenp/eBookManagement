@@ -1,0 +1,207 @@
+{% extends 'books/wizard/base.html' %}
+
+{% block wizard_content %}
+<div class="mb-4">
+    <h3>
+        <i class="fas fa-folder-open text-primary me-2"></i>
+        Select Your Ebook Folders
+    </h3>
+    <p class="text-muted">
+        Choose the folders where your ebooks, comics, and audiobooks are stored. 
+        We'll scan these folders to build your library.
+    </p>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+    
+    <!-- Suggested Folders -->
+    {% if suggested_folders %}
+    <div class="mb-4">
+        <h5 class="mb-3">
+            <i class="fas fa-lightbulb text-warning me-1"></i>
+            Suggested Folders
+        </h5>
+        <p class="text-muted small mb-3">
+            We found these folders that might contain your ebooks:
+        </p>
+        
+        {% for folder in suggested_folders %}
+        <div class="folder-suggestion" data-path="{{ folder.path }}">
+            <div class="d-flex align-items-start">
+                <div class="form-check me-3">
+                    <input class="form-check-input" type="checkbox" 
+                           name="folders" value="{{ folder.path }}" 
+                           id="folder_{{ forloop.counter }}">
+                </div>
+                <div class="flex-grow-1">
+                    <label class="form-check-label d-block" for="folder_{{ forloop.counter }}">
+                        <strong>{{ folder.name }}</strong>
+                        <div class="folder-path">{{ folder.path }}</div>
+                        <div class="folder-stats">
+                            {% if folder.file_count > 0 %}
+                                <span class="badge bg-success">{{ folder.file_count }} ebook files found</span>
+                            {% else %}
+                                <span class="badge bg-secondary">No ebook files found</span>
+                            {% endif %}
+                        </div>
+                    </label>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <!-- Custom Folder Input -->
+    <div class="mb-4">
+        <h5 class="mb-3">
+            <i class="fas fa-plus text-success me-1"></i>
+            Add Custom Folder
+        </h5>
+        <div class="input-group">
+            <span class="input-group-text">
+                <i class="fas fa-folder"></i>
+            </span>
+            <input type="text" class="form-control" name="custom_folder" 
+                   id="customFolder" placeholder="Enter folder path (e.g., C:\Books or /home/user/ebooks)"
+                   autocomplete="off">
+        </div>
+        <div id="customFolderFeedback" class="mt-2"></div>
+        
+        <div class="mt-3">
+            <div class="alert alert-info">
+                <div class="d-flex">
+                    <i class="fas fa-info-circle me-2 mt-1"></i>
+                    <div>
+                        <strong>Tips for selecting folders:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Choose folders that contain your ebooks directly or in subfolders</li>
+                            <li>Common locations: Documents/Books, Downloads, Desktop/eBooks</li>
+                            <li>You can add multiple folders for different content types</li>
+                            <li>Network drives and external storage are supported</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- File Format Info -->
+    <div class="mb-4">
+        <h6 class="text-muted">
+            <i class="fas fa-file-alt me-1"></i>
+            Supported File Formats
+        </h6>
+        <div class="row">
+            <div class="col-md-4">
+                <strong>📘 Ebooks</strong>
+                <div class="small text-muted">
+                    EPUB, MOBI, AZW, AZW3, PDF, FB2, LIT, PRC
+                </div>
+            </div>
+            <div class="col-md-4">
+                <strong>🖼️ Comics</strong>
+                <div class="small text-muted">
+                    CBR, CBZ, CB7, CBT, PDF
+                </div>
+            </div>
+            <div class="col-md-4">
+                <strong>🔊 Audiobooks</strong>
+                <div class="small text-muted">
+                    MP3, M4A, M4B, AAC, FLAC, OGG, WAV
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="wizard-navigation">
+        <div>
+            <a href="{% url 'books:wizard_step' step='welcome' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>
+                Back
+            </a>
+        </div>
+        
+        <div>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-arrow-right me-2"></i>
+                Continue
+            </button>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Browse folder functionality (placeholder - would need native file dialog)
+    document.getElementById('browseFolder')?.addEventListener('click', function() {
+        alert('Folder browsing requires a native file dialog. Please type the path manually for now.');
+    });
+    
+    // Enhanced folder validation with preview
+    const customFolderInput = document.getElementById('customFolder');
+    if (customFolderInput) {
+        let validationTimeout;
+        
+        customFolderInput.addEventListener('input', function() {
+            clearTimeout(validationTimeout);
+            const path = this.value.trim();
+            
+            if (path.length > 3) {
+                validationTimeout = setTimeout(() => {
+                    validateFolderWithPreview(path);
+                }, 500);
+            }
+        });
+    }
+});
+
+function validateFolderWithPreview(path) {
+    const input = document.getElementById('customFolder');
+    const feedback = document.getElementById('customFolderFeedback');
+    
+    // Show loading state
+    feedback.innerHTML = '<small class="text-info"><i class="fas fa-spinner fa-spin me-1"></i>Checking folder...</small>';
+    
+    fetch('{% url "books:wizard_validate_folder" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: 'path=' + encodeURIComponent(path)
+    })
+    .then(response => response.json())
+    .then(data => {
+        input.classList.remove('is-invalid', 'is-valid');
+        
+        if (data.valid) {
+            input.classList.add('is-valid');
+            feedback.innerHTML = `
+                <small class="text-success">
+                    <i class="fas fa-check-circle me-1"></i>
+                    Valid folder: <strong>${data.name}</strong> 
+                    <span class="badge bg-success ms-2">${data.file_count} files</span>
+                </small>
+            `;
+        } else {
+            input.classList.add('is-invalid');
+            feedback.innerHTML = `
+                <small class="text-danger">
+                    <i class="fas fa-exclamation-circle me-1"></i>
+                    ${data.error}
+                </small>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('Error validating folder:', error);
+        feedback.innerHTML = '<small class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i>Unable to validate folder</small>';
+    });
+}
+</script>
+{% endblock %}

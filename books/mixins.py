@@ -151,6 +151,7 @@ class BaseMetadataValidator:
         return ', '.join(item_list)
 
     @staticmethod
+    @staticmethod
     def validate_integer_list(value, field_name="items"):
         """Validate comma-separated integer list"""
         if not value:
@@ -240,7 +241,7 @@ class MetadataFormMixin(StandardFormMixin, BaseMetadataValidator):
 
     def clean_publication_year(self):
         """Validate publication year using base validator"""
-        return self.validate_year(
+        return BaseMetadataValidator.validate_year(
             self.cleaned_data.get('publication_year'),
             "Publication year"
         )
@@ -253,7 +254,7 @@ class MetadataFormMixin(StandardFormMixin, BaseMetadataValidator):
 
     def clean_manual_genres(self):
         """Validate manual genres using base validator"""
-        return self.validate_comma_separated_list(
+        return BaseMetadataValidator.validate_comma_separated_list(
             self.cleaned_data.get('manual_genres', ''),
             'genres'
         )

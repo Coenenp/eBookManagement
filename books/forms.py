@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
 from .models import ScanFolder, Book, FinalMetadata, BookCover, LANGUAGE_CHOICES
-from .mixins import StandardFormMixin, MetadataFormMixin
+from .mixins import StandardFormMixin, MetadataFormMixin, BaseMetadataValidator
 import os
 
 
@@ -25,11 +25,18 @@ class ScanFolderForm(StandardFormMixin, forms.ModelForm):
             }),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set default for content_type and make it not required
+        self.fields['content_type'].initial = 'ebooks'
+        self.fields['content_type'].required = False
+
     def clean_path(self):
-        path = self.cleaned_data['path']
+        path = self.cleaned_data.get('path', '')
         if not path or not path.strip():
             raise forms.ValidationError("Please provide a folder path.")
 
+        # Strip whitespace and normalize path
         path = path.strip()
 
         if not os.path.exists(path):
@@ -37,6 +44,15 @@ class ScanFolderForm(StandardFormMixin, forms.ModelForm):
         if not os.path.isdir(path):
             raise forms.ValidationError(f"The specified path is not a directory: {path}")
         return path
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        # Set default content_type if not provided
+        if 'content_type' not in cleaned_data or not cleaned_data['content_type']:
+            cleaned_data['content_type'] = 'ebooks'
+
+        return cleaned_data
 
 
 class BookSearchForm(StandardFormMixin, forms.Form):
@@ -152,6 +168,46 @@ class MetadataReviewForm(MetadataFormMixin, forms.ModelForm):
         # Update manual genres widget using mixin
         self.fields['manual_genres'].widget = self.text_with_placeholder('Enter additional genres...')
 
+        # Set required fields
+        self.fields['final_title'].required = True
+        self.fields['final_author'].required = True
+
+    def clean_manual_genres(self):
+        """Validate manual genres using base validator"""
+        value = self.cleaned_data.get('manual_genres', '')
+        if not value:
+            return ''
+
+        value_str = str(value).strip()
+        if not value_str:
+            return ''
+
+        # Split by comma and clean each item
+        item_list = [item.strip() for item in value_str.split(',') if item.strip()]
+        if not item_list:
+            return ''
+
+        return ', '.join(item_list)
+
+    def clean(self):
+        """Custom form validation including publication year"""
+        from django.utils import timezone
+
+        cleaned_data = super().clean()
+
+        # Validate publication year
+        publication_year = cleaned_data.get('publication_year')
+
+        if publication_year is not None:
+            current_year = timezone.now().year
+
+            if publication_year < 1000 or publication_year > current_year + 1:
+                self.add_error('publication_year', forms.ValidationError(
+                    f"Publication year must be between 1000 and {current_year + 1}."
+                ))
+
+        return cleaned_data
+
 
 class BookStatusForm(StandardFormMixin, forms.ModelForm):
     class Meta:
@@ -175,7 +231,7 @@ class BookEditForm(StandardFormMixin, forms.ModelForm):
         }
 
 
-class BookCoverForm(StandardFormMixin, forms.ModelForm):
+class BookCoverForm(MetadataFormMixin, forms.ModelForm):
     class Meta:
         model = BookCover
         fields = [
@@ -200,13 +256,20 @@ class BookCoverForm(StandardFormMixin, forms.ModelForm):
 
     def clean_confidence(self):
         """Validate confidence using base validator"""
-        from .mixins import BaseMetadataValidator
-        return BaseMetadataValidator.validate_confidence(
-            self.cleaned_data.get('confidence')
-        )
+        value = self.cleaned_data.get('confidence')
+        if value is None:
+            return value
+
+        try:
+            conf = float(value)
+            if not (0 <= conf <= 1):
+                raise forms.ValidationError("Confidence must be between 0 and 1.")
+            return conf
+        except (ValueError, TypeError):
+            raise forms.ValidationError("Confidence must be a valid number.")
 
 
-class BulkUpdateForm(StandardFormMixin, forms.Form):
+class BulkUpdateForm(MetadataFormMixin, forms.Form):
     ACTION_CHOICES = [
         ('', 'Select action'),
         ('mark_reviewed', 'Mark as reviewed'),
@@ -228,14 +291,20 @@ class BulkUpdateForm(StandardFormMixin, forms.Form):
     )
 
     def clean_selected_books(self):
-        from .mixins import BaseMetadataValidator
-
         selected = self.cleaned_data.get('selected_books', '')
         if not selected:
             raise forms.ValidationError("No books selected.")
 
-        # Use the validator from mixins
-        return BaseMetadataValidator.validate_integer_list(selected, 'book IDs')
+        # Validate and convert comma-separated integer list
+        value_str = str(selected).strip()
+        if not value_str:
+            return []
+
+        try:
+            item_list = [int(item.strip()) for item in value_str.split(',') if item.strip()]
+            return item_list
+        except ValueError:
+            raise forms.ValidationError("Invalid book IDs - must be comma-separated integers.")
 
 
 class AdvancedSearchForm(StandardFormMixin, forms.Form):
@@ -311,14 +380,12 @@ class AdvancedSearchForm(StandardFormMixin, forms.Form):
 
         # Validate years using base validator
         if year_from is not None:
-            from .mixins import BaseMetadataValidator
             try:
                 BaseMetadataValidator.validate_year(year_from, "From year")
             except forms.ValidationError:
                 self.add_error('publication_year_from', 'Invalid from year.')
 
         if year_to is not None:
-            from .mixins import BaseMetadataValidator
             try:
                 BaseMetadataValidator.validate_year(year_to, "To year")
             except forms.ValidationError:

@@ -1,0 +1,128 @@
+/* ======================================
+   🧭 Navigation & Enhanced UI
+   Optimized for Bootstrap integration
+========================================= */
+
+/* Enhanced tab navigation */
+.nav-tabs-enhanced .nav-link {
+    border: none;
+    padding: 0.75rem 1.25rem;
+    margin: 0 0.125rem;
+    transition: all 0.3s ease;
+    position: relative;
+}
+.nav-tabs-enhanced .nav-link:hover { background-color: rgba(255, 255, 255, 0.1); transform: translateY(-1px); }
+.nav-tabs-enhanced .nav-link.active { border-radius: 0.375rem 0.375rem 0 0; margin-bottom: -1px; font-weight: 600; }
+.nav-tabs-enhanced .nav-link.active::before {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--bs-primary), var(--bs-primary-dark, var(--bs-primary)));
+}
+
+/* Book navigation system */
+.btn-toolbar.gap-2 { flex-wrap: wrap; gap: 0.5rem !important; }
+.btn-toolbar .btn-group { flex-shrink: 0; }
+.navigation-card {
+    border-left: 4px solid var(--bs-primary);
+    background: linear-gradient(135deg, var(--bs-light) 0%, var(--bs-gray-200) 100%);
+}
+.navigation-card .card-body { padding: 0.75rem 1rem; }
+
+/* Navigation type variants */
+.nav-basic { border-left-color: var(--bs-primary); }
+.nav-author { border-left-color: var(--bs-info); }  
+.nav-series { border-left-color: var(--bs-success); }
+.nav-review { border-left-color: var(--bs-warning); }
+.navigation-icon { opacity: 0.7; margin-right: 0.5rem; }
+
+/* Button & dropdown enhancements */
+.btn-outline-primary:hover,
+.btn-outline-info:hover,
+.btn-outline-success:hover,
+.btn-outline-warning:hover,
+.btn-outline-secondary:hover,
+.btn-outline-danger:hover { transform: translateY(-1px); transition: transform 0.1s ease; }
+.btn.disabled { opacity: 0.5; transform: none !important; }
+
+.dropdown-menu { border-radius: 0.5rem; box-shadow: var(--bs-box-shadow); border: none; }
+.dropdown-item { padding: 0.5rem 1rem; transition: all 0.2s ease; }
+.dropdown-item:hover { background-color: var(--bs-light); transform: translateX(5px); }
+.dropdown-item i { width: 1.2rem; color: var(--bs-secondary); }
+
+/* File management & renamer utilities */
+.table-col-format { width: 60px; } .table-col-lang { width: 60px; } .table-col-confidence { width: 70px; } .table-col-cover { width: 30px; }
+.text-truncate-title { max-width: 300px; } .text-truncate-author { max-width: 200px; } .text-truncate-series { max-width: 150px; }
+.cover-thumbnail { max-width: 150px; }
+.table-sm th, .table-sm td { padding: 0.3rem 0.4rem; vertical-align: middle; }
+.rename-table-col-book { width: 200px; } .rename-table-col-status { width: 80px; }
+.rename-title-text { font-size: 0.9rem; } .rename-path-text { font-size: 0.75rem; }
+
+.additional-files-section { border-top: 1px solid var(--bs-border-color); margin-top: 1rem; padding-top: 1rem; }
+.file-item { transition: all 0.2s ease; }
+.file-item:hover { background-color: var(--bs-light) !important; }
+.file-action-group .btn { font-size: 0.875rem; padding: 0.375rem 0.75rem; }
+.file-action-group .btn-check:checked + .btn { font-weight: 600; }
+
+/* Forms, ISBN lookup & misc utilities */
+.isbn-lookup-hidden { display: none; }
+.lookup-thumbnail { max-width: 60px; }
+.cover-preview-small { max-width: 150px; max-height: 200px; }
+.object-fit-contain { object-fit: contain; }
+.success-icon-large { font-size: 3rem; }
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .nav-tabs-enhanced { overflow-x: auto; white-space: nowrap; flex-wrap: nowrap !important; }
+    .nav-tabs-enhanced .nav-item { flex-shrink: 0; }
+    .nav-tabs-enhanced .nav-link { padding: 0.5rem 0.75rem; font-size: 0.9rem; }
+    .btn-toolbar .btn-group-sm .btn { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+    .btn-toolbar .btn-group-sm .btn i { margin: 0 0.2rem; }
+    .btn-toolbar { flex-direction: column; align-items: stretch; }
+    .btn-toolbar .btn-group { justify-content: center; margin-bottom: 0.25rem; }
+    .text-truncate-title { max-width: 250px; } .text-truncate-author { max-width: 150px; } .text-truncate-series { max-width: 120px; }
+}
+@media (max-width: 1200px) {
+    .text-truncate-title { max-width: 250px; } .text-truncate-author { max-width: 150px; } .text-truncate-series { max-width: 120px; }
+}
+@media (max-width: 992px) {
+    .text-truncate-title { max-width: 200px; } .text-truncate-author { max-width: 120px; } .text-truncate-series { max-width: 100px; }
+    .table-col-format { width: 50px; } .table-col-lang { width: 50px; } .table-col-confidence { width: 60px; } .table-col-status { width: 70px; }
+}
+
+/* Cover management & selection system */
+.cover-wrapper { position: relative; display: flex; justify-content: center; align-items: flex-start; width: 100%; }
+
+/* Cover selection cards - center all content */
+.card.cover-card .card-body { text-align: center; }
+.card.cover-card .card-body .form-check,
+.cover-section .card .card-body .form-check { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.card.cover-card .card-body .form-check-label,
+.cover-section .card .card-body .form-check-label { display: flex; flex-direction: column; align-items: center; text-align: center; margin-left: 0; }
+.card.cover-card .card-body .form-check-label > div,
+.cover-section .card .card-body .form-check-label > div { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+.card.cover-card .card-body .form-check-label > div:last-child,
+.cover-section .card .card-body .form-check-label > div:last-child { 
+    display: flex; flex-direction: row; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.5rem; 
+}
+
+/* Cover positioning in cards */
+.card .cover-container { margin: 15px auto; display: block; }
+.card .cover-container.cover-large { margin: 15px auto; flex-shrink: 0; }
+.card .cover-wrapper.cover-medium { display: flex; justify-content: center; align-items: flex-start; width: 100%; margin-bottom: 15px; }
+.card .cover-wrapper.cover-medium .cover-container { flex-shrink: 0; margin: 15px auto; }
+
+/* Cover options & image loading */
+.cover-option { padding: 4px; border-radius: 8px; }
+.cover-info { font-size: 0.8em; margin-top: 4px; }
+.cover-img { display: block; transition: opacity 0.3s ease; }
+.cover-img:not([src]) { opacity: 0; }
+img[loading="lazy"]:not([src^="data:"]) { opacity: 0; transition: opacity 0.3s ease; }
+img[loading="lazy"].loaded { opacity: 1; }
+
+/* Cover responsive sizing */
+@media (max-width: 768px) { .cover-container.cover-large { max-width: 160px; } }
+@media (max-width: 576px) { .cover-container.cover-large { max-width: 120px; } }

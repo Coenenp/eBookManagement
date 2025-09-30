@@ -5,164 +5,7 @@
 {% block title %}Dashboard - Ebook Library Manager{% endblock %}
 
 {% block extra_css %}
-<style>
-.stat-card {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    cursor: pointer;
-    border: none;
-    border-radius: 0.75rem;
-    overflow: hidden;
-}
-
-.stat-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-}
-
-.stat-card .card-body {
-    padding: 1.5rem;
-}
-
-.stat-icon {
-    font-size: 2.5rem;
-    opacity: 0.8;
-}
-
-.stat-number {
-    font-size: 2.8rem;
-    font-weight: 700;
-    line-height: 1;
-    margin: 0.5rem 0;
-}
-
-.stat-label {
-    font-size: 0.875rem;
-    font-weight: 500;
-    opacity: 0.9;
-    margin-bottom: 0.25rem;
-}
-
-.stat-progress {
-    margin-top: 0.75rem;
-    height: 6px !important;
-}
-
-/* Dynamic progress bar widths using CSS custom properties */
-.progress-bar-ebook {
-    width: var(--ebook-width, 0%);
-}
-
-.progress-bar-comic {
-    width: var(--comic-width, 0%);
-}
-
-.progress-bar-audiobook {
-    width: var(--audiobook-width, 0%);
-}
-
-.progress-bar-series {
-    width: var(--series-width, 0%);
-}
-
-.progress-bar-author {
-    width: var(--author-width, 85%);
-}
-
-.chart-container {
-    position: relative;
-    height: 300px;
-    margin: 1rem 0;
-}
-
-.chart-container canvas {
-    max-height: 300px;
-}
-
-.issue-card {
-    border-left: 4px solid;
-    transition: all 0.2s ease;
-}
-
-.issue-card:hover {
-    transform: translateX(4px);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-}
-
-/* Use Bootstrap theme colors for issue severity */
-.issue-high { 
-    border-left-color: var(--bs-danger, #dc3545); 
-}
-
-.issue-medium { 
-    border-left-color: var(--bs-warning, #fd7e14); 
-}
-
-.issue-low { 
-    border-left-color: var(--bs-warning, #ffc107); 
-}
-
-.issue-info { 
-    border-left-color: var(--bs-info, #0dcaf0); 
-}
-
-.activity-item {
-    padding: 0.75rem;
-    border-bottom: 1px solid var(--bs-border-color, #e9ecef);
-    transition: background-color 0.2s ease;
-}
-
-.activity-item:hover {
-    background-color: var(--bs-light, #f8f9fa);
-}
-
-.quality-score {
-    position: relative;
-    display: inline-block;
-}
-
-.quality-score .progress {
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background: conic-gradient(from 0deg, var(--bs-gray-300, #e9ecef) 0deg, var(--bs-gray-300, #e9ecef) 360deg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.filter-section {
-    background: linear-gradient(135deg, var(--bs-primary, #667eea) 0%, var(--bs-purple, #764ba2) 100%);
-    border-radius: 1rem;
-    color: white;
-    margin-bottom: 2rem;
-}
-
-.filter-section .form-control,
-.filter-section .form-select {
-    background: rgba(255,255,255,0.9);
-    border: none;
-    border-radius: 0.5rem;
-}
-
-.filter-dropdown {
-    min-width: 250px;
-}
-
-/* Purple color using Bootstrap purple if available, fallback to custom */
-.bg-purple {
-    background-color: var(--bs-purple, #6f42c1) !important;
-}
-
-@media (max-width: 768px) {
-    .stat-number {
-        font-size: 2rem;
-    }
-    
-    .chart-container {
-        height: 250px;
-    }
-}
-</style>
+<!-- Dashboard styles already included in dashboard.css -->
 {% endblock %}
 
 {% block content %}
@@ -878,95 +721,20 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'book/js/dashboard-main.js' %}"></script>
 <script>
+// Initialize dashboard URLs for navigation
 document.addEventListener('DOMContentLoaded', function() {
-    // Set progress bar widths using CSS custom properties for stat cards
-    const ebookBar = document.querySelector('.progress-bar-ebook');
-    if (ebookBar) {
-        const width = ebookBar.getAttribute('data-width');
-        document.documentElement.style.setProperty('--ebook-width', width + '%');
-    }
-    
-    const comicBar = document.querySelector('.progress-bar-comic');
-    if (comicBar) {
-        const width = comicBar.getAttribute('data-width');
-        document.documentElement.style.setProperty('--comic-width', width + '%');
-    }
-    
-    const audiobookBar = document.querySelector('.progress-bar-audiobook');
-    if (audiobookBar) {
-        const width = audiobookBar.getAttribute('data-width');
-        document.documentElement.style.setProperty('--audiobook-width', width + '%');
-    }
-    
-    const seriesBar = document.querySelector('.progress-bar-series');
-    if (seriesBar) {
-        const width = seriesBar.getAttribute('data-width');
-        document.documentElement.style.setProperty('--series-width', width + '%');
-    }
-    
-    const authorBar = document.querySelector('.progress-bar-author');
-    if (authorBar) {
-        const width = authorBar.getAttribute('data-width');
-        document.documentElement.style.setProperty('--author-width', width + '%');
-    }
-
-    // Set progress bar widths for quality metrics
-    const confidenceBar = document.querySelector('.progress-bar-confidence');
-    if (confidenceBar) {
-        const width = confidenceBar.getAttribute('data-width');
-        confidenceBar.style.setProperty('--confidence-width', width + '%');
-    }
-    
-    const completenessBar = document.querySelector('.progress-bar-completeness');
-    if (completenessBar) {
-        const width = completenessBar.getAttribute('data-width');
-        completenessBar.style.setProperty('--completeness-width', width + '%');
-    }
-    
-    // Set format progress bars
-    const formatBars = document.querySelectorAll('.progress-bar-format');
-    formatBars.forEach(bar => {
-        const width = bar.getAttribute('data-width');
-        bar.style.setProperty('--format-width', width + '%');
-    });
-});
-
-// Navigation functions for dashboard cards
-function navigateToBooks() {
-    window.location.href = '{% url "books:book_list" %}';
-}
-
-function navigateToEbooks() {
-    window.location.href = '{% url "books:ebooks_main" %}';
-}
-
-function navigateToComics() {
-    window.location.href = '{% url "books:comics_main" %}';
-}
-
-function navigateToAudiobooks() {
-    window.location.href = '{% url "books:audiobooks_main" %}';
-}
-
-function navigateToSeries() {
-    window.location.href = '{% url "books:series_main" %}';
-}
-
-function navigateToAuthors() {
-    window.location.href = '{% url "books:author_list" %}';
-}
-
-// Dashboard refresh functionality
-document.getElementById('refreshDashboard')?.addEventListener('click', function() {
-    location.reload();
-});
-
-// Filter form handling
-document.getElementById('dashboardFilters')?.addEventListener('submit', function(e) {
-    e.preventDefault();
-    // In future implementation, update dashboard with filters via AJAX
-    console.log('Filters applied:', new FormData(this));
+    // Set navigation URLs on the dashboard container
+    const dashboard = document.body;
+    dashboard.setAttribute('data-urls', JSON.stringify({
+        book_list: '{% url "books:book_list" %}',
+        ebooks_main: '{% url "books:ebooks_main" %}',
+        comics_main: '{% url "books:comics_main" %}',
+        audiobooks_main: '{% url "books:audiobooks_main" %}',
+        series_main: '{% url "books:series_main" %}',
+        author_list: '{% url "books:author_list" %}'
+    }));
 });
 </script>
 {% endblock %}

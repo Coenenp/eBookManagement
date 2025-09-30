@@ -183,6 +183,7 @@ class ISBNLookupViewTests(TestCase):
 
         # Create request
         request = self.factory.get('/ajax/isbn-lookup/9780134685991/')
+        request.user = self.user
 
         # Call the view
         response = isbn_lookup(request, '9780134685991')
@@ -225,6 +226,7 @@ class ISBNLookupViewTests(TestCase):
 
         # Create request
         request = self.factory.get('/ajax/isbn-lookup/9780134685991/')
+        request.user = self.user
 
         # Call the view
         response = isbn_lookup(request, '9780134685991')
@@ -244,6 +246,7 @@ class ISBNLookupViewTests(TestCase):
     def test_isbn_lookup_invalid_isbn_length(self):
         """Test ISBN lookup with invalid ISBN length"""
         request = self.factory.get('/ajax/isbn-lookup/123/')
+        request.user = self.user
 
         response = isbn_lookup(request, '123')
 
@@ -258,6 +261,7 @@ class ISBNLookupViewTests(TestCase):
     def test_isbn_lookup_formatted_isbn(self):
         """Test ISBN lookup works with formatted ISBN (hyphens)"""
         request = self.factory.get('/ajax/isbn-lookup/978-0-13-468599-1/')
+        request.user = self.user
 
         # We'll test that the view doesn't crash with formatted ISBN
         # The actual API calls would be mocked in a real test
@@ -276,6 +280,7 @@ class ISBNLookupViewTests(TestCase):
         mock_requests_get.side_effect = Exception("API Error")
 
         request = self.factory.get('/ajax/isbn-lookup/9780134685991/')
+        request.user = self.user
 
         response = isbn_lookup(request, '9780134685991')
 
@@ -299,6 +304,9 @@ class ISBNLookupViewTests(TestCase):
     def test_isbn_lookup_url_endpoint(self):
         """Test ISBN lookup URL endpoint works"""
         client = Client()
+
+        # Log in the user
+        client.force_login(self.user)
 
         # Test that the URL is accessible (will fail on API calls but shouldn't crash)
         response = client.get(reverse('books:isbn_lookup', kwargs={'isbn': '9780134685991'}))

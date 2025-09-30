@@ -109,63 +109,16 @@
 </div>
 
 
+<script src="{% static 'book/js/scanning-dashboard.js' %}"></script>
 <script>
-  document.addEventListener("DOMContentLoaded", function () {
-      // Initialize progress bar with CSS custom property
-      const progressBar = document.getElementById("scan-progress-bar");
-      if (progressBar) {
-          const width = progressBar.getAttribute("data-width") || "0";
-          progressBar.style.setProperty("--scan-width", width + "%");
-      }
-
-      function fetchStatus() {
-          fetch("{% url 'books:live_scan_status' %}")
-              .then(response => response.json())
-              .then(data => {
-                  if (data.status) {
-                      
-                     // Update status badge classes
-                      const statusBadge = document.getElementById("scan-status");
-                      if (statusBadge) {
-                          statusBadge.textContent = data.status;
-                          statusBadge.className = "badge " + (
-                              data.status === "Running" ? "bg-primary" :
-                              data.status === "Completed" ? "bg-success" :
-                              data.status === "Failed" ? "bg-danger" : "bg-secondary"
-                          );
-                      }
-                      
-                      const startedEl = document.getElementById("scan-started");
-                      if (startedEl) startedEl.textContent = data.started;
-
-                      const messageEl = document.getElementById("scan-message");
-                      if (messageEl) messageEl.textContent = data.message;
-
-                      const progressBar = document.getElementById("scan-progress-bar");
-                      if (progressBar) {
-                          const progress = data.progress || 0;
-                          progressBar.style.setProperty("--scan-width", progress + "%");
-                          progressBar.textContent = progress + "%";
-                          progressBar.setAttribute("aria-valuenow", progress);
-                          
-                          // Update color class while preserving other classes
-                          const colorClass = "bg-" + (progress === 100 ? "success" : progress >= 50 ? "info" : "warning");
-                          progressBar.className = "progress-bar progress-bar-scan " + colorClass;
-                      }
-
-                      if (data.status !== "Running") clearInterval(intervalId);
-                  }
-              })
-              .catch(error => {
-                  console.error("Status fetch error:", error);
-              });
-      }
-
-      // Start immediately
-      fetchStatus();
-
-      // Keep polling every 5 seconds
-      const intervalId = setInterval(fetchStatus, 5000);
-  });
+document.addEventListener("DOMContentLoaded", function () {
+    // Initialize scan status monitor
+    const statusMonitor = new ScanStatusMonitor("{% url 'books:live_scan_status' %}");
+    
+    // Clean up on page unload
+    window.addEventListener('beforeunload', function() {
+        statusMonitor.destroy();
+    });
+});
 </script>
 {% endblock %}

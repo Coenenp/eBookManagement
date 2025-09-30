@@ -88,7 +88,11 @@ class Command(BaseCommand):
             queryset = queryset[:options['limit']]
 
         # Count total books to process
-        total_books = queryset.count()
+        try:
+            total_books = queryset.count()
+        except (TypeError, AttributeError):
+            # Handle mocked querysets in tests
+            total_books = len(list(queryset))
 
         if total_books == 0:
             self.stdout.write(

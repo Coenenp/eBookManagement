@@ -6,9 +6,10 @@ from django.http import JsonResponse
 from django.contrib.auth.models import User
 from books.models import Book, ScanFolder, FinalMetadata
 from books.view_utils import (
-    StandardAjaxResponseMixin, BookAjaxViewMixin, StandardPaginationMixin,
-    BookFilterMixin, ajax_book_operation, standard_ajax_handler
+    StandardAjaxResponseMixin, StandardPaginationMixin,
+    BookFilterMixin, standard_ajax_handler
 )
+from books.mixins import BookAjaxViewMixin, ajax_book_operation
 import json
 
 

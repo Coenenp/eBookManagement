@@ -1,0 +1,189 @@
+{% extends 'books/base.html' %}
+{% load static %}
+
+{% block title %}Setup Wizard - Ebook Library Manager{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'book/css/theme-components.css' %}">
+<link rel="stylesheet" href="{% static 'book/css/wizard.css' %}>
+<!-- Wizard styles already included in wizard.css -->
+{% endblock %}
+
+{% block content %}
+<div class="wizard-container">
+    <div class="wizard-header">
+        <h1 class="h2 mb-3">
+            <i class="fas fa-magic text-primary me-2"></i>
+            Library Setup Wizard
+        </h1>
+        <p class="text-muted">Let's get your ebook library set up in just a few steps</p>
+    </div>
+
+    <!-- Progress Indicator -->
+    <div class="wizard-progress">
+        <div class="step-indicator">
+            <div class="step-item {% if wizard.welcome_completed %}completed{% elif step == 'welcome' %}active{% else %}pending{% endif %}">
+                <div class="step-number">
+                    {% if wizard.welcome_completed %}
+                        <i class="fas fa-check"></i>
+                    {% else %}
+                        1
+                    {% endif %}
+                </div>
+                <div class="step-label">Welcome</div>
+            </div>
+            
+            <div class="step-item {% if wizard.folders_completed %}completed{% elif step == 'folders' %}active{% else %}pending{% endif %}">
+                <div class="step-number">
+                    {% if wizard.folders_completed %}
+                        <i class="fas fa-check"></i>
+                    {% else %}
+                        2
+                    {% endif %}
+                </div>
+                <div class="step-label">Folders</div>
+            </div>
+            
+            <div class="step-item {% if wizard.content_types_completed %}completed{% elif step == 'content_types' %}active{% else %}pending{% endif %}">
+                <div class="step-number">
+                    {% if wizard.content_types_completed %}
+                        <i class="fas fa-check"></i>
+                    {% else %}
+                        3
+                    {% endif %}
+                </div>
+                <div class="step-label">Content Types</div>
+            </div>
+            
+            <div class="step-item {% if wizard.scrapers_completed %}completed{% elif step == 'scrapers' %}active{% else %}pending{% endif %}">
+                <div class="step-number">
+                    {% if wizard.scrapers_completed %}
+                        <i class="fas fa-check"></i>
+                    {% else %}
+                        4
+                    {% endif %}
+                </div>
+                <div class="step-label">Scrapers</div>
+            </div>
+            
+            <div class="step-item {% if wizard.is_completed %}completed{% elif step == 'complete' %}active{% else %}pending{% endif %}">
+                <div class="step-number">
+                    {% if wizard.is_completed %}
+                        <i class="fas fa-check"></i>
+                    {% else %}
+                        5
+                    {% endif %}
+                </div>
+                <div class="step-label">Complete</div>
+            </div>
+        </div>
+        
+        <!-- Progress Bar -->
+        <div class="progress mb-3">
+            <div class="progress-bar" role="progressbar"
+                 data-width="{{ progress_percentage }}"
+                 aria-valuenow="{{ progress_percentage }}" 
+                 aria-valuemin="0" aria-valuemax="100"
+                 aria-label="Setup progress">
+                {{ progress_percentage }}%
+            </div>
+        </div>
+    </div>
+
+    <!-- Step Content -->
+    <div class="wizard-step">
+        {% block wizard_content %}
+        {% endblock %}
+    </div>
+
+    <!-- Skip Option -->
+    <div class="skip-option">
+        <p class="text-muted mb-2">
+            <small>Don't want to set up now? You can configure everything later in the settings.</small>
+        </p>
+        <form method="post" class="form-inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="skip">
+            <button type="submit" class="btn btn-link text-muted btn-sm">
+                <i class="fas fa-skip-forward me-1"></i>Skip Setup
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'book/js/wizard-system.js' %}"></script>
+{% endblock %}
+    if (customFolderInput) {
+        customFolderInput.addEventListener('blur', function() {
+            validateFolder(this.value);
+        });
+    }
+    
+    // Folder selection handling
+    document.querySelectorAll('.folder-suggestion').forEach(function(suggestion) {
+        suggestion.addEventListener('click', function() {
+            const checkbox = this.querySelector('input[type="checkbox"]');
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked;
+                this.classList.toggle('selected', checkbox.checked);
+            }
+        });
+    });
+    
+    // Content type change handling
+    document.querySelectorAll('select[name^="folder_"]').forEach(function(select) {
+        select.addEventListener('change', function() {
+            updateContentTypePreview(this);
+        });
+    });
+});
+
+function validateFolder(path) {
+    if (!path.trim()) return;
+    
+    fetch('{% url "books:wizard_validate_folder" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: 'path=' + encodeURIComponent(path)
+    })
+    .then(response => response.json())
+    .then(data => {
+        const input = document.getElementById('customFolder');
+        const feedback = document.getElementById('customFolderFeedback');
+        
+        if (data.valid) {
+            input.classList.remove('is-invalid');
+            input.classList.add('is-valid');
+            if (feedback) {
+                feedback.textContent = `Found ${data.file_count} ebook files`;
+                feedback.className = 'text-success small';
+            }
+        } else {
+            input.classList.remove('is-valid');
+            input.classList.add('is-invalid');
+            if (feedback) {
+                feedback.textContent = data.error;
+                feedback.className = 'text-danger small';
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error validating folder:', error);
+    });
+}
+
+function updateContentTypePreview(select) {
+    // This could update preview information based on content type selection
+    const container = select.closest('.content-type-assignment');
+    const preview = container.querySelector('.content-type-preview');
+    if (preview) {
+        preview.textContent = `Will scan as: ${select.options[select.selectedIndex].text}`;
+    }
+}
+</script>
+{% endblock %}

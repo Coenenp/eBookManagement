@@ -47,38 +47,8 @@ class StandardAjaxResponseMixin:
         }, status=400)
 
 
-class BookAjaxViewMixin(StandardAjaxResponseMixin):
-    """Specialized mixin for book-related AJAX operations"""
-
-    def get_book_or_404(self, book_id):
-        """Get book with standard error handling"""
-        from .models import Book
-        try:
-            return Book.objects.get(pk=book_id)
-        except Book.DoesNotExist:
-            return None
-
-    def handle_book_operation(self, book_id, operation_func, *args, **kwargs):
-        """Standardized book operation handling"""
-        book = self.get_book_or_404(book_id)
-        if not book:
-            return self.not_found_response("Book")
-
-        try:
-            result = operation_func(book, *args, **kwargs)
-            return result if isinstance(result, JsonResponse) else self.success_response(**result)
-        except Exception as e:
-            logger.error(f"Error in book operation: {e}")
-            return self.error_response(str(e), status=500)
-
-
-def ajax_book_operation(operation_func):
-    """Decorator for standardizing book AJAX operations"""
-    @wraps(operation_func)
-    def wrapper(request, book_id, *args, **kwargs):
-        mixin = BookAjaxViewMixin()
-        return mixin.handle_book_operation(book_id, operation_func, request, *args, **kwargs)
-    return wrapper
+# NOTE: BookAjaxViewMixin and ajax_book_operation moved to books.mixins.ajax
+# Import from there to avoid duplication
 
 
 class StandardPaginationMixin:

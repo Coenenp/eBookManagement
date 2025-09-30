@@ -303,11 +303,19 @@ class MetadataReviewFormTests(TestCase):
 
     def test_metadata_review_form_cover_upload(self):
         """Test MetadataReviewForm cover upload field"""
-        # Create a simple image file
-        image_content = b'fake_image_content'
+        # Create a simple 1x1 pixel image file (minimal valid JPEG)
+        from PIL import Image
+        import io
+
+        # Create a 1x1 pixel image
+        img = Image.new('RGB', (1, 1), color='red')
+        img_io = io.BytesIO()
+        img.save(img_io, format='JPEG')
+        img_io.seek(0)
+
         uploaded_file = SimpleUploadedFile(
             'test_cover.jpg',
-            image_content,
+            img_io.read(),
             content_type='image/jpeg'
         )
 

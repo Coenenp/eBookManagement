@@ -28,13 +28,13 @@ class MetadataProcessorTests(TestCase):
         )
 
         # Create test data sources
-        self.manual_source = DataSource.objects.create(
+        self.manual_source, _ = DataSource.objects.get_or_create(
             name='Manual Entry',
-            trust_level=0.9
+            defaults={'trust_level': 1.0}
         )
-        self.epub_source = DataSource.objects.create(
+        self.epub_source, _ = DataSource.objects.get_or_create(
             name='EPUB',
-            trust_level=0.7
+            defaults={'trust_level': 0.7}
         )
 
         # Create test scan folder
@@ -88,7 +88,7 @@ class MetadataProcessorTests(TestCase):
         # Verify manual source was created
         manual_source = DataSource.objects.get(name=DataSource.MANUAL)
         self.assertIsNotNone(manual_source)
-        self.assertEqual(manual_source.trust_level, 0.9)
+        self.assertEqual(manual_source.trust_level, 1.0)
 
     def test_handle_manual_entries_title_processing(self):
         """Test manual title entry processing"""
@@ -321,6 +321,14 @@ class MetadataProcessorTests(TestCase):
             is_active=True,
             source=self.epub_source
         )
+        # Create existing series data to test the "has existing data" logic
+        BookSeries.objects.create(
+            book=self.book,
+            series=self.series,
+            confidence=0.6,
+            is_active=True,
+            source=self.epub_source
+        )
 
         request = self.factory.post('/', {
             'final_title': 'New Title',
@@ -373,9 +381,9 @@ class MetadataProcessorHelperMethodTests(TestCase):
         self.factory = RequestFactory()
         self.user = User.objects.create_user(username='testuser', password='testpass123')
 
-        self.manual_source = DataSource.objects.create(
+        self.manual_source, _ = DataSource.objects.get_or_create(
             name='Manual Entry',
-            trust_level=0.9
+            defaults={'trust_level': 1.0}
         )
 
         self.scan_folder = ScanFolder.objects.create(
@@ -390,6 +398,13 @@ class MetadataProcessorHelperMethodTests(TestCase):
             scan_folder=self.scan_folder
         )
 
+        # Create final metadata
+        self.final_metadata = FinalMetadata.objects.create(
+            book=self.book,
+            final_title='Original Title',
+            is_reviewed=False
+        )
+
     def test_handle_manual_title_new_entry(self):
         """Test creating new manual title entry"""
         form_data = {'final_title': 'New Manual Title'}
@@ -401,7 +416,7 @@ class MetadataProcessorHelperMethodTests(TestCase):
         self.assertIsInstance(entry, BookTitle)
         self.assertEqual(entry.book, self.book)
         self.assertEqual(entry.title, 'New Manual Title')
-        self.assertEqual(entry.data_source, self.manual_source)
+        self.assertEqual(entry.source, self.manual_source)
         self.assertEqual(entry.confidence, 1.0)
         self.assertTrue(entry.is_active)
 
@@ -416,7 +431,7 @@ class MetadataProcessorHelperMethodTests(TestCase):
         self.assertIsInstance(entry, BookAuthor)
         self.assertEqual(entry.book, self.book)
         self.assertEqual(entry.author.name, 'New Manual Author')
-        self.assertEqual(entry.data_source, self.manual_source)
+        self.assertEqual(entry.source, self.manual_source)
         self.assertEqual(entry.confidence, 1.0)
         self.assertTrue(entry.is_main_author)
         self.assertTrue(entry.is_active)
@@ -444,7 +459,7 @@ class MetadataProcessorHelperMethodTests(TestCase):
         self.assertIsInstance(entry, BookSeries)
         self.assertEqual(entry.book, self.book)
         self.assertEqual(entry.series.name, 'New Manual Series')
-        self.assertEqual(entry.data_source, self.manual_source)
+        self.assertEqual(entry.source, self.manual_source)
         self.assertEqual(entry.confidence, 1.0)
         self.assertTrue(entry.is_active)
 
@@ -471,7 +486,7 @@ class MetadataProcessorHelperMethodTests(TestCase):
         self.assertIsInstance(entry, BookPublisher)
         self.assertEqual(entry.book, self.book)
         self.assertEqual(entry.publisher.name, 'New Manual Publisher')
-        self.assertEqual(entry.data_source, self.manual_source)
+        self.assertEqual(entry.source, self.manual_source)
         self.assertEqual(entry.confidence, 1.0)
         self.assertTrue(entry.is_active)
 
@@ -521,9 +536,9 @@ class MetadataProcessorErrorHandlingTests(TestCase):
         self.factory = RequestFactory()
         self.user = User.objects.create_user(username='testuser', password='testpass123')
 
-        self.manual_source = DataSource.objects.create(
+        self.manual_source, _ = DataSource.objects.get_or_create(
             name='Manual Entry',
-            trust_level=0.9
+            defaults={'trust_level': 1.0}
         )
 
         self.scan_folder = ScanFolder.objects.create(
@@ -536,6 +551,13 @@ class MetadataProcessorErrorHandlingTests(TestCase):
             file_format='epub',
             file_size=1000000,
             scan_folder=self.scan_folder
+        )
+
+        # Create final metadata
+        self.final_metadata = FinalMetadata.objects.create(
+            book=self.book,
+            final_title='Original Title',
+            is_reviewed=False
         )
 
     def test_handle_manual_entries_with_missing_form_data(self):
@@ -699,7 +721,7 @@ class MetadataProcessorIntegrationTests(TestCase):
         self.assertTrue(BookTitle.objects.filter(
             book=self.book,
             title='Complete Manual Title',
-            data_source__name='Manual Entry'
+            source__name='Manual Entry'
         ).exists())
 
         self.assertTrue(Author.objects.filter(name='Complete Manual Author').exists())
@@ -707,7 +729,7 @@ class MetadataProcessorIntegrationTests(TestCase):
         self.assertTrue(BookAuthor.objects.filter(
             book=self.book,
             author=author,
-            data_source__name='Manual Entry'
+            source__name='Manual Entry'
         ).exists())
 
         self.assertTrue(Series.objects.filter(name='Complete Manual Series').exists())
@@ -715,7 +737,7 @@ class MetadataProcessorIntegrationTests(TestCase):
         self.assertTrue(BookSeries.objects.filter(
             book=self.book,
             series=series,
-            data_source__name='Manual Entry'
+            source__name='Manual Entry'
         ).exists())
 
         self.assertTrue(BookMetadata.objects.filter(
@@ -729,7 +751,7 @@ class MetadataProcessorIntegrationTests(TestCase):
         """Test processing with mix of manual entries and existing data"""
         # Create some existing data
         existing_author = Author.objects.create(name='Existing Author')
-        epub_source = DataSource.objects.create(name='EPUB', trust_level=0.7)
+        epub_source, _ = DataSource.objects.get_or_create(name='EPUB', defaults={'trust_level': 0.7})
 
         BookAuthor.objects.create(
             book=self.book,
@@ -762,13 +784,13 @@ class MetadataProcessorIntegrationTests(TestCase):
         self.assertTrue(BookTitle.objects.filter(
             book=self.book,
             title='New Manual Title',
-            data_source__name='Manual Entry'
+            source__name='Manual Entry'
         ).exists())
 
         # Verify no new manual author entry was created (existing data exists)
         manual_author_entries = BookAuthor.objects.filter(
             book=self.book,
-            data_source__name='Manual Entry'
+            source__name='Manual Entry'
         )
         self.assertEqual(manual_author_entries.count(), 0)
 

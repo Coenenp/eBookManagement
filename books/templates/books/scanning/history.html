@@ -1,0 +1,208 @@
+{% extends "books/base.html" %}
+{% load static %}
+{% load custom_filters %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block extra_css %}
+<!-- Scanning history styles already included in dashboard.css -->
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-history"></i> {{ page_title }}</h1>
+        <a href="{% url 'books:scan_dashboard' %}" class="btn btn-primary">
+            <i class="fas fa-tachometer-alt"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card scan-stats-card">
+                <div class="card-body text-center">
+                    <div class="stat-number">{{ stats.total_scans }}</div>
+                    <div class="stat-label">Total Scans</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card scan-stats-card">
+                <div class="card-body text-center">
+                    <div class="stat-number">{{ stats.successful_scans }}</div>
+                    <div class="stat-label">Successful</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card scan-stats-card">
+                <div class="card-body text-center">
+                    <div class="stat-number">{{ stats.failed_scans }}</div>
+                    <div class="stat-label">Failed</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card scan-stats-card">
+                <div class="card-body text-center">
+                    <div class="stat-number">{{ stats.success_rate }}%</div>
+                    <div class="stat-label">Success Rate</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scan History List -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-list"></i> Scan History 
+                <small class="text-muted">({{ stats.recent_scans_count }} in last 30 days)</small>
+            </h5>
+        </div>
+        <div class="card-body">
+            {% if scan_history %}
+                {% for scan in scan_history %}
+                <div class="scan-card">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <!-- Main Scan Info -->
+                            <div class="col-md-6">
+                                <h6 class="mb-1">
+                                    <i class="fas fa-folder"></i> {{ scan.folder_name }}
+                                    <span class="badge scan-status-badge 
+                                        {% if scan.status == 'completed' %}bg-success
+                                        {% elif scan.status == 'failed' %}bg-danger
+                                        {% elif scan.status == 'cancelled' %}bg-warning text-dark
+                                        {% else %}bg-secondary{% endif %}">
+                                        {{ scan.get_status_display }}
+                                    </span>
+                                </h6>
+                                <p class="text-muted mb-1 small">{{ scan.folder_path }}</p>
+                                <div class="scan-metadata">
+                                    <span class="badge bg-light text-dark">{{ scan.get_scan_type_display }}</span>
+                                    <span class="ms-2">Job ID: {{ scan.job_id|truncatechars:20 }}</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Timing Info -->
+                            <div class="col-md-3">
+                                <div class="text-center">
+                                    <div class="fw-bold">{{ scan.completed_at|date:"M d, Y" }}</div>
+                                    <div class="text-muted small">{{ scan.completed_at|date:"H:i" }}</div>
+                                    <div class="scan-duration">
+                                        <i class="fas fa-clock"></i> {{ scan.duration_formatted }}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Statistics -->
+                            <div class="col-md-3">
+                                <div class="small">
+                                    <div class="mb-1">
+                                        <i class="fas fa-file-alt"></i> 
+                                        {{ scan.files_processed }}/{{ scan.total_files_found }} files
+                                        {% if scan.total_files_found > 0 %}
+                                            <div class="progress progress-mini">
+                                                <div class="progress-bar" data-width="{{ scan.success_rate }}"></div>
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="mb-1">
+                                        <i class="fas fa-book text-primary"></i> 
+                                        {% if scan.books_added %}{{ scan.books_added }} added{% endif %}
+                                        {% if scan.books_updated %}, {{ scan.books_updated }} updated{% endif %}
+                                        {% if scan.books_removed %}, {{ scan.books_removed }} removed{% endif %}
+                                        {% if not scan.books_added and not scan.books_updated and not scan.books_removed %}No changes{% endif %}
+                                    </div>
+                                    {% if scan.errors_count > 0 %}
+                                    <div class="text-danger">
+                                        <i class="fas fa-exclamation-triangle"></i> {{ scan.errors_count }} errors
+                                    </div>
+                                    {% endif %}
+                                    {% if scan.warnings_count > 0 %}
+                                    <div class="text-warning">
+                                        <i class="fas fa-exclamation-triangle"></i> {{ scan.warnings_count }} warnings
+                                    </div>
+                                    {% endif %}
+                                    {% if scan.external_apis_used %}
+                                    <div class="text-info">
+                                        <i class="fas fa-globe"></i> {{ scan.api_requests_made }} API calls
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Summary -->
+                        {% if scan.summary %}
+                        <div class="row mt-2">
+                            <div class="col-12">
+                                <div class="scan-summary">
+                                    <i class="fas fa-info-circle text-muted"></i> {{ scan.summary }}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Error Message -->
+                        {% if scan.error_message %}
+                        <div class="row mt-2">
+                            <div class="col-12">
+                                <div class="alert alert-danger alert-sm mb-0">
+                                    <i class="fas fa-exclamation-circle"></i> 
+                                    <strong>Error:</strong> {{ scan.error_message|truncatechars:200 }}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+                
+                <!-- Pagination -->
+                {% if page_obj.has_other_pages %}
+                <nav aria-label="Scan history pagination" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1">&laquo; First</a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+                            </li>
+                        {% endif %}
+                        
+                        <li class="page-item active">
+                            <span class="page-link">
+                                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                            </span>
+                        </li>
+                        
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last &raquo;</a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+                
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-history fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No scan history found</h5>
+                    <p class="text-muted">Start scanning some folders to see history here!</p>
+                    <a href="{% url 'books:scan_dashboard' %}" class="btn btn-primary">
+                        <i class="fas fa-play"></i> Start Scanning
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -626,14 +626,14 @@ class AIFeedbackIntegrationTests(TestCase):
         final_metadata, created = FinalMetadata.objects.get_or_create(
             book=book,
             defaults={
-                'final_title': "Workflow Test Book",
+                'final_title': '',  # Empty string will show "Unknown Title" in template
                 'final_author': "Test Author",
                 'overall_confidence': 0.6,
                 'is_reviewed': False
             }
         )
         if not created:
-            final_metadata.final_title = "Workflow Test Book"
+            final_metadata.final_title = ''  # Empty string will show "Unknown Title" in template
             final_metadata.final_author = "Test Author"
             final_metadata.overall_confidence = 0.6
             final_metadata.is_reviewed = False

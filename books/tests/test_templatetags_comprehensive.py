@@ -31,9 +31,9 @@ class BookExtrasTemplateTagsTests(TestCase):
             file_format='epub',
             scan_folder=self.scan_folder
         )
-        self.data_source = DataSource.objects.create(
+        self.data_source, _ = DataSource.objects.get_or_create(
             name=DataSource.MANUAL,
-            trust_level=0.9
+            defaults={'trust_level': 0.9}
         )
         self.final_metadata = FinalMetadata.objects.create(
             book=self.book,
@@ -304,7 +304,7 @@ class CustomFiltersTemplateTagsTests(TestCase):
 
     def setUp(self):
         self.factory = RequestFactory()
-        self.data_source = DataSource.objects.create(name='Test Source')
+        self.data_source, _ = DataSource.objects.get_or_create(name='Test Source', defaults={'trust_level': 0.8})
         self.scan_folder = ScanFolder.objects.create(
             path='/test/path',
             is_active=True
@@ -423,10 +423,14 @@ class CustomFiltersTemplateTagsTests(TestCase):
             scan_folder=self.scan_folder
         )
 
+        filename_source, _ = DataSource.objects.get_or_create(
+            name=DataSource.FILENAME,
+            defaults={'trust_level': 0.5}
+        )
         BookTitle.objects.create(
             book=book_no_final,
             title='Title from BookTitle',
-            source=DataSource.objects.create(name=DataSource.FILENAME, trust_level=0.5),
+            source=filename_source,
             confidence=0.8
         )
 
@@ -474,10 +478,14 @@ class CustomFiltersTemplateTagsTests(TestCase):
 
         from books.models import BookAuthor
         author = Author.objects.create(name='Fallback Author')
+        epub_source, _ = DataSource.objects.get_or_create(
+            name=DataSource.EPUB_INTERNAL,
+            defaults={'trust_level': 0.7}
+        )
         BookAuthor.objects.create(
             book=book_no_final,
             author=author,
-            source=DataSource.objects.create(name=DataSource.EPUB_INTERNAL, trust_level=0.7),
+            source=epub_source,
             confidence=0.8
         )
 
@@ -616,7 +624,7 @@ class TemplateIntegrationTests(TestCase):
     """Test template tag integration with actual templates"""
 
     def setUp(self):
-        self.data_source = DataSource.objects.create(name='Test Source')
+        self.data_source, _ = DataSource.objects.get_or_create(name='Test Source', defaults={'trust_level': 0.8})
         self.scan_folder = ScanFolder.objects.create(path='/test/path')
         self.book = Book.objects.create(
             file_path='/test/integration_test.epub',

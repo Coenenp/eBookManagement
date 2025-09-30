@@ -1,0 +1,297 @@
+/*
+ * Theme-based CSS Variables using Bootstrap 5 and Bootswatch
+ * This file defines all custom styles that were previously inline
+ */
+
+:root {
+  /* Extend Bootstrap CSS Custom Properties */
+  --bs-component-active-color: var(--bs-white);
+  --bs-component-active-bg: var(--bs-primary);
+  
+  /* Custom semantic colors using Bootstrap theme */
+  --success-border: var(--bs-success);
+  --success-shadow: var(--bs-success-rgb);
+  --success-bg-start: var(--bs-success-bg-subtle);
+  --success-bg-end: var(--bs-light);
+  
+  --danger-border: var(--bs-danger);
+  --danger-shadow: var(--bs-danger-rgb);
+  --danger-bg-start: var(--bs-danger-bg-subtle);
+  --danger-bg-end: var(--bs-light);
+  
+  /* Progress bar heights */
+  --progress-height-sm: 8px;
+  --progress-height-xs: 6px;
+  
+  /* Spacing for components */
+  --min-width-button: 80px;
+  --min-width-sidebar: 250px;
+  
+  /* Icon sizes */
+  --icon-size-xs: 1.2rem;
+  --icon-size-sm: 1.5rem;
+  --icon-size-lg: 2rem;
+  --icon-size-xl: 4rem;
+  
+  /* Health score circle */
+  --health-circle-size: 80px;
+  
+  /* Wizard progress */
+  --wizard-step-size: 3rem;
+}
+
+/* Progress Components */
+.progress-thin {
+  height: var(--progress-height-sm);
+  min-width: 60px;
+}
+
+.progress-xs {
+  height: var(--progress-height-xs);
+}
+
+.progress-bar-dynamic {
+  transition: width 0.3s ease-in-out;
+}
+
+/* Button Components */
+.btn-min-width {
+  min-width: var(--min-width-button);
+}
+
+/* Success State Components */
+.scan-success-border {
+  border: 2px solid var(--success-border) !important;
+  box-shadow: 0 0 10px rgba(var(--success-shadow), 0.3);
+}
+
+.scan-success-bg {
+  background: linear-gradient(135deg, var(--success-bg-start) 0%, var(--success-bg-end) 100%);
+}
+
+/* Error State Components */
+.scan-error-border {
+  border: 2px solid var(--danger-border) !important;
+  box-shadow: 0 0 10px rgba(var(--danger-shadow), 0.3);
+}
+
+.scan-error-bg {
+  background: linear-gradient(135deg, var(--danger-bg-start) 0%, var(--danger-bg-end) 100%);
+}
+
+/* Health Score Circle */
+.health-score-circle {
+  width: var(--health-circle-size);
+  height: var(--health-circle-size);
+  position: relative;
+}
+
+.health-score-content {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Trend Indicators using Bootstrap contextual colors */
+.trend-up { 
+  color: var(--bs-success) !important; 
+}
+
+.trend-down { 
+  color: var(--bs-danger) !important; 
+}
+
+.trend-stable { 
+  color: var(--bs-secondary) !important; 
+}
+
+/* Sidebar Components */
+.sidebar-min-width {
+  min-width: var(--min-width-sidebar);
+}
+
+/* Icon Sizes */
+.icon-xs {
+  font-size: var(--icon-size-xs) !important;
+}
+
+.icon-sm {
+  font-size: var(--icon-size-sm) !important;
+}
+
+.icon-lg {
+  font-size: var(--icon-size-lg) !important;
+}
+
+.icon-xl {
+  font-size: var(--icon-size-xl) !important;
+}
+
+/* Card Enhancements */
+.card-shadow-sm {
+  box-shadow: 0 4px 12px rgba(var(--bs-dark-rgb), 0.15);
+}
+
+/* Wizard Components */
+.wizard-step {
+  background: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
+  width: var(--wizard-step-size);
+  height: var(--wizard-step-size);
+  border-radius: 50%;
+}
+
+.wizard-step-connector {
+  background: var(--bs-border-color);
+  height: 2px;
+  flex: 1;
+}
+
+.wizard-step-active {
+  background: var(--bs-white);
+  color: var(--bs-body-color);
+}
+
+.wizard-step-completed {
+  background: var(--bs-success);
+  color: var(--bs-white);
+}
+
+.wizard-step-current {
+  background: var(--bs-primary);
+  color: var(--bs-white);
+}
+
+.wizard-step-future {
+  background: var(--bs-secondary-bg);
+  color: var(--bs-secondary-color);
+}
+
+.wizard-step-number {
+  color: var(--bs-secondary-color);
+}
+
+.wizard-step-title {
+  color: var(--bs-primary);
+}
+
+.wizard-footer {
+  border-top: 1px solid var(--bs-border-color);
+}
+
+/* Form Enhancements */
+.form-inline {
+  display: inline;
+}
+
+/* Quick Actions Cards */
+.quick-action-card {
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  transition: all 0.3s ease;
+}
+
+.quick-action-card:hover {
+  border-color: var(--bs-primary);
+  box-shadow: 0 2px 4px rgba(var(--bs-dark-rgb), 0.1);
+}
+
+.quick-action-header {
+  background: var(--bs-secondary-bg);
+  padding: 1rem;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.quick-action-header.featured {
+  border-color: var(--bs-primary);
+  box-shadow: 0 2px 8px rgba(var(--bs-dark-rgb), 0.1);
+}
+
+.quick-action-content {
+  background: var(--bs-body-bg);
+  padding: 1.5rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+}
+
+.quick-action-content.featured {
+  border-color: var(--bs-primary);
+  box-shadow: 0 2px 8px rgba(var(--bs-dark-rgb), 0.1);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .health-score-circle {
+    --health-circle-size: 60px;
+  }
+  
+  .sidebar-min-width {
+    --min-width-sidebar: 200px;
+  }
+  
+  .icon-responsive {
+    font-size: var(--icon-size-sm) !important;
+  }
+}
+
+/* Animation helpers */
+.fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Scanning Components */
+.scan-card.completed {
+  border: 2px solid var(--success-border) !important;
+  box-shadow: 0 0 10px rgba(var(--success-shadow), 0.3);
+}
+
+.scan-card.error {
+  border: 2px solid var(--danger-border) !important;
+  box-shadow: 0 0 10px rgba(var(--danger-shadow), 0.3);
+}
+
+.scan-card.completed .card-body {
+  background: linear-gradient(135deg, var(--success-bg-start) 0%, var(--success-bg-end) 100%);
+}
+
+.scan-card.error .card-body {
+  background: linear-gradient(135deg, var(--danger-bg-start) 0%, var(--danger-bg-end) 100%);
+}
+
+.hidden-group {
+  display: none !important;
+}
+
+/* Bootstrap 5 component overrides for better theme integration */
+.btn {
+  --bs-btn-border-radius: var(--bs-border-radius);
+}
+
+.card {
+  --bs-card-border-color: var(--bs-border-color);
+  --bs-card-bg: var(--bs-body-bg);
+}
+
+.progress {
+  --bs-progress-bg: var(--bs-secondary-bg);
+}
+
+/* Chart.js theme integration - CSS variables for JavaScript access */
+.chart-theme {
+  --chart-primary: var(--bs-primary);
+  --chart-success: var(--bs-success);  
+  --chart-warning: var(--bs-warning);
+  --chart-danger: var(--bs-danger);
+  --chart-info: var(--bs-info);
+  --chart-purple: #6f42c1;
+  --chart-teal: #20c997;
+  --chart-gray: var(--bs-secondary);
+  --chart-text: var(--bs-body-color);
+  --chart-border: var(--bs-white);
+}

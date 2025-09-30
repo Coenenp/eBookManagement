@@ -1,0 +1,275 @@
+/* ======================================
+   🌐 Base Styles & Bootstrap Enhancements
+   Core utilities and theme variables
+========================================= */
+
+:root {
+    /* Enhanced theme support */
+    --theme-border-radius: var(--bs-border-radius, 0.375rem);
+    --theme-transition: all 0.2s ease-in-out;
+    --theme-box-shadow-hover: var(--bs-box-shadow-lg);
+    
+    /* Custom semantic colors with fallbacks */
+    --theme-reading-progress: linear-gradient(90deg, var(--bs-success), var(--bs-info));
+    --theme-badge-gradient: linear-gradient(45deg, var(--bs-success), var(--bs-teal, var(--bs-success)));
+}
+
+/* ======================================
+   📖 Layout & Typography
+========================================= */
+
+/* Layout */
+footer {
+    margin-top: auto;
+}
+
+/* Typography */
+.card-text,
+.metadata-section p {
+    word-break: break-word;
+    white-space: pre-wrap;
+}
+
+.list-group-item .d-flex {
+    gap: 0.75rem;
+}
+
+legend {
+    /* Ensure legends work with theme colors */
+    color: var(--bs-body-color);
+}
+
+/* ======================================
+   🎛️ Bootstrap-Compatible Utilities
+========================================= */
+
+/* Text utilities */
+.text-size-09 { font-size: 0.9rem; }
+.text-size-075 { font-size: 0.75rem; }
+.text-break-all { 
+    word-break: break-all; 
+    line-height: 1.2; 
+    max-width: 100%; 
+}
+.text-pre-line { white-space: pre-line; }
+
+/* Use Bootstrap semantic colors for better theme support */
+.text-theme-primary { color: var(--bs-primary) !important; }
+.text-theme-success { color: var(--bs-success) !important; }
+.text-theme-warning { color: var(--bs-warning) !important; }
+.text-theme-danger { color: var(--bs-danger) !important; }
+.text-theme-info { color: var(--bs-info) !important; }
+
+.bg-theme-primary { background-color: var(--bs-primary) !important; }
+.bg-theme-success { background-color: var(--bs-success) !important; }
+.bg-theme-warning { background-color: var(--bs-warning) !important; }
+.bg-theme-danger { background-color: var(--bs-danger) !important; }
+.bg-theme-info { background-color: var(--bs-info) !important; }
+
+/* Purple color using Bootstrap purple if available, fallback to custom */
+.bg-purple {
+    background-color: var(--bs-purple, #6f42c1) !important;
+}
+
+/* Enhanced shadow utilities using Bootstrap variables */
+.shadow-theme-sm { box-shadow: var(--bs-box-shadow-sm) !important; }
+.shadow-theme { box-shadow: var(--bs-box-shadow) !important; }
+.shadow-theme-lg { box-shadow: var(--bs-box-shadow-lg) !important; }
+
+/* ======================================
+   📏 Size & Spacing Utilities
+========================================= */
+
+/* Size constraints */
+.max-width-100 { max-width: 100%; }
+.max-height-300 { max-height: 300px; }
+.max-height-70vh { max-height: 70vh; }
+
+/* Table column widths - Use CSS custom properties for consistency */
+.col-width-40 { width: 40px; }
+.col-width-120 { width: 120px; }
+.col-width-140 { width: 140px; }
+.col-width-160 { max-width: 160px; }
+.col-width-250 { width: 250px; }
+
+/* Progress height utilities */
+.progress-height-15 { height: 15px; }
+.progress-tall { height: 25px; }
+
+/* Z-index utilities */
+.z-index-1050 { z-index: 1050; }
+
+/* ======================================
+   📱 Responsive Utilities
+========================================= */
+
+@media (max-width: 576px) {
+    .col-md-2 {
+        margin-bottom: 1rem;
+    }
+    
+    .card-body {
+        padding: 0.75rem;
+    }
+    
+    .cover-tiny {
+        width: 40px;
+        height: 60px;
+    }
+    
+    /* Stack book info vertically on very small screens */
+    .list-group-item .d-flex {
+        flex-direction: column;
+        align-items: flex-start !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .card-body .d-flex {
+        flex-direction: column;
+        align-items: start !important;
+    }
+    
+    .badge {
+        margin-top: 0.25rem;
+    }
+}
+
+/* ======================================
+   🎨 Scrollbar Styling
+========================================= */
+
+.scrollable-section {
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+}
+
+.scrollable-section::-webkit-scrollbar,
+.overflow-auto::-webkit-scrollbar {
+    width: 6px;
+}
+
+.scrollable-section::-webkit-scrollbar-track,
+.overflow-auto::-webkit-scrollbar-track {
+    background: var(--bs-light);
+    border-radius: 3px;
+}
+
+.scrollable-section::-webkit-scrollbar-thumb,
+.overflow-auto::-webkit-scrollbar-thumb {
+    background: var(--bs-gray-400);
+    border-radius: 3px;
+}
+
+.scrollable-section::-webkit-scrollbar-thumb:hover,
+.overflow-auto::-webkit-scrollbar-thumb:hover {
+    background: var(--bs-gray-500);
+}
+
+/* ======================================
+   ⚡ Performance & Animations
+========================================= */
+
+/* Transition effects */
+.fade-out {
+    transition: opacity 0.3s ease;
+    opacity: 0;
+}
+
+.scale-down {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    opacity: 0;
+    transform: scale(0.9);
+}
+
+/* Animation states */
+.metadata-fade {
+    transition: opacity 0.3s ease;
+    opacity: 0;
+}
+
+.metadata-fade.show {
+    opacity: 1;
+}
+
+/* Fade-in Animation */
+.fade-in {
+    animation: fadeIn 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Loading states */
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Focus states for accessibility */
+.form-check-input:focus + .form-check-label {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 2px;
+}
+
+/* ======================================
+   🎯 Custom Enhancements
+========================================= */
+
+.card {
+    transition: var(--theme-transition);
+}
+
+.card:hover {
+    will-change: transform;
+    transform: translateY(-2px);
+    box-shadow: var(--theme-box-shadow-hover) !important;
+}
+
+.card-body {
+    contain: layout style;
+}
+
+/* Toast container */
+.toast-container {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    padding: 1rem;
+    z-index: 1080;
+    max-width: 350px;
+}
+
+/* Responsive text utilities */
+.text-responsive {
+    font-size: clamp(0.875rem, 2.5vw, 1.125rem);
+}
+
+/* ======================================
+   📝 Bootstrap Compatibility Notes
+========================================= */
+/*
+This stylesheet provides base utilities compatible with Bootstrap 5.3+ and all Bootswatch themes.
+
+Key principles:
+- Always use var(--bs-*) variables for colors
+- Leverage Bootstrap's semantic color system  
+- Utilize Bootstrap's spacing and sizing utilities
+- Maintain consistent theming across all Bootswatch themes
+- Provide fallbacks for older theme versions
+
+Recommended approach:
+1. Use Bootstrap utilities first (d-*, text-*, bg-*, etc.)
+2. Add custom CSS only when Bootstrap doesn't provide the functionality
+3. Test with multiple Bootswatch themes
+4. Ensure high contrast for accessibility
+*/

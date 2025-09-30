@@ -14,7 +14,12 @@
     {% endif %}
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="icon" href="{% static 'book/images/favicon.ico' %}" type="image/x-icon">
-    <link rel="stylesheet" href="{% static 'book/css/style.css' %}">
+    
+    <!-- Optimized CSS - Split into focused modules -->
+    <link rel="stylesheet" href="{% static 'book/css/base.css' %}">
+    <link rel="stylesheet" href="{% static 'book/css/components.css' %}">
+    <link rel="stylesheet" href="{% static 'book/css/dashboard.css' %}">
+    <link rel="stylesheet" href="{% static 'book/css/navigation.css' %}">
     
     {% block extra_css %}{% endblock %}
 </head>
@@ -48,6 +53,7 @@
     <script src="{% static 'book/js/shared-utils.js' %}"></script>
     <script src="{% static 'book/js/metadata-utils.js' %}"></script>
     <script src="{% static 'book/js/script.js' %}"></script>
+    
     {% block extra_js %}{% endblock %}
 </body>
 

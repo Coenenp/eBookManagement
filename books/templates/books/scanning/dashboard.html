@@ -5,43 +5,7 @@
 {% block title %}Scanning Dashboard{% endblock %}
 
 {% block extra_css %}
-<style>
-.scan-progress-bar {
-    transition: width 0.3s ease;
-}
-.api-status-indicator {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    display: inline-block;
-    margin-right: 8px;
-}
-.api-healthy {
-    background-color: #28a745;
-}
-.api-down {
-    background-color: #dc3545;
-}
-.scan-card {
-    border-left: 4px solid #007bff;
-}
-.scan-card.completed {
-    border-left-color: #28a745;
-}
-.scan-card.error {
-    border-left-color: #dc3545;
-}
-
-/* Progress bar styling */
-.progress-thin {
-    height: 8px;
-}
-
-/* Form visibility controls */
-.hidden-group {
-    display: none;
-}
-</style>
+<!-- Scanning dashboard styles already included in dashboard.css -->
 {% endblock %}
 
 {% block content %}

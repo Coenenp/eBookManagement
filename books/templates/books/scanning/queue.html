@@ -1,0 +1,250 @@
+{% extends "books/base.html" %}
+{% load static %}
+
+{% block title %}{{ page_title }} - eBook Library{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="mb-0">
+                    <i class="fas fa-clock me-2"></i>Scan Queue Management
+                </h1>
+                <div class="btn-group">
+                    <button class="btn btn-success" onclick="addToQueue()">
+                        <i class="fas fa-plus me-2"></i>Add to Queue
+                    </button>
+                    <a href="{% url 'books:scanning_dashboard' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-2">
+            <div class="card text-center border-info">
+                <div class="card-body">
+                    <h5 class="card-title text-info">{{ stats.total_items }}</h5>
+                    <p class="card-text small">Total Items</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card text-center border-secondary">
+                <div class="card-body">
+                    <h5 class="card-title text-secondary">{{ stats.pending_items }}</h5>
+                    <p class="card-text small">Pending</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card text-center border-primary">
+                <div class="card-body">
+                    <h5 class="card-title text-primary">{{ stats.scheduled_items }}</h5>
+                    <p class="card-text small">Scheduled</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card text-center border-warning">
+                <div class="card-body">
+                    <h5 class="card-title text-warning">{{ stats.processing_items }}</h5>
+                    <p class="card-text small">Processing</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card text-center border-success">
+                <div class="card-body">
+                    <h5 class="card-title text-success">{{ stats.completed_items }}</h5>
+                    <p class="card-text small">Completed</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card text-center border-danger">
+                <div class="card-body">
+                    <h5 class="card-title text-danger">{{ stats.failed_items }}</h5>
+                    <p class="card-text small">Failed</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Queue Items -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="mb-0">Queue Items</h3>
+                </div>
+                <div class="card-body">
+                    {% if queue_items %}
+                        <div class="list-group">
+                            {% for item in queue_items %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <h5 class="mb-0 me-3">{{ item.name }}</h5>
+                                            <span class="badge 
+                                                {% if item.status == 'pending' %}bg-secondary
+                                                {% elif item.status == 'scheduled' %}bg-primary
+                                                {% elif item.status == 'processing' %}bg-warning text-dark
+                                                {% elif item.status == 'completed' %}bg-success
+                                                {% elif item.status == 'failed' %}bg-danger
+                                                {% else %}bg-info{% endif %} me-2">
+                                                {{ item.get_status_display }}
+                                            </span>
+                                            <small class="badge bg-light text-dark me-2">{{ item.get_scan_type_display }}</small>
+                                            <span class="badge bg-light text-dark">{{ item.priority_display }}</span>
+                                        </div>
+                                        
+                                        <div class="mb-2">
+                                            <p class="mb-1 small">
+                                                <i class="fas fa-target me-1"></i>
+                                                <strong>Target:</strong> {{ item.target_summary }}
+                                            </p>
+                                            <p class="mb-1 small text-muted">
+                                                <i class="fas fa-cogs me-1"></i>
+                                                <strong>Options:</strong> {{ item.options_summary }}
+                                            </p>
+                                            {% if item.scheduled_for %}
+                                            <p class="mb-1 small text-muted">
+                                                <i class="fas fa-calendar-alt me-1"></i>
+                                                <strong>Scheduled for:</strong> {{ item.scheduled_for|date:"M d, Y H:i" }}
+                                            </p>
+                                            {% endif %}
+                                            {% if item.estimated_files > 0 %}
+                                            <p class="mb-0 small text-muted">
+                                                <i class="fas fa-file-alt me-1"></i>
+                                                <strong>Est. Files:</strong> {{ item.estimated_files }}
+                                                {% if item.estimated_duration > 0 %}
+                                                | <strong>Est. Duration:</strong> {{ item.estimated_duration_formatted }}
+                                                {% endif %}
+                                            </p>
+                                            {% endif %}
+                                            {% if item.error_message %}
+                                            <div class="alert alert-danger alert-sm mt-2 mb-0">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                                {{ item.error_message }}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="text-end">
+                                        <div class="small text-muted mb-2">
+                                            <div>Created: {{ item.created_at|date:"M d, H:i" }}</div>
+                                            <div>By: {{ item.created_by.username }}</div>
+                                            {% if item.retry_count > 0 %}
+                                            <div class="text-warning">Retries: {{ item.retry_count }}/{{ item.max_retries }}</div>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        <div class="btn-group" role="group">
+                                            {% if item.status == 'pending' and item.is_ready_to_execute %}
+                                            <button class="btn btn-sm btn-success" 
+                                                    onclick="executeQueueItem('{{ item.id }}')" 
+                                                    title="Execute now">
+                                                <i class="fas fa-play"></i>
+                                            </button>
+                                            {% endif %}
+                                            
+                                            {% if item.status in 'pending,scheduled' %}
+                                            <button class="btn btn-sm btn-outline-primary" 
+                                                    onclick="editQueueItem('{{ item.id }}')" 
+                                                    title="Edit">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            {% endif %}
+                                            
+                                            {% if item.can_retry %}
+                                            <button class="btn btn-sm btn-outline-warning" 
+                                                    onclick="retryQueueItem('{{ item.id }}')" 
+                                                    title="Retry">
+                                                <i class="fas fa-redo"></i>
+                                            </button>
+                                            {% endif %}
+                                            
+                                            <button class="btn btn-sm btn-outline-danger" 
+                                                    onclick="removeQueueItem('{{ item.id }}')" 
+                                                    title="Remove">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Pagination -->
+                        {% if page_obj.has_other_pages %}
+                        <nav aria-label="Queue pagination" class="mt-4">
+                            <ul class="pagination justify-content-center">
+                                {% if page_obj.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page=1">&laquo; First</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+                                    </li>
+                                {% endif %}
+                                
+                                {% for num in page_obj.paginator.page_range %}
+                                    {% if page_obj.number == num %}
+                                        <li class="page-item active">
+                                            <span class="page-link">{{ num }}</span>
+                                        </li>
+                                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                                        </li>
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% if page_obj.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last &raquo;</a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                        {% endif %}
+                        
+                    {% else %}
+                        <div class="alert alert-info text-center">
+                            <i class="fas fa-info-circle me-2"></i>
+                            No items in the scan queue. 
+                            <button class="btn btn-outline-primary btn-sm ms-2" onclick="addToQueue()">
+                                <i class="fas fa-plus me-1"></i>Add First Item
+                            </button>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% load static %}
+<script src="{% static 'book/js/scanning-dashboard.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize scanning queue management
+    if (typeof ScanningQueue !== 'undefined') {
+        new ScanningQueue();
+    }
+});
+</script>
+{% endblock %}

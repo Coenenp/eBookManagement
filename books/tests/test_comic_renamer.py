@@ -16,9 +16,9 @@ class ComicRenamerTests(TestCase):
             password='testpass123'
         )
 
-        self.content_source = DataSource.objects.create(
+        self.content_source, _ = DataSource.objects.get_or_create(
             name=DataSource.CONTENT_SCAN,
-            trust_level=0.85
+            defaults={'trust_level': 0.85}
         )
 
     def create_comic_book(self, filename, series_name, issue_type='main_series', issue_number=None, publisher=None):

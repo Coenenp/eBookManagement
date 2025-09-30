@@ -175,7 +175,7 @@ function renderEbooksList(ebooksData = null, viewType = null) {
                     `}
                     ${ebook.reading_progress > 0 ? `
                         <div class="reading-progress mt-2">
-                            <div class="reading-progress-bar" style="width: ${ebook.reading_progress}%"></div>
+                            <div class="reading-progress-bar" data-width="${ebook.reading_progress}"></div>
                         </div>
                     ` : ''}
                 </div>

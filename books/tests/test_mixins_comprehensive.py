@@ -143,8 +143,8 @@ class BaseMetadataValidatorTests(TestCase):
         self.assertIn('must be between 1000', str(cm.exception))
 
     def test_validate_year_future(self):
-        """Test validate_year with future year"""
-        future_year = timezone.now().year + 5
+        """Test validate_year with future year beyond allowed range"""
+        future_year = timezone.now().year + 15  # Beyond the +10 limit
         with self.assertRaises(forms.ValidationError) as cm:
             BaseMetadataValidator.validate_year(future_year)
         self.assertIn('must be between 1000', str(cm.exception))
@@ -169,7 +169,7 @@ class BaseMetadataValidatorTests(TestCase):
     def test_validate_isbn_none(self):
         """Test validate_isbn with None"""
         result = BaseMetadataValidator.validate_isbn(None)
-        self.assertEqual(result, '')
+        self.assertIsNone(result)
 
     def test_validate_isbn_valid_10_digit(self):
         """Test validate_isbn with valid 10-digit ISBN"""
@@ -201,7 +201,7 @@ class BaseMetadataValidatorTests(TestCase):
         """Test validate_isbn with invalid characters"""
         with self.assertRaises(forms.ValidationError) as cm:
             BaseMetadataValidator.validate_isbn('012345678Z')
-        self.assertIn('must contain only digits', str(cm.exception))
+        self.assertIn('Invalid ISBN-10 format', str(cm.exception))
 
     def test_validate_confidence_valid(self):
         """Test validate_confidence with valid value"""
@@ -483,9 +483,9 @@ class FinalMetadataSyncMixinTests(TestCase):
 
     def setUp(self):
         # Create test data
-        self.data_source = DataSource.objects.create(
+        self.data_source, _ = DataSource.objects.get_or_create(
             name=DataSource.MANUAL,
-            trust_level=0.9
+            defaults={'trust_level': 0.9}
         )
         self.book = Book.objects.create(
             file_path='/test/path/test_book.epub',

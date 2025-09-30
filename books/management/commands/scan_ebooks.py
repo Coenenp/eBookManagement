@@ -20,4 +20,4 @@ class Command(BaseCommand):
             rescan=options.get('rescan', False),
             resume=options.get('resume', False)
         )
-        scanner.run(options.get('folder_path'))
+        scanner.run(folder_path=options.get('folder_path'))

@@ -27,13 +27,14 @@ class ComicsViewsTestCase(TestCase):
         # Create a scan folder
         self.scan_folder = ScanFolder.objects.create(
             name="Test Comics Folder",
-            path="/test/comics/path"
+            path="/test/comics/path",
+            content_type="comics"
         )
 
         # Create a data source
-        self.data_source = DataSource.objects.create(
+        self.data_source, _ = DataSource.objects.get_or_create(
             name="Test Comics Source",
-            trust_level=0.8
+            defaults={'trust_level': 0.8}
         )
 
         # Create test books with comic formats

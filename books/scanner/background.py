@@ -52,7 +52,7 @@ class ScanProgress:
         logger.info(f"[SCAN PROGRESS] {status}: {current}/{total} ({progress_data['percentage']}%)")
 
     def complete(self, success: bool, message: str = "", error: str = ""):
-        """Mark scan as complete."""
+        """Mark scan as complete and remove from active scans."""
         final_data = {
             'job_id': self.job_id,
             'completed': True,
@@ -64,6 +64,12 @@ class ScanProgress:
             'total_time': time.time() - self.start_time,
         }
         cache.set(self.cache_key, final_data, timeout=86400)  # 24 hours
+
+        # Remove from active scans list
+        job_ids = cache.get('active_scan_job_ids', [])
+        if self.job_id in job_ids:
+            job_ids.remove(self.job_id)
+            cache.set('active_scan_job_ids', job_ids, timeout=3600)
 
     def get_status(self) -> Dict:
         """Get current progress status."""
@@ -299,11 +305,25 @@ def get_scan_progress(job_id: str) -> Dict:
     return progress.get_status()
 
 
+def add_active_scan(job_id: str):
+    """Add a job ID to the active scans list."""
+    job_ids = cache.get('active_scan_job_ids', [])
+    if job_id not in job_ids:
+        job_ids.append(job_id)
+        cache.set('active_scan_job_ids', job_ids, timeout=3600)
+
+
 def get_all_active_scans() -> List[Dict]:
     """Get all currently active scan jobs."""
-    # This would need to be implemented with a proper job queue
-    # For now, return empty list
-    return []
+    job_ids = cache.get('active_scan_job_ids', [])
+    active_scans = []
+
+    for job_id in job_ids:
+        progress_data = cache.get(f"scan_progress_{job_id}")
+        if progress_data and not progress_data.get('completed', False):
+            active_scans.append(progress_data)
+
+    return active_scans
 
 
 def cancel_scan(job_id: str) -> bool:

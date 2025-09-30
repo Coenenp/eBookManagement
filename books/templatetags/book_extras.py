@@ -217,3 +217,17 @@ def language_display(language_code):
 def language_name(language_code):
     """Convert language code to full language name for display (alias for language_display)"""
     return language_display(language_code)
+
+
+@register.filter
+def format_confidence(confidence):
+    """Format confidence value as percentage string"""
+    if confidence is None:
+        return "N/A"
+
+    try:
+        # Convert to percentage and format
+        percentage = float(confidence) * 100
+        return f"{percentage:.0f}%"
+    except (ValueError, TypeError):
+        return "N/A"

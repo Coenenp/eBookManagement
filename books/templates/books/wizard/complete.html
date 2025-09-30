@@ -1,0 +1,216 @@
+{% extends 'books/wizard/base.html' %}
+
+{% block wizard_content %}
+<div class="text-center mb-5">
+    <div class="completion-icon">
+        <i class="fas fa-check-circle text-success icon-xl"></i>
+    </div>
+    <h3 class="mt-3">
+        <i class="fas fa-party-horn text-warning me-2"></i>
+        Setup Complete!
+    </h3>
+    <p class="lead text-muted">
+        Your eBook Library Manager is ready to use. Here's what we've configured for you:
+    </p>
+</div>
+
+<div class="row">
+    <!-- Configuration Summary -->
+    <div class="col-md-8">
+        <div class="setup-summary">
+            <h5 class="mb-3">
+                <i class="fas fa-clipboard-check text-primary me-2"></i>
+                Configuration Summary
+            </h5>
+            
+            <!-- Folders -->
+            <div class="summary-item">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="mb-0">
+                        <i class="fas fa-folder text-warning me-2"></i>
+                        Scan Folders
+                    </h6>
+                    <span class="badge bg-light text-dark">{{ folder_count }} configured</span>
+                </div>
+                {% if configured_folders %}
+                <ul class="list-unstyled small text-muted mb-3">
+                    {% for folder in configured_folders %}
+                    <li class="ms-3">
+                        <i class="fas fa-folder-open me-2"></i>
+                        <code>{{ folder.path }}</code>
+                        {% if folder.content_type %}
+                        <span class="badge bg-secondary ms-2">{{ folder.content_type }}</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+            
+            <!-- Scrapers -->
+            <div class="summary-item">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="mb-0">
+                        <i class="fas fa-robot text-info me-2"></i>
+                        Metadata Scrapers
+                    </h6>
+                    <span class="badge bg-light text-dark">{{ configured_scrapers|length }} active</span>
+                </div>
+                {% if configured_scrapers %}
+                <ul class="list-unstyled small text-muted mb-3">
+                    {% for scraper in configured_scrapers %}
+                    <li class="ms-3">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        {{ scraper.name }}
+                        {% if scraper.has_api_key %}
+                        <span class="badge bg-success ms-2">API Key Configured</span>
+                        {% else %}
+                        <span class="badge bg-secondary ms-2">Built-in</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="small text-muted ms-3 mb-3">No external scrapers configured (using built-in metadata extraction)</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="col-md-4">
+        <div class="quick-actions">
+            <h5 class="mb-3">
+                <i class="fas fa-rocket text-primary me-2"></i>
+                Quick Actions
+            </h5>
+            
+            <div class="action-card mb-3">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-search text-primary me-3 icon-sm"></i>
+                    <div>
+                        <h6 class="mb-1">Start Initial Scan</h6>
+                        <p class="small text-muted mb-0">Scan configured folders for books</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="action-card mb-3">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-tachometer-alt text-success me-3 icon-sm"></i>
+                    <div>
+                        <h6 class="mb-1">View Dashboard</h6>
+                        <p class="small text-muted mb-0">See your library statistics</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="action-card">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-cog text-warning me-3 icon-sm"></i>
+                    <div>
+                        <h6 class="mb-1">Adjust Settings</h6>
+                        <p class="small text-muted mb-0">Fine-tune your configuration</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Next Steps -->
+<div class="mt-4">
+    <div class="alert alert-light border">
+        <div class="d-flex">
+            <i class="fas fa-lightbulb text-warning me-3 icon-xs"></i>
+            <div>
+                <h6 class="alert-heading mb-2">What's Next?</h6>
+                <div class="row small">
+                    <div class="col-md-6">
+                        <ul class="mb-0">
+                            <li><strong>Scan your library:</strong> Start with the initial scan to discover your books</li>
+                            <li><strong>Browse your collection:</strong> Use the main library view to explore your books</li>
+                            <li><strong>Organize with tags:</strong> Add custom tags and categories</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <ul class="mb-0">
+                            <li><strong>Set up reading lists:</strong> Create custom collections</li>
+                            <li><strong>Configure additional scrapers:</strong> Add more metadata sources</li>
+                            <li><strong>Explore advanced features:</strong> Discover all the tools available</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Buttons -->
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="complete">
+    
+    <div class="wizard-navigation">
+        <div>
+            <a href="{% url 'books:wizard_step' step='scrapers' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>
+                Back
+            </a>
+        </div>
+        
+        <div>
+            {% if folder_count > 0 %}
+            <button type="submit" name="start_scan" value="true" class="btn btn-success me-2">
+                <i class="fas fa-search me-2"></i>
+                Complete Setup & Scan Now
+            </button>
+            {% endif %}
+            
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-check me-2"></i>
+                Complete Setup
+            </button>
+        </div>
+    </div>
+</form>
+
+<!-- Feature Highlights -->
+<div class="mt-5 pt-4 border-top">
+    <h5 class="mb-3">
+        <i class="fas fa-star text-warning me-2"></i>
+        Key Features Ready to Use
+    </h5>
+    
+    <div class="row">
+        <div class="col-md-4">
+            <div class="feature-highlight text-center p-3">
+                <i class="fas fa-books text-primary mb-2 icon-lg"></i>
+                <h6>Smart Library Management</h6>
+                <p class="small text-muted mb-0">Automatic organization, duplicate detection, and metadata enhancement</p>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="feature-highlight text-center p-3">
+                <i class="fas fa-chart-bar text-success mb-2 icon-lg"></i>
+                <h6>Advanced Analytics</h6>
+                <p class="small text-muted mb-0">Track reading progress, format distribution, and library growth</p>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="feature-highlight text-center p-3">
+                <i class="fas fa-mobile-alt text-info mb-2 icon-lg"></i>
+                <h6>Responsive Design</h6>
+                <p class="small text-muted mb-0">Access your library from any device with our mobile-friendly interface</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+{{ block.super }}
+<!-- Wizard completion styles already included in wizard.css -->
+{% endblock %}

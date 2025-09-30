@@ -93,7 +93,7 @@ class ScanFolderModelTests(TestCase):
         self.assertEqual(folder.path, '/test/path')
         self.assertEqual(folder.language, 'en')
         self.assertTrue(folder.is_active)
-        self.assertEqual(str(folder), 'Test Folder')
+        self.assertEqual(str(folder), 'Test Folder (📘 Ebooks)')
 
     def test_scan_folder_defaults(self):
         """Test ScanFolder default values"""
@@ -649,10 +649,11 @@ class FinalMetadataModelTests(TestCase):
         """Test FinalMetadata save with auto-update"""
         mock_normalize.return_value = 'en'
 
-        final = FinalMetadata.objects.create(book=self.book, language='en')
+        # Create FinalMetadata instance without saving to trigger auto-update on first save
+        final = FinalMetadata(book=self.book)
 
         with patch.object(final, 'update_final_values') as mock_update:
-            final.save()
+            final.save()  # This should trigger auto-update on first save
             mock_update.assert_called_once()
 
     @patch('books.models.normalize_language')

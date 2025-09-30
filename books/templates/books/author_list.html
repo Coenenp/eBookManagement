@@ -111,13 +111,5 @@
     </form>
 </div>
 
-<script>
-const selectAllCheckbox = document.getElementById('select-all');
-if (selectAllCheckbox) {
-    selectAllCheckbox.addEventListener('click', function () {
-        const checkboxes = document.querySelectorAll('input[name="selected_authors"]');
-        checkboxes.forEach(cb => cb.checked = this.checked);
-    });
-}
-</script>
+<script src="{% static 'book/js/list-utils.js' %}"></script>
 {% endblock %}

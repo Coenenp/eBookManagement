@@ -1,0 +1,197 @@
+{% extends 'books/wizard/base.html' %}
+
+{% block wizard_content %}
+<div class="mb-4">
+    <h3>
+        <i class="fas fa-robot text-primary me-2"></i>
+        Configure Metadata Scrapers
+    </h3>
+    <p class="text-muted">
+        Metadata scrapers automatically fetch book information, covers, and details from online databases. 
+        This step is optional - you can configure these later or skip entirely.
+    </p>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+    
+    {% for scraper in scrapers_info %}
+    <div class="scraper-config">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <div class="flex-grow-1">
+                <h5 class="mb-1">
+                    <i class="fas fa-plug text-info me-2"></i>
+                    {{ scraper.name }}
+                </h5>
+                <p class="text-muted mb-2">{{ scraper.description }}</p>
+                <span class="scraper-status {% if scraper.status == 'Built-in' %}status-builtin{% else %}status-optional{% endif %}">
+                    {{ scraper.status }}
+                </span>
+            </div>
+            
+            {% if scraper.config_needed %}
+            <div class="ms-4 min-width-250">
+                <div class="input-group">
+                    <span class="input-group-text">
+                        <i class="fas fa-key"></i>
+                    </span>
+                    <input type="text" class="form-control" 
+                           name="{{ scraper.config_field }}" 
+                           placeholder="API Key (optional)"
+                           autocomplete="off">
+                </div>
+            </div>
+            {% else %}
+            <div class="ms-4">
+                <span class="badge bg-success">
+                    <i class="fas fa-check me-1"></i>
+                    Ready to use
+                </span>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Scraper Details -->
+        {% if scraper.name == 'Open Library' %}
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <div class="small text-muted">
+                    <strong>What it provides:</strong>
+                    <ul class="mb-0 mt-1">
+                        <li>Book titles and authors</li>
+                        <li>Publication information</li>
+                        <li>Book covers and thumbnails</li>
+                        <li>Series and genre information</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="small text-muted">
+                    <strong>Benefits:</strong>
+                    <ul class="mb-0 mt-1">
+                        <li>Completely free service</li>
+                        <li>No registration required</li>
+                        <li>Large database coverage</li>
+                        <li>Works immediately</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% elif scraper.name == 'Google Books' %}
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <div class="small text-muted">
+                    <strong>What it provides:</strong>
+                    <ul class="mb-0 mt-1">
+                        <li>Rich book metadata</li>
+                        <li>High-quality cover images</li>
+                        <li>Book descriptions and reviews</li>
+                        <li>Publisher and ISBN data</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="small text-muted">
+                    <strong>Setup info:</strong>
+                    <ul class="mb-0 mt-1">
+                        <li>Get API key from Google Cloud Console</li>
+                        <li>Enable Books API</li>
+                        <li>Free tier: 1,000 requests/day</li>
+                        <li><a href="https://developers.google.com/books/docs/v1/getting_started" target="_blank" class="text-decoration-none">Setup Guide <i class="fas fa-external-link-alt"></i></a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% elif scraper.name == 'Comic Vine' %}
+        <div class="row mt-3">
+            <div class="col-md-6">
+                <div class="small text-muted">
+                    <strong>What it provides:</strong>
+                    <ul class="mb-0 mt-1">
+                        <li>Comic book metadata</li>
+                        <li>Character and creator info</li>
+                        <li>Issue numbers and volumes</li>
+                        <li>Comic covers and artwork</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="small text-muted">
+                    <strong>Setup info:</strong>
+                    <ul class="mb-0 mt-1">
+                        <li>Register at Comic Vine website</li>
+                        <li>Request free API key</li>
+                        <li>Specialized for comic content</li>
+                        <li><a href="https://comicvine.gamespot.com/api/" target="_blank" class="text-decoration-none">Get API Key <i class="fas fa-external-link-alt"></i></a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    
+    <!-- Configuration Tips -->
+    <div class="mt-4">
+        <div class="alert alert-info">
+            <div class="d-flex">
+                <i class="fas fa-lightbulb me-3"></i>
+                <div>
+                    <h6 class="alert-heading mb-2">Configuration Tips</h6>
+                    <ul class="mb-0 small">
+                        <li><strong>Optional Setup:</strong> All scrapers are optional. The library works great with just file-based metadata.</li>
+                        <li><strong>API Keys:</strong> You can add API keys later in the settings if you skip this step.</li>
+                        <li><strong>Privacy:</strong> API keys are stored securely and only used for metadata requests.</li>
+                        <li><strong>Rate Limits:</strong> Most services have daily request limits, but they're usually sufficient for personal use.</li>
+                        <li><strong>Offline Mode:</strong> The library works perfectly without internet connectivity using built-in metadata extraction.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Performance Note -->
+    <div class="alert alert-success">
+        <div class="d-flex">
+            <i class="fas fa-rocket me-3"></i>
+            <div>
+                <h6 class="alert-heading mb-2">Performance Benefits</h6>
+                <p class="mb-0 small">
+                    Configured scrapers will automatically enrich your library with professional metadata, 
+                    high-quality covers, and detailed information. This happens in the background and 
+                    makes browsing and organizing your collection much more enjoyable.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="wizard-navigation">
+        <div>
+            <a href="{% url 'books:wizard_step' step='content_types' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>
+                Back
+            </a>
+        </div>
+        
+        <div>
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-arrow-right me-2"></i>
+                Continue
+            </button>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize API key validation using external utility
+    if (typeof window.ApiKeyValidator !== 'undefined') {
+        const validator = new ApiKeyValidator();
+        validator.init();
+    }
+});
+</script>
+{% endblock %}

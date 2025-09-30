@@ -1,0 +1,84 @@
+{% extends 'books/wizard/base.html' %}
+
+{% block wizard_content %}
+<div class="text-center">
+    <div class="mb-4">
+        <i class="fas fa-book-reader fa-4x text-primary mb-3"></i>
+        <h2>Welcome to Your Ebook Library!</h2>
+        <p class="lead text-muted">
+            Let's set up your digital library in just a few minutes.
+        </p>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-folder-open fa-2x text-success mb-3"></i>
+                    <h5>Choose Your Folders</h5>
+                    <p class="text-muted small">
+                        Select where your ebooks are stored
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-tags fa-2x text-info mb-3"></i>
+                    <h5>Organize Content</h5>
+                    <p class="text-muted small">
+                        Categorize by ebooks, comics, audiobooks
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <i class="fas fa-robot fa-2x text-warning mb-3"></i>
+                    <h5>Configure Scrapers</h5>
+                    <p class="text-muted small">
+                        Set up automatic metadata fetching
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-info mt-4">
+        <div class="d-flex">
+            <div class="flex-shrink-0">
+                <i class="fas fa-info-circle"></i>
+            </div>
+            <div class="flex-grow-1 ms-3">
+                <strong>What happens next?</strong>
+                <ul class="mb-0 mt-2">
+                    <li>We'll help you select folders containing your ebooks</li>
+                    <li>You'll assign content types to organize your library</li>
+                    <li>Optionally configure metadata scrapers for rich information</li>
+                    <li>Start your first scan to populate your library</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="wizard-navigation">
+    <div>
+        <!-- No previous step -->
+    </div>
+    
+    <div>
+        <form method="post" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i class="fas fa-arrow-right me-2"></i>
+                Get Started
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
