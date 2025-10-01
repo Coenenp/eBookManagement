@@ -299,20 +299,29 @@
 
 /* Ensure Bootswatch themes take precedence over custom form styles */
 .form-control,
-.form-select,
-.form-check-input {
+.form-select {
     /* Reset any overly specific styles to let themes apply properly */
     border-color: var(--bs-border-color) !important;
     background-color: var(--bs-body-bg) !important;
     color: var(--bs-body-color) !important;
 }
 
+/* Form checkboxes need special handling - don't override all properties */
+.form-check-input {
+    border-color: var(--bs-border-color);
+    /* Allow normal checkbox behavior without aggressive overrides */
+}
+
 /* Focus states should respect theme colors */
 .form-control:focus,
-.form-select:focus,
-.form-check-input:focus {
+.form-select:focus {
     border-color: var(--bs-primary) !important;
     box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25) !important;
+}
+
+.form-check-input:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
 }
 
 /* Ensure dropdown indicators use theme colors */
@@ -365,6 +374,7 @@
     /* Force override system colors */
     -webkit-appearance: none !important;
     -moz-appearance: none !important;
+    appearance: none !important;
 }
 
 /* Try to override system highlight colors */

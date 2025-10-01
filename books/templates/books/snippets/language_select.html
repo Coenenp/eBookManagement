@@ -1,0 +1,5 @@
+<select name="{{ field_name }}" class="{{ css_class }}"{% if required %} required{% endif %}>
+    {% for code, name in choices %}
+        <option value="{{ code }}"{% if selected_value == code %} selected{% endif %}>{{ name }}</option>
+    {% endfor %}
+</select>

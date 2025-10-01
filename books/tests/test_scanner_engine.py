@@ -21,7 +21,7 @@ class EbookScannerTests(TestCase):
         """Set up test data."""
         # Create data sources
         self.data_source = DataSource.objects.create(
-            name=DataSource.FILENAME,
+            name=DataSource.INITIAL_SCAN,
             trust_level=0.2
         )
 

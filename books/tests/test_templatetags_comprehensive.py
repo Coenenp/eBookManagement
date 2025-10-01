@@ -424,7 +424,7 @@ class CustomFiltersTemplateTagsTests(TestCase):
         )
 
         filename_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.FILENAME,
+            name=DataSource.INITIAL_SCAN,
             defaults={'trust_level': 0.5}
         )
         BookTitle.objects.create(

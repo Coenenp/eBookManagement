@@ -294,8 +294,8 @@ def ajax_validate_file_integrity(request):
 @login_required
 def ajax_get_supported_languages(request):
     """AJAX endpoint to get supported languages"""
-    from ..models import LANGUAGE_CHOICES
-    languages = [{'code': code, 'name': name} for code, name in LANGUAGE_CHOICES]
+    from books.utils.language_manager import LanguageManager
+    languages = [{'code': code, 'name': name} for code, name in LanguageManager.get_language_choices()]
     return JsonResponse({'success': True, 'languages': languages})
 
 
@@ -601,9 +601,117 @@ def ajax_process_book(request):
 
 
 @login_required
+@require_http_methods(["POST"])
 def ajax_trigger_scan(request):
-    """AJAX trigger scan."""
-    return JsonResponse({'status': 'success', 'message': 'Trigger scan not yet implemented'})
+    """AJAX trigger scan for a specific folder."""
+    try:
+        import json
+        from django.apps import apps
+
+        # Parse JSON data
+        data = json.loads(request.body)
+        folder_id = data.get('folder_id')
+        use_external_apis = data.get('use_external_apis', True)
+
+        if not folder_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Folder ID is required'
+            })
+
+        # Get the scan folder
+        ScanFolder = apps.get_model('books', 'ScanFolder')
+        try:
+            scan_folder = ScanFolder.objects.get(id=folder_id)
+        except ScanFolder.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Scan folder not found'
+            })
+
+        # Import scanning functionality
+        from books.scanner.background import scan_folder_in_background
+
+        # Trigger the scan
+        job_id = scan_folder_in_background(
+            folder_id=scan_folder.id,
+            folder_path=scan_folder.path,
+            folder_name=scan_folder.name,
+            content_type=scan_folder.content_type,
+            language=scan_folder.language,
+            enable_external_apis=use_external_apis
+        )
+
+        api_status = "with external APIs" if use_external_apis else "without external APIs"
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Scan started for "{scan_folder.name}" {api_status}',
+            'job_id': job_id
+        })
+
+    except Exception as e:
+        logger.error(f'Failed to trigger scan: {str(e)}')
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Failed to start scan: {str(e)}'
+        })
+
+
+@login_required
+@require_http_methods(["POST"])
+def ajax_rescan_folder(request):
+    """AJAX rescan folder endpoint."""
+    try:
+        import json
+        from django.apps import apps
+
+        # Parse JSON data
+        data = json.loads(request.body)
+        folder_id = data.get('folder_id')
+        use_external_apis = data.get('use_external_apis', True)
+
+        if not folder_id:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Folder ID is required'
+            })
+
+        # Get the scan folder
+        ScanFolder = apps.get_model('books', 'ScanFolder')
+        try:
+            scan_folder = ScanFolder.objects.get(id=folder_id)
+        except ScanFolder.DoesNotExist:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Scan folder not found'
+            })
+
+        # Import scanning functionality
+        from books.scanner.background import scan_folder_in_background
+
+        # Trigger the rescan (same as scan but with different message)
+        job_id = scan_folder_in_background(
+            folder_id=scan_folder.id,
+            folder_path=scan_folder.path,
+            folder_name=scan_folder.name,
+            content_type=scan_folder.content_type,
+            language=scan_folder.language,
+            enable_external_apis=use_external_apis
+        )
+
+        api_status = "with external APIs" if use_external_apis else "without external APIs"
+        return JsonResponse({
+            'status': 'success',
+            'message': f'Rescan started for "{scan_folder.name}" {api_status}',
+            'job_id': job_id
+        })
+
+    except Exception as e:
+        logger.error(f'Failed to trigger rescan: {str(e)}')
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Failed to start rescan: {str(e)}'
+        })
 
 
 @login_required
@@ -2073,6 +2181,7 @@ __all__ = [
     'ajax_batch_update_books',
     'ajax_process_book',
     'ajax_trigger_scan',
+    'ajax_rescan_folder',
     'ajax_add_scan_folder',
     'ajax_upload_file',
     'ajax_upload_multiple_files',

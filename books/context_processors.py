@@ -2,6 +2,7 @@
 Context processors for the books app.
 """
 from django.conf import settings
+from books.utils.language_manager import LanguageManager
 
 
 def theme_context(request):
@@ -54,4 +55,13 @@ def theme_context(request):
             {'value': 'yeti', 'name': 'Yeti', 'description': 'Crisp winter'},
             {'value': 'zephyr', 'name': 'Zephyr', 'description': 'Soft and gentle'},
         ]
+    }
+
+
+def language_context(request):
+    """Add language choices to all templates"""
+    return {
+        'language_choices': LanguageManager.get_language_choices(),
+        'language_choices_with_empty': LanguageManager.get_language_choices_with_empty(),
+        'language_choices_with_all': LanguageManager.get_language_choices_with_all(),
     }

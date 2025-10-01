@@ -1,0 +1,18 @@
+{% extends 'books/base.html' %}
+
+{% block title %}Delete Data Source - Ebook Library Manager{% endblock %}
+
+{% block content %}
+<h2>Delete Data Source</h2>
+<p><strong>Heads up!</strong> Deleting the data source <strong>"{{ object.name }}"</strong> will remove all metadata entries and trust level settings associated with this source.</p>
+<p>This may affect the accuracy of your book metadata. Are you sure you want to continue?</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">
+        <i class="fas fa-trash"></i> Delete
+    </button>
+    <a href="{% url 'books:data_source_list' %}" class="btn btn-secondary">
+        <i class="fas fa-times"></i> Cancel
+    </a>
+</form>
+{% endblock %}

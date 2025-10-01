@@ -1,0 +1,535 @@
+/*
+ * Unified Table Component System
+ * Provides consistent Bootstrap-based styling for all data tables
+ * Integrates with Bootswatch themes and maintains accessibility
+ */
+
+/* ======================================
+   📋 Base Table Container
+========================================= */
+
+.unified-table-container {
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius-lg);
+    box-shadow: 0 2px 4px rgba(var(--bs-body-color-rgb), 0.08);
+    overflow: hidden;
+}
+
+.unified-table-header {
+    background: var(--bs-light-bg-subtle);
+    border-bottom: 1px solid var(--bs-border-color);
+    padding: 1.25rem 1.5rem;
+    
+    display: flex;
+    justify-content: between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.unified-table-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--bs-body-color);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.unified-table-title i {
+    color: var(--bs-primary);
+    font-size: 1.1em;
+}
+
+.unified-table-subtitle {
+    margin: 0.25rem 0 0 0;
+    font-size: 0.875rem;
+    color: var(--bs-secondary-color);
+    font-weight: 400;
+}
+
+.unified-table-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+/* ======================================
+   🗂️ Table Styling
+========================================= */
+
+.unified-table {
+    margin-bottom: 0;
+    border: none;
+    
+    /* Use Bootstrap theme colors */
+    --bs-table-bg: var(--bs-body-bg);
+    --bs-table-hover-bg: var(--bs-primary-bg-subtle);
+    --bs-table-striped-bg: var(--bs-secondary-bg-subtle);
+}
+
+.unified-table thead {
+    background-color: var(--bs-primary-bg-subtle);
+    border-bottom: 2px solid var(--bs-primary-border-subtle);
+}
+
+.unified-table thead th {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--bs-primary-text);
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    padding: 1rem 0.75rem;
+    border: none;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.unified-table tbody td {
+    padding: 1rem 0.75rem;
+    vertical-align: middle;
+    border-color: var(--bs-border-color-translucent);
+    font-size: 0.9rem;
+}
+
+/* ======================================
+   🔗 Sortable Headers
+========================================= */
+
+.sortable-header {
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+    transition: all 0.2s ease-in-out;
+    position: relative;
+    padding-right: 2rem !important;
+}
+
+.sortable-header:hover {
+    background-color: var(--bs-primary-bg-subtle);
+    color: var(--bs-primary-text);
+}
+
+.sortable-header .sort-indicator {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0.5;
+    transition: opacity 0.2s ease-in-out;
+}
+
+.sortable-header:hover .sort-indicator,
+.sortable-header.active .sort-indicator {
+    opacity: 1;
+}
+
+.sortable-header.active {
+    background-color: var(--bs-primary-bg-subtle);
+    color: var(--bs-primary-text);
+}
+
+.sortable-header.sort-asc .sort-indicator::before {
+    content: '\f0de'; /* fa-sort-up */
+    font-family: 'Font Awesome 5 Free';
+    font-weight: 900;
+}
+
+.sortable-header.sort-desc .sort-indicator::before {
+    content: '\f0dd'; /* fa-sort-down */
+    font-family: 'Font Awesome 5 Free';
+    font-weight: 900;
+}
+
+.sortable-header:not(.active) .sort-indicator::before {
+    content: '\f0dc'; /* fa-sort */
+    font-family: 'Font Awesome 5 Free';
+    font-weight: 900;
+}
+
+/* ======================================
+   🎯 Special Column Types
+========================================= */
+
+/* Status badges */
+.status-badge {
+    font-size: 0.8125rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--bs-border-radius-pill);
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.status-active { 
+    background-color: var(--bs-success-bg-subtle);
+    color: var(--bs-success-text);
+    border: 1px solid var(--bs-success-border-subtle);
+}
+
+.status-inactive { 
+    background-color: var(--bs-secondary-bg-subtle);
+    color: var(--bs-secondary-text);
+    border: 1px solid var(--bs-secondary-border-subtle);
+}
+
+/* Content type badges */
+.content-type-badge {
+    font-size: 0.8125rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: var(--bs-border-radius);
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.content-type-ebooks { 
+    background-color: var(--bs-primary-bg-subtle);
+    color: var(--bs-primary-text);
+}
+
+.content-type-comics { 
+    background-color: var(--bs-warning-bg-subtle);
+    color: var(--bs-warning-text);
+}
+
+.content-type-audiobooks { 
+    background-color: var(--bs-info-bg-subtle);
+    color: var(--bs-info-text);
+}
+
+.content-type-mixed { 
+    background-color: var(--bs-secondary-bg-subtle);
+    color: var(--bs-secondary-text);
+}
+
+/* Path display */
+.path-display {
+    font-family: var(--bs-font-monospace);
+    font-size: 0.8125rem;
+    background-color: var(--bs-secondary-bg-subtle);
+    color: var(--bs-secondary-text);
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--bs-border-radius-sm);
+    border: 1px solid var(--bs-secondary-border-subtle);
+    word-break: break-all;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Date display */
+.date-display {
+    color: var(--bs-secondary-color);
+    font-size: 0.875rem;
+    white-space: nowrap;
+}
+
+.date-never {
+    font-style: italic;
+    opacity: 0.7;
+}
+
+/* Name/Title columns */
+.item-name {
+    font-weight: 600;
+    color: var(--bs-body-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+/* ======================================
+   🔘 Action Buttons
+========================================= */
+
+.action-buttons {
+    display: flex;
+    gap: 0.375rem;
+    justify-content: center;
+    flex-wrap: nowrap;
+}
+
+.action-btn {
+    padding: 0.375rem 0.625rem;
+    border-radius: var(--bs-border-radius-sm);
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: 1px solid;
+    transition: all 0.2s ease-in-out;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.25rem;
+    height: 2.25rem;
+    text-decoration: none;
+}
+
+.action-btn i {
+    font-size: 0.875rem;
+}
+
+.action-btn-edit {
+    color: var(--bs-primary);
+    border-color: var(--bs-primary-border-subtle);
+    background-color: var(--bs-primary-bg-subtle);
+}
+
+.action-btn-edit:hover {
+    color: var(--bs-primary-text);
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(var(--bs-primary-rgb), 0.3);
+}
+
+.action-btn-delete {
+    color: var(--bs-danger);
+    border-color: var(--bs-danger-border-subtle);
+    background-color: var(--bs-danger-bg-subtle);
+}
+
+.action-btn-delete:hover {
+    color: var(--bs-danger-text);
+    background-color: var(--bs-danger);
+    border-color: var(--bs-danger);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(var(--bs-danger-rgb), 0.3);
+}
+
+.action-btn-scan {
+    color: var(--bs-info);
+    border-color: var(--bs-info-border-subtle);
+    background-color: var(--bs-info-bg-subtle);
+}
+
+.action-btn-scan:hover {
+    color: var(--bs-info-text);
+    background-color: var(--bs-info);
+    border-color: var(--bs-info);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(var(--bs-info-rgb), 0.3);
+}
+
+/* ======================================
+   📊 Statistics & Metrics
+========================================= */
+
+.table-stats-row {
+    background-color: var(--bs-light-bg-subtle);
+    border-top: 2px solid var(--bs-primary-border-subtle);
+}
+
+.table-stats-row td {
+    padding: 1.25rem 0.75rem;
+    font-weight: 500;
+    color: var(--bs-secondary-color);
+}
+
+.stat-value {
+    font-weight: 600;
+    font-size: 1.125rem;
+    color: var(--bs-primary);
+}
+
+/* ======================================
+   📱 Responsive Design
+========================================= */
+
+@media (max-width: 768px) {
+    .unified-table-header {
+        padding: 1rem;
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+    
+    .unified-table-actions {
+        justify-content: center;
+        margin-top: 1rem;
+    }
+    
+    .unified-table thead th {
+        padding: 0.75rem 0.5rem;
+        font-size: 0.8125rem;
+    }
+    
+    .unified-table tbody td {
+        padding: 0.75rem 0.5rem;
+        font-size: 0.875rem;
+    }
+    
+    .path-display {
+        max-width: 150px;
+    }
+    
+    .item-name {
+        max-width: 120px;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    
+    .action-btn {
+        min-width: auto;
+        width: 100%;
+        height: auto;
+        padding: 0.5rem;
+    }
+}
+
+@media (max-width: 576px) {
+    /* Stack table on very small screens */
+    .unified-table,
+    .unified-table thead,
+    .unified-table tbody,
+    .unified-table th,
+    .unified-table td,
+    .unified-table tr {
+        display: block;
+    }
+    
+    .unified-table thead tr {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+    }
+    
+    .unified-table tr {
+        border: 1px solid var(--bs-border-color);
+        border-radius: var(--bs-border-radius);
+        margin-bottom: 0.75rem;
+        background: var(--bs-body-bg);
+        box-shadow: 0 1px 3px rgba(var(--bs-body-color-rgb), 0.1);
+    }
+    
+    .unified-table td {
+        border: none !important;
+        position: relative;
+        padding-left: 40% !important;
+        padding-right: 1rem !important;
+        padding-top: 0.75rem !important;
+        padding-bottom: 0.75rem !important;
+        text-align: right;
+    }
+    
+    .unified-table td:before {
+        content: attr(data-label);
+        position: absolute;
+        left: 1rem;
+        width: 35%;
+        padding-right: 0.5rem;
+        white-space: nowrap;
+        font-weight: 600;
+        color: var(--bs-secondary-color);
+        text-align: left;
+    }
+}
+
+/* ======================================
+   🔄 Loading & Empty States
+========================================= */
+
+.table-loading {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--bs-secondary-color);
+}
+
+.table-loading i {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.table-empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--bs-secondary-color);
+}
+
+.table-empty i {
+    font-size: 3rem;
+    margin-bottom: 1.5rem;
+    opacity: 0.3;
+}
+
+.table-empty h5 {
+    color: var(--bs-secondary-color);
+    margin-bottom: 1rem;
+}
+
+.table-empty p {
+    margin-bottom: 1.5rem;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 0.8; }
+}
+
+/* ======================================
+   ✨ Additional Enhancements
+========================================= */
+
+/* Hover row effect */
+.unified-table tbody tr:hover {
+    background-color: var(--bs-primary-bg-subtle);
+    transition: background-color 0.2s ease-in-out;
+}
+
+/* Zebra striping */
+.unified-table.table-striped tbody tr:nth-of-type(odd) td {
+    background-color: var(--bs-secondary-bg-subtle);
+}
+
+/* Focus indicators for accessibility */
+.unified-table th:focus,
+.unified-table td:focus,
+.action-btn:focus {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 2px;
+}
+
+/* Trust level progress bars */
+.trust-level-progress {
+    flex: 1;
+    height: 1.5rem;
+}
+
+/* Disabled action buttons */
+.action-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+    background-color: var(--bs-gray-300);
+    color: var(--bs-gray-500);
+}
+
+/* Print styles */
+@media print {
+    .unified-table-actions,
+    .action-buttons {
+        display: none !important;
+    }
+    
+    .unified-table {
+        background: white !important;
+        color: black !important;
+    }
+    
+    .unified-table th,
+    .unified-table td {
+        background: white !important;
+        color: black !important;
+        border: 1px solid #ccc !important;
+    }
+}

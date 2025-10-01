@@ -525,7 +525,92 @@ document.addEventListener('DOMContentLoaded', function() {
         setupWizard = new SetupWizard();
         apiKeyValidator = new ApiKeyValidator();
     }
+    
+    // Initialize progress bar ARIA attributes
+    const progressBar = document.querySelector('.progress-bar');
+    if (progressBar) {
+        const progressValue = progressBar.getAttribute('data-progress') || '0';
+        const numericValue = parseInt(progressValue, 10) || 0;
+        progressBar.setAttribute('aria-valuenow', numericValue.toString());
+        progressBar.style.width = numericValue + '%';
+    }
+    
+    // Folder selection handling
+    document.querySelectorAll('.folder-suggestion').forEach(function(suggestion) {
+        suggestion.addEventListener('click', function() {
+            const checkbox = this.querySelector('input[type="checkbox"]');
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked;
+                this.classList.toggle('selected', checkbox.checked);
+            }
+        });
+    });
+    
+    // Content type change handling
+    document.querySelectorAll('select[name^="folder_"]').forEach(function(select) {
+        select.addEventListener('change', function() {
+            updateContentTypePreview(this);
+        });
+    });
+    
+    // Custom folder input validation
+    const customFolderInput = document.getElementById('customFolder');
+    if (customFolderInput) {
+        customFolderInput.addEventListener('blur', function() {
+            validateFolder(this.value);
+        });
+    }
 });
+
+// Folder validation function (extracted from inline JavaScript)
+function validateFolder(path) {
+    if (!path.trim()) return;
+    
+    // Get the validation URL from configuration or use default
+    const validationUrl = window.wizardConfig?.validateUrl || '/books/wizard/validate-folder/';
+    
+    fetch(validationUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: 'path=' + encodeURIComponent(path)
+    })
+    .then(response => response.json())
+    .then(data => {
+        const input = document.getElementById('customFolder');
+        const feedback = document.getElementById('customFolderFeedback');
+        
+        if (data.valid) {
+            input.classList.remove('is-invalid');
+            input.classList.add('is-valid');
+            if (feedback) {
+                feedback.textContent = `Found ${data.file_count} ebook files`;
+                feedback.className = 'text-success small';
+            }
+        } else {
+            input.classList.remove('is-valid');
+            input.classList.add('is-invalid');
+            if (feedback) {
+                feedback.textContent = data.error;
+                feedback.className = 'text-danger small';
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error validating folder:', error);
+    });
+}
+
+// Content type preview function (extracted from inline JavaScript)
+function updateContentTypePreview(select) {
+    const container = select.closest('.content-type-assignment');
+    const preview = container.querySelector('.content-type-preview');
+    if (preview) {
+        preview.textContent = `Will scan as: ${select.options[select.selectedIndex].text}`;
+    }
+}
 
 // Export for global access
 window.SetupWizard = SetupWizard;

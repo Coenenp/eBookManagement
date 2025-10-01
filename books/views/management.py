@@ -9,14 +9,14 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
-from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView
+from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView, View
 from django.urls import reverse_lazy
 from django.apps import apps
 from django.http import JsonResponse
 
 # Import mixins and utilities
 from ..mixins.navigation import BookNavigationMixin
-from ..forms import ScanFolderForm
+from ..forms import ScanFolderForm, ScanFolderEditForm, TriggerScanForm, DataSourceForm
 
 
 # Get models dynamically to avoid circular imports
@@ -42,27 +42,44 @@ class ScanFolderListView(LoginRequiredMixin, BookNavigationMixin, ListView):
     def get_queryset(self):
         from django.db.models import Count
         ScanFolder = self.get_model()
-        return ScanFolder.objects.annotate(
+        queryset = ScanFolder.objects.annotate(
             book_count=Count('book')
-        ).order_by('name')
+        )
 
-    @property
-    def model(self):
-        return self.get_model()
+        # Handle sorting
+        sort_by = self.request.GET.get('sort', 'name')
+        sort_order = self.request.GET.get('order', 'asc')
+
+        # Validate sort field
+        valid_sorts = ['name', 'path', 'content_type', 'language', 'is_active', 'last_scanned']
+        if sort_by not in valid_sorts:
+            sort_by = 'name'
+
+        # Apply sorting
+        order_prefix = '-' if sort_order == 'desc' else ''
+        queryset = queryset.order_by(f'{order_prefix}{sort_by}')
+
+        return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         ScanFolder = self.get_model()
         context.update({
+            'sort_by': self.request.GET.get('sort', 'name'),
+            'sort_order': self.request.GET.get('order', 'asc'),
             'total_folders': ScanFolder.objects.count(),
             'active_folders': ScanFolder.objects.filter(is_active=True).count(),
         })
         return context
 
+    @property
+    def model(self):
+        return self.get_model()
+
 
 class AddScanFolderView(LoginRequiredMixin, BookNavigationMixin, CreateView):
     """Add a new scan folder."""
-    template_name = 'books/add_scan_folder.html'
+    template_name = 'books/scan_folder/add_scan_folder.html'
     form_class = ScanFolderForm
     success_url = reverse_lazy('books:scan_folder_list')
 
@@ -73,9 +90,83 @@ class AddScanFolderView(LoginRequiredMixin, BookNavigationMixin, CreateView):
         return self.get_model().objects.all()
 
 
+class EditScanFolderView(LoginRequiredMixin, BookNavigationMixin, UpdateView):
+    """Edit an existing scan folder (restricted fields)."""
+    template_name = 'books/scan_folder/edit_scan_folder.html'
+    form_class = ScanFolderEditForm
+    success_url = reverse_lazy('books:scan_folder_list')
+
+    def get_model(self):
+        return get_model('ScanFolder')
+
+    def get_queryset(self):
+        return self.get_model().objects.all()
+
+    def form_valid(self, form):
+        messages.success(self.request, f'Scan folder "{form.instance.name}" updated successfully.')
+        return super().form_valid(form)
+
+
+class TriggerSingleScanView(LoginRequiredMixin, BookNavigationMixin, View):
+    """Trigger scan for a single scan folder with options."""
+    template_name = 'books/scan_folder/trigger_scan.html'
+
+    def get(self, request, pk):
+        ScanFolder = get_model('ScanFolder')
+        scan_folder = get_object_or_404(ScanFolder, pk=pk)
+        form = TriggerScanForm()
+
+        return render(request, self.template_name, {
+            'form': form,
+            'scan_folder': scan_folder
+        })
+
+    def post(self, request, pk):
+        ScanFolder = get_model('ScanFolder')
+        scan_folder = get_object_or_404(ScanFolder, pk=pk)
+        form = TriggerScanForm(request.POST)
+
+        if form.is_valid():
+            query_external_apis = form.cleaned_data.get('query_external_apis', True)
+
+            # Import scanning functionality
+            from ..scanner.background import scan_folder_in_background
+
+            try:
+                # Trigger background scan using existing functionality
+                scan_folder_in_background(
+                    folder_id=scan_folder.id,
+                    folder_path=scan_folder.path,
+                    folder_name=scan_folder.name,
+                    content_type=scan_folder.content_type,
+                    language=scan_folder.language,
+                    enable_external_apis=query_external_apis
+                )
+
+                api_status = "with external API queries" if query_external_apis else "without external API queries"
+                messages.success(
+                    request,
+                    f'Scan triggered for folder "{scan_folder.name}" {api_status}. '
+                    f'Check the scanning dashboard for progress.'
+                )
+            except Exception as e:
+                logger.error(f'Failed to trigger scan for folder {scan_folder.name}: {str(e)}')
+                messages.error(
+                    request,
+                    f'Failed to trigger scan for folder "{scan_folder.name}": {str(e)}'
+                )
+
+            return redirect('books:scan_folder_list')
+
+        return render(request, self.template_name, {
+            'form': form,
+            'scan_folder': scan_folder
+        })
+
+
 class DeleteScanFolderView(LoginRequiredMixin, BookNavigationMixin, DeleteView):
     """Delete a scan folder with safety checks."""
-    template_name = 'books/confirm_delete.html'
+    template_name = 'books/scan_folder/delete_scan_folder.html'
     success_url = reverse_lazy('books:scan_folder_list')
 
     def get_model(self):
@@ -117,11 +208,57 @@ class DataSourceListView(LoginRequiredMixin, BookNavigationMixin, ListView):
 
     def get_queryset(self):
         DataSource = self.get_model()
-        return DataSource.objects.all().order_by('name')
+
+        # Get sorting parameters
+        sort_by = self.request.GET.get('sort', 'name')
+        order = self.request.GET.get('order', 'asc')
+
+        # Define valid sort fields
+        valid_sorts = {
+            'name': 'name',
+            'trust_level': 'trust_level',
+            'priority': 'priority',
+            'is_active': 'is_active'
+        }
+
+        # Validate sort field
+        if sort_by not in valid_sorts:
+            sort_by = 'name'
+
+        # Apply ordering
+        order_field = valid_sorts[sort_by]
+        if order == 'desc':
+            order_field = f'-{order_field}'
+
+        return DataSource.objects.all().order_by(order_field)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        data_sources = context['data_sources']
+        data_sources = list(context['data_sources'])
+
+        # Get sorting parameters for template
+        sort_by = self.request.GET.get('sort', 'name')
+        order = self.request.GET.get('order', 'asc')
+
+        # For computed fields (metadata counts), we need to sort in Python
+        if sort_by in ['metadata_count', 'title_count', 'author_count', 'genre_count', 'series_count', 'cover_count']:
+            reverse_order = (order == 'desc')
+            if sort_by == 'metadata_count':
+                data_sources.sort(key=lambda x: x.metadata_count, reverse=reverse_order)
+            elif sort_by == 'title_count':
+                data_sources.sort(key=lambda x: x.title_count, reverse=reverse_order)
+            elif sort_by == 'author_count':
+                data_sources.sort(key=lambda x: x.author_count, reverse=reverse_order)
+            elif sort_by == 'genre_count':
+                data_sources.sort(key=lambda x: x.genre_count, reverse=reverse_order)
+            elif sort_by == 'series_count':
+                data_sources.sort(key=lambda x: x.series_count, reverse=reverse_order)
+            elif sort_by == 'cover_count':
+                data_sources.sort(key=lambda x: x.cover_count, reverse=reverse_order)
+
+        context['data_sources'] = data_sources
+        context['current_sort'] = sort_by
+        context['current_order'] = order
 
         # Calculate summary statistics
         total_sources = len(data_sources)
@@ -141,23 +278,39 @@ class DataSourceListView(LoginRequiredMixin, BookNavigationMixin, ListView):
 class DataSourceCreateView(LoginRequiredMixin, BookNavigationMixin, CreateView):
     """Create a new data source."""
     template_name = 'books/data_source/create.html'
-    # form_class = DataSourceForm  # TODO: Create DataSourceForm
-    fields = ['name', 'base_url', 'trust_level']
+    form_class = DataSourceForm
     success_url = reverse_lazy('books:data_source_list')
 
     def get_model(self):
         return get_model('DataSource')
+
+    def get_queryset(self):
+        return self.get_model().objects.all()
 
 
 class DataSourceUpdateView(LoginRequiredMixin, BookNavigationMixin, UpdateView):
     """Update an existing data source."""
     template_name = 'books/data_source/update.html'
-    # form_class = DataSourceForm  # TODO: Create DataSourceForm
-    fields = ['name', 'base_url', 'trust_level']
+    form_class = DataSourceForm
     success_url = reverse_lazy('books:data_source_list')
 
     def get_model(self):
         return get_model('DataSource')
+
+    def get_queryset(self):
+        return self.get_model().objects.all()
+
+
+class DataSourceDeleteView(LoginRequiredMixin, BookNavigationMixin, DeleteView):
+    """Delete a data source with safety checks."""
+    template_name = 'books/data_source/delete.html'
+    success_url = reverse_lazy('books:data_source_list')
+
+    def get_model(self):
+        return get_model('DataSource')
+
+    def get_queryset(self):
+        return self.get_model().objects.all()
 
 
 @login_required
@@ -220,7 +373,7 @@ class AuthorUpdateView(LoginRequiredMixin, BookNavigationMixin, UpdateView):
 
 class AuthorDeleteView(LoginRequiredMixin, BookNavigationMixin, DeleteView):
     """Delete an author with safety checks."""
-    template_name = 'books/confirm_delete.html'
+    template_name = 'books/delete_author.html'
     success_url = reverse_lazy('books:author_list')
 
     def get_model(self):
@@ -470,7 +623,7 @@ class SeriesDetailView(LoginRequiredMixin, DetailView):
 
 class TriggerScanView(LoginRequiredMixin, BookNavigationMixin, ListView):
     """View for triggering scans."""
-    template_name = 'books/trigger_scan.html'
+    template_name = 'books/scan_folder/trigger_scan.html'
     context_object_name = 'scan_folders'
 
     def get_model(self):

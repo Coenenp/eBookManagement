@@ -3,6 +3,56 @@
    Optimized for Bootstrap integration
 ========================================= */
 
+/* ======================================
+   📱 Navbar Navigation Styles
+========================================= */
+
+/* Navigation links - use theme colors instead of hardcoded colors */
+.navbar .nav-link {
+    transition: all 0.3s ease;
+}
+
+.navbar .nav-link:not(.active) {
+    color: var(--bs-nav-link-color) !important;
+}
+
+.navbar .nav-link:hover:not(.active) {
+    color: var(--bs-nav-link-hover-color) !important;
+    background-color: var(--bs-secondary-bg);
+    border-radius: 0.375rem;
+}
+
+.navbar .nav-link.active {
+    background-color: var(--bs-light) !important;
+    color: var(--bs-primary) !important;
+    border-radius: 0.375rem;
+}
+
+/* Navbar dropdown menu styling */
+.navbar .dropdown-menu {
+    border: 1px solid var(--bs-border-color);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.navbar .dropdown-item {
+    color: var(--bs-body-color);
+}
+
+.navbar .dropdown-item:hover,
+.navbar .dropdown-item:focus {
+    background-color: var(--bs-secondary-bg);
+    color: var(--bs-body-color);
+}
+
+.navbar .dropdown-item.active {
+    background-color: var(--bs-primary);
+    color: var(--bs-white);
+}
+
+/* ======================================
+   📋 Enhanced Tab Navigation
+========================================= */
+
 /* Enhanced tab navigation */
 .nav-tabs-enhanced .nav-link {
     border: none;
@@ -48,10 +98,18 @@
 .btn-outline-danger:hover { transform: translateY(-1px); transition: transform 0.1s ease; }
 .btn.disabled { opacity: 0.5; transform: none !important; }
 
-.dropdown-menu { border-radius: 0.5rem; box-shadow: var(--bs-box-shadow); border: none; }
-.dropdown-item { padding: 0.5rem 1rem; transition: all 0.2s ease; }
-/* Use theme-aware hover state for dropdowns */
-.dropdown-item:hover { 
+/* General dropdown styling (not navbar specific) */
+.dropdown-menu:not(.navbar .dropdown-menu) { 
+    border-radius: 0.5rem; 
+    box-shadow: var(--bs-box-shadow); 
+    border: none; 
+}
+.dropdown-item:not(.navbar .dropdown-item) { 
+    padding: 0.5rem 1rem; 
+    transition: all 0.2s ease; 
+}
+/* Use theme-aware hover state for general dropdowns */
+.dropdown-item:not(.navbar .dropdown-item):hover { 
     background-color: var(--bs-primary) !important; 
     color: var(--bs-white, #fff) !important; 
     transform: translateX(5px); 

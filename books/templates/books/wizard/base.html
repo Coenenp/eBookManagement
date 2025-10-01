@@ -81,11 +81,10 @@
         <!-- Progress Bar -->
         <div class="progress mb-3">
             <div class="progress-bar" role="progressbar"
-                 data-width="{{ progress_percentage }}"
-                 aria-valuenow="{{ progress_percentage }}" 
+                 data-progress="{{ progress_percentage|default:0 }}"
                  aria-valuemin="0" aria-valuemax="100"
                  aria-label="Setup progress">
-                {{ progress_percentage }}%
+                {{ progress_percentage|default:0 }}%
             </div>
         </div>
     </div>
@@ -113,77 +112,11 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'book/js/wizard-system.js' %}"></script>
-{% endblock %}
-    if (customFolderInput) {
-        customFolderInput.addEventListener('blur', function() {
-            validateFolder(this.value);
-        });
-    }
-    
-    // Folder selection handling
-    document.querySelectorAll('.folder-suggestion').forEach(function(suggestion) {
-        suggestion.addEventListener('click', function() {
-            const checkbox = this.querySelector('input[type="checkbox"]');
-            if (checkbox) {
-                checkbox.checked = !checkbox.checked;
-                this.classList.toggle('selected', checkbox.checked);
-            }
-        });
-    });
-    
-    // Content type change handling
-    document.querySelectorAll('select[name^="folder_"]').forEach(function(select) {
-        select.addEventListener('change', function() {
-            updateContentTypePreview(this);
-        });
-    });
-});
-
-function validateFolder(path) {
-    if (!path.trim()) return;
-    
-    fetch('{% url "books:wizard_validate_folder" %}', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-        },
-        body: 'path=' + encodeURIComponent(path)
-    })
-    .then(response => response.json())
-    .then(data => {
-        const input = document.getElementById('customFolder');
-        const feedback = document.getElementById('customFolderFeedback');
-        
-        if (data.valid) {
-            input.classList.remove('is-invalid');
-            input.classList.add('is-valid');
-            if (feedback) {
-                feedback.textContent = `Found ${data.file_count} ebook files`;
-                feedback.className = 'text-success small';
-            }
-        } else {
-            input.classList.remove('is-valid');
-            input.classList.add('is-invalid');
-            if (feedback) {
-                feedback.textContent = data.error;
-                feedback.className = 'text-danger small';
-            }
-        }
-    })
-    .catch(error => {
-        console.error('Error validating folder:', error);
-    });
-}
-
-function updateContentTypePreview(select) {
-    // This could update preview information based on content type selection
-    const container = select.closest('.content-type-assignment');
-    const preview = container.querySelector('.content-type-preview');
-    if (preview) {
-        preview.textContent = `Will scan as: ${select.options[select.selectedIndex].text}`;
-    }
-}
+<script>
+// Configuration for wizard JavaScript
+window.wizardConfig = {
+    validateUrl: '{% url "books:wizard_validate_folder" %}'
+};
 </script>
+<script src="{% static 'book/js/wizard-system.js' %}"></script>
 {% endblock %}

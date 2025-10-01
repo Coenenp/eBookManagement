@@ -20,32 +20,36 @@
     <!-- Statistics Cards -->
     <div class="row mb-4">
         <div class="col-md-3 mb-3">
-            <div class="card scan-stats-card">
+            <div class="card stat-card h-100 bg-primary text-white">
                 <div class="card-body text-center">
+                    <i class="fas fa-list-ol stat-icon" aria-hidden="true"></i>
                     <div class="stat-number">{{ stats.total_scans }}</div>
                     <div class="stat-label">Total Scans</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="card scan-stats-card">
+            <div class="card stat-card h-100 bg-success text-white">
                 <div class="card-body text-center">
+                    <i class="fas fa-check-circle stat-icon" aria-hidden="true"></i>
                     <div class="stat-number">{{ stats.successful_scans }}</div>
                     <div class="stat-label">Successful</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="card scan-stats-card">
+            <div class="card stat-card h-100 bg-danger text-white">
                 <div class="card-body text-center">
+                    <i class="fas fa-times-circle stat-icon" aria-hidden="true"></i>
                     <div class="stat-number">{{ stats.failed_scans }}</div>
                     <div class="stat-label">Failed</div>
                 </div>
             </div>
         </div>
         <div class="col-md-3 mb-3">
-            <div class="card scan-stats-card">
+            <div class="card stat-card h-100 bg-info text-white">
                 <div class="card-body text-center">
+                    <i class="fas fa-percentage stat-icon" aria-hidden="true"></i>
                     <div class="stat-number">{{ stats.success_rate }}%</div>
                     <div class="stat-label">Success Rate</div>
                 </div>

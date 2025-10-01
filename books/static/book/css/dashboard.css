@@ -77,14 +77,7 @@
 .activity-item { padding: 0.75rem; border-bottom: 1px solid var(--bs-border-color); transition: background-color 0.2s ease; }
 .activity-item:hover { background-color: var(--bs-light); }
 
-/* Filter section & scanning */
-.filter-section {
-    background: linear-gradient(135deg, var(--bs-primary) 0%, var(--bs-purple, #764ba2) 100%);
-    color: white;
-    margin-bottom: 2rem;
-}
-.filter-section .form-control,
-.filter-section .form-select { background: rgba(255,255,255,0.9); border: none; border-radius: 0.5rem; }
+/* Scanning-specific styles */
 .filter-dropdown { min-width: 250px; }
 
 /* API status & scanning progress */
@@ -144,8 +137,6 @@
 
 /* Scanning history specific styles */
 .scan-status-badge { font-size: 0.75rem; padding: 0.25rem 0.5rem; }
-.scan-stats-card { background: linear-gradient(135deg, var(--bs-primary) 0%, var(--bs-purple, #764ba2) 100%); color: var(--bs-white); border: none; }
-.scan-stats-card .card-body { padding: 1.5rem; }
 .scan-duration { color: var(--bs-secondary); font-size: 0.875rem; }
 .scan-summary { font-size: 0.875rem; line-height: 1.4; }
 .scan-metadata { font-size: 0.75rem; color: var(--bs-secondary); }

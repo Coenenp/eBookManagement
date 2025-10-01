@@ -19,8 +19,7 @@ def ensure_data_sources():
     # 0.65 = Open Library Covers (Cover images from Open Library)
     # 0.6 = PDF Internal (Limited metadata in PDFs)
     # 0.55 = Google Books Covers (Cover images from Google Books)
-    # 0.5 = Original Scan (Fallback source)
-    # 0.2 = Filename (Last resort, low reliability)
+    # 0.2 = Initial Scan (Last resort - basic filename and path analysis)
 
     sources = [
         (DataSource.MANUAL, 1.0),              # Highest - Human verification
@@ -34,8 +33,7 @@ def ensure_data_sources():
         (DataSource.OPEN_LIBRARY_COVERS, 0.65),  # Moderate - Cover images
         (DataSource.PDF_INTERNAL, 0.6),       # Moderate - Limited PDF metadata
         (DataSource.GOOGLE_BOOKS_COVERS, 0.55),  # Moderate - Cover images
-        (DataSource.ORIGINAL_SCAN, 0.5),      # Low - Fallback source
-        (DataSource.FILENAME, 0.2),           # Very Low - Last resort
+        (DataSource.INITIAL_SCAN, 0.2),       # Very Low - Last resort from file analysis
     ]
 
     for name, trust in sources:

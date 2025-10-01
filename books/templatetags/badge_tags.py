@@ -58,7 +58,7 @@ def status_badge(status_type, value=None, text=None, title=None):
         'new': ('badge bg-success', 'New'),
         'primary_source': ('badge bg-primary', 'Primary Source'),
         'alternate_source': ('badge bg-light text-dark', 'Alternate Source'),
-        'original_scan': ('badge bg-secondary', 'Original Scan')
+        'initial_scan': ('badge bg-secondary', 'Initial Scan')
     }
 
     if status_type in ['reviewed', 'needs_review', 'duplicate', 'placeholder', 'active']:
@@ -87,7 +87,7 @@ def metadata_source_badge(source_name, is_final=False, confidence=None):
     # Determine badge style based on source name
     source_styles = {
         'opf': 'badge bg-secondary',
-        'filename': 'badge bg-info',
+        'initial_scan': 'badge bg-info',
         'external': 'badge bg-warning text-dark',
         'manual': 'badge bg-success'
     }
@@ -113,7 +113,7 @@ def legend_badges():
         <span class="badge bg-danger">Low (<0.5)</span>
         <span class="badge bg-primary">Primary Source</span>
         <span class="badge bg-light text-dark">Alternate Source</span>
-        <span class="badge bg-secondary">Original Scan</span>
+        <span class="badge bg-secondary">Initial Scan</span>
     </div>
     '''
 

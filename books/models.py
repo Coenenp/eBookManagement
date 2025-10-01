@@ -39,8 +39,8 @@ LANGUAGE_CHOICES = [
 
 
 class DataSource(models.Model):
-    """Sources of metadata (filename, internal, API, etc.)"""
-    FILENAME = 'Filename'
+    """Sources of metadata (initial scan, internal, API, etc.)"""
+    INITIAL_SCAN = 'Initial Scan'
     EPUB_INTERNAL = 'EPUB'
     MOBI_INTERNAL = 'MOBI'
     PDF_INTERNAL = 'PDF'
@@ -50,12 +50,11 @@ class DataSource(models.Model):
     COMICVINE = 'Comic Vine'
     OPEN_LIBRARY_COVERS = 'Open Library Covers'
     GOOGLE_BOOKS_COVERS = 'Google Books Covers'
-    ORIGINAL_SCAN = 'Original Scan'
     MANUAL = 'Manual Entry'
     CONTENT_SCAN = 'ISBN Content Scan'
 
     SOURCE_CHOICES = [
-        (FILENAME, 'Filename'),
+        (INITIAL_SCAN, 'Initial Scan'),
         (EPUB_INTERNAL, 'EPUB'),
         (MOBI_INTERNAL, 'MOBI'),
         (PDF_INTERNAL, 'PDF'),
@@ -65,7 +64,6 @@ class DataSource(models.Model):
         (COMICVINE, 'Comic Vine'),
         (OPEN_LIBRARY_COVERS, 'Open Library Covers'),
         (GOOGLE_BOOKS_COVERS, 'Google Books Covers'),
-        (ORIGINAL_SCAN, 'Original Scan'),
         (MANUAL, 'Manual Entry'),
         (CONTENT_SCAN, 'ISBN Content Scan'),
     ]
@@ -126,9 +124,9 @@ class DataSource(models.Model):
 
 class ScanFolder(models.Model):
     CONTENT_TYPE_CHOICES = [
-        ('ebooks', '📘 Ebooks'),
-        ('comics', '🖼️ Comics'),
-        ('audiobooks', '🔊 Audiobooks'),
+        ('ebooks', 'Ebooks'),
+        ('comics', 'Comics'),
+        ('audiobooks', 'Audiobooks'),
     ]
 
     name = models.CharField(max_length=100, default='Untitled', blank=False, null=False)

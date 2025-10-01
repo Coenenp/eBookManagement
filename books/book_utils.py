@@ -83,7 +83,8 @@ class MetadataProcessor:
                 (has_value and not has_existing_data and manual_flag != 'false')
             )
 
-            logger.debug(f"Processing {field_name}: manual_flag={manual_flag}, has_value={bool(has_value)}, "f"has_existing_data={has_existing_data}, should_be_manual={should_be_manual}")
+            logger.debug(f"Processing {field_name}: manual_flag={manual_flag}, has_value={bool(has_value)}, "
+                         f"has_existing_data={has_existing_data}, should_be_manual={should_be_manual}")
 
             if should_be_manual and has_value:
                 handler_form_data = form_data.copy()
@@ -484,7 +485,7 @@ class CoverManager:
             normalized_source = source_name.strip().lower()
 
             # Handle original covers
-            if normalized_source in ["original", "original scan"]:
+            if normalized_source in ["original", "initial scan"]:
                 return CoverManager._handle_original_cover(book, action)
 
             # Handle metadata-based covers

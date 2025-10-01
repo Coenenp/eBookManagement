@@ -56,7 +56,7 @@ class BackgroundScannerTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        DataSource.objects.get_or_create(name=DataSource.FILENAME, defaults={'trust_level': 0.2})
+        DataSource.objects.get_or_create(name=DataSource.INITIAL_SCAN, defaults={'trust_level': 0.2})
 
     def setUp(self):
         self.job_id = "bg_scan_job_456"
@@ -130,7 +130,7 @@ class BackgroundJobFunctionTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        DataSource.objects.get_or_create(name=DataSource.FILENAME, defaults={'trust_level': 0.2})
+        DataSource.objects.get_or_create(name=DataSource.INITIAL_SCAN, defaults={'trust_level': 0.2})
 
     def setUp(self):
         self.job_id = "job_func_789"

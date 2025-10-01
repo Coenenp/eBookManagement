@@ -33,8 +33,7 @@ class BootstrapTests(TestCase):
             (DataSource.OPEN_LIBRARY_COVERS, 0.65),
             (DataSource.PDF_INTERNAL, 0.6),
             (DataSource.GOOGLE_BOOKS_COVERS, 0.55),
-            (DataSource.ORIGINAL_SCAN, 0.5),
-            (DataSource.FILENAME, 0.2),
+            (DataSource.INITIAL_SCAN, 0.2),
         ]
 
         # Verify all expected sources exist with correct trust levels
@@ -75,8 +74,7 @@ class BootstrapTests(TestCase):
             DataSource.OPEN_LIBRARY_COVERS,  # 0.65
             DataSource.PDF_INTERNAL,         # 0.6
             DataSource.GOOGLE_BOOKS_COVERS,  # 0.55
-            DataSource.ORIGINAL_SCAN,        # 0.5
-            DataSource.FILENAME,             # 0.2
+            DataSource.INITIAL_SCAN,         # 0.2
         ]
 
         actual_order = [source.name for source in sources]
@@ -108,8 +106,8 @@ class BootstrapTests(TestCase):
         self.assertEqual(pdf.trust_level, 0.6)
 
         # Test lowest trust source
-        filename = DataSource.objects.get(name=DataSource.FILENAME)
-        self.assertEqual(filename.trust_level, 0.2)
+        initial_scan = DataSource.objects.get(name=DataSource.INITIAL_SCAN)
+        self.assertEqual(initial_scan.trust_level, 0.2)
 
     def test_cover_source_trust_levels(self):
         """Test that cover sources have appropriate trust levels."""
@@ -184,7 +182,7 @@ class BootstrapTests(TestCase):
             'PDF_INTERNAL',
             'GOOGLE_BOOKS_COVERS',
             'ORIGINAL_SCAN',
-            'FILENAME',
+            'INITIAL_SCAN',
         ]
 
         for constant in constants:
@@ -367,8 +365,8 @@ class BootstrapErrorHandlingTests(TestCase):
             DataSource.MANUAL, DataSource.OPEN_LIBRARY, DataSource.COMICVINE,
             DataSource.OPF_FILE, DataSource.CONTENT_SCAN, DataSource.EPUB_INTERNAL,
             DataSource.MOBI_INTERNAL, DataSource.GOOGLE_BOOKS, DataSource.OPEN_LIBRARY_COVERS,
-            DataSource.PDF_INTERNAL, DataSource.GOOGLE_BOOKS_COVERS, DataSource.ORIGINAL_SCAN,
-            DataSource.FILENAME
+            DataSource.PDF_INTERNAL, DataSource.GOOGLE_BOOKS_COVERS,
+            DataSource.INITIAL_SCAN
         ]
 
         self.assertEqual(DataSource.objects.count(), len(expected_sources))

@@ -4,7 +4,8 @@
 
 {% block content %}
 <h2>Delete Scan Folder</h2>
-<p>Are you sure you want to delete the scan folder "<strong>{{ object.name }}</strong>"?</p>
+<p><strong>Heads up!</strong> Deleting the folder<strong> "{{ object.name }}" </strong>will also remove all your eBooks and comics from the database.</p>
+<p>To get them back, you'll have to add and scan the folder again. Are you sure you want to continue?</p>
 <form method="post">
     {% csrf_token %}
     <button type="submit" class="btn btn-danger">

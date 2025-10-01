@@ -22,6 +22,7 @@ from books.scanner.background import (
     get_scan_progress, get_all_active_scans, add_active_scan
 )
 from books.scanner.rate_limiting import get_api_status, check_api_health
+from books.utils.language_manager import LanguageManager
 
 logger = logging.getLogger('books.scanner')
 
@@ -111,6 +112,7 @@ def scan_dashboard(request):
         'interrupted_scans_enhanced': interrupted_scans_enhanced,
         'scan_queue': scan_queue,
         'recent_scan_history': recent_scan_history,
+        'language_choices': LanguageManager.get_language_choices(),
         'page_title': 'Scanning Dashboard'
     }
 
@@ -168,8 +170,8 @@ def start_folder_scan(request):
         )
 
         messages.info(request,
-            f"Scan queued due to concurrent scan limit ({len(active_scans)}/{max_concurrent_scans} active). "
-            f"Your scan will start automatically when a slot becomes available.")
+                      f"Scan queued due to concurrent scan limit ({len(active_scans)}/{max_concurrent_scans} active). "
+                      f"Your scan '{queue_item.name}' (Queue ID: {queue_item.id}) will start automatically when a slot becomes available.")
         return redirect('books:scan_dashboard')
 
     # Generate job ID and execute immediately
@@ -244,8 +246,8 @@ def start_book_rescan(request):
                 )
 
                 messages.info(request,
-                    f"Rescan queued due to concurrent scan limit ({len(active_scans)}/{max_concurrent_scans} active). "
-                    f"Your rescan will start automatically when a slot becomes available.")
+                              f"Rescan queued due to concurrent scan limit ({len(active_scans)}/{max_concurrent_scans} active). "
+                              f"Your rescan '{queue_item.name}' (Queue ID: {queue_item.id}) will start automatically when a slot becomes available.")
                 return redirect('books:scan_dashboard')
 
             job_id = str(uuid.uuid4())

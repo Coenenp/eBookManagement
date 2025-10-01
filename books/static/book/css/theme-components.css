@@ -317,8 +317,9 @@
   margin-bottom: 0;
 }
 
-/* Enhanced radio button styling for rescan options */
-.form-check {
+/* Enhanced radio button styling for rescan options - ONLY apply to scan options */
+.scan-options .form-check,
+.rescan-options .form-check {
   padding: 0.75rem;
   margin-bottom: 0.5rem;
   border: 1px solid var(--bs-border-color);
@@ -326,22 +327,26 @@
   transition: all 0.2s ease;
 }
 
-.form-check:hover {
+.scan-options .form-check:hover,
+.rescan-options .form-check:hover {
   background-color: var(--bs-light);
   border-color: var(--bs-primary);
 }
 
-.form-check:has(.form-check-input:checked) {
+.scan-options .form-check:has(.form-check-input:checked),
+.rescan-options .form-check:has(.form-check-input:checked) {
   background-color: var(--bs-primary-bg-subtle);
   border-color: var(--bs-primary);
 }
 
-.form-check .form-check-label {
+.scan-options .form-check .form-check-label,
+.rescan-options .form-check .form-check-label {
   cursor: pointer;
   width: 100%;
 }
 
-.form-check .form-check-label small {
+.scan-options .form-check .form-check-label small,
+.rescan-options .form-check .form-check-label small {
   font-size: 0.8rem;
   line-height: 1.2;
 }

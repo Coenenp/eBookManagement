@@ -1,103 +1,145 @@
 {% extends 'books/base.html' %}
 {% load custom_filters %}
+{% load static %}
 
 {% block title %}Data Sources - Ebook Library Manager{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'book/css/unified-tables.css' %}">
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'book/js/unified-tables.js' %}"></script>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2>Data Sources</h2>
-            </div>
-            
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-database"></i> 
-                        Data Source Management
-                    </h5>
-                    <p class="text-muted small mb-0">
-                        Configure trust levels and view usage statistics for metadata sources
-                    </p>
+<div class="unified-table-container">
+    <div class="unified-table-header">
+        <div>
+            <h2 class="unified-table-title">
+                <i class="fas fa-database"></i>
+                Data Sources
+            </h2>
+            <p class="unified-table-subtitle">
+                Configure trust levels and view usage statistics for metadata sources
+            </p>
+        </div>
+        <div class="unified-table-actions">
+            <a href="{% url 'books:data_source_create' %}" class="btn btn-primary">
+                <i class="fas fa-plus me-2"></i>Add Data Source
+            </a>
+            {% if current_sort != 'name' or current_order != 'asc' %}
+                <a href="{% url 'books:data_source_list' %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-times me-1"></i>Clear Sort
+                </a>
+            {% endif %}
+        </div>
+    </div>
+                        {% if current_sort and current_sort != 'name' or current_order != 'asc' %}
+                            <div class="text-end">
+                                <small class="text-muted">
+                                    <i class="fas fa-sort me-1"></i>Sorted by: 
+                                    <span class="text-info">
+                                        {% if current_sort == 'name' %}Name{% endif %}
+                                        {% if current_sort == 'is_active' %}Active Status{% endif %}
+                                        {% if current_sort == 'trust_level' %}Trust Level{% endif %}
+                                        {% if current_sort == 'metadata_count' %}Total Metadata{% endif %}
+                                        {% if current_sort == 'title_count' %}Title Count{% endif %}
+                                        {% if current_sort == 'author_count' %}Author Count{% endif %}
+                                        {% if current_sort == 'genre_count' %}Genre Count{% endif %}
+                                        {% if current_sort == 'series_count' %}Series Count{% endif %}
+                                        {% if current_sort == 'cover_count' %}Cover Count{% endif %}
+                                    </span>
+                                    {% if current_order == 'desc' %}
+                                        <i class="fas fa-sort-down text-info"></i>
+                                    {% else %}
+                                        <i class="fas fa-sort-up text-info"></i>
+                                    {% endif %}
+                                </small>
+                            </div>
+                        {% endif %}
+                    </div>
                 </div>
                 
-                <div class="card-body">
-                    {% if data_sources %}
-                        <div class="table-responsive">
-                            <table class="table table-striped table-hover align-middle data-source-table">
-                                <thead class="thead-dark">
-                                    <tr>
-                                        <th class="col-name">Name</th>
-                                        <th class="col-trust">Trust Level</th>
-                                        <th class="ps-5">Usage Statistics</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for source in data_sources %}
-                                    <tr>
-                                        <!-- Name Column -->
-                                        <td class="text-truncate name-cell">
-                                            <strong>{{ source.name }}</strong>
-                                        </td>
-
-                                        <!-- Trust Level Column -->
-                                        <td>
-                                            <div class="d-flex align-items-center justify-content-start gap-3">
-                                                <!-- Progress Bar -->
-                                                <div class="progress trust-progress">
-                                                    <div class="progress-bar progress-bar-trust {% if source.trust_level >= 0.8 %}bg-success{% elif source.trust_level >= 0.6 %}bg-warning{% else %}bg-danger{% endif %}"
-                                                        role="progressbar"
-                                                        data-width="{{ source.trust_level|mul:100|default:0|floatformat:0 }}"
-                                                        aria-label="Trust level {{ source.trust_level|floatformat:2 }} percent">
-                                                    </div>
-                                                    <div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center text-white fw-bold fs-6">
-                                                        {{ source.trust_level|floatformat:2 }}
-                                                    </div>
-                                                </div>
-
-                                                <!-- Edit Badge -->
-                                                <button class="badge trust-level-badge {% if source.trust_level >= 0.8 %}bg-success text-white{% elif source.trust_level >= 0.6 %}bg-warning text-dark{% else %}bg-danger text-white{% endif %}"
-                                                        onclick="editTrustLevel(this)"
-                                                        data-source-id="{{ source.id }}" 
-                                                        data-current-level="{{ source.trust_level }}"
-                                                        data-update-url="{% url 'books:update_trust' pk=source.id %}"
-                                                        title="Click to edit trust level">
-                                                    <i class="fas fa-edit me-1"></i>{{ source.trust_level|floatformat:2 }}
-                                                </button>
-                                            </div>
-                                        </td>
-
-                                        <!-- Usage Statistics Column -->
-                                        <td class="ps-5">
-                                            <div class="row text-center gx-3">
-                                                <div class="col">
-                                                    <div class="text-primary fw-bold">{{ source.title_count }}</div>
-                                                    <small class="text-muted">Titles</small>
-                                                </div>
-                                                <div class="col">
-                                                    <div class="text-success fw-bold">{{ source.author_count }}</div>
-                                                    <small class="text-muted">Authors</small>
-                                                </div>
-                                                <div class="col">
-                                                    <div class="text-info fw-bold">{{ source.genre_count }}</div>
-                                                    <small class="text-muted">Genres</small>
-                                                </div>
-                                                <div class="col">
-                                                    <div class="text-warning fw-bold">{{ source.series_count }}</div>
-                                                    <small class="text-muted">Series</small>
-                                                </div>
-                                                <div class="col">
-                                                    <div class="text-warning fw-bold">{{ source.cover_count }}</div>
-                                                    <small class="text-muted">Covers</small>
-                                                </div>
-                                            </div>
-                                            <div class="mt-2 text-center">
-                                                <small class="text-muted">{{ source.metadata_count }} total metadata entries</small>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
+    {% if data_sources %}
+        <div class="table-responsive">
+            <table class="table unified-table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th class="sortable-header {% if current_sort == 'name' %}active sort-{{ current_order }}{% endif %}">
+                            <a href="?sort=name&order={% if current_sort == 'name' and current_order == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none">
+                                Name
+                                <span class="sort-indicator"></span>
+                            </a>
+                        </th>
+                        <th class="sortable-header {% if current_sort == 'is_active' %}active sort-{{ current_order }}{% endif %} text-center">
+                            <a href="?sort=is_active&order={% if current_sort == 'is_active' and current_order == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none">
+                                Active
+                                <span class="sort-indicator"></span>
+                            </a>
+                        </th>
+                        <th class="sortable-header {% if current_sort == 'trust_level' %}active sort-{{ current_order }}{% endif %}">
+                            <a href="?sort=trust_level&order={% if current_sort == 'trust_level' and current_order == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none">
+                                Trust Level
+                                <span class="sort-indicator"></span>
+                            </a>
+                        </th>
+                        <th class="sortable-header {% if current_sort == 'metadata_count' %}active sort-{{ current_order }}{% endif %}">
+                            <a href="?sort=metadata_count&order={% if current_sort == 'metadata_count' and current_order == 'asc' %}desc{% else %}asc{% endif %}" class="text-decoration-none">
+                                Total Metadata
+                                <span class="sort-indicator"></span>
+                            </a>
+                        </th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for source in data_sources %}
+                    <tr>
+                        <td class="item-name" data-label="Name">{{ source.name }}</td>
+                        <td class="text-center" data-label="Active">
+                            {% if source.is_active %}
+                                <span class="status-badge status-active">
+                                    <i class="fas fa-check-circle"></i>Active
+                                </span>
+                            {% else %}
+                                <span class="status-badge status-inactive">
+                                    <i class="fas fa-times-circle"></i>Inactive
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td data-label="Trust Level">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="progress trust-level-progress">
+                                    <div class="progress-bar {% if source.trust_level >= 0.8 %}bg-success{% elif source.trust_level >= 0.6 %}bg-warning{% else %}bg-danger{% endif %}"
+                                         role="progressbar" 
+                                         data-width="{% widthratio source.trust_level 1 100 %}"
+                                         aria-label="Trust level {{ source.trust_level|floatformat:2 }}"
+                                         title="Trust level: {{ source.trust_level|floatformat:2 }}">
+                                        <span class="fw-bold">{{ source.trust_level|floatformat:2 }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="date-display" data-label="Metadata">
+                            <span class="stat-value">{{ source.metadata_count }}</span> entries
+                        </td>
+                        <td class="text-center" data-label="Actions">
+                            <div class="action-buttons">
+                                <a href="{% url 'books:data_source_update' pk=source.pk %}" 
+                                   class="action-btn action-btn-edit"
+                                   title="Edit {{ source.name }}">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="{% url 'books:data_source_delete' pk=source.pk %}" 
+                                   class="action-btn action-btn-delete"
+                                   title="Delete {{ source.name }}">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
                                 </tbody>
                             </table>
                         </div>
@@ -216,5 +258,6 @@
 </div>
 
 {% load static %}
+<link rel="stylesheet" href="{% static 'books/css/data-source-management.css' %}">
 <script src="{% static 'book/js/data-source-manager.js' %}"></script>
 {% endblock %}

@@ -313,6 +313,30 @@ def add_active_scan(job_id: str):
         cache.set('active_scan_job_ids', job_ids, timeout=3600)
 
 
+def scan_folder_in_background(folder_id: int, folder_path: str, folder_name: str,
+                              content_type: str, language: str, enable_external_apis: bool = True):
+    """Trigger a background scan for a specific scan folder."""
+    import uuid
+    import threading
+
+    # Generate unique job ID
+    job_id = str(uuid.uuid4())
+
+    # Add to active scans
+    add_active_scan(job_id)
+
+    # Start background scan thread
+    thread = threading.Thread(
+        target=background_scan_folder,
+        args=(job_id, folder_path, language, enable_external_apis, content_type),
+        daemon=True
+    )
+    thread.start()
+
+    logger.info(f"Started background scan for folder '{folder_name}' (ID: {folder_id}, Job ID: {job_id})")
+    return job_id
+
+
 def get_all_active_scans() -> List[Dict]:
     """Get all currently active scan jobs."""
     job_ids = cache.get('active_scan_job_ids', [])

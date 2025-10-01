@@ -1,8 +1,9 @@
 from django import forms
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
-from .models import ScanFolder, Book, FinalMetadata, BookCover, LANGUAGE_CHOICES
+from .models import ScanFolder, Book, FinalMetadata, BookCover, DataSource
 from .mixins import StandardFormMixin, MetadataFormMixin, BaseMetadataValidator
+from .utils.language_manager import LanguageManager
 import os
 
 
@@ -29,15 +30,30 @@ class ScanFolderForm(StandardFormMixin, forms.ModelForm):
             }),
         }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Set default for content_type and make it not required
-        self.fields['content_type'].initial = 'ebooks'
-        self.fields['content_type'].required = False
 
-        # Ensure is_active defaults to True for new instances
-        if not self.instance.pk:
-            self.fields['is_active'].initial = True
+class ScanFolderEditForm(StandardFormMixin, forms.ModelForm):
+    """Restricted form for editing scan folders - excludes path and content_type."""
+    class Meta:
+        model = ScanFolder
+        fields = ['name', 'language', 'is_active']
+        widgets = {
+            'is_active': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+        }
+
+
+class TriggerScanForm(forms.Form):
+    """Form for triggering scans with options."""
+    query_external_apis = forms.BooleanField(
+        required=False,
+        initial=True,
+        label='Query external APIs for metadata',
+        help_text='Enable this to fetch metadata from external sources during scanning',
+        widget=forms.CheckboxInput(attrs={
+            'class': 'form-check-input'
+        })
+    )
 
     def clean_path(self):
         path = self.cleaned_data.get('path', '')
@@ -63,6 +79,48 @@ class ScanFolderForm(StandardFormMixin, forms.ModelForm):
         return cleaned_data
 
 
+class DataSourceForm(StandardFormMixin, forms.ModelForm):
+    class Meta:
+        model = DataSource
+        fields = ['name', 'trust_level', 'priority', 'is_active']
+        widgets = {
+            'name': forms.Select(attrs={
+                'class': 'form-select'
+            }),
+            'trust_level': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '0',
+                'max': '1',
+                'step': '0.1',
+                'placeholder': '0.0-1.0'
+            }),
+            'priority': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '1',
+                'placeholder': 'Priority (1 = highest)'
+            }),
+            'is_active': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Ensure is_active defaults to True for new instances
+        # For existing instances, the form will automatically use the model value
+        if not self.instance.pk:
+            self.fields['is_active'].initial = True
+        else:
+            # Explicitly set the initial value from the database for existing instances
+            self.fields['is_active'].initial = self.instance.is_active
+
+        # Add help text
+        self.fields['trust_level'].help_text = 'Trust level for this source (0.0 = lowest, 1.0 = highest)'
+        self.fields['priority'].help_text = 'Lower numbers have higher priority'
+        self.fields['is_active'].help_text = 'Whether this data source is currently active'
+
+
 class BookSearchForm(StandardFormMixin, forms.Form):
     search_query = forms.CharField(
         max_length=100,
@@ -71,7 +129,7 @@ class BookSearchForm(StandardFormMixin, forms.Form):
     )
 
     language = forms.ChoiceField(
-        choices=[('', 'All Languages')] + LANGUAGE_CHOICES,
+        choices=LanguageManager.get_language_choices_with_all('All Languages'),
         required=False
     )
 
@@ -168,7 +226,7 @@ class MetadataReviewForm(MetadataFormMixin, forms.ModelForm):
                 self.fields[field_name].widget = widget
 
         # Set language choices including empty option
-        self.fields['language'].widget.choices = [('', 'Select language')] + LANGUAGE_CHOICES
+        self.fields['language'].widget.choices = LanguageManager.get_language_choices_with_empty('Select language')
 
         # Update cover upload widget using mixin
         self.fields['new_cover_upload'].widget = self.get_widget('image_input')
@@ -352,7 +410,7 @@ class AdvancedSearchForm(StandardFormMixin, forms.Form):
     )
 
     language = forms.ChoiceField(
-        choices=[('', 'All Languages')] + LANGUAGE_CHOICES,
+        choices=LanguageManager.get_language_choices_with_all('All Languages'),
         required=False
     )
 

@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from ..models import (
     Book, FinalMetadata, BookTitle, BookAuthor, Author, BookSeries, Series,
-    BookPublisher, Publisher, BookMetadata, DataSource, LANGUAGE_CHOICES
+    BookPublisher, Publisher, BookMetadata, DataSource
 )
 from ..mixins import SimpleNavigationMixin, MetadataContextMixin
 from ..book_utils import CoverManager, GenreManager

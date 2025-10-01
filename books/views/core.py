@@ -12,7 +12,7 @@ from django.http import JsonResponse
 from django.db import transaction
 
 from ..models import (
-    Book, FinalMetadata, LANGUAGE_CHOICES
+    Book, FinalMetadata
 )
 from ..forms import UserRegisterForm, MetadataReviewForm
 from ..mixins import BookNavigationMixin, MetadataContextMixin, BookListContextMixin

@@ -203,14 +203,12 @@ def has_finalmetadata(book):
 @register.filter
 def language_display(language_code):
     """Convert language code to full language name for display"""
-    from books.models import LANGUAGE_CHOICES
+    from books.utils.language_manager import LanguageManager
 
     if not language_code:
         return ''
 
-    # Create a lookup dictionary from LANGUAGE_CHOICES
-    language_dict = dict(LANGUAGE_CHOICES)
-    return language_dict.get(language_code, language_code)
+    return LanguageManager.get_language_name(language_code)
 
 
 @register.filter

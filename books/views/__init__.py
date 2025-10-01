@@ -32,8 +32,9 @@ from .metadata import (  # noqa: F401
 
 # Management views - COMPLETED
 from .management import (  # noqa: F401
-    ScanFolderListView, AddScanFolderView, DeleteScanFolderView, trigger_scan,
-    DataSourceListView, DataSourceCreateView, DataSourceUpdateView, update_trust,
+    ScanFolderListView, AddScanFolderView, EditScanFolderView, DeleteScanFolderView,
+    TriggerSingleScanView, trigger_scan,
+    DataSourceListView, DataSourceCreateView, DataSourceUpdateView, DataSourceDeleteView, update_trust,
     AuthorListView, AuthorCreateView, AuthorUpdateView, AuthorDeleteView,
     AuthorBulkDeleteView, AuthorMarkReviewedView,
     GenreListView, GenreCreateView, GenreUpdateView, GenreBulkDeleteView, GenreMarkReviewedView,
@@ -107,9 +108,9 @@ __all__ = [
     'BookMetadataView', 'BookMetadataUpdateView',
 
     # Management views
-    'ScanFolderListView', 'AddScanFolderView', 'DeleteScanFolderView',
-    'TriggerScanView', 'ScanStatusView', 'DataSourceListView',
-    'DataSourceCreateView', 'DataSourceUpdateView',
+    'ScanFolderListView', 'AddScanFolderView', 'EditScanFolderView', 'DeleteScanFolderView',
+    'TriggerSingleScanView', 'TriggerScanView', 'ScanStatusView', 'DataSourceListView',
+    'DataSourceCreateView', 'DataSourceUpdateView', 'DataSourceDeleteView',
     'AuthorListView', 'AuthorCreateView', 'AuthorUpdateView', 'AuthorDeleteView',
     'AuthorBulkDeleteView', 'AuthorMarkReviewedView',
     'GenreListView', 'GenreCreateView', 'GenreUpdateView', 'GenreBulkDeleteView', 'GenreMarkReviewedView',

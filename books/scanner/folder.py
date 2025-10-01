@@ -225,7 +225,7 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
 
 
 def _extract_filename_metadata(book):
-    source = DataSource.objects.get(name=DataSource.FILENAME)
+    source = DataSource.objects.get(name=DataSource.INITIAL_SCAN)
 
     # Use comic-specific parsing for comic books
     is_comic = book.file_format.lower() in ['cbr', 'cbz']

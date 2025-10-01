@@ -45,7 +45,7 @@ class FinalMetadataBusinessLogicTests(TestCase):
         )
 
         self.filename_source = DataSource.objects.create(
-            name=DataSource.FILENAME,
+            name=DataSource.INITIAL_SCAN,
             trust_level=0.2
         )
 
@@ -439,7 +439,7 @@ class DataSourceBusinessLogicTests(TestCase):
             'MANUAL', 'OPEN_LIBRARY', 'OPF_FILE', 'CONTENT_SCAN',
             'EPUB_INTERNAL', 'MOBI_INTERNAL', 'GOOGLE_BOOKS',
             'OPEN_LIBRARY_COVERS', 'PDF_INTERNAL', 'GOOGLE_BOOKS_COVERS',
-            'ORIGINAL_SCAN', 'FILENAME', 'COMICVINE'
+            'INITIAL_SCAN', 'COMICVINE'
         ]
 
         for constant in required_constants:

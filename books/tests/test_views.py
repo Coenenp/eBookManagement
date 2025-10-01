@@ -368,8 +368,8 @@ class ViewFilteringTests(BaseViewTestCase):
         self.client.force_login(self.user)
 
         from books.models import DataSource
-        self.filename_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.FILENAME,
+        self.initial_scan_source, _ = DataSource.objects.get_or_create(
+            name=DataSource.INITIAL_SCAN,
             defaults={'trust_level': 0.2}
         )
 
@@ -531,8 +531,8 @@ class ViewFilteringTests(BaseViewTestCase):
             defaults={'trust_level': 0.8}
         )
 
-        filename_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.FILENAME,
+        initial_scan_source, _ = DataSource.objects.get_or_create(
+            name=DataSource.INITIAL_SCAN,
             defaults={'trust_level': 0.3}
         )
 
@@ -566,7 +566,7 @@ class ViewFilteringTests(BaseViewTestCase):
         BookTitle.objects.create(
             book=book2,
             title="Book with filename metadata",
-            source=filename_source,
+            source=initial_scan_source,
             confidence=0.3
         )
 
@@ -580,7 +580,7 @@ class ViewFilteringTests(BaseViewTestCase):
         BookAuthor.objects.create(
             book=book2,
             author=filename_author,
-            source=filename_source,
+            source=initial_scan_source,
             confidence=0.3
         )
 
@@ -593,8 +593,8 @@ class ViewFilteringTests(BaseViewTestCase):
         self.assertIn(book1.id, book_ids)
         self.assertNotIn(book2.id, book_ids)
 
-        # Test filtering by filename source
-        response = self.client.get(reverse('books:book_list'), {'datasource': str(filename_source.id)})
+        # Test filtering by initial scan source
+        response = self.client.get(reverse('books:book_list'), {'datasource': str(initial_scan_source.id)})
         self.assertEqual(response.status_code, 200)
         context = self.get_context_from_response(response)
         books = context['books'] if 'books' in context else context['page_obj']

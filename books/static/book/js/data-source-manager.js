@@ -76,6 +76,11 @@ class DataSourceManager {
         
         console.log('Submitting to URL:', url);
         console.log('Form data:', Object.fromEntries(formData));
+        console.log('EbookLibrary available:', typeof EbookLibrary !== 'undefined');
+        if (typeof EbookLibrary !== 'undefined') {
+            console.log('EbookLibrary.Ajax available:', typeof EbookLibrary.Ajax !== 'undefined');
+            console.log('EbookLibrary.Forms available:', typeof EbookLibrary.Forms !== 'undefined');
+        }
         
         // Show loading state
         const submitBtn = form.querySelector('button[type="submit"]');
@@ -86,8 +91,23 @@ class DataSourceManager {
         submitBtn.textContent = 'Updating...';
         
         try {
-            // Get CSRF token
-            const csrfToken = EbookLibrary.Ajax.getCSRFToken();
+            // Get CSRF token with fallbacks
+            let csrfToken;
+            if (typeof EbookLibrary !== 'undefined' && 
+                EbookLibrary.Ajax && 
+                typeof EbookLibrary.Ajax.getCSRFToken === 'function') {
+                csrfToken = EbookLibrary.Ajax.getCSRFToken();
+            } else if (typeof EbookLibrary !== 'undefined' && 
+                       EbookLibrary.Forms && 
+                       typeof EbookLibrary.Forms.getCSRFToken === 'function') {
+                csrfToken = EbookLibrary.Forms.getCSRFToken();
+            } else {
+                // Direct fallback
+                const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+                csrfToken = csrfInput ? csrfInput.value : '';
+            }
+            
+            console.log('Using CSRF token:', csrfToken);
             
             const response = await fetch(url, {
                 method: 'POST',

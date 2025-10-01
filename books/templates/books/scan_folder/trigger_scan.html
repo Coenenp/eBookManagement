@@ -1,0 +1,117 @@
+{% extends 'books/base.html' %}
+{% load static %}
+
+{% block title %}Trigger Scan - Ebook Library Manager{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'book/css/unified-tables.css' %}">
+<link rel="stylesheet" href="{% static 'book/css/forms.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="unified-table-container">
+    <div class="unified-table-header">
+        <div>
+            <h2 class="unified-table-title">
+                <i class="fas fa-sync-alt"></i>
+                Trigger Scan
+            </h2>
+            <p class="unified-table-subtitle">
+                Start scanning "{{ scan_folder.name }}"
+            </p>
+        </div>
+        <div class="unified-table-actions">
+            <a href="{% url 'books:scan_folder_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Scan Folders
+            </a>
+        </div>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-play me-2"></i>Scan Configuration
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Folder information -->
+                    <div class="alert alert-primary">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Folder:</strong> {{ scan_folder.name }}<br>
+                                <strong>Path:</strong> <code>{{ scan_folder.path }}</code>
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Content Type:</strong> {{ scan_folder.get_content_type_display }}<br>
+                                <strong>Language:</strong> {{ scan_folder.get_language_display }}
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if not scan_folder.is_active %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Warning:</strong> This folder is currently inactive. You may want to activate it before scanning.
+                        </div>
+                    {% endif %}
+
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        
+                        <div class="mb-4">
+                            <label class="form-label">
+                                <i class="fas fa-cogs me-1"></i>Scan Options
+                            </label>
+                            
+                            <div class="form-check">
+                                {{ form.query_external_apis }}
+                                <label class="form-check-label" for="{{ form.query_external_apis.id_for_label }}">
+                                    <i class="fas fa-globe me-1"></i>{{ form.query_external_apis.label }}
+                                </label>
+                                {% if form.query_external_apis.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.query_external_apis.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text">
+                                    {{ form.query_external_apis.help_text }}
+                                    <br><small class="text-muted">
+                                        <strong>Note:</strong> Disabling this will make scans faster but may result in less complete metadata.
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>What happens next:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>The scan will run in the background</li>
+                                <li>You can monitor progress on the <a href="{% url 'books:scan_dashboard' %}">scanning dashboard</a></li>
+                                <li>New books found will be added to your library</li>
+                                <li>Existing books will have their metadata updated</li>
+                            </ul>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-play me-2"></i>Start Scan
+                            </button>
+                            <a href="{% url 'books:scan_folder_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                            <a href="{% url 'books:scan_dashboard' %}" class="btn btn-outline-info">
+                                <i class="fas fa-chart-line me-2"></i>Scanning Dashboard
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

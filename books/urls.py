@@ -99,6 +99,8 @@ urlpatterns = [
     # Scan folder management
     path('scan_folders/', views.ScanFolderListView.as_view(), name='scan_folder_list'),
     path('scan_folders/add/', views.AddScanFolderView.as_view(), name='add_scan_folder'),
+    path('scan_folders/<int:pk>/edit/', views.EditScanFolderView.as_view(), name='edit_scan_folder'),
+    path('scan_folders/<int:pk>/trigger/', views.TriggerSingleScanView.as_view(), name='scan_folder_trigger'),
     path('scan_folders/<int:pk>/delete/', views.DeleteScanFolderView.as_view(), name='delete_scan_folder'),
 
     # Scanning
@@ -108,6 +110,9 @@ urlpatterns = [
 
     # Data source management
     path('data_sources/', views.DataSourceListView.as_view(), name='data_source_list'),
+    path('data_sources/create/', views.DataSourceCreateView.as_view(), name='data_source_create'),
+    path('data_sources/<int:pk>/update/', views.DataSourceUpdateView.as_view(), name='data_source_update'),
+    path('data_sources/<int:pk>/delete/', views.DataSourceDeleteView.as_view(), name='data_source_delete'),
     path('data_sources/<int:pk>/update_trust/', views.update_trust, name='update_trust'),
 
     # AI Feedback and Training

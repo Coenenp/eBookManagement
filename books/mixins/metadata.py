@@ -4,6 +4,7 @@ Metadata processing mixins for book views and models.
 from django.db import models
 from django.db.models import Q, Avg
 from django.core.validators import MinValueValidator, MaxValueValidator
+from books.utils.language_manager import LanguageManager
 
 
 class SourceConfidenceMixin(models.Model):
@@ -81,15 +82,13 @@ class MetadataContextMixin:
 
     def get_metadata_fields_context(self, book):
         """Get additional metadata fields for the review form"""
-        from ..models import LANGUAGE_CHOICES
-
         return {
             'series_number_metadata': book.metadata.filter(field_name='series_number', is_active=True).order_by('-confidence'),
             'description_metadata': book.metadata.filter(field_name='description', is_active=True).order_by('-confidence'),
             'isbn_metadata': book.metadata.filter(field_name='isbn', is_active=True).order_by('-confidence'),
             'year_metadata': book.metadata.filter(field_name='publication_year', is_active=True).order_by('-confidence'),
             'language_metadata': book.metadata.filter(field_name='language', is_active=True).order_by('-confidence'),
-            'language_choices': LANGUAGE_CHOICES,
+            'language_choices': LanguageManager.get_language_choices(),
         }
 
 
@@ -99,7 +98,7 @@ class BookListContextMixin:
     def get_list_statistics_context(self):
         """Get statistics for book list context."""
         from django.apps import apps
-        LANGUAGE_CHOICES = getattr(apps.get_model('books', 'Book'), 'LANGUAGE_CHOICES', [])
+        from ..utils.language_manager import LanguageManager
         DataSource = apps.get_model('books', 'DataSource')
 
         metadata_stats = apps.get_model('books', 'FinalMetadata').objects.aggregate(
@@ -109,11 +108,11 @@ class BookListContextMixin:
 
         # Get all language values from database and filter to only valid ISO codes
         all_languages = apps.get_model('books', 'FinalMetadata').objects.values_list('language', flat=True).distinct()
-        valid_language_codes = [code for code, name in LANGUAGE_CHOICES] if LANGUAGE_CHOICES else []
+        valid_language_codes = LanguageManager.get_language_codes()
         used_languages = [lang for lang in all_languages if lang in valid_language_codes]
 
         # Create language choices for template
-        lang_dict = dict(LANGUAGE_CHOICES) if LANGUAGE_CHOICES else {}
+        lang_dict = LanguageManager.get_language_dict()
         languages = [(code, lang_dict[code]) for code in used_languages if code in lang_dict]
 
         # Get all datasources that have been used for metadata

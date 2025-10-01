@@ -1,0 +1,375 @@
+/*
+ * Filter Section Component
+ * Integrates with Bootswatch themes and Bootstrap 5 variables
+ * Provides consistent styling for search, filters, and controls
+ */
+
+/* ======================================
+   🔍 Filter Section Container
+========================================= */
+
+.filter-section {
+    /* Use theme colors instead of hardcoded gradients */
+    background: var(--bs-primary-bg-subtle);
+    border: 1px solid var(--bs-primary-border-subtle);
+    border-radius: var(--bs-border-radius-lg);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    position: relative;
+    
+    /* Add subtle shadow for depth */
+    box-shadow: 0 2px 4px rgba(var(--bs-primary-rgb), 0.1);
+    
+    /* Ensure proper color inheritance */
+    color: var(--bs-body-color);
+}
+
+/* Dark theme support */
+@media (prefers-color-scheme: dark) {
+    .filter-section {
+        background: var(--bs-dark-bg-subtle, var(--bs-secondary-bg-subtle));
+        border-color: var(--bs-secondary-border-subtle);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+}
+
+/* ======================================
+   🔍 Search Bar with Icon
+========================================= */
+
+.filter-section .position-relative {
+    position: relative;
+}
+
+.search-icon {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--bs-secondary);
+    z-index: 3;
+    pointer-events: none;
+    font-size: 0.875rem;
+}
+
+.filter-section .form-control {
+    /* Ensure proper theme colors */
+    background-color: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-body-color);
+    
+    /* Padding for icon */
+    padding-left: 2.5rem;
+    padding-right: 2.5rem;
+    
+    /* Enhanced styling */
+    border-radius: var(--bs-border-radius);
+    transition: all 0.2s ease-in-out;
+    font-size: 0.875rem;
+}
+
+.filter-section .form-control:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+    background-color: var(--bs-body-bg);
+}
+
+.filter-section .form-control::placeholder {
+    color: var(--bs-secondary-color);
+    opacity: 0.8;
+}
+
+/* ======================================
+   ❌ Clear Search Button
+========================================= */
+
+.clear-search-btn {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 3;
+    
+    /* Reset button styling */
+    border: none;
+    background: transparent;
+    padding: 0.25rem;
+    
+    /* Use theme colors */
+    color: var(--bs-secondary);
+    
+    /* Sizing and styling */
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: var(--bs-border-radius-sm);
+    
+    /* Animation */
+    transition: all 0.2s ease-in-out;
+    
+    /* Initially hidden */
+    display: none;
+    
+    /* Ensure proper centering */
+    align-items: center;
+    justify-content: center;
+}
+
+.clear-search-btn:hover {
+    background-color: var(--bs-secondary-bg-subtle);
+    color: var(--bs-secondary-color);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.clear-search-btn:active {
+    transform: translateY(-50%) scale(0.95);
+}
+
+.clear-search-btn i {
+    font-size: 0.75rem;
+    line-height: 1;
+}
+
+/* Show clear button when search has content */
+.filter-section .form-control:not(:placeholder-shown) + .clear-search-btn {
+    display: flex;
+}
+
+/* ======================================
+   📊 Form Controls (Selects)
+========================================= */
+
+.filter-section .form-select {
+    background-color: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-body-color);
+    font-size: 0.875rem;
+    
+    /* Enhanced styling */
+    border-radius: var(--bs-border-radius);
+    transition: all 0.2s ease-in-out;
+    
+    /* Ensure proper background image for dropdown arrow */
+    background-image: var(--bs-form-select-bg-img);
+}
+
+.filter-section .form-select:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+.filter-section .form-select option {
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+}
+
+/* ======================================
+   🔘 Action Buttons
+========================================= */
+
+.filter-section .btn {
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: var(--bs-border-radius);
+    transition: all 0.2s ease-in-out;
+    
+    /* Ensure proper spacing for icons */
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.filter-section .btn-outline-primary {
+    --bs-btn-color: var(--bs-primary);
+    --bs-btn-border-color: var(--bs-primary);
+    --bs-btn-hover-color: var(--bs-primary-text);
+    --bs-btn-hover-bg: var(--bs-primary);
+    --bs-btn-hover-border-color: var(--bs-primary);
+    --bs-btn-active-color: var(--bs-primary-text);
+    --bs-btn-active-bg: var(--bs-primary);
+}
+
+.filter-section .btn-outline-secondary {
+    --bs-btn-color: var(--bs-secondary);
+    --bs-btn-border-color: var(--bs-secondary);
+    --bs-btn-hover-color: var(--bs-secondary-text);
+    --bs-btn-hover-bg: var(--bs-secondary);
+    --bs-btn-hover-border-color: var(--bs-secondary);
+}
+
+/* ======================================
+   🎯 Advanced Filters
+========================================= */
+
+.advanced-filters {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--bs-border-color-translucent);
+    
+    /* Smooth animation */
+    transition: all 0.3s ease-in-out;
+}
+
+.advanced-filters.d-none {
+    display: none !important;
+}
+
+/* Animate the advanced filters toggle */
+.advanced-filters:not(.d-none) {
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+        padding-top: 0;
+        margin-top: 0;
+    }
+    to {
+        opacity: 1;
+        max-height: 200px;
+        padding-top: 0.75rem;
+        margin-top: 0.75rem;
+    }
+}
+
+/* ======================================
+   📱 Responsive Design
+========================================= */
+
+@media (max-width: 576px) {
+    .filter-section {
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
+    }
+    
+    .filter-section .row.g-2 {
+        --bs-gutter-x: 0.5rem;
+    }
+    
+    .filter-section .btn {
+        font-size: 0.8125rem;
+        padding: 0.375rem 0.75rem;
+    }
+    
+    .search-icon {
+        font-size: 0.8125rem;
+    }
+    
+    .clear-search-btn {
+        width: 1.25rem;
+        height: 1.25rem;
+    }
+}
+
+/* ======================================
+   🎨 Theme-specific Enhancements
+========================================= */
+
+/* Subtle hover effects for better UX */
+.filter-section .form-control:hover:not(:focus) {
+    border-color: var(--bs-primary-border-subtle);
+}
+
+.filter-section .form-select:hover:not(:focus) {
+    border-color: var(--bs-primary-border-subtle);
+}
+
+/* Focus ring customization */
+.filter-section .form-control:focus,
+.filter-section .form-select:focus {
+    outline: none;
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+/* Improved accessibility for high contrast modes */
+@media (prefers-contrast: high) {
+    .filter-section {
+        border-width: 2px;
+    }
+    
+    .filter-section .form-control,
+    .filter-section .form-select {
+        border-width: 2px;
+    }
+    
+    .search-icon,
+    .clear-search-btn {
+        color: var(--bs-body-color);
+    }
+}
+
+/* ======================================
+   🌟 Enhanced Visual Polish
+========================================= */
+
+/* Add subtle animation to the entire filter section */
+.filter-section {
+    animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Loading state for buttons */
+.filter-section .btn.loading {
+    position: relative;
+    color: transparent !important;
+}
+
+.filter-section .btn.loading::after {
+    content: '';
+    position: absolute;
+    width: 1rem;
+    height: 1rem;
+    top: 50%;
+    left: 50%;
+    margin-left: -0.5rem;
+    margin-top: -0.5rem;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Badge styling in filter context */
+.filter-section .badge {
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: var(--bs-border-radius-sm);
+}
+
+/* Emoji spacing in select options */
+.filter-section option {
+    line-height: 1.5;
+}
+
+/* RTL support */
+[dir="rtl"] .search-icon {
+    left: auto;
+    right: 0.75rem;
+}
+
+[dir="rtl"] .clear-search-btn {
+    right: auto;
+    left: 0.5rem;
+}
+
+[dir="rtl"] .filter-section .form-control {
+    padding-left: 2.5rem;
+    padding-right: 2.5rem;
+}

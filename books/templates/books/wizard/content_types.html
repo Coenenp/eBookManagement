@@ -1,4 +1,5 @@
 {% extends 'books/wizard/base.html' %}
+{% load custom_filters %}
 
 {% block wizard_content %}
 <div class="mb-4">
@@ -27,8 +28,13 @@
             </div>
             
             <div class="ms-3">
+                <label for="folder_{{ forloop.counter }}" class="form-label visually-hidden">
+                    Content type for {{ folder.name }}
+                </label>
                 <select class="form-select" name="folder_{{ folder.path|hash }}" 
-                        id="folder_{{ forloop.counter }}">
+                        id="folder_{{ forloop.counter }}"
+                        aria-label="Content type for {{ folder.name }}"
+                        title="Select content type for {{ folder.name }}">
                     {% for choice_value, choice_display in content_type_choices %}
                     <option value="{{ choice_value }}" 
                             {% if choice_value == folder.suggested_type %}selected{% endif %}>
@@ -166,36 +172,5 @@
 
 {% block extra_js %}
 {{ block.super }}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Update preview when content type changes
-    document.querySelectorAll('select[name^="folder_"]').forEach(function(select) {
-        select.addEventListener('change', function() {
-            updateContentTypePreview(this);
-        });
-    });
-});
-
-function updateContentTypePreview(select) {
-    const container = select.closest('.content-type-assignment');
-    const preview = container.querySelector('.content-type-preview span');
-    if (preview) {
-        const selectedText = select.options[select.selectedIndex].text;
-        preview.textContent = selectedText;
-        
-        // Update suggestion badge if different from suggestion
-        const suggestionBadge = container.querySelector('.badge.bg-info');
-        if (suggestionBadge) {
-            const originalSuggestion = suggestionBadge.textContent.replace('Suggested: ', '');
-            if (selectedText.toLowerCase() !== originalSuggestion.toLowerCase()) {
-                suggestionBadge.className = 'badge bg-warning';
-                suggestionBadge.innerHTML = '<i class="fas fa-edit me-1"></i>Modified from suggestion';
-            } else {
-                suggestionBadge.className = 'badge bg-info';
-                suggestionBadge.innerHTML = '<i class="fas fa-lightbulb me-1"></i>Suggested: ' + originalSuggestion;
-            }
-        }
-    }
-}
-</script>
+<script src="{% static 'book/js/wizard-content-types.js' %}"></script>
 {% endblock %}

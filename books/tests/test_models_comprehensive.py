@@ -42,13 +42,13 @@ class DataSourceModelTests(TestCase):
     def test_data_source_ordering(self):
         """Test DataSource ordering by trust level and name"""
         # Clean up existing data
-        DataSource.objects.filter(name__in=[DataSource.FILENAME, DataSource.MANUAL, DataSource.EPUB_INTERNAL]).delete()
+        DataSource.objects.filter(name__in=[DataSource.INITIAL_SCAN, DataSource.MANUAL, DataSource.EPUB_INTERNAL]).delete()
 
-        DataSource.objects.create(name=DataSource.FILENAME, trust_level=0.3)
+        DataSource.objects.create(name=DataSource.INITIAL_SCAN, trust_level=0.3)
         DataSource.objects.create(name=DataSource.MANUAL, trust_level=0.9)
         DataSource.objects.create(name=DataSource.EPUB_INTERNAL, trust_level=0.9)
 
-        sources = list(DataSource.objects.filter(name__in=[DataSource.FILENAME, DataSource.MANUAL, DataSource.EPUB_INTERNAL]))
+        sources = list(DataSource.objects.filter(name__in=[DataSource.INITIAL_SCAN, DataSource.MANUAL, DataSource.EPUB_INTERNAL]))
         # Should be ordered by trust_level desc, then by name
         self.assertEqual(sources[0].trust_level, 0.9)
         self.assertEqual(sources[-1].trust_level, 0.3)

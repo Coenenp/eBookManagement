@@ -178,9 +178,8 @@ def sanitize_description(text):
 @register.filter
 def language_name(language_code):
     """Convert language code to readable name."""
-    from books.models import LANGUAGE_CHOICES
-    lang_dict = dict(LANGUAGE_CHOICES)
-    return lang_dict.get(language_code, language_code)
+    from books.utils.language_manager import LanguageManager
+    return LanguageManager.get_language_name(language_code)
 
 
 @register.simple_tag(takes_context=True)
@@ -229,3 +228,9 @@ def isbn_type(isbn):
             return "ISBN-13"
 
     return "Invalid"
+
+
+@register.filter
+def hash(value):
+    """Return a hash of the given value, useful for creating unique IDs."""
+    return str(abs(hash(str(value))))
