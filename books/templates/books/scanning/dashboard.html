@@ -342,7 +342,7 @@
                 <div class="tab-content mt-3" id="scanTabContent">
                     <!-- Folder Scan Tab -->
                     <div class="tab-pane fade show active" id="folder-scan" role="tabpanel">
-                        <form method="post" action="{% url 'books:start_folder_scan' %}">
+                        <form method="post" action="{% url 'books:start_folder_scan' %}" class="scan-options">
                             {% csrf_token %}
                             <div class="mb-3">
                                 <label for="folder_name" class="form-label">Name</label>
@@ -368,12 +368,9 @@
                             <div class="mb-3">
                                 <label for="language" class="form-label">Default Language</label>
                                 <select class="form-control" id="language" name="language">
-                                    <option value="en">English</option>
-                                    <option value="fr">French</option>
-                                    <option value="de">German</option>
-                                    <option value="es">Spanish</option>
-                                    <option value="it">Italian</option>
-                                    <option value="nl">Dutch</option>
+                                    {% for code, name in language_choices %}
+                                        <option value="{{ code }}"{% if code == 'en' %} selected{% endif %}>{{ name }}</option>
+                                    {% endfor %}
                                 </select>
                             </div>
                             <div class="mb-3">
@@ -394,7 +391,7 @@
 
                     <!-- Book Rescan Tab -->
                     <div class="tab-pane fade" id="book-rescan" role="tabpanel">
-                        <form method="post" action="{% url 'books:start_book_rescan' %}">
+                        <form method="post" action="{% url 'books:start_book_rescan' %}" class="rescan-options">
                             {% csrf_token %}
                             <div class="mb-3">
                                 <label class="form-label fw-semibold">
