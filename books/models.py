@@ -801,28 +801,32 @@ class FinalMetadata(models.Model):
 
     def update_final_values(self):
         """Update all final metadata fields from related sources"""
-        self.update_final_title()
-        self.update_final_author()
-        self.update_final_series()
-        self.update_final_cover()
-        self.update_final_publisher()
+        try:
+            self.update_final_title()
+            self.update_final_author()
+            self.update_final_series()
+            self.update_final_cover()
+            self.update_final_publisher()
 
-        # Update dynamic fields (publication_year, description, isbn, language)
-        dynamic_fields = ['publication_year', 'description', 'isbn', 'language']
-        for field_name in dynamic_fields:
-            self.update_dynamic_field(field_name)
+            # Update dynamic fields (publication_year, description, isbn, language)
+            dynamic_fields = ['publication_year', 'description', 'isbn', 'language']
+            for field_name in dynamic_fields:
+                self.update_dynamic_field(field_name)
 
-        self.calculate_overall_confidence()
-        self.calculate_completeness_score()
+            self.calculate_overall_confidence()
+            self.calculate_completeness_score()
 
-        logger.debug(
-            f"Updated values for book {self.book.id}: "
-            f"title='{self.final_title}', author='{self.final_author}', "
-            f"series='{self.final_series}', cover='{self.final_cover_path}', "
-            f"publisher='{self.final_publisher}', year='{self.publication_year}', "
-            f"isbn='{self.isbn}', confidence={self.overall_confidence:.2f}, "
-            f"completeness={self.completeness_score:.2f}"
-        )
+            logger.debug(
+                f"Updated values for book {self.book.id}: "
+                f"title='{self.final_title}', author='{self.final_author}', "
+                f"series='{self.final_series}', cover='{self.final_cover_path}', "
+                f"publisher='{self.final_publisher}', year='{self.publication_year}', "
+                f"isbn='{self.isbn}', confidence={self.overall_confidence:.2f}, "
+                f"completeness={self.completeness_score:.2f}"
+            )
+        except Exception as e:
+            logger.error(f"Error updating final values for book {self.book.id}: {e}")
+            # Don't re-raise the exception - handle gracefully
 
     def save(self, *args, **kwargs):
         # Check if this is a manual update (set by views when user makes manual changes)

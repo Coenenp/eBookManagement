@@ -108,7 +108,7 @@ class BookListContextMixin:
 
         # Get all language values from database and filter to only valid ISO codes
         all_languages = apps.get_model('books', 'FinalMetadata').objects.values_list('language', flat=True).distinct()
-        valid_language_codes = LanguageManager.get_language_codes()
+        valid_language_codes = LanguageManager.get_valid_codes()
         used_languages = [lang for lang in all_languages if lang in valid_language_codes]
 
         # Create language choices for template

@@ -184,6 +184,13 @@ class SectionsTestCase(TestCase):
             is_reviewed=True
         )
 
+        self.final_meta_audiobook2 = FinalMetadata.objects.create(
+            book=self.audiobook2,
+            final_title="Mixed Folder Audiobook",
+            final_author="Test Author",
+            is_reviewed=True
+        )
+
         # Create BookMetadata for search testing and fallback testing
         BookMetadata.objects.create(
             book=self.ebook1,

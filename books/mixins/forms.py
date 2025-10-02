@@ -109,9 +109,8 @@ class BaseMetadataValidator:
         if not value:
             return value
 
-        # Remove hyphens and spaces for validation
-        isbn = ''.join(value.split())
-        isbn = isbn.replace('-', '')
+        # Remove hyphens, spaces, and other formatting for validation
+        isbn = ''.join(c for c in str(value) if c.isalnum())
 
         # Check length (ISBN-10 or ISBN-13)
         if len(isbn) not in [10, 13]:
@@ -210,7 +209,7 @@ class MetadataFormMixin(StandardFormMixin, BaseMetadataValidator):
             'final_series': self.text_with_placeholder('Enter series name'),
             'final_series_number': self.text_with_placeholder('Enter series number'),
             'final_publisher': self.text_with_placeholder('Enter publisher'),
-            'final_cover_path': self.get_widget('hidden'),
+            'final_cover_path': self.get_widget('file_input'),
             'language': self.get_widget('select'),
             'isbn': self.text_with_placeholder('Enter ISBN'),
             'publication_year': self.number_with_range(

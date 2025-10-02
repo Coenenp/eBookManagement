@@ -112,8 +112,10 @@ class DashboardService:
         from ..models import FinalMetadata, Book
         from django.db.models import Count, Avg, Q
 
+        # Get total book count from Book model, not FinalMetadata
+        total_books = Book.objects.exclude(is_placeholder=True).count()
+
         metadata_stats = FinalMetadata.objects.select_related('book').aggregate(
-            total_books=Count('book'),
             books_with_metadata=Count('book', filter=~Q(final_title='')),
             books_with_author=Count('book', filter=~Q(final_author='')),
             books_with_cover=Count('book', filter=Q(has_cover=True)),
@@ -126,6 +128,9 @@ class DashboardService:
             medium_confidence_count=Count('book', filter=Q(overall_confidence__gte=0.5, overall_confidence__lt=0.8)),
             low_confidence_count=Count('book', filter=Q(overall_confidence__lt=0.5)),
         )
+
+        # Add the correct total book count
+        metadata_stats['total_books'] = total_books
 
         format_stats = Book.objects.exclude(is_placeholder=True).values('file_format').annotate(
             count=Count('id')

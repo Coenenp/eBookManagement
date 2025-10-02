@@ -621,17 +621,22 @@ class SeriesDetailView(LoginRequiredMixin, DetailView):
 # =============================================================================
 
 
-class TriggerScanView(LoginRequiredMixin, BookNavigationMixin, ListView):
+class TriggerScanView(LoginRequiredMixin, BookNavigationMixin, View):
     """View for triggering scans."""
     template_name = 'books/scan_folder/trigger_scan.html'
-    context_object_name = 'scan_folders'
 
     def get_model(self):
         return get_model('ScanFolder')
 
-    def get_queryset(self):
+    def get(self, request, *args, **kwargs):
+        """Handle GET requests - show scan folders."""
         ScanFolder = self.get_model()
-        return ScanFolder.objects.filter(is_active=True)
+        scan_folders = ScanFolder.objects.filter(is_active=True)
+
+        context = {
+            'scan_folders': scan_folders,
+        }
+        return render(request, self.template_name, context)
 
     def post(self, request, *args, **kwargs):
         """Handle scan trigger POST requests."""

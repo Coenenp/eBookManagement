@@ -330,7 +330,7 @@ def bulk_scan_content_isbns(books_queryset=None, page_limit=10):
             existing_content_isbns = BookMetadata.objects.filter(
                 book=book,
                 field_name='isbn',
-                source__name='content_scan'
+                source__name=DataSource.CONTENT_SCAN
             ).count()
 
             if existing_content_isbns > 0:
@@ -341,7 +341,7 @@ def bulk_scan_content_isbns(books_queryset=None, page_limit=10):
             initial_count = BookMetadata.objects.filter(
                 book=book,
                 field_name='isbn',
-                source__name='content_scan'
+                source__name=DataSource.CONTENT_SCAN
             ).count()
 
             save_content_isbns(book)
@@ -349,7 +349,7 @@ def bulk_scan_content_isbns(books_queryset=None, page_limit=10):
             final_count = BookMetadata.objects.filter(
                 book=book,
                 field_name='isbn',
-                source__name='content_scan'
+                source__name=DataSource.CONTENT_SCAN
             ).count()
 
             new_isbns = final_count - initial_count

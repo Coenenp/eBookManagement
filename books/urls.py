@@ -143,6 +143,8 @@ urlpatterns = [
 
     # Scanning AJAX
     path('ajax/trigger-scan/', views.ajax_trigger_scan, name='ajax_trigger_scan'),
+    path('trigger-scan/', views.ajax_trigger_scan, name='ajax_trigger_scan_compat'),  # For JS compatibility
+    path('rescan-folder/', views.ajax_rescan_folder, name='ajax_rescan_folder'),  # For JS compatibility
     path('ajax/add-scan-folder/', views.ajax_add_scan_folder, name='ajax_add_scan_folder'),
 
     # File operations AJAX

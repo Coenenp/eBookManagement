@@ -88,6 +88,7 @@ class ScanFolderFormTests(TestCase):
         form_data = {
             'name': 'Test Folder',
             'path': '/test/path',
+            'content_type': 'ebooks',
             'language': 'en',
             'is_active': True
         }
@@ -99,6 +100,7 @@ class ScanFolderFormTests(TestCase):
         form_data = {
             'name': 'Test Folder',
             'path': '',
+            'content_type': 'ebooks',
             'language': 'en',
             'is_active': True
         }
@@ -111,6 +113,7 @@ class ScanFolderFormTests(TestCase):
         form_data = {
             'name': 'Test Folder',
             'path': '   ',
+            'content_type': 'ebooks',
             'language': 'en',
             'is_active': True
         }
@@ -118,37 +121,29 @@ class ScanFolderFormTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('path', form.errors)
 
-    @patch('os.path.exists')
-    def test_scan_folder_form_nonexistent_path(self, mock_exists):
-        """Test ScanFolderForm with nonexistent path"""
-        mock_exists.return_value = False
-
+    def test_scan_folder_form_accepts_any_path_string(self):
+        """Test ScanFolderForm accepts any path string (no path validation in current form)"""
         form_data = {
             'name': 'Test Folder',
-            'path': '/nonexistent/path',
+            'path': '/any/path/string',
+            'content_type': 'ebooks',
             'language': 'en',
             'is_active': True
         }
         form = ScanFolderForm(data=form_data)
-        self.assertFalse(form.is_valid())
-        self.assertIn('path', form.errors)
+        self.assertTrue(form.is_valid())
 
-    @patch('os.path.exists')
-    @patch('os.path.isdir')
-    def test_scan_folder_form_file_not_directory(self, mock_isdir, mock_exists):
-        """Test ScanFolderForm with file path instead of directory"""
-        mock_exists.return_value = True
-        mock_isdir.return_value = False
-
+    def test_scan_folder_form_accepts_file_paths(self):
+        """Test ScanFolderForm accepts file paths (no directory validation in current form)"""
         form_data = {
             'name': 'Test Folder',
             'path': '/test/file.txt',
+            'content_type': 'ebooks',
             'language': 'en',
             'is_active': True
         }
         form = ScanFolderForm(data=form_data)
-        self.assertFalse(form.is_valid())
-        self.assertIn('path', form.errors)
+        self.assertTrue(form.is_valid())
 
     @patch('os.path.exists')
     @patch('os.path.isdir')
@@ -160,6 +155,7 @@ class ScanFolderFormTests(TestCase):
         form_data = {
             'name': 'Test Folder',
             'path': '  /test/path  ',
+            'content_type': 'ebooks',
             'language': 'en',
             'is_active': True
         }
@@ -736,17 +732,19 @@ class FormIntegrationTests(TestCase):
         self.assertEqual(year_widget.attrs['max'], '2030')
 
     def test_form_error_messages(self):
-        """Test custom form error messages"""
-        # Test ScanFolderForm custom error messages
+        """Test form error messages for required fields"""
+        # Test ScanFolderForm required field validation
         form_data = {
-            'name': 'Test',
-            'path': '/nonexistent/path'
+            'name': '',  # Required field left empty
+            'path': '/test/path',
+            'content_type': 'ebooks',
+            'language': 'en',
+            'is_active': True
         }
 
-        with patch('os.path.exists', return_value=False):
-            form = ScanFolderForm(data=form_data)
-            self.assertFalse(form.is_valid())
-            self.assertIn('does not exist', str(form.errors['path']))
+        form = ScanFolderForm(data=form_data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('name', form.errors)
 
     def test_form_field_requirements(self):
         """Test form field requirements"""

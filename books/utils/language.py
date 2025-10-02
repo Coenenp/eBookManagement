@@ -71,7 +71,7 @@ def normalize_language(value):
 
     # Import here to avoid circular imports
     from books.utils.language_manager import LanguageManager
-    valid_codes = LanguageManager.get_language_codes()
+    valid_codes = LanguageManager.get_valid_codes()
 
     normalized_values = []
     for segment in str(value).replace(';', ',').split(','):

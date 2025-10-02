@@ -5,6 +5,7 @@ Tests for the external metadata rescan functionality.
 import json
 from django.test import TestCase, Client
 from django.urls import reverse
+from django.contrib.auth.models import User
 from books.models import Book, FinalMetadata, BookTitle, BookAuthor, Author, DataSource, ScanFolder
 
 
@@ -15,11 +16,26 @@ class RescanFunctionalityTestCase(TestCase):
         """Set up test data."""
         self.client = Client()
 
+        # Create and login a user for authentication
+        self.user = User.objects.create_user(
+            username='testuser',
+            password='testpass123'
+        )
+        self.client.login(username='testuser', password='testpass123')
+
+        # Create required scan folder
+        self.scan_folder = ScanFolder.objects.create(
+            name="Test Scan Folder",
+            path="/test/scan/folder",
+            content_type="books"
+        )
+
         # Create a test book
         self.book = Book.objects.create(
             file_path="/test/path/book.epub",
             file_format="epub",
-            file_size=1024
+            file_size=1024,
+            scan_folder=self.scan_folder
         )
 
         # Create a data source
@@ -47,6 +63,7 @@ class RescanFunctionalityTestCase(TestCase):
         # Create final metadata
         FinalMetadata.objects.create(
             book=self.book,
+            final_title="Test Book Title",
             final_author="Test Author",
             isbn="9780062498557",
             is_reviewed=True

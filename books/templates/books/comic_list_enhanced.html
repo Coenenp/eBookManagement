@@ -1,0 +1,69 @@
+{% load static %}
+{% load book_extras %}
+
+<!-- Enhanced comic table that will be populated by JavaScript -->
+<div class="enhanced-comic-list h-100">
+    <!-- Loading state -->
+    <div id="loading-state" class="text-center p-4 text-muted">
+        <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
+        <p>Loading comics...</p>
+    </div>
+    
+    <!-- Table view (will be populated by JavaScript) -->
+    <div id="comic-table-container" class="d-none">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm enhanced-table mb-0" id="comicTable">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th scope="col" class="sortable-column" data-sort="title">
+                            Title
+                            <i class="fas fa-sort ms-1 sort-icon"></i>
+                        </th>
+                        <th scope="col" class="sortable-column" data-sort="author">
+                            Author
+                            <i class="fas fa-sort ms-1 sort-icon"></i>
+                        </th>
+                        <th scope="col" class="sortable-column" data-sort="publisher">
+                            Publisher
+                            <i class="fas fa-sort ms-1 sort-icon"></i>
+                        </th>
+                        <th scope="col" class="sortable-column" data-sort="series">
+                            Series
+                            <i class="fas fa-sort ms-1 sort-icon"></i>
+                        </th>
+                        <th scope="col" class="sortable-column" data-sort="file_format">
+                            Format
+                            <i class="fas fa-sort ms-1 sort-icon"></i>
+                        </th>
+                        <th scope="col" class="sortable-column" data-sort="file_size">
+                            Size
+                            <i class="fas fa-sort ms-1 sort-icon"></i>
+                        </th>
+                        <th scope="col" class="sortable-column" data-sort="last_scanned">
+                            Last Scanned
+                            <i class="fas fa-sort ms-1 sort-icon"></i>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody id="comic-table-body">
+                    <!-- Rows will be populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Empty state -->
+    <div id="empty-state" class="text-center py-5 d-none">
+        <div class="empty-state">
+            <i class="fas fa-mask fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">No comics found</h5>
+            <p class="text-muted">No comics match your current search criteria</p>
+            <button type="button" class="btn btn-outline-primary" onclick="clearFilters()">
+                <i class="fas fa-filter me-2"></i>Clear Filters
+            </button>
+        </div>
+    </div>
+</div>
+
+{% load static %}
+<script src="{% static 'book/js/comic-list-enhanced.js' %}"></script>
