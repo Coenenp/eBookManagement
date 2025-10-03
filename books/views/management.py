@@ -13,6 +13,7 @@ from django.views.generic import ListView, CreateView, UpdateView, DeleteView, D
 from django.urls import reverse_lazy
 from django.apps import apps
 from django.http import JsonResponse
+from django.db import models
 
 # Import mixins and utilities
 from ..mixins.navigation import BookNavigationMixin
@@ -346,7 +347,39 @@ class AuthorListView(LoginRequiredMixin, BookNavigationMixin, ListView):
 
     def get_queryset(self):
         Author = self.get_model()
-        return Author.objects.all().order_by('name')
+        queryset = Author.objects.all()
+
+        # Apply search filter
+        search_query = self.request.GET.get('search', '').strip()
+        if search_query:
+            queryset = queryset.filter(
+                models.Q(name__icontains=search_query) |
+                models.Q(first_name__icontains=search_query) |
+                models.Q(last_name__icontains=search_query)
+            )
+
+        # Apply review status filter
+        is_reviewed = self.request.GET.get('is_reviewed')
+        if is_reviewed == 'true':
+            queryset = queryset.filter(is_reviewed=True)
+        elif is_reviewed == 'false':
+            queryset = queryset.filter(is_reviewed=False)
+
+        return queryset.order_by('name')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search_query'] = self.request.GET.get('search', '')
+
+        # Add author sources mapping
+        BookAuthor = get_model('BookAuthor')
+        author_sources = {}
+        for author in context['authors']:
+            sources = BookAuthor.objects.filter(author=author, is_active=True).values_list('source__name', flat=True).distinct()
+            author_sources[author.id] = list(sources)
+        context['author_sources'] = author_sources
+
+        return context
 
 
 class AuthorCreateView(LoginRequiredMixin, BookNavigationMixin, CreateView):
@@ -469,7 +502,30 @@ class GenreListView(LoginRequiredMixin, BookNavigationMixin, ListView):
 
     def get_queryset(self):
         Genre = self.get_model()
-        return Genre.objects.all().order_by('name')
+        queryset = Genre.objects.all()
+
+        # Apply search filter
+        search_query = self.request.GET.get('search', '').strip()
+        if search_query:
+            queryset = queryset.filter(name__icontains=search_query)
+
+        # Apply review status filter
+        is_reviewed = self.request.GET.get('is_reviewed')
+        if is_reviewed == 'true':
+            queryset = queryset.filter(is_reviewed=True)
+        elif is_reviewed == 'false':
+            queryset = queryset.filter(is_reviewed=False)
+
+        return queryset.order_by('name')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search_query'] = self.request.GET.get('search', '')
+
+        # Add empty genre sources mapping to avoid template errors
+        context['genre_sources'] = {}
+
+        return context
 
 
 class GenreCreateView(LoginRequiredMixin, BookNavigationMixin, CreateView):

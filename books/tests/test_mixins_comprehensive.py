@@ -10,7 +10,6 @@ from django.test import TestCase
 from django import forms
 from django.utils import timezone
 from unittest.mock import patch
-from django.db import models
 
 from books.mixins import (
     StandardWidgetMixin, BaseMetadataValidator, StandardFormMixin,
@@ -500,34 +499,30 @@ class FinalMetadataSyncMixinTests(TestCase):
 
     def test_metadata_type_map_exists(self):
         """Test that metadata_type_map is properly defined"""
-        # Create a test model using the mixin
-        class TestModel(FinalMetadataSyncMixin, models.Model):
-            book = models.ForeignKey(Book, on_delete=models.CASCADE)
-            is_active = models.BooleanField(default=True)
+        # Test using existing non-abstract BookTitle model that uses the mixin
+        from books.models import BookTitle
 
-            class Meta:
-                app_label = 'books'
-
-        test_instance = TestModel(book=self.book)
+        # Create a book title instance
+        book_title = BookTitle(book=self.book, title="Test Title")
 
         # Check that metadata_type_map exists and has expected structure
-        self.assertIsInstance(test_instance.metadata_type_map, dict)
+        self.assertIsInstance(book_title.metadata_type_map, dict)
         expected_keys = ['BookTitle', 'BookAuthor', 'BookCover', 'BookSeries', 'BookPublisher', 'BookMetadata']
         for key in expected_keys:
-            self.assertIn(key, test_instance.metadata_type_map)
+            self.assertIn(key, book_title.metadata_type_map)
+
+        # Check that metadata_type_map exists and has expected structure
+        self.assertIsInstance(book_title.metadata_type_map, dict)
+        expected_keys = ['BookTitle', 'BookAuthor', 'BookCover', 'BookSeries', 'BookPublisher', 'BookMetadata']
+        for key in expected_keys:
+            self.assertIn(key, book_title.metadata_type_map)
 
     def test_post_deactivation_sync_active_record(self):
         """Test post_deactivation_sync with active record (should not sync)"""
-        # Create a test model using the mixin
-        class TestModel(FinalMetadataSyncMixin, models.Model):
-            book = models.ForeignKey(Book, on_delete=models.CASCADE)
-            is_active = models.BooleanField(default=True)
-            title = models.CharField(max_length=200, default='Test Title')
+        # Use existing BookTitle model that uses the mixin
+        from books.models import BookTitle
 
-            class Meta:
-                app_label = 'books'
-
-        test_instance = TestModel(book=self.book, is_active=True)
+        test_instance = BookTitle(book=self.book, is_active=True, title='Test Title')
 
         # Mock the update methods
         with patch.object(self.final_metadata, 'update_final_title') as mock_update:
@@ -544,31 +539,20 @@ class FinalMetadataSyncMixinTests(TestCase):
             file_format='epub'
         )
 
-        class TestModel(FinalMetadataSyncMixin, models.Model):
-            book = models.ForeignKey(Book, on_delete=models.CASCADE)
-            is_active = models.BooleanField(default=True)
+        # Use existing BookTitle model that uses the mixin
+        from books.models import BookTitle
 
-            class Meta:
-                app_label = 'books'
-
-        test_instance = TestModel(book=book_without_metadata, is_active=False)
+        test_instance = BookTitle(book=book_without_metadata, is_active=False, title="Test Title")
         # Should not raise exception when no finalmetadata exists
         test_instance.post_deactivation_sync()
 
     @patch('books.models.logger')
     def test_post_deactivation_sync_booktitle(self, mock_logger):
         """Test post_deactivation_sync for BookTitle model"""
-        class TestTitleModel(FinalMetadataSyncMixin, models.Model):
-            book = models.ForeignKey(Book, on_delete=models.CASCADE)
-            is_active = models.BooleanField(default=True)
-            title = models.CharField(max_length=200, default='Test Title')
+        # Use existing BookTitle model that uses the mixin
+        from books.models import BookTitle
 
-            class Meta:
-                app_label = 'books'
-
-        test_instance = TestTitleModel(book=self.book, is_active=False, title='Test Title')
-        # Mock the class name to match expected model name
-        test_instance.__class__.__name__ = 'BookTitle'
+        test_instance = BookTitle(book=self.book, is_active=False, title='Test Title')
 
         with patch.object(self.final_metadata, 'update_final_title') as mock_update:
             test_instance.post_deactivation_sync()
@@ -580,17 +564,10 @@ class FinalMetadataSyncMixinTests(TestCase):
         # Create real author instance
         real_author = Author.objects.create(name='Test Author')
 
-        class TestAuthorModel(FinalMetadataSyncMixin, models.Model):
-            book = models.ForeignKey(Book, on_delete=models.CASCADE)
-            is_active = models.BooleanField(default=True)
-            author = models.ForeignKey('books.Author', on_delete=models.CASCADE, null=True)
+        # Use existing BookAuthor model that uses the mixin
+        from books.models import BookAuthor
 
-            class Meta:
-                app_label = 'books'
-
-        test_instance = TestAuthorModel(book=self.book, is_active=False, author=real_author)
-        # Mock the class name to match expected model name
-        test_instance.__class__.__name__ = 'BookAuthor'
+        test_instance = BookAuthor(book=self.book, is_active=False, author=real_author)
 
         with patch.object(self.final_metadata, 'update_final_author') as mock_update:
             test_instance.post_deactivation_sync()
@@ -810,12 +787,8 @@ class MixinAdvancedEdgeCaseTests(TestCase):
     def test_final_metadata_sync_mixin_database_errors(self, mock_logger):
         """Test FinalMetadataSyncMixin handling of database errors"""
 
-        class TestModel(FinalMetadataSyncMixin, models.Model):
-            book = models.ForeignKey(Book, on_delete=models.CASCADE)
-            is_active = models.BooleanField(default=True)
-
-            class Meta:
-                app_label = 'books'
+        # Use existing BookTitle model that uses the mixin
+        from books.models import BookTitle
 
         # Create test instance
         book = Book.objects.create(
@@ -830,9 +803,7 @@ class MixinAdvancedEdgeCaseTests(TestCase):
             final_title='Test Title'
         )
 
-        test_instance = TestModel(book=book, is_active=False)
-        test_instance.__class__.__name__ = 'BookTitle'  # Mock model name
-        test_instance.title = 'Test Title'  # Add title attribute
+        test_instance = BookTitle(book=book, is_active=False, title='Test Title')
 
         # Mock database error by patching the final_metadata's update method
         with patch.object(final_metadata, 'update_final_title', side_effect=Exception('Database connection error')):

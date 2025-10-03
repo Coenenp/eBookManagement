@@ -142,9 +142,9 @@ class ComicsMainViewTests(ComicsViewsTestCase):
         """Test that books with empty comic formats are excluded"""
         # Create a book with non-comic format but with FinalMetadata
         empty_comic = Book.objects.create(
-            file_path="/test/empty.pdf",
+            file_path="/test/empty.epub",
             file_size=1000000,
-            file_format="pdf",  # Not a comic format
+            file_format="epub",  # Not a comic format (ebook format)
             scan_folder=self.scan_folder
         )
         FinalMetadata.objects.create(
@@ -156,7 +156,7 @@ class ComicsMainViewTests(ComicsViewsTestCase):
         self.client.login(username='testuser', password='testpass123')
         response = self.client.get(reverse('books:comics_main'))
 
-        # Should still be 2, not 3
+        # Should still be 2, not 3 (epub should be excluded)
         self.assertEqual(response.context['comics_count'], 2)
 
     def test_comics_count_fallback_to_book_format(self):

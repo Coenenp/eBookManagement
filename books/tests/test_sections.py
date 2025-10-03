@@ -21,7 +21,7 @@ from books.models import (
     Book, FinalMetadata, ScanFolder, DataSource, Series, BookSeries,
     Author, BookMetadata
 )
-from books.views_modules.sections import get_book_metadata_dict, get_book_cover_url
+from books.views.sections import get_book_metadata_dict, get_book_cover_url
 
 
 class SectionsTestCase(TestCase):
@@ -61,12 +61,7 @@ class SectionsTestCase(TestCase):
             is_active=True
         )
 
-        self.mixed_folder = ScanFolder.objects.create(
-            name="Mixed Content Folder",
-            path="/test/mixed",
-            content_type="mixed",
-            is_active=True
-        )
+        # Mixed folders are no longer supported - removed
 
         self.inactive_folder = ScanFolder.objects.create(
             name="Inactive Folder",
@@ -90,10 +85,10 @@ class SectionsTestCase(TestCase):
         )
 
         self.ebook2 = Book.objects.create(
-            file_path="/test/mixed/book2.pdf",
+            file_path="/test/ebooks/book2.pdf",
             file_format="pdf",
             file_size=2000000,
-            scan_folder=self.mixed_folder
+            scan_folder=self.ebooks_folder
         )
 
         self.comic1 = Book.objects.create(
@@ -104,10 +99,10 @@ class SectionsTestCase(TestCase):
         )
 
         self.comic2 = Book.objects.create(
-            file_path="/test/mixed/comic2.pdf",
+            file_path="/test/comics/comic2.pdf",
             file_format="pdf",
             file_size=3000000,
-            scan_folder=self.mixed_folder
+            scan_folder=self.comics_folder
         )
 
         self.audiobook1 = Book.objects.create(
@@ -118,10 +113,10 @@ class SectionsTestCase(TestCase):
         )
 
         self.audiobook2 = Book.objects.create(
-            file_path="/test/mixed/audio2.mp3",
+            file_path="/test/audiobooks/audio2.mp3",
             file_format="mp3",
             file_size=50000000,
-            scan_folder=self.mixed_folder
+            scan_folder=self.audiobooks_folder
         )
 
         self.inactive_book = Book.objects.create(
@@ -359,16 +354,16 @@ class EbooksViewsTests(SectionsTestCase):
             self.fail("response.context is None - template view not rendered")
 
         self.assertIn('ebooks_count', response.context)
-        # Should count ebook1 (ebooks folder) + ebook2, comic2, audiobook2 (mixed folder) = 4
-        self.assertEqual(response.context['ebooks_count'], 4)
+        # Should count ebook1 + ebook2 (both in ebooks folder) = 2
+        self.assertEqual(response.context['ebooks_count'], 2)
 
     def test_ebooks_main_view_excludes_inactive_folders(self):
         """Test that inactive folders are excluded from count"""
         self.client.login(username=self.user.username, password='testpass123')
         response = self.client.get(reverse('books:ebooks_main'))
 
-        # Should not count book from inactive folder, total should be 4
-        self.assertEqual(response.context['ebooks_count'], 4)
+        # Should not count book from inactive folder, total should be 2
+        self.assertEqual(response.context['ebooks_count'], 2)
 
     def test_ebooks_ajax_list_requires_login(self):
         """Test that ebooks AJAX endpoint requires authentication"""
@@ -385,7 +380,7 @@ class EbooksViewsTests(SectionsTestCase):
 
         self.assertTrue(data['success'])
         self.assertIn('ebooks', data)
-        self.assertEqual(len(data['ebooks']), 4)  # Should include all books from ebooks and mixed folders
+        self.assertEqual(len(data['ebooks']), 2)  # Should include both books from ebooks folder
 
     def test_ebooks_ajax_list_with_search(self):
         """Test ebooks AJAX list with search parameter"""
@@ -469,7 +464,7 @@ class EbooksViewsTests(SectionsTestCase):
         """Test exception handling in ebooks AJAX list"""
         self.client.login(username=self.user.username, password='testpass123')
 
-        with patch('books.views_modules.sections.Book.objects.filter', side_effect=Exception("Test error")):
+        with patch('books.views.sections.Book.objects.filter', side_effect=Exception("Test error")):
             response = self.client.get(reverse('books:ebooks_ajax_list'))
 
             self.assertEqual(response.status_code, 500)
@@ -574,8 +569,8 @@ class ComicsViewsTests(SectionsTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('comics_count', response.context)
-        # Should count 1 series (Batman) + 2 standalone (comic2 + ebook2 from mixed) = 3
-        self.assertEqual(response.context['comics_count'], 3)
+        # Should count comic1 + comic2 both in comics folder = 2
+        self.assertEqual(response.context['comics_count'], 2)
 
     def test_comics_main_view_fallback_count(self):
         """Test comics main view fallback when no final metadata"""
@@ -585,8 +580,8 @@ class ComicsViewsTests(SectionsTestCase):
         self.client.login(username=self.user.username, password='testpass123')
         response = self.client.get(reverse('books:comics_main'))
 
-        # Should count remaining FinalMetadata from mixed folder (ebook2 only)
-        self.assertEqual(response.context['comics_count'], 1)
+        # Should count 2 books in comics folder (comic1 + comic2) using fallback logic
+        self.assertEqual(response.context['comics_count'], 2)
 
     def test_comics_ajax_list_success(self):
         """Test comics AJAX list returns correct data"""
@@ -600,7 +595,7 @@ class ComicsViewsTests(SectionsTestCase):
         self.assertIn('series', data)
         self.assertIn('standalone', data)
         self.assertEqual(len(data['series']), 1)  # Batman
-        self.assertEqual(len(data['standalone']), 2)  # comic2 + ebook2 from mixed folder
+        self.assertEqual(len(data['standalone']), 1)  # comic2 only (ebook2 is in ebooks folder)
 
     def test_comics_ajax_list_series_books_sorting(self):
         """Test that books within comic series are sorted correctly"""
@@ -669,8 +664,8 @@ class AudiobooksViewsTests(SectionsTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn('audiobooks_count', response.context)
-        # Should count audiobook1 from audiobooks folder + audiobook2 from mixed folder = 2
-        self.assertEqual(response.context['audiobooks_count'], 4)  # All books from audiobooks + mixed folders
+        # Should count audiobook1 + audiobook2 both in audiobooks folder = 2
+        self.assertEqual(response.context['audiobooks_count'], 2)
 
     def test_audiobooks_ajax_list_success(self):
         """Test audiobooks AJAX list returns correct data"""
@@ -682,7 +677,7 @@ class AudiobooksViewsTests(SectionsTestCase):
 
         self.assertTrue(data['success'])
         self.assertIn('audiobooks', data)
-        self.assertEqual(len(data['audiobooks']), 4)  # All books from audiobooks + mixed folders
+        self.assertEqual(len(data['audiobooks']), 2)  # audiobook1 + audiobook2 in audiobooks folder
 
     def test_audiobooks_ajax_list_data_structure(self):
         """Test audiobooks AJAX list data structure"""
@@ -724,7 +719,7 @@ class AudiobooksViewsTests(SectionsTestCase):
         """Test exception handling in audiobooks AJAX list"""
         self.client.login(username=self.user.username, password='testpass123')
 
-        with patch('books.views_modules.sections.Book.objects.filter', side_effect=Exception("Test error")):
+        with patch('books.views.sections.Book.objects.filter', side_effect=Exception("Test error")):
             response = self.client.get(reverse('books:audiobooks_ajax_list'))
 
             self.assertEqual(response.status_code, 500)
@@ -917,7 +912,7 @@ class EdgeCasesAndErrorHandlingTests(SectionsTestCase):
         self.assertIsNotNone(unicode_book)
         self.assertEqual(unicode_book['title'], "测试书籍 with émojis 📚")
 
-    @patch('books.views_modules.sections.get_book_metadata_dict')
+    @patch('books.views.sections.get_book_metadata_dict')
     def test_metadata_function_exception_handling(self, mock_metadata):
         """Test exception handling in metadata retrieval"""
         mock_metadata.side_effect = Exception("Metadata error")
@@ -958,7 +953,7 @@ class PerformanceTests(SectionsTestCase):
         """Test that queries are efficient with select_related and prefetch_related"""
         self.client.login(username=self.user.username, password='testpass123')
 
-        with self.assertNumQueries(11):  # Adjust based on actual query count
+        with self.assertNumQueries(8):  # Adjusted based on actual query count after removing mixed folder filtering
             response = self.client.get(reverse('books:ebooks_ajax_list'))
             self.assertEqual(response.status_code, 200)
 

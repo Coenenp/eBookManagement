@@ -17,6 +17,13 @@ import logging
 logger = logging.getLogger('books.scanner')
 logger.debug("Logger is working!")
 
+
+# File format constants for consistent usage across the application
+COMIC_FORMATS = ['cbr', 'cbz', 'cb7', 'cbt', 'pdf']
+EBOOK_FORMATS = ['epub', 'pdf', 'mobi', 'azw', 'azw3', 'fb2', 'lit', 'prc']
+AUDIOBOOK_FORMATS = ['mp3', 'm4a', 'm4b', 'aac', 'flac', 'ogg', 'wav']
+
+
 LANGUAGE_CHOICES = [
     ('en', 'English'),
     ('fr', 'French'),
@@ -178,6 +185,18 @@ class ScanFolder(models.Model):
 
         return file_count
 
+    def get_extensions(self):
+        """Get file extensions for this scan folder based on content type"""
+        if self.content_type == 'comics':
+            return ['.cbr', '.cbz', '.cb7', '.cbt', '.pdf']
+        elif self.content_type == 'audiobooks':
+            return ['.mp3', '.m4a', '.m4b', '.aac', '.flac', '.ogg', '.wav']
+        elif self.content_type == 'ebooks':
+            return ['.epub', '.pdf', '.mobi', '.azw', '.azw3', '.fb2', '.lit', '.prc']
+        else:
+            # Default to ebook extensions for unknown types
+            return ['.epub', '.pdf', '.mobi', '.azw', '.azw3', '.fb2']
+
     def get_scan_progress_info(self):
         """Get information about scan progress (scanned vs total files)"""
         scanned_count = self.book_set.count()
@@ -194,6 +213,13 @@ class ScanFolder(models.Model):
             'percentage': round(percentage, 1),
             'needs_scan': total_files > scanned_count
         }
+
+    class Meta:
+        # Allow multiple scan folders for the same path with different content types
+        # e.g. /library/mixed/ can be scanned as both 'comics' and 'ebooks'
+        unique_together = ['path', 'content_type']
+        verbose_name = "Scan Folder"
+        verbose_name_plural = "Scan Folders"
 
 
 class Book(HashFieldMixin, models.Model):

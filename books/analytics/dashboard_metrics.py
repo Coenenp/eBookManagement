@@ -10,7 +10,8 @@ from typing import Dict
 from django.db.models import Q, Count
 from books.models import (
     Book, BookSeries, Series, FinalMetadata, Author, Genre, Publisher,
-    ScanLog, ScanFolder
+    ScanLog, ScanFolder,
+    COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
 )
 
 
@@ -74,10 +75,10 @@ def get_content_type_statistics() -> Dict[str, int]:
     common_filter = Q(is_placeholder=False) & Q(is_duplicate=False) & Q(is_corrupted=False)
     return {
         # Count distinct formats in each category present in the library
-        'ebook_count': Book.objects.filter(common_filter & Q(file_format__in=['epub', 'mobi', 'pdf'])).values('file_format').distinct().count(),
-        'comic_count': Book.objects.filter(common_filter & Q(file_format__in=['cbr', 'cbz'])).values('file_format').distinct().count(),
+        'ebook_count': Book.objects.filter(common_filter & Q(file_format__in=EBOOK_FORMATS)).values('file_format').distinct().count(),
+        'comic_count': Book.objects.filter(common_filter & Q(file_format__in=COMIC_FORMATS)).values('file_format').distinct().count(),
         'audiobook_count': Book.objects.filter(
-            common_filter & Q(file_format__in=['m4a', 'mp3', 'audiobook'])
+            common_filter & Q(file_format__in=AUDIOBOOK_FORMATS)
         ).values('file_format').distinct().count(),
         'series_count': Series.objects.count(),
         'series_with_books': Series.objects.annotate(

@@ -52,11 +52,23 @@ class MetadataContextMixin:
         # If no series relationships but there is series info in final metadata
         if not context['all_series'].exists():
             series_number_metadata = book.metadata.filter(is_active=True, field_name='series_number').first()
-            if series_number_metadata or (book.finalmetadata and book.finalmetadata.final_series):
-                context['has_series_number_only'] = True
-                context['series_number_metadata'] = series_number_metadata
-                context['final_series_name'] = getattr(book.finalmetadata, 'final_series', '') if book.finalmetadata else ''
-                context['final_series_number'] = getattr(book.finalmetadata, 'final_series_number', '') if book.finalmetadata else ''
+            try:
+                final_metadata = getattr(book, 'final_metadata', None)
+                if not final_metadata:
+                    # Try alternative attribute name
+                    final_metadata = getattr(book, 'finalmetadata', None)
+
+                if series_number_metadata or (final_metadata and final_metadata.final_series):
+                    context['has_series_number_only'] = True
+                    context['series_number_metadata'] = series_number_metadata
+                    context['final_series_name'] = getattr(final_metadata, 'final_series', '') if final_metadata else ''
+                    context['final_series_number'] = getattr(final_metadata, 'final_series_number', '') if final_metadata else ''
+            except Exception:
+                # Handle case where neither attribute exists
+                context['has_series_number_only'] = False
+                context['series_number_metadata'] = None
+                context['final_series_name'] = ''
+                context['final_series_number'] = ''
 
         context['all_publishers'] = book.bookpublisher.filter(is_active=True).order_by('-confidence')
         context['all_covers'] = book.covers.filter(is_active=True).order_by('-confidence', '-is_high_resolution')

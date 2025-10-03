@@ -19,7 +19,7 @@ from books.models import (
     Book, Series, BookSeries, FinalMetadata,
     ScanFolder, DataSource
 )
-from books.views_modules.sections import get_book_metadata_dict
+from books.views.sections import get_book_metadata_dict
 
 
 class SeriesViewsTestCase(TestCase):
@@ -214,7 +214,8 @@ class SeriesMainViewTests(SeriesViewsTestCase):
 
         # Should count 3 series from final metadata (Harry Potter, LOTR, Discworld)
         # Even though we only have 2 BookSeries relationships
-        self.assertContains(response, 'Choose from 3 available series')
+        # Check the series count is displayed in the badge
+        self.assertContains(response, '<span class="badge bg-primary" id="item-count">')
         self.assertEqual(response.context['series_count'], 3)
 
     def test_series_count_excludes_empty_series(self):
@@ -486,7 +487,7 @@ class SeriesAjaxListTests(SeriesViewsTestCase):
         self.client.login(username='testuser', password='testpass123')
 
         # Mock an exception in the view
-        with patch('books.views_modules.sections.Book.objects.filter') as mock_filter:
+        with patch('books.views.sections.Book.objects.filter') as mock_filter:
             mock_filter.side_effect = Exception("Database error")
 
             response = self.client.get(reverse('books:series_ajax_list'))

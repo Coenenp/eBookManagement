@@ -68,6 +68,11 @@ from .views.sections import (  # noqa: F401
     ebooks_ajax_companion_files,
     SeriesMainView,
     series_ajax_list,
+    series_ajax_detail,
+    series_ajax_toggle_read,
+    series_ajax_mark_read,
+    series_ajax_download,
+    series_ajax_download_book,
     ComicsMainView,
     comics_ajax_list,
     AudiobooksMainView,
@@ -77,29 +82,40 @@ from .views.sections import (  # noqa: F401
 
 # Administrative functionality
 from .views.management import (  # noqa: F401
+    # Scan Folder Management (Class-based views)
     ScanFolderListView,
     AddScanFolderView,
-    edit_scan_folder,
-    trigger_single_scan,
+    EditScanFolderView,
+    TriggerSingleScanView,
     DeleteScanFolderView,
-    trigger_scan,
-    update_trust,
+
+    # Data Source Management (Class-based views)
     DataSourceListView,
     DataSourceCreateView,
     DataSourceUpdateView,
     DataSourceDeleteView,
+
+    # Author Management (Class-based views)
     AuthorListView,
     AuthorCreateView,
     AuthorUpdateView,
     AuthorDeleteView,
     AuthorBulkDeleteView,
     AuthorMarkReviewedView,
+
+    # Genre Management (Class-based views)
     GenreListView,
     GenreCreateView,
     GenreUpdateView,
     GenreBulkDeleteView,
     GenreMarkReviewedView,
-    SeriesListView
+
+    # Series Management (Class-based views)
+    SeriesListView,
+
+    # Function-based views
+    trigger_scan,
+    update_trust
 )
 
 # AJAX endpoints (60+ functions consolidated) - imported for URL routing

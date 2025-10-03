@@ -11,7 +11,8 @@ import traceback
 from pathlib import Path
 from books.models import (
     Book, DataSource, BookTitle,
-    Series, BookSeries, ScanStatus
+    Series, BookSeries, ScanStatus,
+    COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
 )
 from books.scanner.file_ops import get_file_format, find_cover_file, find_opf_file
 from books.scanner.extractors import epub, mobi, pdf, opf, comic
@@ -27,6 +28,10 @@ logger = logging.getLogger("books.scanner")
 def scan_directory(directory, scan_folder, rescan=False, ebook_extensions=None, cover_extensions=None, scan_status=None, resume_from=None):
     if not scan_status:
         scan_status, _ = ScanStatus.objects.get_or_create(id=1)
+
+    # Use content-type specific extensions if none provided
+    if ebook_extensions is None:
+        ebook_extensions = scan_folder.get_extensions()
 
     scan_status.message = "Counting files..."
     scan_status.save()
@@ -140,6 +145,43 @@ def _complete_metadata_for_books(books, scan_status):
             logger.info(f"Completed metadata for {i}/{total_incomplete} books")
 
 
+def discover_books_in_folder(directory, ebook_extensions=None, cover_extensions=None):
+    """
+    Discover all ebook files in a directory.
+
+    Args:
+        directory: Path to scan
+        ebook_extensions: List of ebook extensions to look for (defaults to all supported formats)
+        cover_extensions: List of cover file extensions
+
+    Returns:
+        List of ebook file paths found
+    """
+    if ebook_extensions is None:
+        # Include all supported formats: ebooks, comics, and audiobooks
+        # Use set union to avoid duplicates (PDF appears in both ebooks and comics)
+        all_formats = set(
+            [f'.{fmt}' for fmt in EBOOK_FORMATS] +
+            [f'.{fmt}' for fmt in COMIC_FORMATS] +
+            [f'.{fmt}' for fmt in AUDIOBOOK_FORMATS]
+        )
+        ebook_extensions = sorted(list(all_formats))  # Sort for consistent output
+
+    if cover_extensions is None:
+        cover_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+
+    logger.info(f"[DISCOVER] Scanning directory: {directory}")
+    logger.info(f"[DISCOVER] Looking for extensions: {ebook_extensions}")
+
+    ebook_files, cover_files, opf_files = _collect_files(directory, ebook_extensions, cover_extensions)
+
+    logger.info(f"[DISCOVER] Found {len(ebook_files)} ebook files")
+    logger.info(f"[DISCOVER] Found {len(cover_files)} cover files")
+    logger.info(f"[DISCOVER] Found {len(opf_files)} OPF files")
+
+    return ebook_files
+
+
 def _collect_files(directory, ebook_exts, cover_exts):
     ebook_files, cover_files, opf_files = [], [], []
     for root, dirs, files in os.walk(directory):
@@ -184,8 +226,8 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
     logger.info(f"[INTERNAL METADATA PARSE] Path: {book.file_path}")
     _extract_internal_metadata(book)
 
-    # Skip ISBN scanning for comic books (CBR/CBZ don't typically have ISBNs)
-    is_comic = book.file_format.lower() in ['cbr', 'cbz']
+    # Skip ISBN scanning for comic books (comics don't typically have ISBNs)
+    is_comic = book.file_format.lower() in COMIC_FORMATS
 
     if not is_comic:
         logger.info(f"[CONTENT ISBN SCAN] Path: {book.file_path}")
@@ -228,7 +270,7 @@ def _extract_filename_metadata(book):
     source = DataSource.objects.get(name=DataSource.INITIAL_SCAN)
 
     # Use comic-specific parsing for comic books
-    is_comic = book.file_format.lower() in ['cbr', 'cbz']
+    is_comic = book.file_format.lower() in COMIC_FORMATS
     if is_comic:
         from books.scanner.parsing import parse_comic_metadata
         parsed = parse_comic_metadata(book.file_path)
@@ -293,6 +335,11 @@ def _extract_internal_metadata(book):
                 raise ValueError("CBZ file is not a valid ZIP archive.")
             extractor = comic.extract_cbz
 
+        elif fmt in ["cb7", "cbt"]:
+            # CB7 (7-Zip) and CBT (TAR) comic formats are not yet supported
+            logger.info(f"[SKIPPED] Comic format {fmt.upper()} not yet supported for metadata extraction: {book.file_path}")
+            return
+
         else:
             logger.info(f"[SKIPPED] No extractor available for format: {fmt}")
             return
@@ -337,3 +384,88 @@ def _create_placeholder_book(file_path, scan_folder):
             logger.info(f"Created placeholder for orphan OPF file: {file_path}")
     except Exception as e:
         logger.error(f"Error creating placeholder for {file_path}: {e}")
+
+
+def create_book_from_file(file_path, scan_folder):
+    """
+    Create a book record from a file path.
+
+    Args:
+        file_path: Path to the ebook file
+        scan_folder: ScanFolder object
+
+    Returns:
+        Book object or None if creation failed
+    """
+    try:
+        book, created = Book.get_or_create_by_path(
+            file_path=file_path,
+            defaults={
+                "file_format": get_file_format(file_path),
+                "file_size": os.path.getsize(file_path),
+                "scan_folder": scan_folder,
+            }
+        )
+
+        if created:
+            logger.info(f"[CREATE BOOK] Created new book record: {file_path}")
+            # Extract filename metadata
+            _extract_filename_metadata(book)
+        else:
+            logger.debug(f"[CREATE BOOK] Book already exists: {file_path}")
+
+        return book
+
+    except Exception as e:
+        logger.error(f"[CREATE BOOK ERROR] Failed to create book from {file_path}: {e}")
+        return None
+
+
+def extract_internal_metadata(book):
+    """
+    Extract internal metadata from a book file.
+
+    Args:
+        book: Book object
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        logger.info(f"[INTERNAL METADATA] Processing: {book.file_path}")
+        _extract_internal_metadata(book)
+        return True
+    except Exception as e:
+        logger.error(f"[INTERNAL METADATA ERROR] Failed for {book.file_path}: {e}")
+        book.is_corrupted = True
+        book.save()
+        return False
+
+
+def query_external_metadata(book):
+    """
+    Query external APIs for book metadata and covers.
+
+    Args:
+        book: Book object
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Skip external queries for comic books
+        is_comic = book.file_format.lower() in COMIC_FORMATS
+        if is_comic:
+            logger.info(f"[EXTERNAL METADATA] Skipping external queries for comic: {book.file_path}")
+            return True
+
+        logger.info(f"[EXTERNAL METADATA] Querying external APIs: {book.file_path}")
+        query_metadata_and_covers(book)
+
+        # Resolve final metadata
+        resolve_final_metadata(book)
+
+        return True
+    except Exception as e:
+        logger.error(f"[EXTERNAL METADATA ERROR] Failed for {book.file_path}: {e}")
+        return False

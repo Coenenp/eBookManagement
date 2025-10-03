@@ -11,6 +11,7 @@ from django.conf.urls.static import static
 from . import views
 from .views import scanning as scanning_views
 from .views import wizard as wizard_views
+from .views import sections as sections_views
 # All scanning and sections views are now imported via views module
 from .views import SeriesListView, SeriesDetailView
 
@@ -46,9 +47,17 @@ urlpatterns = [
     path('ebooks/', views.EbooksMainView.as_view(), name='ebooks_main'),
     path('ebooks/ajax/list/', views.ebooks_ajax_list, name='ebooks_ajax_list'),
     path('ebooks/ajax/detail/<int:book_id>/', views.ebooks_ajax_detail, name='ebooks_ajax_detail'),
+    path('ebooks/ajax/toggle_read/', sections_views.ebooks_ajax_toggle_read, name='ebooks_ajax_toggle_read'),
+    path('ebooks/ajax/download/<int:book_id>/', sections_views.ebooks_ajax_download, name='ebooks_ajax_download'),
+    path('ebooks/ajax/companion_files/<int:book_id>/', sections_views.ebooks_ajax_companion_files, name='ebooks_ajax_companion_files'),
 
     path('series/', views.SeriesMainView.as_view(), name='series_main'),
     path('series/ajax/list/', views.series_ajax_list, name='series_ajax_list'),
+    path('series/ajax/detail/<int:series_id>/', sections_views.series_ajax_detail, name='series_ajax_detail'),
+    path('series/ajax/toggle_read/', sections_views.series_ajax_toggle_read, name='series_ajax_toggle_read'),
+    path('series/ajax/mark_read/', sections_views.series_ajax_mark_read, name='series_ajax_mark_read'),
+    path('series/ajax/download/<int:series_id>/', sections_views.series_ajax_download, name='series_ajax_download'),
+    path('series/ajax/download_book/<int:book_id>/', sections_views.series_ajax_download_book, name='series_ajax_download_book'),
     # Management-oriented series list/detail expected by tests
     path('series/list/', SeriesListView.as_view(), name='series_list'),
     path('series/<int:pk>/', SeriesDetailView.as_view(), name='series_detail'),

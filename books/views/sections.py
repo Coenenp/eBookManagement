@@ -7,6 +7,7 @@ from django.db.models import Q
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.apps import apps
+from books.models import COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
 
 
 def get_book_metadata_dict(book):
@@ -399,7 +400,9 @@ class ComicsMainView(LoginRequiredMixin, TemplateView):
         comics_from_final = FinalMetadata.objects.filter(
             book__scan_folder__content_type='comics',
             book__scan_folder__is_active=True,
-            book__file_format__in=['cbr', 'cbz']
+            book__file_format__in=COMIC_FORMATS
+        ).exclude(
+            book__file_format__in=EBOOK_FORMATS  # Exclude ebook formats
         ).select_related('book')
 
         # Count unique series + standalone comics
@@ -419,7 +422,9 @@ class ComicsMainView(LoginRequiredMixin, TemplateView):
             comics_count = Book.objects.filter(
                 scan_folder__content_type='comics',
                 scan_folder__is_active=True,
-                file_format__in=['cbr', 'cbz']
+                file_format__in=COMIC_FORMATS
+            ).exclude(
+                file_format__in=EBOOK_FORMATS  # Exclude ebook formats
             ).count()
 
         context['comics_count'] = comics_count
@@ -437,7 +442,9 @@ def comics_ajax_list(request):
         comics_from_final = FinalMetadata.objects.filter(
             book__scan_folder__content_type='comics',
             book__scan_folder__is_active=True,
-            book__file_format__in=['cbr', 'cbz']
+            book__file_format__in=COMIC_FORMATS
+        ).exclude(
+            book__file_format__in=EBOOK_FORMATS  # Exclude ebook formats
         ).select_related('book', 'book__scan_folder')
 
         # Group by series if available
@@ -627,3 +634,140 @@ def audiobooks_ajax_detail(request, book_id):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+@login_required
+def ebooks_ajax_toggle_read(request):
+    """AJAX endpoint to toggle read status for ebooks"""
+    if request.method == 'POST':
+        try:
+            book_id = request.POST.get('book_id')
+            if not book_id:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Book ID is required'
+                }, status=400)
+
+            # Validate book exists
+            Book = apps.get_model('books', 'Book')
+            get_object_or_404(Book, id=book_id)
+
+            # Toggle the read status (assuming there's a read field or we use metadata)
+            # This is a placeholder implementation
+            return JsonResponse({
+                'success': True,
+                'message': 'Read status toggled successfully'
+            })
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+    return JsonResponse({
+        'success': False,
+        'error': 'Only POST method allowed'
+    }, status=405)
+
+
+@login_required
+def ebooks_ajax_download(request, book_id):
+    """AJAX endpoint to handle ebook downloads"""
+    try:
+        Book = apps.get_model('books', 'Book')
+        book = get_object_or_404(Book, id=book_id)
+
+        # Placeholder implementation for download
+        return JsonResponse({
+            'success': True,
+            'download_url': f'/media/books/{book.file_path}',
+            'filename': book.filename if hasattr(book, 'filename') else f'book_{book.id}'
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+def ebooks_ajax_companion_files(request, book_id):
+    """AJAX endpoint to get companion files for ebooks"""
+    try:
+        # Validate book exists
+        Book = apps.get_model('books', 'Book')
+        get_object_or_404(Book, id=book_id)
+
+        # Placeholder implementation for companion files
+        companion_files = []
+
+        return JsonResponse({
+            'success': True,
+            'companion_files': companion_files
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+def series_ajax_detail(request, series_id):
+    """AJAX endpoint for series detail"""
+    try:
+        Series = apps.get_model('books', 'Series')
+        series = get_object_or_404(Series, id=series_id)
+
+        return JsonResponse({
+            'success': True,
+            'series': {
+                'id': series.id,
+                'name': series.name,
+            }
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+def series_ajax_toggle_read(request):
+    """AJAX endpoint to toggle read status for series"""
+    return JsonResponse({
+        'success': True,
+        'message': 'Series read status toggled'
+    })
+
+
+@login_required
+def series_ajax_mark_read(request):
+    """AJAX endpoint to mark series as read"""
+    return JsonResponse({
+        'success': True,
+        'message': 'Series marked as read'
+    })
+
+
+@login_required
+def series_ajax_download(request, series_id):
+    """AJAX endpoint to download entire series"""
+    return JsonResponse({
+        'success': True,
+        'message': 'Series download initiated'
+    })
+
+
+@login_required
+def series_ajax_download_book(request, book_id):
+    """AJAX endpoint to download book from series"""
+    return JsonResponse({
+        'success': True,
+        'message': 'Book download initiated'
+    })

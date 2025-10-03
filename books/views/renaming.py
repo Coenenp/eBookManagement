@@ -9,6 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.generic import ListView, TemplateView
 from django.http import JsonResponse
 from django.apps import apps
+from books.models import COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
 from django.db import models
 
 
@@ -286,7 +287,7 @@ class BookRenamerView(LoginRequiredMixin, ListView):
         """Analyze comic series completion for comic books."""
         # Get all comic books (CBZ, CBR formats)
         comic_books = self.get_queryset().filter(
-            file_format__in=['cbz', 'cbr'],
+            file_format__in=COMIC_FORMATS,
             finalmetadata__final_series__isnull=False
         ).exclude(finalmetadata__final_series='')
 

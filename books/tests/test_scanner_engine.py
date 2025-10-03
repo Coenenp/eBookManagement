@@ -19,10 +19,10 @@ class EbookScannerTests(TestCase):
 
     def setUp(self):
         """Set up test data."""
-        # Create data sources
-        self.data_source = DataSource.objects.create(
+        # Create or get data sources
+        self.data_source, _ = DataSource.objects.get_or_create(
             name=DataSource.INITIAL_SCAN,
-            trust_level=0.2
+            defaults={'trust_level': 0.2}
         )
 
     def test_init_default_settings(self):

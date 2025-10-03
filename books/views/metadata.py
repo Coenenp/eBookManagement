@@ -6,7 +6,6 @@ from django.shortcuts import get_object_or_404, redirect, render, reverse
 from django.views.generic import DetailView, View, ListView
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.utils import timezone
 
 from ..models import (
     Book, FinalMetadata, BookTitle, BookAuthor, Author, BookSeries, Series,
@@ -88,7 +87,7 @@ class BookMetadataUpdateView(LoginRequiredMixin, View):
                 final_metadata.is_reviewed = is_reviewed
                 updated_fields.append('reviewed status')
 
-            final_metadata.updated_at = timezone.now()
+            # last_updated is auto-updated by Django
 
             # Save with flag to prevent auto-update since we've made manual changes
             final_metadata._manual_update = True

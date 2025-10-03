@@ -72,7 +72,12 @@ class EbookScanner:
         total_files_across_all_folders = 0
         for path in folders_to_scan:
             from books.scanner.folder import _collect_files
-            ebook_files, _, _ = _collect_files(path, self.ebook_extensions, self.cover_extensions)
+            # Get the scan folder object to determine content-type specific extensions
+            scan_folder_obj, _ = ScanFolder.objects.get_or_create(
+                path=path, defaults={"is_active": True}
+            )
+            content_specific_extensions = scan_folder_obj.get_extensions()
+            ebook_files, _, _ = _collect_files(path, content_specific_extensions, self.cover_extensions)
             total_files_across_all_folders += len(ebook_files)
 
         status.total_files = total_files_across_all_folders
@@ -97,11 +102,13 @@ class EbookScanner:
             scan_folder_obj.save()
 
             try:
+                # Use content-type specific extensions instead of generic ones
+                content_specific_extensions = scan_folder_obj.get_extensions()
                 scan_directory(
                     directory=path,
                     scan_folder=scan_folder_obj,
                     rescan=self.rescan,
-                    ebook_extensions=self.ebook_extensions,
+                    ebook_extensions=content_specific_extensions,
                     cover_extensions=self.cover_extensions,
                     scan_status=status,  # Pass status for progress tracking
                 )
@@ -173,11 +180,13 @@ class EbookScanner:
             logger.info(f"Resuming scan of folder: {path}")
 
             try:
+                # Use content-type specific extensions instead of generic ones
+                content_specific_extensions = scan_folder_obj.get_extensions()
                 scan_directory(
                     directory=path,
                     scan_folder=scan_folder_obj,
                     rescan=self.rescan,
-                    ebook_extensions=self.ebook_extensions,
+                    ebook_extensions=content_specific_extensions,
                     cover_extensions=self.cover_extensions,
                     scan_status=status,
                     resume_from=status.last_processed_file,  # Resume from last processed file

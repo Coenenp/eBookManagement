@@ -150,7 +150,10 @@ class RateLimitedAPIClientTests(TestCase):
         with patch('books.scanner.rate_limiting.time.sleep') as mock_sleep:
             result = self.client.make_request('http://example.com')
             self.assertEqual(result, {'status': 'ok'})
-            mock_sleep.assert_called_once_with(1)
+            # Should call sleep twice: once for base delay, once for 429 retry
+            self.assertEqual(mock_sleep.call_count, 2)
+            # The second call should be for the retry-after value
+            mock_sleep.assert_any_call(1)
             self.assertEqual(mock_get.call_count, 2)
 
 
