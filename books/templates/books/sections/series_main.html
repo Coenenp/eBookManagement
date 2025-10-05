@@ -20,7 +20,7 @@
 
 {% block items_list %}
 <div id="series-list-container">
-    {% include 'books/series_list_enhanced.html' with series=series %}
+    <!-- Series will be loaded via AJAX -->
 </div>
 {% endblock %}
 
@@ -35,22 +35,21 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-    // Configuration for series section
-    window.seriesConfig = {
-        ajax_urls: {
-            list: '{% url "books:series_ajax_list" %}',
-            detail: '{% url "books:series_ajax_detail" 0 %}',
-            toggle_read: '{% url "books:series_ajax_toggle_read" %}',
-            mark_read: '{% url "books:series_ajax_mark_read" %}',
-            download: '{% url "books:series_ajax_download" 0 %}',
-            download_book: '{% url "books:series_ajax_download_book" 0 %}'
-        },
-        urls: {
-            detail: '{% url "books:book_detail" 0 %}'
-        }
-    };
-</script>
-<script src="{% static 'book/js/media-library-utils.js' %}"></script>
+{{ block.super }}
 <script src="{% static 'book/js/series-section.js' %}"></script>
+<script>
+// Configuration for series section
+window.seriesConfig = {
+    ajax_urls: {
+        list: '{% url "books:series_ajax_list" %}',
+        detail: '{% url "books:series_ajax_detail" 0 %}'.replace('0', '{id}'),
+        mark_read: '{% url "books:series_ajax_mark_read" %}',
+        book_detail: '{% url "books:book_detail" 0 %}'.replace('0', '{id}'),
+        book_list: '{% url "books:book_list" %}'
+    }
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    new SeriesSectionManager();
+});</script>
 {% endblock %}

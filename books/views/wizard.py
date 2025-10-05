@@ -12,7 +12,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.urls import reverse
 from django.utils import timezone
 
-from ..models import SetupWizard, ScanFolder
+from books.models import SetupWizard, ScanFolder
 
 logger = logging.getLogger('books.scanner')
 
@@ -21,16 +21,19 @@ class WizardRequiredMixin:
     """Mixin to redirect users to wizard if not completed."""
 
     def dispatch(self, request, *args, **kwargs):
+        # Check if this is a wizard URL before any processing
+        is_wizard_url = 'wizard' in request.path
+
         if request.user.is_authenticated:
             wizard, created = SetupWizard.get_or_create_for_user(request.user)
-            if not wizard.is_completed and not wizard.is_skipped:
-                # Allow access to wizard views themselves
-                if 'wizard' in request.path:
-                    return super().dispatch(request, *args, **kwargs)
-                # Redirect to current wizard step
+            if not wizard.is_completed and not wizard.is_skipped and not is_wizard_url:
+                # Redirect to current wizard step if not accessing wizard itself
                 return redirect('books:wizard_step', step=wizard.current_step)
 
-        return super().dispatch(request, *args, **kwargs)
+        # Call parent dispatch if it exists
+        if hasattr(super(), 'dispatch'):
+            return super().dispatch(request, *args, **kwargs)
+        return None
 
 
 class SetupWizardView(LoginRequiredMixin, TemplateView):

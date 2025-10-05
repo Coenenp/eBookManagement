@@ -2,7 +2,7 @@
 Cover management service for handling book cover operations.
 """
 import logging
-from ..utils.image_utils import encode_cover_to_base64
+from books.utils.image_utils import encode_cover_to_base64
 
 logger = logging.getLogger('books.scanner')
 
@@ -109,7 +109,7 @@ class DashboardService:
     @staticmethod
     def get_dashboard_statistics():
         """Get dashboard statistics."""
-        from ..models import FinalMetadata, Book
+        from books.models import FinalMetadata, Book
         from django.db.models import Count, Avg, Q
 
         # Get total book count from Book model, not FinalMetadata

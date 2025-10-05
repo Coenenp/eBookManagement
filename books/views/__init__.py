@@ -94,8 +94,10 @@ from .scanning import (  # noqa: F401
 # Sections views - COMPLETED (moved from views_modules/sections.py)
 from .sections import (  # noqa: F401
     EbooksMainView, ebooks_ajax_list, ebooks_ajax_detail,
-    SeriesMainView, series_ajax_list, ComicsMainView, comics_ajax_list,
-    AudiobooksMainView, audiobooks_ajax_list, audiobooks_ajax_detail
+    SeriesMainView, series_ajax_list, ComicsMainView, comics_ajax_list, comics_ajax_detail,
+    comics_ajax_toggle_read, comics_ajax_download,
+    AudiobooksMainView, audiobooks_ajax_list, audiobooks_ajax_detail,
+    audiobooks_ajax_toggle_read, audiobooks_ajax_download
 )
 
 # Utility functions - COMPLETED (needed by tests and views)
@@ -154,8 +156,10 @@ __all__ = [
 
     # Media sections views
     'EbooksMainView', 'ebooks_ajax_list', 'ebooks_ajax_detail',
-    'SeriesMainView', 'series_ajax_list', 'ComicsMainView', 'comics_ajax_list',
+    'SeriesMainView', 'series_ajax_list', 'ComicsMainView', 'comics_ajax_list', 'comics_ajax_detail',
+    'comics_ajax_toggle_read', 'comics_ajax_download',
     'AudiobooksMainView', 'audiobooks_ajax_list', 'audiobooks_ajax_detail',
+    'audiobooks_ajax_toggle_read', 'audiobooks_ajax_download',
 
     # Utility functions
     'get_filter_params', 'build_filter_context', 'paginate_queryset', 'format_file_size',

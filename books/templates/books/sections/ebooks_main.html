@@ -18,7 +18,7 @@
 
 {% block items_list %}
 <div id="ebooks-list-container">
-    {% include 'books/ebook_list_enhanced.html' with ebooks=ebooks %}
+    {% include 'books/ebook_list.html' with ebooks=ebooks %}
 </div>
 {% endblock %}
 
@@ -33,8 +33,9 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ block.super }}
 <script>
-    // Configuration for ebooks section
+    // Configuration for the ebooks section
     window.ebooksConfig = {
         ajax_urls: {
             list: '{% url "books:ebooks_ajax_list" %}',
@@ -47,7 +48,9 @@
             detail: '{% url "books:book_detail" 0 %}'
         }
     };
+
 </script>
 <script src="{% static 'book/js/media-library-utils.js' %}"></script>
+<script src="{% static 'book/js/base-section.js' %}"></script>
 <script src="{% static 'book/js/ebooks-section.js' %}"></script>
 {% endblock %}

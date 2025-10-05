@@ -18,7 +18,7 @@
 
 {% block items_list %}
 <div id="comics-list-container">
-    {% include 'books/comic_list_enhanced.html' with series=series standalone=standalone %}
+    {% include 'books/comic_list.html' with series=series standalone=standalone %}
 </div>
 {% endblock %}
 
@@ -33,8 +33,9 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ block.super }}
 <script>
-    // Configuration for comics section
+    // Configuration for the comics section
     window.comicsConfig = {
         ajax_urls: {
             list: '{% url "books:comics_ajax_list" %}',
@@ -46,7 +47,28 @@
             detail: '{% url "books:book_detail" 0 %}'
         }
     };
+
+    // Base functionality integration for split-pane compatibility  
+    function selectItem(itemId) {
+        // Clear previous selection
+        document.querySelectorAll('.list-item.selected').forEach(el => {
+            el.classList.remove('selected');
+        });
+        
+        // Add selection to new item
+        const newItem = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (newItem) {
+            newItem.classList.add('selected');
+        }
+        
+        // Load item detail using the comics manager
+        if (window.comicsManager) {
+            window.comicsManager.selectItem(itemId);
+        }
+    }
+
 </script>
 <script src="{% static 'book/js/media-library-utils.js' %}"></script>
+<script src="{% static 'book/js/base-section.js' %}"></script>
 <script src="{% static 'book/js/comics-section.js' %}"></script>
 {% endblock %}

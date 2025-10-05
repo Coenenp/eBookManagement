@@ -110,7 +110,7 @@ class BookListContextMixin:
     def get_list_statistics_context(self):
         """Get statistics for book list context."""
         from django.apps import apps
-        from ..utils.language_manager import LanguageManager
+        from books.utils.language_manager import LanguageManager
         DataSource = apps.get_model('books', 'DataSource')
 
         metadata_stats = apps.get_model('books', 'FinalMetadata').objects.aggregate(
@@ -149,7 +149,7 @@ class BookListContextMixin:
 
     def get_filter_context(self):
         """Get filter context for template rendering."""
-        from ..views.utilities import get_filter_params, build_filter_context
+        from books.views.utilities import get_filter_params, build_filter_context
 
         # Extract filter parameters from request
         filters = get_filter_params(self.request.GET)

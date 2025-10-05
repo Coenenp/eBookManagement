@@ -10,8 +10,8 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.contrib import messages
 from django.shortcuts import redirect
-from ..models import UserProfile
-from ..forms import UserProfileForm
+from books.models import UserProfile
+from books.forms import UserProfileForm
 
 
 class UserSettingsView(LoginRequiredMixin, TemplateView):

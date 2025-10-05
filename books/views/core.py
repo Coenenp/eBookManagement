@@ -11,13 +11,13 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
 from django.db import transaction
 
-from ..models import (
+from books.models import (
     Book, FinalMetadata
 )
-from ..forms import UserRegisterForm, MetadataReviewForm
-from ..mixins import BookNavigationMixin, MetadataContextMixin, BookListContextMixin
-from ..services.common import CoverService, DashboardService
-from ..book_utils import MetadataProcessor, CoverManager, GenreManager, MetadataResetter
+from books.forms import UserRegisterForm, MetadataReviewForm
+from books.mixins import BookNavigationMixin, MetadataContextMixin, BookListContextMixin
+from books.services.common import CoverService, DashboardService
+from books.book_utils import MetadataProcessor, CoverManager, GenreManager, MetadataResetter
 from books.queries.book_queries import build_book_queryset
 
 logger = logging.getLogger('books.scanner')
@@ -54,7 +54,9 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
         # Get analytics data
         try:
-            from books.analytics.enhanced_dashboard import DashboardAnalytics, LibraryHealth
+            from books.analytics.dashboard import DashboardAnalytics, LibraryHealth
+
+            dashboard_analytics = DashboardAnalytics()
             from books.analytics import dashboard_metrics
 
             # Get enhanced chart data
@@ -139,7 +141,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 health_score = 85  # Default
                 quality_issues = []
 
-        from ..models import Book, FinalMetadata, ScanFolder, ScanLog
+        from books.models import Book, FinalMetadata, ScanFolder, ScanLog
         from django.utils import timezone
         from django.db.models import Count
         from datetime import timedelta

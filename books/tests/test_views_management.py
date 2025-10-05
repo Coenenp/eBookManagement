@@ -448,7 +448,7 @@ class GenreManagementViewTests(TestCase):
 
         # Check success message
         messages = list(get_messages(response.wsgi_request))
-        self.assertTrue(any('Deleted 2 genres' in str(msg) for msg in messages))
+        self.assertTrue(any('Successfully deleted 2 genre(s)' in str(msg) for msg in messages))
 
     def test_genre_bulk_delete_protects_reviewed_genres(self):
         """Test that bulk delete protects reviewed genres"""
@@ -528,7 +528,7 @@ class GenreManagementViewTests(TestCase):
 
         # Check success message
         messages = list(get_messages(response.wsgi_request))
-        self.assertTrue(any('Marked 2 genre(s) as reviewed' in str(msg) for msg in messages))
+        self.assertTrue(any('Successfully marked 2 genre(s) as reviewed' in str(msg) for msg in messages))
 
 
 class SeriesManagementViewTests(TestCase):

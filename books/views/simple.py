@@ -13,7 +13,7 @@ from django.views.generic import TemplateView
 from django.http import JsonResponse
 from django.db.models import Count
 
-from ..models import Book, Author, Genre, Series, FinalMetadata
+from books.models import Book, Author, Genre, Series, FinalMetadata
 
 
 # Static/Information Pages

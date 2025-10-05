@@ -413,8 +413,9 @@ class AjaxErrorHandlingTests(TestCase):
 
     def test_ajax_endpoints_handle_invalid_ids(self):
         """Test AJAX endpoints handle invalid object IDs."""
+        # Use a non-existent but valid integer ID
         response = self.client.get(
-            reverse('books:ebooks_ajax_detail', args=['invalid'])
+            reverse('books:ebooks_ajax_detail', args=[99999])
         )
 
         self.assertEqual(response.status_code, 404)

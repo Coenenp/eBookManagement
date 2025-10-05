@@ -96,8 +96,8 @@ class BaseMetadataValidator:
             year = int(value) if isinstance(value, int) else int(str(value).strip())
             current_year = timezone.now().year
 
-            if year < 1000 or year > current_year + 10:
-                raise forms.ValidationError(f"{field_name} must be between 1000 and {current_year + 10}.")
+            if year < 1000 or year > current_year + 1:
+                raise forms.ValidationError(f"{field_name} must be between 1000 and {current_year + 1}.")
 
             return year
         except (ValueError, TypeError):
@@ -107,7 +107,7 @@ class BaseMetadataValidator:
     def validate_isbn(value):
         """Basic ISBN validation"""
         if not value:
-            return value
+            return ''
 
         # Remove hyphens, spaces, and other formatting for validation
         isbn = ''.join(c for c in str(value) if c.isalnum())

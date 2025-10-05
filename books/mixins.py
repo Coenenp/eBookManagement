@@ -151,7 +151,6 @@ class BaseMetadataValidator:
         return ', '.join(item_list)
 
     @staticmethod
-    @staticmethod
     def validate_integer_list(value, field_name="items"):
         """Validate comma-separated integer list"""
         if not value:

@@ -64,10 +64,15 @@ urlpatterns = [
 
     path('comics/', views.ComicsMainView.as_view(), name='comics_main'),
     path('comics/ajax/list/', views.comics_ajax_list, name='comics_ajax_list'),
+    path('comics/ajax/detail/<int:book_id>/', views.comics_ajax_detail, name='comics_ajax_detail'),
+    path('comics/ajax/toggle_read/', views.comics_ajax_toggle_read, name='comics_ajax_toggle_read'),
+    path('comics/ajax/download/<int:book_id>/', views.comics_ajax_download, name='comics_ajax_download'),
 
     path('audiobooks/', views.AudiobooksMainView.as_view(), name='audiobooks_main'),
     path('audiobooks/ajax/list/', views.audiobooks_ajax_list, name='audiobooks_ajax_list'),
     path('audiobooks/ajax/detail/<int:book_id>/', views.audiobooks_ajax_detail, name='audiobooks_ajax_detail'),
+    path('audiobooks/ajax/toggle_read/', views.audiobooks_ajax_toggle_read, name='audiobooks_ajax_toggle_read'),
+    path('audiobooks/ajax/download/<int:book_id>/', views.audiobooks_ajax_download, name='audiobooks_ajax_download'),
     path('book/<int:pk>/', views.BookDetailView.as_view(), name='book_detail'),
     path('book/<int:pk>/metadata/', views.BookMetadataView.as_view(), name='book_metadata'),
     path('book/<int:pk>/metadata/update/', views.BookMetadataUpdateView.as_view(), name='book_metadata_update'),

@@ -7,12 +7,12 @@ from django.views.generic import DetailView, View, ListView
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 
-from ..models import (
+from books.models import (
     Book, FinalMetadata, BookTitle, BookAuthor, Author, BookSeries, Series,
     BookPublisher, Publisher, BookMetadata, DataSource
 )
-from ..mixins import SimpleNavigationMixin, MetadataContextMixin
-from ..book_utils import CoverManager, GenreManager
+from books.mixins import SimpleNavigationMixin, MetadataContextMixin
+from books.book_utils import CoverManager, GenreManager
 
 logger = logging.getLogger('books.scanner')
 

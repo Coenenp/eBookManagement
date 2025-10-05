@@ -166,8 +166,9 @@ class BatchRenamer:
             logger.warning(f"Could not generate target path for book {book.id}")
             return
 
-        # Ensure target folder exists in target path
-        target_path = Path(target_folder) / target_filename
+        # Use book's current directory as base and create absolute target path
+        book_base_dir = Path(book.file_path).parent
+        target_path = book_base_dir / target_folder / target_filename
 
         # Add main file operation
         main_operation = FileOperation(

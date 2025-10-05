@@ -10,7 +10,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.generic import ListView, TemplateView
 from django.http import JsonResponse
 from django.apps import apps
-from books.models import COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
+from books.models import COMIC_FORMATS
 from django.db import models
 
 
@@ -20,7 +20,7 @@ def get_model(model_name):
 
 class BookRenamerView(LoginRequiredMixin, ListView):
     """Enhanced view for organizing and renaming reviewed books with template patterns."""
-    template_name = 'books/book_renamer_enhanced.html'
+    template_name = 'books/book_renamer.html'
     context_object_name = 'books'
     paginate_by = 50
 
