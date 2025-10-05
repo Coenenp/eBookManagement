@@ -136,7 +136,7 @@ class SeriesSectionManager extends BaseSectionManager {
                     `}
                 </div>
                 <div class="item-title">
-                    <i class="fas fa-chevron-${this.expandedSeries.has(series.id) ? 'down' : 'right'} me-2 text-muted"></i>
+                    <i class="fas fa-chevron-right expand-icon me-2"></i>
                     ${MediaLibraryUtils.escapeHtml(series.name)}
                 </div>
                 <div class="item-subtitle">${series.authors.map(author => MediaLibraryUtils.escapeHtml(author)).join(', ')}</div>

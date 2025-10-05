@@ -372,8 +372,8 @@
   --chart-warning: var(--bs-warning);
   --chart-danger: var(--bs-danger);
   --chart-info: var(--bs-info);
-  --chart-purple: #6f42c1;
-  --chart-teal: #20c997;
+  --chart-purple: var(--bs-purple, #6f42c1);
+  --chart-teal: var(--bs-teal, #20c997);
   --chart-gray: var(--bs-secondary);
   --chart-text: var(--bs-body-color);
   --chart-border: var(--bs-white);

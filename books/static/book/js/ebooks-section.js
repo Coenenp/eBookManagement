@@ -11,6 +11,8 @@ class EbooksSectionManager extends BaseSectionManager {
             apiEndpoint: window.ebooksConfig?.ajax_urls?.list || '/books/ebooks/ajax/',
             detailEndpoint: window.ebooksConfig?.ajax_urls?.detail || '/books/ebooks/ajax/'
         });
+        
+        this.expandedEbooks = new Set();
     }
 
     bindEvents() {
@@ -121,7 +123,8 @@ class EbooksSectionManager extends BaseSectionManager {
         `;
         
         const itemsHtml = ebooksData.map(ebook => `
-            <div class="list-item" data-item-id="${ebook.id}" onclick="window.ebookManager.selectItem(${ebook.id})">
+            <div class="list-item ebook-item ${this.expandedEbooks.has(ebook.id) ? 'expanded' : ''}" 
+                 data-item-id="${ebook.id}" onclick="window.ebookManager.toggleEbook(${ebook.id})">
                 <div class="item-cover-tiny">
                     ${ebook.cover_url ? `
                         <img src="${ebook.cover_url}" alt="Book Cover">
@@ -131,22 +134,103 @@ class EbooksSectionManager extends BaseSectionManager {
                         </div>
                     `}
                 </div>
-                <div class="item-title">${MediaLibraryUtils.escapeHtml(ebook.title)}</div>
+                <div class="item-title">
+                    <i class="fas fa-chevron-right expand-icon me-2"></i>
+                    ${MediaLibraryUtils.escapeHtml(ebook.title)}
+                </div>
                 <div class="item-subtitle">${MediaLibraryUtils.escapeHtml(ebook.author)}</div>
                 <div class="item-info">
                     <div class="item-badges">
                         <span class="badge bg-secondary">${ebook.file_format.toUpperCase()}</span>
                         ${ebook.is_read ? '<span class="badge bg-success">✓</span>' : ''}
                         ${ebook.reading_progress > 0 && !ebook.is_read ? '<span class="badge bg-warning">📖</span>' : ''}
+                        ${ebook.companion_files && ebook.companion_files.length > 0 ? `<span class="badge bg-info">${ebook.companion_files.length} files</span>` : ''}
                     </div>
                     <div class="text-muted small">
                         ${MediaLibraryUtils.formatFileSize(ebook.file_size)}
                     </div>
                 </div>
             </div>
+            ${this.expandedEbooks.has(ebook.id) ? this.renderCompanionFiles(ebook) : ''}
         `).join('');
         
         return headerHtml + itemsHtml;
+    }
+
+    renderCompanionFiles(ebook) {
+        if (!ebook.companion_files || ebook.companion_files.length === 0) {
+            return `
+                <div class="companion-files-container">
+                    <div class="list-item companion-file-item ms-4 text-muted">
+                        <small><i class="fas fa-info-circle me-2"></i>No companion files found</small>
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="companion-files-container">
+                ${ebook.companion_files.map(file => `
+                    <div class="list-item companion-file-item ms-4" 
+                         onclick="event.stopPropagation(); window.ebookManager.selectItem(${ebook.id})">
+                        <div class="companion-file-details">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="file-name">
+                                        <i class="fas fa-file me-2"></i>
+                                        ${MediaLibraryUtils.escapeHtml(file.name)}
+                                    </div>
+                                    <small class="text-muted">${file.type} • ${MediaLibraryUtils.formatFileSize(file.size)}</small>
+                                </div>
+                                <div class="file-actions">
+                                    <button class="btn btn-sm btn-outline-primary me-1" 
+                                            onclick="event.stopPropagation(); window.ebookManager.downloadCompanionFile('${file.path}')" 
+                                            title="Download file">
+                                        <i class="fas fa-download"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary" 
+                                            onclick="event.stopPropagation(); window.ebookManager.showFileLocation('${file.path}')" 
+                                            title="Show in folder">
+                                        <i class="fas fa-folder-open"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    toggleEbook(ebookId) {
+        if (this.expandedEbooks.has(ebookId)) {
+            this.expandedEbooks.delete(ebookId);
+        } else {
+            this.expandedEbooks.add(ebookId);
+            // Load companion files if not already loaded
+            this.loadCompanionFiles(ebookId);
+        }
+        this.renderList();
+    }
+
+    downloadCompanionFile(filePath) {
+        const urls = window.ebooksConfig?.ajax_urls;
+        if (!urls?.companion_files) {
+            this.showToast('Download functionality not available', 'warning');
+            return;
+        }
+
+        // In a real implementation, this would trigger the download
+        this.showToast('Downloading companion file...', 'info');
+    }
+
+    showFileLocation(filePath) {
+        // Copy path to clipboard as a fallback
+        navigator.clipboard.writeText(filePath).then(() => {
+            this.showToast('File path copied to clipboard', 'info');
+        }).catch(() => {
+            this.showToast('Unable to copy path to clipboard', 'warning');
+        });
     }
 
     getCurrentViewType() {

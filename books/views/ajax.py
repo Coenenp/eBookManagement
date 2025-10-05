@@ -16,8 +16,8 @@ from django.views.decorators.http import require_http_methods, require_POST
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 
-from ..models import Book, UserProfile
-from ..book_utils import BookStatusManager, MetadataConflictAnalyzer, MetadataRemover, CoverManager
+from books.models import Book, UserProfile
+from books.book_utils import BookStatusManager, MetadataConflictAnalyzer, MetadataRemover, CoverManager
 
 logger = logging.getLogger('books.scanner')
 

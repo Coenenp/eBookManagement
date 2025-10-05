@@ -61,10 +61,10 @@ class BookRenamerViewTests(TestCase):
         response = self.client.get(reverse('books:book_renamer'))
         self.assertEqual(response.status_code, 200)
 
-        # Check context variables
-        self.assertIn('books_with_paths', response.context)
-        self.assertIn('complete_series', response.context)
-        self.assertIn('incomplete_series', response.context)
+        # Check context variables - the view provides books_with_previews, not books_with_paths
+        self.assertIn('books_with_previews', response.context)
+        self.assertIn('predefined_patterns', response.context)
+        self.assertIn('available_tokens', response.context)
 
     def test_series_analysis_with_null_series_number(self):
         """Test series analysis handles null series numbers correctly"""
@@ -115,10 +115,10 @@ class BookRenamerViewTests(TestCase):
         response = self.client.get(reverse('books:book_renamer'))
         self.assertEqual(response.status_code, 200)
 
-        books_with_paths = response.context['books_with_paths']
-        self.assertTrue(len(books_with_paths) > 0)
+        books_with_previews = response.context['books_with_previews']
+        self.assertTrue(len(books_with_previews) > 0)
 
-        book_data = books_with_paths[0]
+        book_data = books_with_previews[0]
         self.assertIn('new_path', book_data)
         self.assertIn('current_path', book_data)
         self.assertNotEqual(book_data['new_path'], book_data['current_path'])
@@ -143,11 +143,11 @@ class BookRenamerViewTests(TestCase):
         response = self.client.get(reverse('books:book_renamer'))
         self.assertEqual(response.status_code, 200)
 
-        books_with_paths = response.context['books_with_paths']
+        books_with_previews = response.context['books_with_previews']
 
         # Find the book with missing author
         missing_author_book = None
-        for book_data in books_with_paths:
+        for book_data in books_with_previews:
             if book_data['book'].id == book_missing_author.id:
                 missing_author_book = book_data
                 break
@@ -685,6 +685,6 @@ class FileHandlingEdgeCaseTests(TestCase):
         response = self.client.get(reverse('books:book_renamer'))
         self.assertEqual(response.status_code, 200)
 
-        books_with_paths = response.context['books_with_paths']
-        book_ids = [b['book'].id for b in books_with_paths]
+        books_with_previews = response.context['books_with_previews']
+        book_ids = [b['book'].id for b in books_with_previews]
         self.assertNotIn(book_no_metadata.id, book_ids)

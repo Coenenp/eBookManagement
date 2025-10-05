@@ -31,8 +31,8 @@ class RenamingViewsTestCase(TestCase):
 
         # Create test data
         self.author = Author.objects.create(
-            name="Isaac Asimov",
-            sort_name="Asimov, Isaac"
+            first_name="Isaac",
+            last_name="Asimov"
         )
 
         self.series = Series.objects.create(name="Foundation Series")
@@ -44,28 +44,87 @@ class RenamingViewsTestCase(TestCase):
 
         # Create test books
         self.book1 = Book.objects.create(
-            title="Foundation",
             file_path="/test/Foundation.epub",
             file_size=1024000,
-            file_format="epub",  # Use string format instead of Format model
-            # language=self.language,  # Commented out - no Language model
-            # category=self.genre  # Commented out - need to check Book model fields,
-            publication_year=1951
+            file_format="epub"
         )
-        self.book1.authors.add(self.author)
-        self.book1.series.add(self.series)
 
         self.book2 = Book.objects.create(
-            title="Foundation and Empire",
             file_path="/test/Foundation and Empire.epub",
             file_size=1536000,
-            file_format="epub",  # Use string format instead of Format model
-            # language=self.language,  # Commented out - no Language model
-            # category=self.genre  # Commented out - need to check Book model fields,
-            publication_year=1952
+            file_format="epub"
         )
-        self.book2.authors.add(self.author)
-        self.book2.series.add(self.series)
+
+        # Create metadata relationships
+        from books.models import DataSource, BookTitle, BookAuthor, BookSeries, FinalMetadata
+
+        # Create data source
+        self.data_source = DataSource.objects.create(
+            name=DataSource.INITIAL_SCAN,
+            trust_level=0.9
+        )
+
+        # Create book titles
+        BookTitle.objects.create(
+            book=self.book1,
+            title="Foundation",
+            source=self.data_source,
+            confidence=1.0
+        )
+        BookTitle.objects.create(
+            book=self.book2,
+            title="Foundation and Empire",
+            source=self.data_source,
+            confidence=1.0
+        )
+
+        # Create book-author relationships
+        BookAuthor.objects.create(
+            book=self.book1,
+            author=self.author,
+            source=self.data_source,
+            confidence=1.0,
+            is_main_author=True
+        )
+        BookAuthor.objects.create(
+            book=self.book2,
+            author=self.author,
+            source=self.data_source,
+            confidence=1.0,
+            is_main_author=True
+        )
+
+        # Create book-series relationships
+        BookSeries.objects.create(
+            book=self.book1,
+            series=self.series,
+            series_number="1",
+            source=self.data_source,
+            confidence=1.0
+        )
+        BookSeries.objects.create(
+            book=self.book2,
+            series=self.series,
+            series_number="2",
+            source=self.data_source,
+            confidence=1.0
+        )
+
+        # Create final metadata for renaming engine
+        FinalMetadata.objects.create(
+            book=self.book1,
+            final_title="Foundation",
+            final_author="Isaac Asimov",
+            final_series="Foundation Series",
+            final_series_number="1"
+        )
+        FinalMetadata.objects.create(
+            book=self.book2,
+            final_title="Foundation and Empire",
+            final_author="Isaac Asimov",
+            final_series="Foundation Series",
+            final_series_number="2"
+        )
 
         # Login user
         self.client.login(username='testuser', password='testpass123')

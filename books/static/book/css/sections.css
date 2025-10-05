@@ -1,0 +1,228 @@
+/* ======================================
+   📚 Media Sections - Consistent styling for all media sections
+   Using Bootstrap classes and theme variables
+========================================= */
+
+:root {
+    /* Theme-aware custom properties */
+    --section-transition: var(--bs-transition-base, all 0.2s ease-in-out);
+    --section-border-radius: var(--bs-border-radius, 0.375rem);
+    --section-box-shadow: var(--bs-box-shadow, 0 0.125rem 0.25rem rgba(0,0,0,0.075));
+}
+
+/* Expansion Icons */
+.expand-icon {
+    transition: var(--section-transition);
+    color: var(--bs-secondary, #6c757d);
+    font-size: 0.8em;
+}
+
+.expanded .expand-icon {
+    transform: rotate(90deg);
+    color: var(--bs-primary, #0d6efd);
+}
+
+/* List Item States - Using Bootstrap utility classes as base */
+.list-item {
+    cursor: pointer;
+    transition: var(--section-transition);
+    border-radius: var(--section-border-radius);
+    margin-bottom: var(--bs-spacer-1, 0.25rem);
+    padding: var(--bs-spacer-3, 0.75rem);
+}
+
+.list-item:hover {
+    background-color: var(--bs-gray-100, #f8f9fa);
+}
+
+.list-item.expanded {
+    background-color: var(--bs-primary-bg-subtle, rgba(13, 110, 253, 0.075));
+    border-left: 3px solid var(--bs-primary, #0d6efd);
+}
+
+.list-item.selected {
+    background-color: var(--bs-primary-bg-subtle, rgba(13, 110, 253, 0.125));
+    border-left: 3px solid var(--bs-primary, #0d6efd);
+}
+
+/* Sub-item containers - Using Bootstrap background utilities */
+.series-books-container,
+.companion-files-container,
+.audiobook-details-container {
+    background-color: var(--bs-gray-100, #f8f9fa);
+    border-left: 2px solid var(--bs-border-color, #dee2e6);
+    margin-left: 1rem;
+    border-radius: 0 var(--section-border-radius) var(--section-border-radius) 0;
+}
+
+/* Sub-items styling - Bootstrap card-like appearance */
+.series-book-item,
+.companion-file-item,
+.audiobook-detail-item {
+    background-color: var(--bs-body-bg, white);
+    border: 1px solid var(--bs-border-color-translucent, rgba(0,0,0,0.175));
+    margin: 0.25rem 0;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--section-border-radius);
+}
+
+.series-book-item:hover,
+.companion-file-item:hover,
+.audiobook-detail-item:hover {
+    background-color: var(--bs-tertiary-bg, #f8f9fa);
+    border-color: var(--bs-primary, #0d6efd);
+    box-shadow: var(--section-box-shadow);
+}
+
+/* Detail rows in expanded content */
+.detail-row {
+    margin-bottom: var(--bs-spacer-2, 0.5rem);
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--bs-border-color-translucent, rgba(0,0,0,0.125));
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+/* File actions styling - Bootstrap button sizing */
+.file-actions .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+/* Series count badges - Bootstrap badge styling */
+.series-count-badge {
+    z-index: 10;
+}
+
+.series-count-badge .badge {
+    font-size: 0.7rem;
+    font-weight: var(--bs-font-weight-semibold, 600);
+}
+
+/* Audiobook file details - Bootstrap warning-like styling */
+.audiobook-file-details {
+    background: var(--bs-warning-bg-subtle, #fff3cd);
+    border: 1px solid var(--bs-warning-border-subtle, #ffecb5);
+    border-radius: var(--section-border-radius);
+    padding: var(--bs-spacer-4, 1rem);
+}
+
+.audiobook-file-details h6 {
+    color: var(--bs-warning-text-emphasis, #664d03);
+    border-bottom: 1px solid var(--bs-warning-border-subtle, #ffecb5);
+    padding-bottom: 0.5rem;
+    margin-bottom: var(--bs-spacer-3, 0.75rem);
+}
+
+/* Companion file details - Bootstrap info-like styling */
+.companion-file-details {
+    background: var(--bs-info-bg-subtle, #cff4fc);
+    border: 1px solid var(--bs-info-border-subtle, #b6effb);
+    border-radius: var(--section-border-radius);
+    padding: 0.75rem;
+}
+
+.file-name {
+    font-weight: var(--bs-font-weight-medium, 500);
+    color: var(--bs-info-text-emphasis, #055160);
+}
+
+/* Animation for expansion */
+@keyframes expandIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.series-books-container,
+.companion-files-container,
+.audiobook-details-container {
+    animation: expandIn 0.3s ease-out;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+    .list-item {
+        padding: 0.5rem;
+    }
+    
+    .series-books-container,
+    .companion-files-container,
+    .audiobook-details-container {
+        margin-left: 0.5rem;
+    }
+    
+    .series-book-item,
+    .companion-file-item,
+    .audiobook-detail-item {
+        padding: 0.375rem 0.5rem;
+    }
+    
+    .file-actions .btn {
+        padding: 0.1875rem 0.375rem;
+        font-size: 0.7rem;
+    }
+}
+
+/* Enhanced visual feedback */
+.list-item.expandable {
+    position: relative;
+}
+
+.list-item.expandable::after {
+    content: "";
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 4px solid var(--bs-secondary, #6c757d);
+    transition: var(--section-transition);
+}
+
+.list-item.expanded::after {
+    transform: translateY(-50%) rotate(180deg);
+    border-top-color: var(--bs-primary, #0d6efd);
+}
+
+/* Grid view adjustments - Bootstrap shadow utilities */
+.grid-item {
+    transition: var(--section-transition), box-shadow var(--section-transition);
+}
+
+.grid-item:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--bs-box-shadow, 0 0.5rem 1rem rgba(0,0,0,0.15));
+}
+
+/* Status indicators - Bootstrap semantic colors */
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--bs-border-radius-pill, 50rem);
+    display: inline-block;
+    margin-right: 0.5rem;
+}
+
+.status-indicator.complete {
+    background-color: var(--bs-success, #198754);
+}
+
+.status-indicator.partial {
+    background-color: var(--bs-warning, #ffc107);
+}
+
+.status-indicator.missing {
+    background-color: var(--bs-danger, #dc3545);
+}
