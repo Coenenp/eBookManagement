@@ -1,0 +1,364 @@
+/**
+ * Ebook & Series Renamer - Bootswatch Compatible Styles
+ * 
+ * Pattern-based renaming interface using Bootstrap variables and Bootswatch themes
+ */
+
+:root {
+  /* Renamer-specific CSS custom properties using Bootstrap variables */
+  --renamer-overlay-bg: rgba(var(--bs-dark-rgb), 0.5);
+  --renamer-spinner-size: 3rem;
+  --renamer-monospace-font: var(--bs-font-monospace);
+  --renamer-border-radius: var(--bs-border-radius);
+  --renamer-border-radius-sm: var(--bs-border-radius-sm);
+  --renamer-spacing-xs: 0.125rem;
+  --renamer-spacing-sm: 0.25rem;
+  --renamer-spacing-md: 0.75rem;
+  --renamer-font-size-sm: 0.875rem;
+  --renamer-font-size-xs: 0.8rem;
+}
+
+/* Loading overlay - uses Bootstrap utility classes where possible */
+#loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--renamer-overlay-bg);
+    z-index: 9999;
+}
+
+#loading-overlay .spinner-border {
+    width: var(--renamer-spinner-size);
+    height: var(--renamer-spinner-size);
+}
+
+/* Pattern input styling - uses monospace font */
+.pattern-input-group .form-control {
+    font-family: var(--renamer-monospace-font);
+    font-size: 0.9rem;
+}
+
+.pattern-validation {
+    margin-top: var(--renamer-spacing-sm);
+    min-height: 1.25rem;
+}
+
+.pattern-validation .text-success,
+.pattern-validation .text-danger,
+.pattern-validation .text-warning {
+    font-size: var(--renamer-font-size-sm);
+    margin: var(--renamer-spacing-xs) 0;
+}
+
+/* Token reference styling - uses Bootstrap variables */
+.token-reference {
+    background: var(--bs-body-bg);
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    border-radius: var(--renamer-border-radius);
+}
+
+.token-clickable {
+    background: var(--bs-primary-bg-subtle);
+    border: var(--bs-border-width) solid var(--bs-primary-border-subtle);
+    border-radius: var(--renamer-border-radius-sm);
+    padding: var(--renamer-spacing-xs) 0.375rem;
+    margin: var(--renamer-spacing-xs);
+    display: inline-block;
+    cursor: pointer;
+    font-family: var(--renamer-monospace-font);
+    font-size: var(--renamer-font-size-sm);
+    color: var(--bs-primary-text);
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.token-clickable:hover {
+    background: var(--bs-primary-bg-subtle);
+    border-color: var(--bs-primary);
+    color: var(--bs-primary);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(var(--bs-dark-rgb), 0.1);
+}
+
+.token-clickable:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(var(--bs-dark-rgb), 0.1);
+}
+
+.example-clickable {
+    background: var(--bs-warning-bg-subtle);
+    border: var(--bs-border-width) solid var(--bs-warning-border-subtle);
+    border-radius: var(--renamer-border-radius-sm);
+    padding: var(--renamer-spacing-sm) 0.5rem;
+    margin: var(--renamer-spacing-sm) 0;
+    display: block;
+    cursor: pointer;
+    font-family: var(--renamer-monospace-font);
+    font-size: var(--renamer-font-size-xs);
+    color: var(--bs-warning-text);
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.example-clickable:hover {
+    background: var(--bs-warning-bg-subtle);
+    border-color: var(--bs-warning);
+    color: var(--bs-warning);
+    transform: translateX(2px);
+}
+
+.token-category {
+    border-bottom: var(--bs-border-width) solid var(--bs-border-color);
+}
+
+.token-category:last-child {
+    border-bottom: none;
+}
+
+.token-category h6 {
+    color: var(--bs-body-color);
+    font-weight: var(--bs-font-weight-semibold, 600);
+    margin-bottom: 0.5rem;
+}
+
+.token-description {
+    color: var(--bs-secondary-color);
+    font-size: var(--renamer-font-size-xs);
+    margin-left: 0.5rem;
+}
+
+/* Book selection table enhancements */
+.book-row.selected {
+    background-color: var(--bs-primary-bg-subtle) !important;
+}
+
+.preview-path,
+.current-path {
+    font-family: var(--renamer-monospace-font);
+    font-size: var(--renamer-font-size-xs);
+    max-width: 200px;
+}
+
+.preview-path.text-primary {
+    color: var(--bs-primary) !important;
+    font-weight: var(--bs-font-weight-medium, 500);
+}
+
+/* Filter and selection specific styles */
+.selection-buttons .btn {
+    font-size: var(--renamer-font-size-sm);
+}
+
+.filter-group label {
+    font-size: var(--renamer-font-size-sm);
+    font-weight: var(--bs-font-weight-medium, 500);
+}
+
+/* Results modal - responsive sizing */
+.results-modal .modal-dialog {
+    max-width: 90vw;
+}
+
+.results-modal .modal-body {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.results-modal .table {
+    font-size: var(--renamer-font-size-sm);
+}
+
+.results-modal .font-monospace {
+    font-family: var(--renamer-monospace-font);
+    font-size: var(--renamer-font-size-xs);
+}
+
+/* Status indicators - uses Bootstrap alert colors */
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--renamer-spacing-sm) 0.5rem;
+    border-radius: var(--renamer-border-radius-sm);
+    font-size: 0.75rem;
+    font-weight: var(--bs-font-weight-medium, 500);
+}
+
+.status-indicator.status-valid {
+    background-color: var(--bs-success-bg-subtle);
+    color: var(--bs-success-text);
+    border: var(--bs-border-width) solid var(--bs-success-border-subtle);
+}
+
+.status-indicator.status-invalid {
+    background-color: var(--bs-danger-bg-subtle);
+    color: var(--bs-danger-text);
+    border: var(--bs-border-width) solid var(--bs-danger-border-subtle);
+}
+
+.status-indicator.status-warning {
+    background-color: var(--bs-warning-bg-subtle);
+    color: var(--bs-warning-text);
+    border: var(--bs-border-width) solid var(--bs-warning-border-subtle);
+}
+
+/* Progress bars - uses Bootstrap variables */
+.progress {
+    height: 0.75rem;
+    border-radius: var(--renamer-border-radius);
+}
+
+.progress-bar {
+    transition: width 0.3s ease;
+}
+
+/* Statistics cards - uses Bootstrap primary gradient */
+.stats-card {
+    background: linear-gradient(135deg, var(--bs-primary) 0%, var(--bs-secondary) 100%);
+    color: var(--bs-white);
+    border-radius: var(--bs-border-radius-lg);
+    text-align: center;
+}
+
+.stats-card h5 {
+    font-size: 1.5rem;
+    font-weight: var(--bs-font-weight-bold, 700);
+    margin-bottom: var(--renamer-spacing-sm);
+}
+
+.stats-card p {
+    margin-bottom: 0;
+    opacity: 0.9;
+    font-size: 0.9rem;
+}
+
+/* File type icons - uses Bootstrap contextual colors */
+.file-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 0.5rem;
+    opacity: 0.8;
+}
+
+.file-icon.epub {
+    color: var(--bs-success);
+}
+
+.file-icon.pdf {
+    color: var(--bs-danger);
+}
+
+.file-icon.mobi {
+    color: var(--bs-warning);
+}
+
+.file-icon.comic {
+    color: var(--bs-purple, #6f42c1);
+}
+
+.file-icon.audiobook {
+    color: var(--bs-info);
+}
+
+/* Responsive adjustments - uses Bootstrap breakpoints */
+@media (max-width: 768px) {
+    .token-clickable,
+    .example-clickable {
+        font-size: var(--renamer-font-size-xs);
+        padding: var(--renamer-spacing-xs) var(--renamer-spacing-sm);
+        margin: 0.0625rem;
+    }
+    
+    .results-modal .modal-dialog {
+        max-width: 95vw;
+        margin: 0.5rem auto;
+    }
+    
+    .preview-path,
+    .current-path {
+        max-width: 150px;
+    }
+}
+
+@media (max-width: 576px) {
+    .preview-path,
+    .current-path {
+        max-width: 100px;
+    }
+}
+
+/* Dark mode support - removed as Bootswatch themes handle this automatically */
+/* Note: Bootswatch dark themes (darkly, cyborg, superhero, slate, solar, vapor) 
+   automatically provide appropriate colors through CSS custom properties */
+
+/* Animation enhancements */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in-up {
+    animation: fadeInUp 0.3s ease;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+.pulse-animation {
+    animation: pulse 2s infinite;
+}
+
+/* Custom scrollbar for table - uses Bootstrap variables */
+.table-responsive::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+    background: var(--bs-secondary-bg);
+    border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+    background: var(--bs-border-color);
+    border-radius: 4px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb:hover {
+    background: var(--bs-secondary-color);
+}
+
+/* Print styles */
+@media print {
+    .action-buttons,
+    .selection-controls,
+    .filters-section {
+        display: none;
+    }
+    
+    .book-selection-table .book-checkbox {
+        display: none;
+    }
+    
+    .preview-path {
+        max-width: none;
+        overflow: visible;
+        white-space: normal;
+    }
+}

@@ -475,7 +475,10 @@ class UserProfileForm(StandardFormMixin, forms.ModelForm):
     class Meta:
         from .models import UserProfile
         model = UserProfile
-        fields = ['theme', 'items_per_page', 'show_covers_in_list', 'default_view_mode', 'share_reading_progress']
+        fields = [
+            'theme', 'items_per_page', 'show_covers_in_list', 'default_view_mode', 'share_reading_progress',
+            'default_folder_pattern', 'default_filename_pattern', 'include_companion_files'
+        ]
         widgets = {
             'theme': forms.Select(attrs={
                 'class': 'form-select',
@@ -498,6 +501,19 @@ class UserProfileForm(StandardFormMixin, forms.ModelForm):
             'share_reading_progress': forms.CheckboxInput(attrs={
                 'class': 'form-check-input'
             }),
+            'default_folder_pattern': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '{author}/{series_name} #{series_number} - {title}',
+                'maxlength': 255
+            }),
+            'default_filename_pattern': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '{author} - {title}',
+                'maxlength': 255
+            }),
+            'include_companion_files': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
         }
 
     def __init__(self, *args, **kwargs):
@@ -509,3 +525,10 @@ class UserProfileForm(StandardFormMixin, forms.ModelForm):
         self.fields['show_covers_in_list'].help_text = 'Display book cover thumbnails in list views'
         self.fields['default_view_mode'].help_text = 'Default layout for browsing books'
         self.fields['share_reading_progress'].help_text = 'Allow other users to see your reading progress'
+        self.fields['default_folder_pattern'].help_text = (
+            'Default pattern for organizing folders when renaming (use {author}, {title}, {series_name}, {series_number})'
+        )
+        self.fields['default_filename_pattern'].help_text = (
+            'Default pattern for naming files when renaming (use {author}, {title}, {series_name}, {series_number})'
+        )
+        self.fields['include_companion_files'].help_text = 'Include companion files (images, metadata) when renaming'

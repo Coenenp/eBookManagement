@@ -338,6 +338,13 @@ class Book(HashFieldMixin, models.Model):
             return None
 
     @property
+    def effective_path(self):
+        """Get the current effective file path - either final_path if renamed, or original file_path"""
+        if hasattr(self, 'finalmetadata') and self.finalmetadata and self.finalmetadata.is_renamed and self.finalmetadata.final_path:
+            return self.finalmetadata.final_path
+        return self.file_path
+
+    @property
     def relative_path(self):
         import os
 
@@ -677,6 +684,8 @@ class FinalMetadata(models.Model):
     # Status
     is_reviewed = models.BooleanField(default=False)
     has_cover = models.BooleanField(default=False)
+    is_renamed = models.BooleanField(default=False, help_text="Whether this book has been renamed from its original location")
+    final_path = models.CharField(max_length=1000, blank=True, help_text="Final file path after renaming operations")
     last_updated = models.DateTimeField(auto_now=True)
 
     def calculate_overall_confidence(self):
@@ -853,6 +862,32 @@ class FinalMetadata(models.Model):
         except Exception as e:
             logger.error(f"Error updating final values for book {self.book.id}: {e}")
             # Don't re-raise the exception - handle gracefully
+
+    def mark_as_renamed(self, new_file_path, user=None):
+        """Mark this book as renamed and store the new path"""
+        import logging
+        logger = logging.getLogger("books.models")
+
+        # Update the final metadata
+        self.is_renamed = True
+        self.final_path = new_file_path
+        self.save()
+
+        # Create a file operation record
+        from django.utils import timezone
+
+        FileOperation.objects.create(
+            book=self.book,
+            operation_type='rename',
+            status='completed',
+            original_file_path=self.book.file_path,
+            new_file_path=new_file_path,
+            operation_date=timezone.now(),
+            user=user,
+            notes="Book renamed via renaming interface"
+        )
+
+        logger.info(f"Book {self.book.id} marked as renamed: {self.book.file_path} -> {new_file_path}")
 
     def save(self, *args, **kwargs):
         # Check if this is a manual update (set by views when user makes manual changes)
@@ -1265,6 +1300,29 @@ class UserProfile(models.Model):
     # Privacy preferences
     share_reading_progress = models.BooleanField(default=False, help_text='Share reading progress with other users')
 
+    # Renaming preferences
+    default_folder_pattern = models.CharField(
+        max_length=500,
+        blank=True,
+        default='${category}/${author.sortname}/${bookseries.title}',
+        help_text='Default folder structure pattern for renaming'
+    )
+    default_filename_pattern = models.CharField(
+        max_length=500,
+        blank=True,
+        default='${author.sortname} - ${bookseries.title} #${bookseries.number} - ${title}.${ext}',
+        help_text='Default filename pattern for renaming'
+    )
+    saved_patterns = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='User-saved custom patterns for quick access'
+    )
+    include_companion_files = models.BooleanField(
+        default=True,
+        help_text='Include companion files (covers, metadata) when renaming by default'
+    )
+
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1276,6 +1334,34 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"{self.user.username}'s Profile"
+
+    def save_pattern(self, name, folder_pattern, filename_pattern, description=""):
+        """Save a custom renaming pattern for future use"""
+        pattern = {
+            'name': name,
+            'folder': folder_pattern,
+            'filename': filename_pattern,
+            'description': description
+        }
+
+        # Remove existing pattern with same name
+        self.saved_patterns = [p for p in self.saved_patterns if p.get('name') != name]
+
+        # Add new pattern
+        self.saved_patterns.append(pattern)
+        self.save()
+
+    def remove_pattern(self, name):
+        """Remove a saved pattern by name"""
+        self.saved_patterns = [p for p in self.saved_patterns if p.get('name') != name]
+        self.save()
+
+    def get_pattern(self, name):
+        """Get a saved pattern by name"""
+        for pattern in self.saved_patterns:
+            if pattern.get('name') == name:
+                return pattern
+        return None
 
     @classmethod
     def get_or_create_for_user(cls, user):

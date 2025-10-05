@@ -19,6 +19,9 @@ REFACTORING COMPLETED:
 ORIGINAL SIZE: 4,718 lines → NEW SIZE: ~130 lines (97.2% reduction!)
 """
 
+# Import common modules needed for test mocking
+from django.http import JsonResponse
+
 # Import all views from organized modules for backward compatibility
 # This maintains the same public API while dramatically improving maintainability
 
@@ -142,9 +145,9 @@ from .views.simple import (  # noqa: F401
 # Additional views needed by URLs that may be in other modules
 try:
     from .views.renaming import *  # noqa: F401,F403
+    from .views.renaming import rename_book, preview_rename  # noqa: F401
 except ImportError:
     # Create placeholder views for renaming functionality
-    from django.http import JsonResponse
     from django.views.generic import TemplateView
     from django.contrib.auth.mixins import LoginRequiredMixin
 

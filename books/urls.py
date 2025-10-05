@@ -227,10 +227,15 @@ urlpatterns = [
 
     # Legacy view name mappings for existing URLs
     path('book_create/', views.ajax_create_book, name='book_create'),
-    path('preview_rename/', views.ajax_bulk_rename_preview, name='preview_rename'),
+    path('preview_rename/', views.preview_rename, name='preview_rename'),
     path('bulk_rename_preview/', views.ajax_bulk_rename_preview, name='bulk_rename_preview'),
     path('bulk_rename_execute/', views.ajax_bulk_rename_execute, name='bulk_rename_execute'),
-    path('rename_book/', views.ajax_update_book, name='rename_book'),
+    path('rename_book/<int:book_id>/', views.rename_book, name='rename_book'),
+
+    # Enhanced renaming pattern endpoints
+    path('renamer/preview-pattern/', views.preview_pattern, name='renamer_preview_pattern'),
+    path('renamer/execute-batch/', views.execute_batch_rename, name='renamer_execute_batch'),
+    path('renamer/validate-pattern/', views.validate_pattern, name='renamer_validate_pattern'),
 
     # Missing AJAX endpoints for error handling tests
     # path('ajax/create-library-folder/', views.ajax_create_library_folder, name='ajax_create_library_folder'),  # Already defined above

@@ -56,10 +56,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
                 folder_path=temp_dir,
                 language='en',
                 enable_external_apis=False,  # Disable for faster testing
-                content_type='mixed',
-                folder_name='test_folder',
-                rescan=False,
-                resume_from=None
+                content_type='mixed'
             )
             print(f"Scan completed with result: {result}")
         except Exception as e:

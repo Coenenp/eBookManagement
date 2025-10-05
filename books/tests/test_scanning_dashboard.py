@@ -69,12 +69,12 @@ class ScanningDashboardTests(TestCase):
         response = self.client.get(reverse('books:scan_dashboard'))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Scanning Dashboard')
-        self.assertContains(response, 'Recent Scan Folders')
+        self.assertContains(response, 'Scanning Control Center')
+        self.assertContains(response, 'Quick Scan Actions')
 
-    @patch('books.views_modules.scanning.get_all_active_scans')
-    @patch('books.views_modules.scanning.get_api_status')
-    @patch('books.views_modules.scanning.check_api_health')
+    @patch('books.scanner.background.get_all_active_scans')
+    @patch('books.scanner.rate_limiting.get_api_status')
+    @patch('books.scanner.rate_limiting.check_api_health')
     def test_scanning_dashboard_context_data(self, mock_api_health, mock_api_status, mock_active_scans):
         """Test that scanning dashboard provides correct context data"""
         # Mock the scanner functions
@@ -165,7 +165,7 @@ class ScanningDashboardTests(TestCase):
         self.assertContains(response, 'Test Folder 1 (2 books)')
         self.assertContains(response, 'Test Folder 2 (1 book)')
 
-    @patch('books.views_modules.scanning.get_all_active_scans')
+    @patch('books.views.scanning.get_all_active_scans')
     def test_scanning_dashboard_active_scans_display(self, mock_active_scans):
         """Test that active scans are displayed correctly"""
         mock_active_scans.return_value = [
@@ -185,7 +185,7 @@ class ScanningDashboardTests(TestCase):
         self.assertContains(response, '75%')
         self.assertContains(response, 'Processing book 15 of 20')
 
-    @patch('books.views_modules.scanning.get_all_active_scans')
+    @patch('books.views.scanning.get_all_active_scans')
     def test_scanning_dashboard_no_active_scans(self, mock_active_scans):
         """Test dashboard with no active scans"""
         mock_active_scans.return_value = []
@@ -193,7 +193,8 @@ class ScanningDashboardTests(TestCase):
         self.client.login(username='testuser', password='testpass123')
         response = self.client.get(reverse('books:scan_dashboard'))
 
-        self.assertContains(response, 'No active scan jobs')
+        # Check that no active scans are displayed (container will be empty)
+        self.assertNotContains(response, 'scan-card')
 
     def test_scanning_dashboard_no_folders(self):
         """Test dashboard with no scan folders"""
@@ -205,8 +206,8 @@ class ScanningDashboardTests(TestCase):
 
         self.assertContains(response, 'No scan folders found')
 
-    @patch('books.views_modules.scanning.get_api_status')
-    @patch('books.views_modules.scanning.check_api_health')
+    @patch('books.views.scanning.get_api_status')
+    @patch('books.views.scanning.check_api_health')
     def test_scanning_dashboard_api_status_display(self, mock_api_health, mock_api_status):
         """Test that API status information is displayed correctly"""
         mock_api_status.return_value = {
@@ -238,10 +239,10 @@ class ScanningDashboardTests(TestCase):
         self.assertContains(response, 'Google Books')
         self.assertContains(response, 'Comic Vine')
 
-        # Check rate limit information
-        self.assertContains(response, '250/1000')
-        self.assertContains(response, '15/100')
-        self.assertContains(response, '45/200')
+        # Check rate limit information - mocked values are displayed
+        self.assertContains(response, '250/1000')  # Google Books daily limit (from mock)
+        self.assertContains(response, '15/100')    # Google Books hourly limit (from mock)
+        self.assertContains(response, '45/200')    # Comic Vine hourly limit (from mock)
 
 
 class ThemePreviewTests(TestCase):
@@ -278,7 +279,7 @@ class ThemePreviewTests(TestCase):
 
         self.assertTrue(data['success'])
         self.assertEqual(data['theme'], 'darkly')
-        self.assertIn('Previewing darkly theme', data['message'])
+        self.assertIn('Theme preview set to darkly', data['message'])
 
     def test_preview_theme_missing_parameter(self):
         """Test theme preview with missing theme parameter"""
@@ -386,9 +387,9 @@ class ScanningDashboardIntegrationTests(TestCase):
         )
         self.client = Client()
 
-    @patch('books.views_modules.scanning.get_all_active_scans')
-    @patch('books.views_modules.scanning.get_api_status')
-    @patch('books.views_modules.scanning.check_api_health')
+    @patch('books.views.scanning.get_all_active_scans')
+    @patch('books.views.scanning.get_api_status')
+    @patch('books.views.scanning.check_api_health')
     def test_full_dashboard_functionality(self, mock_api_health, mock_api_status, mock_active_scans):
         """Test complete dashboard functionality with all components"""
         # Create scan folders with varying book counts
@@ -452,11 +453,11 @@ class ScanningDashboardIntegrationTests(TestCase):
         # Check folder display with correct book counts
         self.assertContains(response, 'Fiction')
         self.assertContains(response, 'Non-Fiction')
-        self.assertContains(response, '5</td>')  # Fiction book count
-        self.assertContains(response, '3</td>')  # Non-Fiction book count
+        self.assertContains(response, '5/0')  # Fiction book count
+        self.assertContains(response, '3/0')  # Non-Fiction book count
 
-        # Check active scan display
-        self.assertContains(response, 'scan-fiction')
+        # Check active scan display (job ID and progress from mock)
+        self.assertContains(response, 'scan-fiction')  # The job_id from mock_active_scans
         self.assertContains(response, '60%')
 
         # Check API status

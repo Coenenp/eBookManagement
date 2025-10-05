@@ -17,8 +17,19 @@ REFACTORING STATUS:
 ⏳ AI Feedback views (ai_feedback.py) - TODO: AI integration
 """
 
-# Import settings for backward compatibility with tests
+# Import modules for backward compatibility with tests
+import os  # noqa: F401
+import subprocess  # noqa: F401
+import requests  # noqa: F401
 from django.conf import settings  # noqa: F401
+from django.core.files.storage import default_storage  # noqa: F401
+from django.http import JsonResponse  # noqa: F401
+
+# Import models for test compatibility
+try:
+    from books.models import ScanLog, Book  # noqa: F401
+except ImportError:
+    pass
 
 # Core views - COMPLETED
 from .core import (  # noqa: F401
@@ -55,11 +66,12 @@ from .simple import (  # noqa: F401
 )
 
 # Placeholder imports for incomplete modules - will be replaced as modules are created
-# Renaming views - BASIC PLACEHOLDERS CREATED
+# Renaming views - ENHANCED WITH PATTERN ENGINE
 from .renaming import (  # noqa: F401
     BookRenamerView, BookRenamerPreviewView, BookRenamerExecuteView,
     BookRenamerFileDetailsView, BookRenamerRevertView, BookRenamerHistoryView,
-    bulk_rename_view, rename_book_form
+    bulk_rename_view, rename_book_form, rename_book, preview_rename,
+    preview_pattern, execute_batch_rename, validate_pattern
 )
 
 # AI Feedback views - BASIC PLACEHOLDERS CREATED
@@ -120,7 +132,8 @@ __all__ = [
     # Book renaming views
     'BookRenamerView', 'BookRenamerPreviewView', 'BookRenamerExecuteView',
     'BookRenamerFileDetailsView', 'BookRenamerRevertView', 'BookRenamerHistoryView',
-    'bulk_rename_view', 'rename_book_form',
+    'bulk_rename_view', 'rename_book_form', 'rename_book', 'preview_rename',
+    'preview_pattern', 'execute_batch_rename', 'validate_pattern',
 
     # AI Feedback views
     'AIFeedbackListView', 'AIFeedbackDetailView', 'submit_ai_feedback',

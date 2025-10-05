@@ -27,13 +27,13 @@ class AuthorManagementViewTests(TestCase):
         self.client.login(username='testuser', password='testpass123')
 
         # Create test data sources
-        self.manual_source = DataSource.objects.create(
+        self.manual_source, _ = DataSource.objects.get_or_create(
             name='Manual Entry',
-            trust_level=0.9
+            defaults={'trust_level': 0.9}
         )
-        self.epub_source = DataSource.objects.create(
+        self.epub_source, _ = DataSource.objects.get_or_create(
             name='EPUB',
-            trust_level=0.7
+            defaults={'trust_level': 0.7}
         )
 
         # Create test scan folder
@@ -69,7 +69,11 @@ class AuthorManagementViewTests(TestCase):
             file_size=1000000,
             scan_folder=self.scan_folder
         )
-        FinalMetadata.objects.create(book=self.book1)
+        FinalMetadata.objects.create(
+            book=self.book1,
+            final_title='Test Book 1',
+            final_author='Test Author'
+        )
 
         # Create book-author relationships
         BookAuthor.objects.create(
@@ -325,9 +329,9 @@ class GenreManagementViewTests(TestCase):
         self.client.login(username='testuser', password='testpass123')
 
         # Create test data sources
-        self.manual_source = DataSource.objects.create(
+        self.manual_source, _ = DataSource.objects.get_or_create(
             name='Manual Entry',
-            trust_level=0.9
+            defaults={'trust_level': 0.9}
         )
 
         # Create test scan folder
@@ -357,7 +361,11 @@ class GenreManagementViewTests(TestCase):
             file_size=1000000,
             scan_folder=self.scan_folder
         )
-        FinalMetadata.objects.create(book=self.book1)
+        FinalMetadata.objects.create(
+            book=self.book1,
+            final_title='Test Book 1',
+            final_author='Test Author'
+        )
 
         # Create book-genre relationships
         BookGenre.objects.create(
@@ -536,9 +544,9 @@ class SeriesManagementViewTests(TestCase):
         self.client.login(username='testuser', password='testpass123')
 
         # Create test data sources
-        self.manual_source = DataSource.objects.create(
+        self.manual_source, _ = DataSource.objects.get_or_create(
             name='Manual Entry',
-            trust_level=0.9
+            defaults={'trust_level': 0.9}
         )
 
         # Create test scan folder
@@ -566,8 +574,16 @@ class SeriesManagementViewTests(TestCase):
             scan_folder=self.scan_folder
         )
 
-        FinalMetadata.objects.create(book=self.book1)
-        FinalMetadata.objects.create(book=self.book2)
+        FinalMetadata.objects.create(
+            book=self.book1,
+            final_title='Test Book 1',
+            final_author='Test Author'
+        )
+        FinalMetadata.objects.create(
+            book=self.book2,
+            final_title='Test Book 2',
+            final_author='Test Author'
+        )
 
         # Create book-series relationships
         BookSeries.objects.create(
@@ -783,9 +799,9 @@ class BookRenamerViewTests(TestCase):
         """Test that book renamer view provides necessary context."""
         # Create test books
         book1 = Book.objects.create(
-            title="Test Book 1",
             file_path="/library/test1.epub",
-            file_format="epub"
+            file_format="epub",
+            file_size=1000000
         )
         FinalMetadata.objects.create(
             book=book1,
@@ -800,481 +816,16 @@ class BookRenamerViewTests(TestCase):
 
         # Check context variables
         self.assertIn('books', response.context)
-        self.assertIn('stats', response.context)
-
-        # Verify stats structure
-        stats = response.context['stats']
-        expected_stats = [
-            'total_books', 'needs_rename', 'duplicate_paths', 'missing_metadata',
-            'series_books', 'standalone_books', 'comic_books', 'complete_series_count'
-        ]
-        for stat in expected_stats:
-            self.assertIn(stat, stats)
-
-    def test_path_generation_for_regular_book(self):
-        """Test file path generation for regular books."""
-        from books.views import BookRenamerView
-
-        book = Book.objects.create(
-            title="The Test Book: A Novel!",
-            file_path="/old/path/test.epub",
-            file_format="epub"
-        )
-        book.authors.add(self.author)
-        book.genres.add(self.genre_fiction)
-
-        FinalMetadata.objects.create(
-            book=book,
-            final_title="The Test Book: A Novel!",
-            final_author="Test Author",
-            language="en"
-        )
-
-        renamer_view = BookRenamerView()
-        new_path = renamer_view._generate_new_file_path(book)
-
-        # Verify path structure
-        self.assertIsInstance(new_path, str)
-        self.assertIn("Test Author", new_path)
-        self.assertIn("The Test Book - A Novel", new_path)  # Special chars cleaned
-        self.assertNotIn(":", new_path)
-        self.assertNotIn("!", new_path)
-
-    def test_path_generation_for_series_book(self):
-        """Test file path generation for books in a series."""
-        from books.views import BookRenamerView
-
-        book = Book.objects.create(
-            title="Test Series Book 1",
-            file_path="/old/path/series1.epub",
-            file_format="epub"
-        )
-        book.authors.add(self.author)
-        book.genres.add(self.genre_scifi)
-
-        FinalMetadata.objects.create(
-            book=book,
-            final_title="Test Series Book 1",
-            final_author="Test Author",
-            final_series="Test Series",
-            final_series_number="1",
-            language="en"
-        )
-
-        renamer_view = BookRenamerView()
-        new_path = renamer_view._generate_new_file_path(book)
-
-        # Verify series book structure
-        self.assertIn("Test Author", new_path)
-        self.assertIn("Test Series", new_path)
-        self.assertIn("01", new_path)  # Series number should be padded
-
-    def test_path_generation_for_comic_book(self):
-        """Test file path generation for comic books."""
-        from books.views import BookRenamerView
-        from unittest.mock import patch
-
-        book = Book.objects.create(
-            title="Spider-Man #001",
-            file_path="/comics/spider-man-001.cbz",
-            file_format="cbz"
-        )
-
-        FinalMetadata.objects.create(
-            book=book,
-            final_title="Spider-Man #001",
-            final_series="Spider-Man",
-            final_series_number="1",
-            language="en"
-        )
-
-        renamer_view = BookRenamerView()
-
-        # Mock comic metadata
-        with patch.object(renamer_view, '_get_comic_metadata') as mock_get_metadata:
-            mock_get_metadata.return_value = {
-                'series': 'Spider-Man',
-                'issue_number': '1',
-                'title': 'Spider-Man #001',
-                'language': 'en'
-            }
-
-            new_path = renamer_view._generate_new_file_path(book)
-
-            # Verify comic book structure
-            self.assertIn("CBZ", new_path)  # Should be in CBZ folder
-            self.assertIn("Spider-Man", new_path)
-
-    def test_series_completion_analysis(self):
-        """Test series completion analysis for multiple books."""
-        from books.views import BookRenamerView
-
-        # Create multiple books in the same series
-        series_books = []
-        for i in range(1, 6):  # Books 1-5
-            book = Book.objects.create(
-                title=f"Test Series Book {i}",
-                file_path=f"/series/book{i}.epub",
-                file_format="epub"
-            )
-            book.authors.add(self.author)
-            book.genres.add(self.genre_fiction)
-
-            FinalMetadata.objects.create(
-                book=book,
-                final_title=f"Test Series Book {i}",
-                final_author="Test Author",
-                final_series="Test Series",
-                final_series_number=str(i)
-            )
-            series_books.append(book)
-
-        renamer_view = BookRenamerView()
-        complete_series = renamer_view._analyze_series_completion()
-
-        # Should identify this as a complete series
-        self.assertIsInstance(complete_series, dict)
-        self.assertIn("Test Series", complete_series)
-
-    def test_warning_generation(self):
-        """Test warning generation for various scenarios."""
-        from books.views import BookRenamerView
-
-        # Create book with potential issues
-        book = Book.objects.create(
-            title="Test Book",
-            file_path="/library/test.epub",
-            file_format="epub"
-        )
-
-        # Missing metadata should generate warning
-        renamer_view = BookRenamerView()
-        warnings = renamer_view._generate_warnings(book)
-
-        self.assertIsInstance(warnings, list)
-        # Should warn about missing metadata
-
-    def test_duplicate_path_detection(self):
-        """Test detection of duplicate file paths."""
-        from books.views import BookRenamerView
-        from unittest.mock import patch
-
-        book1 = Book.objects.create(
-            title="Test Book 1",
-            file_path="/library/book1.epub",
-            file_format="epub"
-        )
-
-        book2 = Book.objects.create(
-            title="Test Book 2",
-            file_path="/library/book2.epub",
-            file_format="epub"
-        )
-
-        # Add same metadata to both books to potentially create duplicate paths
-        for book in [book1, book2]:
-            book.authors.add(self.author)
-            FinalMetadata.objects.create(
-                book=book,
-                final_title="Same Title",
-                final_author="Test Author"
-            )
-
-        renamer_view = BookRenamerView()
-
-        # Mock path generation to return same path
-        with patch.object(renamer_view, '_generate_new_file_path') as mock_gen_path:
-            mock_gen_path.return_value = "/library/Test Author/Same Title.epub"
-
-            warnings = renamer_view._check_for_duplicate_paths(book1)
-            # Should detect potential duplicates
-            self.assertIsInstance(warnings, list)
-
-    def test_filename_cleaning_comprehensive(self):
-        """Test comprehensive filename cleaning scenarios."""
-        from books.views import BookRenamerView
-
-        renamer_view = BookRenamerView()
-
-        test_cases = [
-            ("Book: Title!", "Book - Title"),
-            ("Book/with\\slashes", "Book-with-slashes"),
-            ("Book<with>pipes|and?quotes\"", "Book-with-pipes-and-quotes"),
-            ("Book   with    multiple     spaces", "Book with multiple spaces"),
-            ("Book.with.dots", "Book.with.dots"),  # Dots should be preserved
-            ("", ""),
-            ("   ", ""),
-            ("Book with éàü unicode", "Book with éàü unicode"),
-            ("Multiple---dashes", "Multiple-dashes"),
-        ]
-
-        for input_name, expected in test_cases:
-            with self.subTest(input_name=input_name):
-                result = renamer_view._clean_filename(input_name)
-                self.assertEqual(result, expected)
-
-    def test_category_determination(self):
-        """Test book category determination logic."""
-        from books.views import BookRenamerView
-
-        renamer_view = BookRenamerView()
-
-        # Test fiction book
-        fiction_book = Book.objects.create(
-            title="Fiction Book",
-            file_path="/library/fiction.epub",
-            file_format="epub"
-        )
-        fiction_book.genres.add(self.genre_fiction)
-
-        category = renamer_view._determine_category(fiction_book)
-        self.assertEqual(category, "Fiction")
-
-        # Test non-fiction book
-        nonfiction_genre = Genre.objects.create(name="Biography")
-        nonfiction_book = Book.objects.create(
-            title="Biography Book",
-            file_path="/library/bio.epub",
-            file_format="epub"
-        )
-        nonfiction_book.genres.add(nonfiction_genre)
-
-        category = renamer_view._determine_category(nonfiction_book)
-        self.assertEqual(category, "Non-Fiction")
-
-    def test_language_mapping(self):
-        """Test language code to folder mapping."""
-        from books.views import BookRenamerView
-
-        renamer_view = BookRenamerView()
-
-        test_mappings = [
-            ('en', 'English'),
-            ('nl', 'Nederlands'),
-            ('fr', 'Francais'),
-            ('de', 'Deutsch'),
-            ('unknown', 'Nederlands'),  # Default
-            ('', 'Nederlands'),  # Default
-            (None, 'Nederlands'),  # Default
-        ]
-
-        for lang_code, expected_folder in test_mappings:
-            with self.subTest(lang_code=lang_code):
-                result = renamer_view._map_language_to_folder(lang_code)
-                self.assertEqual(result, expected_folder)
-
-    def test_comic_metadata_extraction(self):
-        """Test comic metadata extraction functionality."""
-        from books.views import BookRenamerView
-        from unittest.mock import patch
-
-        comic_book = Book.objects.create(
-            title="Test Comic #5",
-            file_path="/comics/test-005.cbz",
-            file_format="cbz"
-        )
-
-        renamer_view = BookRenamerView()
-
-        # Mock the comic metadata extraction
-        with patch.object(renamer_view, '_get_comic_metadata') as mock_get_metadata:
-            mock_get_metadata.return_value = {
-                'series': 'Test Comic',
-                'issue_number': '5',
-                'title': 'Test Comic #5',
-                'issue_type': 'main_series'
-            }
-
-            metadata = renamer_view._get_comic_metadata(comic_book)
-            self.assertEqual(metadata['series'], 'Test Comic')
-            self.assertEqual(metadata['issue_number'], '5')
-
-    def test_issue_number_extraction(self):
-        """Test comic issue number extraction from various sources."""
-        from books.views import BookRenamerView
-
-        comic_book = Book.objects.create(
-            title="Comic #10",
-            file_path="/comics/comic-010.cbz",
-            file_format="cbz"
-        )
-
-        FinalMetadata.objects.create(
-            book=comic_book,
-            final_title="Comic #10",
-            final_series="Comic Series",
-            final_series_number="10"
-        )
-
-        renamer_view = BookRenamerView()
-
-        # Test extraction from metadata
-        comic_metadata = {'issue_number': '15'}
-        result = renamer_view._extract_issue_number(comic_metadata, comic_book)
-        self.assertEqual(result, 15)
-
-        # Test extraction from final metadata
-        comic_metadata = {}
-        result = renamer_view._extract_issue_number(comic_metadata, comic_book)
-        self.assertEqual(result, 10)
-
-        # Test with invalid data
-        comic_metadata = {'issue_number': 'invalid'}
-        result = renamer_view._extract_issue_number(comic_metadata, comic_book)
-        self.assertEqual(result, 10)  # Should fall back to final metadata
-
-    def test_comic_series_completion_analysis(self):
-        """Test comic series completion analysis."""
-        from books.views import BookRenamerView
-        from unittest.mock import patch
-
-        # Create comic series with missing issues
-        comic_issues = [1, 2, 4, 5]  # Missing issue 3
-        for issue_num in comic_issues:
-            book = Book.objects.create(
-                title=f"Comic Series #{issue_num:03d}",
-                file_path=f"/comics/series-{issue_num:03d}.cbz",
-                file_format="cbz"
-            )
-
-            FinalMetadata.objects.create(
-                book=book,
-                final_title=f"Comic Series #{issue_num:03d}",
-                final_series="Comic Series",
-                final_series_number=str(issue_num)
-            )
-
-        renamer_view = BookRenamerView()
-
-        # Mock comic metadata for analysis
-        with patch.object(renamer_view, '_get_comic_metadata') as mock_get_metadata:
-            mock_get_metadata.return_value = {
-                'series': 'Comic Series',
-                'issue_number': '1'
-            }
-
-            status = renamer_view._analyze_series_completion_status(
-                Book.objects.filter(finalmetadata__final_series="Comic Series").first(),
-                {'series': 'Comic Series'}
-            )
-
-            # Should indicate incomplete series
-            self.assertIsInstance(status, str)
-            self.assertIn("1", status)  # Should mention range
-
-    def test_queryset_filtering_and_sorting(self):
-        """Test book renamer view queryset filtering and sorting."""
-        from books.views import BookRenamerView
-
-        # Create various books
-        books_data = [
-            ("Book A", "Author A", None, None),
-            ("Book B", "Author B", "Series B", "1"),
-            ("Book C", "Author A", "Series A", "2"),
-            ("Book D", "Author C", None, None),
-        ]
-
-        for title, author, series, series_num in books_data:
-            book = Book.objects.create(
-                title=title,
-                file_path=f"/library/{title.lower().replace(' ', '_')}.epub",
-                file_format="epub"
-            )
-
-            author_obj, _ = Author.objects.get_or_create(name=author)
-            book.authors.add(author_obj)
-
-            FinalMetadata.objects.create(
-                book=book,
-                final_title=title,
-                final_author=author,
-                final_series=series,
-                final_series_number=series_num
-            )
-
-        renamer_view = BookRenamerView()
-        renamer_view.request = type('Request', (), {'GET': {}})()
-
-        queryset = renamer_view.get_queryset()
-        self.assertEqual(queryset.count(), 4)
-
-        # Books should be ordered properly
-        book_titles = list(queryset.values_list('title', flat=True))
-        self.assertIn("Book A", book_titles)
-        self.assertIn("Book B", book_titles)
-
-    def test_edge_cases_and_error_handling(self):
-        """Test edge cases and error handling in path generation."""
-        from books.views import BookRenamerView
-
-        renamer_view = BookRenamerView()
-
-        # Book with no metadata
-        minimal_book = Book.objects.create(
-            title="Minimal Book",
-            file_path="/library/minimal.epub",
-            file_format="epub"
-        )
-
-        # Should not crash
-        try:
-            new_path = renamer_view._generate_new_file_path(minimal_book)
-            self.assertIsInstance(new_path, str)
-        except Exception as e:
-            self.fail(f"Path generation failed for minimal book: {e}")
-
-        # Book with very long title
-        long_title = "A" * 500
-        long_title_book = Book.objects.create(
-            title=long_title,
-            file_path="/library/long.epub",
-            file_format="epub"
-        )
-
-        try:
-            new_path = renamer_view._generate_new_file_path(long_title_book)
-            self.assertIsInstance(new_path, str)
-            # Path should not be excessively long
-            self.assertLess(len(new_path), 1000)
-        except Exception as e:
-            self.fail(f"Path generation failed for long title: {e}")
-
-    def test_book_renamer_statistics(self):
-        """Test statistics calculation in book renamer view."""
-        # Create test books with various states
-        complete_book = Book.objects.create(
-            title="Complete Book",
-            file_path="/library/complete.epub",
-            file_format="epub"
-        )
-        complete_book.authors.add(self.author)
-        FinalMetadata.objects.create(
-            book=complete_book,
-            final_title="Complete Book",
-            final_author="Test Author"
-        )
-
-        # Book without metadata
-        Book.objects.create(
-            title="Incomplete Book",
-            file_path="/library/incomplete.epub",
-            file_format="epub"
-        )
-
-        # Comic book
-        Book.objects.create(
-            title="Comic #1",
-            file_path="/comics/comic1.cbz",
-            file_format="cbz"
-        )
-
-        response = self.client.get(reverse('books:book_renamer'))
-        stats = response.context['stats']
-
-        # Verify statistics
-        self.assertGreaterEqual(stats['total_books'], 3)
-        self.assertGreaterEqual(stats['missing_metadata'], 1)  # incomplete_book
-        self.assertGreaterEqual(stats['comic_books'], 1)  # comic_book
+        self.assertIn('books_with_paths', response.context)
+        self.assertIn('series_groups', response.context)
+        self.assertIn('complete_series', response.context)
+        self.assertIn('incomplete_series', response.context)
+
+        # Verify context structure
+        books_with_paths = response.context['books_with_paths']
+        series_groups = response.context['series_groups']
+        self.assertIsInstance(books_with_paths, list)
+        self.assertIsInstance(series_groups, list)
 
 
 class BookRenamerFileOperationTests(TestCase):

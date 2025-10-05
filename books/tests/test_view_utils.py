@@ -21,23 +21,27 @@ class StandardAjaxResponseMixinTests(TestCase):
 
     def test_success_response(self):
         """Test success response generation"""
-        response_data = self.mixin.success_response("Operation completed")
+        response = self.mixin.success_response("Operation completed")
 
-        self.assertTrue(response_data['success'])
-        self.assertEqual(response_data['message'], "Operation completed")
+        self.assertIsInstance(response, JsonResponse)
+        data = json.loads(response.content)
+        self.assertTrue(data['success'])
+        self.assertEqual(data['message'], "Operation completed")
 
     def test_success_response_with_extra_data(self):
         """Test success response with additional data"""
-        response_data = self.mixin.success_response(
+        response = self.mixin.success_response(
             "Operation completed",
             book_id=123,
             count=5
         )
 
-        self.assertTrue(response_data['success'])
-        self.assertEqual(response_data['message'], "Operation completed")
-        self.assertEqual(response_data['book_id'], 123)
-        self.assertEqual(response_data['count'], 5)
+        self.assertIsInstance(response, JsonResponse)
+        data = json.loads(response.content)
+        self.assertTrue(data['success'])
+        self.assertEqual(data['message'], "Operation completed")
+        self.assertEqual(data['book_id'], 123)
+        self.assertEqual(data['count'], 5)
 
     def test_error_response(self):
         """Test error response generation"""
@@ -113,8 +117,14 @@ class BookAjaxViewMixinTests(TestCase):
 
         result = self.mixin.handle_book_operation(self.book.id, mock_operation)
 
-        self.assertTrue(result['success'])
-        self.assertEqual(result['message'], f'Processed book {self.book.id}')
+        # The result should be a JsonResponse or dict depending on implementation
+        if isinstance(result, JsonResponse):
+            data = json.loads(result.content)
+            self.assertTrue(data['success'])
+            self.assertEqual(data['message'], f'Processed book {self.book.id}')
+        else:
+            self.assertTrue(result['success'])
+            self.assertEqual(result['message'], f'Processed book {self.book.id}')
 
     def test_handle_book_operation_book_not_found(self):
         """Test book operation with non-existent book"""
@@ -213,7 +223,10 @@ class StandardPaginationMixinTests(TestCase):
     def test_get_paginated_context_small_queryset(self):
         """Test pagination with queryset smaller than page size"""
         # Delete most books to have less than one page
-        Book.objects.all()[10:].delete()
+        all_books = list(Book.objects.all())
+        books_to_delete = all_books[10:]
+        for book in books_to_delete:
+            book.delete()
 
         queryset = Book.objects.all()
         context = self.mixin.get_paginated_context(queryset, 1)

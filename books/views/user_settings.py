@@ -142,6 +142,9 @@ def reset_to_defaults(request):
     profile.show_covers_in_list = True  # Default show covers
     profile.default_view_mode = 'table'  # Default view mode
     profile.share_reading_progress = False  # Default sharing setting
+    profile.default_folder_pattern = ''  # Default folder pattern
+    profile.default_filename_pattern = ''  # Default filename pattern
+    profile.include_companion_files = True  # Default include companion files
 
     # Save the profile with default values
     profile.save()
@@ -166,6 +169,9 @@ def reset_to_defaults(request):
                 'show_covers_in_list': profile.show_covers_in_list,
                 'default_view_mode': profile.default_view_mode,
                 'share_reading_progress': profile.share_reading_progress,
+                'default_folder_pattern': profile.default_folder_pattern,
+                'default_filename_pattern': profile.default_filename_pattern,
+                'include_companion_files': profile.include_companion_files,
             }
         })
     else:
