@@ -100,7 +100,7 @@ class RenamingTestUtils:
         Returns:
             Book instance
         """
-        from books.models import Book, Format
+        from books.models import Book, Format, BookTitle
 
         # Get or create default format
         format_obj, _ = Format.objects.get_or_create(
@@ -115,7 +115,12 @@ class RenamingTestUtils:
         }
         defaults.update(kwargs)
 
-        return Book.objects.create(title=title, **defaults)
+        book = Book.objects.create(**defaults)
+        
+        # Create BookTitle relationship
+        BookTitle.objects.create(book=book, title=title)
+        
+        return book
 
     @staticmethod
     def validate_companion_files(test_case, source_dir, target_dir, base_name):

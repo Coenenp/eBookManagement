@@ -1067,10 +1067,54 @@ class ScanningQueue {
     }
 
     bindEvents() {
-        // Handle queue action buttons with event delegation
+        // Handle queue action buttons with event delegation using CSS classes
         document.addEventListener('click', (e) => {
             const target = e.target;
             
+            // Handle add to queue buttons
+            if (target.closest('.add-to-queue-btn')) {
+                e.preventDefault();
+                this.addToQueue();
+                return;
+            }
+            
+            // Handle execute queue item buttons
+            if (target.closest('.execute-queue-item-btn')) {
+                e.preventDefault();
+                const button = target.closest('.execute-queue-item-btn');
+                const itemId = button.dataset.itemId;
+                this.executeQueueItem(itemId);
+                return;
+            }
+            
+            // Handle edit queue item buttons
+            if (target.closest('.edit-queue-item-btn')) {
+                e.preventDefault();
+                const button = target.closest('.edit-queue-item-btn');
+                const itemId = button.dataset.itemId;
+                this.editQueueItem(itemId);
+                return;
+            }
+            
+            // Handle retry queue item buttons
+            if (target.closest('.retry-queue-item-btn')) {
+                e.preventDefault();
+                const button = target.closest('.retry-queue-item-btn');
+                const itemId = button.dataset.itemId;
+                this.retryQueueItem(itemId);
+                return;
+            }
+            
+            // Handle remove queue item buttons
+            if (target.closest('.remove-queue-item-btn')) {
+                e.preventDefault();
+                const button = target.closest('.remove-queue-item-btn');
+                const itemId = button.dataset.itemId;
+                this.removeQueueItem(itemId);
+                return;
+            }
+            
+            // Legacy onclick support (backward compatibility)
             if (target.matches('[onclick*="addToQueue"]') || target.closest('[onclick*="addToQueue"]')) {
                 e.preventDefault();
                 this.addToQueue();

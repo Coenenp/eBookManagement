@@ -25,6 +25,17 @@ function sortTable(column) {
 
 // Initialize folder list functionality when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
+    // Add click event delegation for sort buttons using CSS classes
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.sort-table-btn')) {
+            const header = e.target.closest('.sort-table-btn');
+            const sortColumn = header.getAttribute('data-sort');
+            if (sortColumn) {
+                sortTable(sortColumn);
+            }
+        }
+    });
+    
     // Add keyboard navigation support for table sorting
     document.querySelectorAll('.sortable-header').forEach(header => {
         header.addEventListener('keydown', function(e) {

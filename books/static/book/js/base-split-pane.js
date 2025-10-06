@@ -52,6 +52,9 @@ function initializeEnhancedUI() {
     
     // Initialize keyboard shortcuts
     initializeKeyboardShortcuts();
+    
+    // Initialize event delegation for dynamic content
+    initializeEventDelegation();
 }
 
 function initializeViewToggle() {
@@ -230,6 +233,35 @@ function initializeKeyboardShortcuts() {
         if ((e.ctrlKey || e.metaKey) && (e.key === '1' || e.key === '2')) {
             e.preventDefault();
             toggleView(e.key === '1' ? 'list' : 'grid');
+        }
+    });
+}
+
+function initializeEventDelegation() {
+    // Use event delegation to handle clicks on dynamically added elements
+    document.addEventListener('click', function(e) {
+        // View toggle buttons
+        if (e.target.matches('.view-toggle-btn') || e.target.closest('.view-toggle-btn')) {
+            const button = e.target.closest('.view-toggle-btn');
+            const viewType = button.getAttribute('data-view');
+            if (viewType) {
+                toggleView(viewType);
+            }
+        }
+        
+        // Clear search button
+        if (e.target.matches('#clear-search') || e.target.closest('#clear-search')) {
+            clearSearch();
+        }
+        
+        // Refresh button
+        if (e.target.matches('.refresh-btn') || e.target.closest('.refresh-btn')) {
+            refreshItems();
+        }
+        
+        // Filters toggle button
+        if (e.target.matches('.filters-btn') || e.target.closest('.filters-btn')) {
+            toggleFilters();
         }
     });
 }

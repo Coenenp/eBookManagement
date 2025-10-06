@@ -14,7 +14,7 @@ from unittest.mock import patch
 from django.test import TransactionTestCase
 from django.contrib.auth import get_user_model
 
-from books.models import Book, Author, Series, Genre
+from books.models import Book, Author, Series, Genre, BookTitle, Format
 from books.utils.renaming_engine import RenamingEngine, PREDEFINED_PATTERNS
 from books.utils.batch_renamer import BatchRenamer
 
@@ -250,12 +250,16 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
 
         # TC3.4 – Duplicate detection postponed
         # Create duplicate
+        format_obj, _ = Format.objects.get_or_create(
+            name="EPUB",
+            defaults={'extension': '.epub'}
+        )
         duplicate = Book.objects.create(
-            title="Foundation",
             file_path="/different/path/Foundation.epub",
             file_size=1024000,
-            file_format="epub"
+            format=format_obj
         )
+        BookTitle.objects.create(book=duplicate, title="Foundation")
         duplicate.authors.add(self.asimov)
 
         pattern = "${author_sort} - ${title}.${ext}"
@@ -266,7 +270,7 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
         self.assertEqual(result1, result2)
 
         # Both books should remain in database
-        self.assertEqual(Book.objects.filter(title="Foundation").count(), 2)
+        self.assertEqual(Book.objects.filter(booktitle__title="Foundation").count(), 2)
 
     @patch('books.utils.batch_renamer.BatchRenamer._move_file')
     def test_tc4_complete_companion_file_handling(self, mock_move):

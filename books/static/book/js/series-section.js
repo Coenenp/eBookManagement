@@ -638,7 +638,105 @@ function onItemActivate(itemId) {
     }
 }
 
+// Template compatibility functions
+function toggleViewMode(viewType) {
+    if (window.seriesManager) {
+        window.seriesManager.setViewType(viewType);
+        window.seriesManager.renderList(viewType);
+        
+        // Update view toggle buttons
+        const buttons = document.querySelectorAll('.view-mode-btn');
+        buttons.forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.view === viewType);
+        });
+    }
+}
+
+function clearFilters() {
+    // Clear all form inputs
+    const form = document.querySelector('form[method="get"]');
+    if (form) {
+        const inputs = form.querySelectorAll('input[type="text"], select');
+        inputs.forEach(input => {
+            if (input.type === 'text') {
+                input.value = '';
+            } else if (input.tagName === 'SELECT') {
+                input.selectedIndex = 0;
+            }
+        });
+        
+        // Refresh the page without parameters
+        window.location.href = window.location.pathname;
+    }
+}
+
+function selectSeries(seriesId) {
+    if (window.seriesManager) {
+        window.seriesManager.selectItem(seriesId);
+    }
+}
+
+function viewSeriesDetails(seriesId) {
+    const detailUrl = window.seriesConfig?.urls?.detail?.replace('0', seriesId) || `/books/series/${seriesId}/`;
+    window.location.href = detailUrl;
+}
+
+function editSeries(seriesId) {
+    const editUrl = window.seriesConfig?.urls?.edit?.replace('0', seriesId) || `/books/series/${seriesId}/edit/`;
+    window.location.href = editUrl;
+}
+
 // Initialize the series manager when the DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
     window.seriesManager = new SeriesSectionManager();
+    
+    // Set up event delegation for new CSS class-based events
+    const body = document.body;
+    
+    // View mode toggle buttons
+    body.addEventListener('click', function(e) {
+        if (e.target.closest('.view-mode-btn')) {
+            const btn = e.target.closest('.view-mode-btn');
+            const viewType = btn.dataset.view;
+            toggleViewMode(viewType);
+        }
+    });
+    
+    // Clear filters button
+    body.addEventListener('click', function(e) {
+        if (e.target.closest('.clear-filters-btn')) {
+            e.preventDefault();
+            clearFilters();
+        }
+    });
+    
+    // Series selection links
+    body.addEventListener('click', function(e) {
+        if (e.target.closest('.series-select-link')) {
+            e.preventDefault();
+            const link = e.target.closest('.series-select-link');
+            const seriesId = parseInt(link.dataset.seriesId);
+            selectSeries(seriesId);
+        }
+    });
+    
+    // Series view buttons
+    body.addEventListener('click', function(e) {
+        if (e.target.closest('.series-view-btn')) {
+            e.stopPropagation();
+            const btn = e.target.closest('.series-view-btn');
+            const seriesId = parseInt(btn.dataset.seriesId);
+            viewSeriesDetails(seriesId);
+        }
+    });
+    
+    // Series edit buttons
+    body.addEventListener('click', function(e) {
+        if (e.target.closest('.series-edit-btn')) {
+            e.stopPropagation();
+            const btn = e.target.closest('.series-edit-btn');
+            const seriesId = parseInt(btn.dataset.seriesId);
+            editSeries(seriesId);
+        }
+    });
 });

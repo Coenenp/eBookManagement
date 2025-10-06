@@ -12,7 +12,7 @@ from pathlib import Path
 
 from django.test import TestCase
 
-from books.models import Book, Author, Series, ScanFolder
+from books.models import Book, Author, Series, ScanFolder, BookTitle, FinalMetadata, DataSource
 from books.utils.renaming_engine import (
     RenamingEngine,
     RenamingPatternValidator,
@@ -27,9 +27,15 @@ class RenamingEngineTests(TestCase):
         """Set up test data"""
         self.engine = RenamingEngine()
 
+        # Create data source for testing
+        self.data_source = DataSource.objects.create(
+            name=DataSource.MANUAL
+        )
+
         # Create test data using existing model structure
         self.author = Author.objects.create(
-            name="Isaac Asimov"
+            first_name="Isaac",
+            last_name="Asimov"
         )
 
         self.series = Series.objects.create(
@@ -143,14 +149,23 @@ class TC2FolderStructureRulesTests(RenamingEngineTests):
         """TC2.2 – Omit empty hierarchy levels"""
         # Create book without series
         book_no_series = Book.objects.create(
-            title="Foundation",
             file_path="/test/Foundation.epub",
             file_size=1024000,
-            file_format="epub",
-            language=self.language,
-            category=self.category
+            file_format="epub"
         )
-        book_no_series.authors.add(self.author)
+
+        # Add title and author relationships
+        BookTitle.objects.create(book=book_no_series, title="Foundation")
+        from books.models import BookAuthor
+        BookAuthor.objects.create(book=book_no_series, author=self.author, source=self.data_source)
+
+        # Create FinalMetadata with language for this book
+        FinalMetadata.objects.create(
+            book=book_no_series,
+            final_title="Foundation",
+            final_author="Isaac Asimov",
+            language="English"
+        )
 
         pattern = "Library/${format}/${language}/${category}/${author.sortname}/${bookseries.title}/${title}.${ext}"
         result = self.engine.process_template(pattern, book_no_series)
@@ -202,7 +217,7 @@ class TC3SeriesAndStandaloneTests(RenamingEngineTests):
     def test_tc3_2_standalone_fallback(self):
         """TC3.2 – Standalone fallback"""
         # Remove series
-        self.book.series.clear()
+        self.book.series_info.all().delete()
 
         pattern = "${author.sortname} - ${bookseries.title} #${bookseries.number} - ${title}.${ext}"
         result = self.engine.process_template(pattern, self.book)
@@ -220,7 +235,7 @@ class TC3SeriesAndStandaloneTests(RenamingEngineTests):
         self.assertEqual(result_with_series, expected_with_series)
 
         # Test standalone - should skip series folder
-        self.book.series.clear()
+        self.book.series_info.all().delete()
         result_standalone = self.engine.process_template(pattern, self.book)
         expected_standalone = "Asimov, Isaac/Foundation.epub"
         self.assertEqual(result_standalone, expected_standalone)
@@ -229,12 +244,13 @@ class TC3SeriesAndStandaloneTests(RenamingEngineTests):
         """TC3.4 – Duplicate detection postponed"""
         # Create duplicate book
         book2 = Book.objects.create(
-            title="Foundation",
             file_path="/test/duplicate/Foundation.epub",
             file_size=1024000,
             file_format="epub"
         )
-        book2.authors.add(self.author)
+        BookTitle.objects.create(book=book2, title="Foundation")
+        from books.models import BookAuthor
+        BookAuthor.objects.create(book=book2, author=self.author, source=self.data_source)
 
         pattern = "${author.sortname} - ${title}.${ext}"
 
@@ -244,7 +260,7 @@ class TC3SeriesAndStandaloneTests(RenamingEngineTests):
 
         self.assertEqual(result1, result2)
         # Ensure both books remain separate in database
-        self.assertEqual(Book.objects.filter(title="Foundation").count(), 2)
+        self.assertEqual(Book.objects.filter(booktitle__title="Foundation").count(), 2)
 
 
 class TC4CompanionFileHandlingTests(RenamingEngineTests):
@@ -410,8 +426,8 @@ class TC6MetadataPreservationTests(RenamingEngineTests):
 
     def test_tc6_2_metadata_retained_after_rename(self):
         """TC6.2 – Metadata retained after rename"""
-        original_title = self.book.title
-        original_author_count = self.book.authors.count()
+        original_title = self.book.titles.first().title if self.book.titles.exists() else ""
+        original_author_count = self.book.bookauthor.count()
 
         # Simulate rename operation
         pattern = "${author.sortname} - ${title}.${ext}"
@@ -419,17 +435,19 @@ class TC6MetadataPreservationTests(RenamingEngineTests):
 
         # Metadata should remain intact
         self.book.refresh_from_db()
-        self.assertEqual(self.book.title, original_title)
-        self.assertEqual(self.book.authors.count(), original_author_count)
+        current_title = self.book.titles.first().title if self.book.titles.exists() else ""
+        self.assertEqual(current_title, original_title)
+        self.assertEqual(self.book.bookauthor.count(), original_author_count)
 
     def test_tc6_3_multiple_metadata_entries_per_field(self):
         """TC6.3 – Multiple metadata entries per field"""
         # Add multiple authors
         author2 = Author.objects.create(
-            name="Robert Heinlein",
-            sort_name="Heinlein, Robert"
+            first_name="Robert",
+            last_name="Heinlein"
         )
-        self.book.authors.add(author2)
+        from books.models import BookAuthor
+        BookAuthor.objects.create(book=self.book, author=author2, source=self.data_source)
 
         # Both authors should be retained
         self.assertEqual(self.book.authors.count(), 2)
@@ -451,7 +469,7 @@ class TC6MetadataPreservationTests(RenamingEngineTests):
         # Renaming shouldn't change metadata storage behavior
         self.assertEqual(result, "Foundation.epub")
         # Metadata relationships should be preserved
-        self.assertTrue(self.book.authors.exists())
+        self.assertTrue(self.book.bookauthor.exists())
         self.assertTrue(self.book.series.exists())
 
 
@@ -635,8 +653,8 @@ class IntegrationTests(RenamingEngineTests):
             file_size=1024000,
             file_format="epub"
         )
-        # Add the title as a custom attribute for the renaming engine
-        minimal_book.title = "Test Book"
+        # Add title through BookTitle relationship
+        BookTitle.objects.create(book=minimal_book, title="Test Book")
 
         # Pattern with many optional fields
         pattern = "${author.sortname}/${bookseries.title}/${category}/${title} (${publicationyear}).${ext}"

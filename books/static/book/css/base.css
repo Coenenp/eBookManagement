@@ -225,15 +225,7 @@ legend {
    🎯 Custom Enhancements
 ========================================= */
 
-.card {
-    transition: var(--theme-transition);
-}
-
-.card:hover {
-    will-change: transform;
-    transform: translateY(-2px);
-    box-shadow: var(--theme-box-shadow-hover) !important;
-}
+/* Card styling moved to theme-optimized.css for consolidation */
 
 .card-body {
     contain: layout style;

@@ -14,7 +14,7 @@
                     <i class="fas fa-clock me-2"></i>Scan Queue Management
                 </h1>
                 <div class="btn-group">
-                    <button class="btn btn-success" onclick="addToQueue()">
+                    <button class="btn btn-success add-to-queue-btn">
                         <i class="fas fa-plus me-2"></i>Add to Queue
                     </button>
                     <a href="{% url 'books:scan_dashboard' %}" class="btn btn-outline-secondary">
@@ -150,31 +150,31 @@
                                         
                                         <div class="btn-group" role="group">
                                             {% if item.status == 'pending' and item.is_ready_to_execute %}
-                                            <button class="btn btn-sm btn-success" 
-                                                    onclick="executeQueueItem('{{ item.id }}')" 
+                                            <button class="btn btn-sm btn-success execute-queue-item-btn" 
+                                                    data-item-id="{{ item.id }}"
                                                     title="Execute now">
                                                 <i class="fas fa-play"></i>
                                             </button>
                                             {% endif %}
                                             
                                             {% if item.status in 'pending,scheduled' %}
-                                            <button class="btn btn-sm btn-outline-primary" 
-                                                    onclick="editQueueItem('{{ item.id }}')" 
+                                            <button class="btn btn-sm btn-outline-primary edit-queue-item-btn" 
+                                                    data-item-id="{{ item.id }}"
                                                     title="Edit">
                                                 <i class="fas fa-edit"></i>
                                             </button>
                                             {% endif %}
                                             
                                             {% if item.can_retry %}
-                                            <button class="btn btn-sm btn-outline-warning" 
-                                                    onclick="retryQueueItem('{{ item.id }}')" 
+                                            <button class="btn btn-sm btn-outline-warning retry-queue-item-btn" 
+                                                    data-item-id="{{ item.id }}"
                                                     title="Retry">
                                                 <i class="fas fa-redo"></i>
                                             </button>
                                             {% endif %}
                                             
-                                            <button class="btn btn-sm btn-outline-danger" 
-                                                    onclick="removeQueueItem('{{ item.id }}')" 
+                                            <button class="btn btn-sm btn-outline-danger remove-queue-item-btn" 
+                                                    data-item-id="{{ item.id }}"
                                                     title="Remove">
                                                 <i class="fas fa-trash"></i>
                                             </button>
@@ -226,7 +226,7 @@
                         <div class="alert alert-info text-center">
                             <i class="fas fa-info-circle me-2"></i>
                             No items in the scan queue. 
-                            <button class="btn btn-outline-primary btn-sm ms-2" onclick="addToQueue()">
+                            <button class="btn btn-outline-primary btn-sm ms-2 add-to-queue-btn">
                                 <i class="fas fa-plus me-1"></i>Add First Item
                             </button>
                         </div>

@@ -32,7 +32,18 @@ class EbookScannerTests(TestCase):
         self.assertFalse(scanner.rescan)
         self.assertFalse(scanner.resume)
         self.assertEqual(scanner.cover_extensions, {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"})
-        self.assertEqual(scanner.ebook_extensions, {".epub", ".mobi", ".pdf", ".azw", ".azw3", ".cbr", ".cbz"})
+
+        # Test that scanner uses centralized extensions from models
+        from books.models import COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
+        expected_extensions = set()
+        for fmt in EBOOK_FORMATS:
+            expected_extensions.add(f'.{fmt}')
+        for fmt in COMIC_FORMATS:
+            expected_extensions.add(f'.{fmt}')
+        for fmt in AUDIOBOOK_FORMATS:
+            expected_extensions.add(f'.{fmt}')
+
+        self.assertEqual(scanner.ebook_extensions, expected_extensions)
 
     def test_init_custom_settings(self):
         """Test scanner initialization with custom settings."""

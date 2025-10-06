@@ -211,6 +211,20 @@ class BookDetailManager {
             this.coversManager.handleCoverAction(coverBtn);
             return;
         }
+        
+        // Handle refresh page button
+        if (e.target.closest('.refresh-page-btn')) {
+            e.preventDefault();
+            refreshPageHandler();
+            return;
+        }
+        
+        // Handle view metadata tab button
+        if (e.target.closest('.view-metadata-tab-btn')) {
+            e.preventDefault();
+            viewMetadataTab();
+            return;
+        }
     }
 }
 
@@ -1221,5 +1235,16 @@ function removeCover(coverPath, sourceName) {
         window.bookDetailManager.coversManager.removeCover(coverPath, sourceName);
     } else {
         console.error('BookDetailManager not initialized');
+    }
+}
+
+function refreshPageHandler() {
+    location.reload();
+}
+
+function viewMetadataTab() {
+    const metadataTab = document.getElementById('metadata-tab');
+    if (metadataTab) {
+        metadataTab.click();
     }
 }

@@ -79,25 +79,16 @@ class SetupWizard {
     }
 
     updateProgress() {
+        // Progress and step indicators are now managed server-side via Django templates
+        // This method is kept for compatibility but doesn't override server values
         const progressBar = document.querySelector('.wizard-progress .progress-bar');
         const stepIndicators = document.querySelectorAll('.step-indicator');
         
-        if (progressBar) {
-            const progress = ((this.currentStep - 1) / (this.totalSteps - 1)) * 100;
-            progressBar.style.width = `${progress}%`;
-        }
+        // Don't override progress bar - server handles this correctly now
         
-        stepIndicators.forEach((indicator, index) => {
-            const stepNumber = index + 1;
-            indicator.classList.remove('active', 'completed');
-            
-            if (stepNumber < this.currentStep) {
-                indicator.classList.add('completed');
-            } else if (stepNumber === this.currentStep) {
-                indicator.classList.add('active');
-            }
-        });
+        // Don't override step indicators - Django template handles this correctly
         
+        // Keep the navigation button updates if needed
         this.updateNavigationButtons();
     }
 
@@ -526,13 +517,13 @@ document.addEventListener('DOMContentLoaded', function() {
         apiKeyValidator = new ApiKeyValidator();
     }
     
-    // Initialize progress bar ARIA attributes
+    // Initialize progress bar ARIA attributes (use server-provided values)
     const progressBar = document.querySelector('.progress-bar');
     if (progressBar) {
         const progressValue = progressBar.getAttribute('data-progress') || '0';
         const numericValue = parseInt(progressValue, 10) || 0;
         progressBar.setAttribute('aria-valuenow', numericValue.toString());
-        progressBar.style.width = numericValue + '%';
+        // Don't override the server-provided width - it's already set correctly
     }
     
     // Folder selection handling

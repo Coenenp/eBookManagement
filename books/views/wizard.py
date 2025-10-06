@@ -12,9 +12,24 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.urls import reverse
 from django.utils import timezone
 
-from books.models import SetupWizard, ScanFolder
+from books.models import SetupWizard, ScanFolder, COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
 
 logger = logging.getLogger('books.scanner')
+
+
+def get_all_media_extensions():
+    """Get all supported media file extensions from centralized constants."""
+    extensions = set()
+
+    # Add all format lists with dots
+    for fmt in EBOOK_FORMATS:
+        extensions.add(f'.{fmt}')
+    for fmt in COMIC_FORMATS:
+        extensions.add(f'.{fmt}')
+    for fmt in AUDIOBOOK_FORMATS:
+        extensions.add(f'.{fmt}')
+
+    return extensions
 
 
 class WizardRequiredMixin:
@@ -25,15 +40,51 @@ class WizardRequiredMixin:
         is_wizard_url = 'wizard' in request.path
 
         if request.user.is_authenticated:
-            wizard, created = SetupWizard.get_or_create_for_user(request.user)
-            if not wizard.is_completed and not wizard.is_skipped and not is_wizard_url:
-                # Redirect to current wizard step if not accessing wizard itself
-                return redirect('books:wizard_step', step=wizard.current_step)
+            # Check if wizard should be shown based on system state
+            should_show_wizard = self._should_show_wizard()
+
+            if should_show_wizard and not is_wizard_url:
+                wizard, created = SetupWizard.get_or_create_for_user(request.user)
+                # Only redirect if wizard is not completed or skipped
+                if not wizard.is_completed and not wizard.is_skipped:
+                    return redirect('books:wizard_step', step=wizard.current_step)
 
         # Call parent dispatch if it exists
         if hasattr(super(), 'dispatch'):
             return super().dispatch(request, *args, **kwargs)
         return None
+
+    def _should_show_wizard(self):
+        """Determine if wizard should be shown based on system state."""
+        from books.models import ScanFolder, Book
+
+        # Don't show wizard if there are scan folders configured
+        if ScanFolder.objects.exists():
+            # Auto-skip wizard if folders exist but wizard was never completed
+            if hasattr(self, 'request') and self.request.user.is_authenticated:
+                try:
+                    wizard = SetupWizard.objects.get(user=self.request.user)
+                    if not wizard.is_completed and not wizard.is_skipped:
+                        wizard.skip_wizard()
+                        logger.info(f"Auto-skipped wizard for user {self.request.user.username} - scan folders already exist")
+                except SetupWizard.DoesNotExist:
+                    pass
+            return False
+
+        # Don't show wizard if there are books already imported
+        if Book.objects.filter(is_placeholder=False).exists():
+            # Auto-skip wizard if books exist but wizard was never completed
+            if hasattr(self, 'request') and self.request.user.is_authenticated:
+                try:
+                    wizard = SetupWizard.objects.get(user=self.request.user)
+                    if not wizard.is_completed and not wizard.is_skipped:
+                        wizard.skip_wizard()
+                        logger.info(f"Auto-skipped wizard for user {self.request.user.username} - books already exist")
+                except SetupWizard.DoesNotExist:
+                    pass
+            return False
+
+        return True
 
 
 class SetupWizardView(LoginRequiredMixin, TemplateView):
@@ -44,10 +95,46 @@ class SetupWizardView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         wizard, created = SetupWizard.get_or_create_for_user(self.request.user)
 
+        # Get current step from URL or infer from view class
+        current_step = self.kwargs.get('step')
+        if not current_step:
+            # Map view class to step name
+            view_step_mapping = {
+                'WizardWelcomeView': 'welcome',
+                'WizardFoldersView': 'folders',
+                'WizardContentTypesView': 'content_types',
+                'WizardScrapersView': 'scrapers',
+                'WizardCompleteView': 'complete',
+            }
+            current_step = view_step_mapping.get(self.__class__.__name__, 'welcome')
+
+        # Calculate step number for display
+        step_order = [choice[0] for choice in wizard.WIZARD_STEPS]
+        try:
+            step_index = step_order.index(current_step)
+            step_number = step_index + 1
+        except ValueError:
+            step_index = 0
+            step_number = 1
+
+        # Calculate previous step based on current displayed step
+        previous_step = None
+        if step_index > 0:
+            previous_step = step_order[step_index - 1]
+
+        # Calculate current position progress (where the user is now)
+        # vs completion progress (what they've actually finished)
+        current_position_percentage = int((step_number / len(step_order)) * 100)
+
         context.update({
             'wizard': wizard,
-            'step': self.kwargs.get('step', wizard.current_step),
-            'progress_percentage': wizard.progress_percentage,
+            'step': current_step,
+            'step_number': step_number,
+            'total_steps': len(step_order),
+            'progress_percentage': wizard.progress_percentage,  # Completed steps
+            'current_position_percentage': current_position_percentage,  # Current position
+            'can_go_back': step_number > 1,
+            'previous_step': previous_step,
         })
         return context
 
@@ -75,10 +162,24 @@ class WizardFoldersView(SetupWizardView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        wizard = context['wizard']
 
         # Get common folder suggestions
         common_folders = self._get_suggested_folders()
         context['suggested_folders'] = common_folders
+
+        # Prefill with previously selected folders if returning to this step
+        selected_folders = wizard.selected_folders or []
+        context['selected_folders'] = selected_folders
+
+        # Mark suggested folders as selected if they were previously chosen
+        suggested_folder_paths = [folder['path'] for folder in common_folders]
+        for folder in common_folders:
+            folder['selected'] = folder['path'] in selected_folders
+
+        # Get custom folders (those not in suggested folders)
+        custom_folders = [path for path in selected_folders if path not in suggested_folder_paths]
+        context['custom_folders'] = custom_folders
 
         return context
 
@@ -91,10 +192,18 @@ class WizardFoldersView(SetupWizardView):
 
         # Process selected folders
         selected_folders = request.POST.getlist('folders')
-        custom_folder = request.POST.get('custom_folder', '').strip()
 
-        if custom_folder and os.path.exists(custom_folder):
-            selected_folders.append(custom_folder)
+        # Process multiple custom folders
+        custom_folders = request.POST.getlist('custom_folders')
+        for custom_folder in custom_folders:
+            custom_folder = custom_folder.strip()
+            if custom_folder and os.path.exists(custom_folder):
+                selected_folders.append(custom_folder)
+
+        # Handle legacy single custom folder field for backward compatibility
+        legacy_custom_folder = request.POST.get('custom_folder', '').strip()
+        if legacy_custom_folder and os.path.exists(legacy_custom_folder):
+            selected_folders.append(legacy_custom_folder)
 
         # Validate folders exist
         valid_folders = [folder for folder in selected_folders if os.path.exists(folder)]
@@ -138,10 +247,10 @@ class WizardFoldersView(SetupWizardView):
 
         return suggestions
 
-    def _count_ebook_files(self, folder_path, max_depth=2):
+    def _count_ebook_files(self, folder_path, max_depth=5):
         """Count ebook files in a folder (limited depth to avoid performance issues)."""
         count = 0
-        extensions = {'.epub', '.pdf', '.mobi', '.azw', '.azw3', '.cbr', '.cbz', '.fb2'}
+        extensions = get_all_media_extensions()
 
         try:
             for root, dirs, files in os.walk(folder_path):
@@ -154,8 +263,8 @@ class WizardFoldersView(SetupWizardView):
                 for file in files:
                     if any(file.lower().endswith(ext) for ext in extensions):
                         count += 1
-                        if count >= 100:  # Stop counting at 100 for performance
-                            return "100+"
+                        if count >= 1000:  # Stop counting at 1000 for performance
+                            return "1000+"
 
         except (PermissionError, OSError):
             pass
@@ -171,15 +280,24 @@ class WizardContentTypesView(SetupWizardView):
         context = super().get_context_data(**kwargs)
         wizard, created = SetupWizard.get_or_create_for_user(self.request.user)
 
+        # Get existing content type assignments
+        existing_assignments = wizard.folder_content_types or {}
+
         # Analyze folders for suggested content types
         folder_analysis = []
         for folder_path in wizard.selected_folders:
             analysis = self._analyze_folder_content(folder_path)
+
+            # Use existing assignment if available, otherwise use suggested type
+            current_assignment = existing_assignments.get(folder_path)
+            suggested_type = analysis.get('suggested_type', 'ebooks')
+
             folder_analysis.append({
                 'path': folder_path,
                 'name': os.path.basename(folder_path) or folder_path,
                 'analysis': analysis,
-                'suggested_type': analysis.get('suggested_type', 'ebooks')
+                'suggested_type': suggested_type,
+                'current_assignment': current_assignment or suggested_type
             })
 
         context['folder_analysis'] = folder_analysis
@@ -197,8 +315,10 @@ class WizardContentTypesView(SetupWizardView):
         # Process content type assignments
         folder_content_types = {}
 
-        for index, folder_path in enumerate(wizard.selected_folders, 1):
-            folder_key = f"folder_{index}"  # Match template naming: folder_1, folder_2, etc.
+        # The template uses folder_{{ folder.path|hash }} as the field name
+        for folder_path in wizard.selected_folders:
+            folder_hash = str(abs(hash(str(folder_path))))
+            folder_key = f"folder_{folder_hash}"
             content_type = request.POST.get(folder_key, 'ebooks')
             folder_content_types[folder_path] = content_type
 
@@ -212,47 +332,119 @@ class WizardContentTypesView(SetupWizardView):
     def _analyze_folder_content(self, folder_path):
         """Analyze folder content to suggest content type."""
         analysis = {
-            'epub_count': 0,
-            'pdf_count': 0,
-            'comic_count': 0,
-            'audio_count': 0,
+            'ebooks': {
+                'total': 0,
+                'formats': {
+                    'epub': 0,
+                    'mobi': 0,
+                    'azw': 0,
+                    'pdf': 0,
+                    'other': 0
+                }
+            },
+            'comics': {
+                'total': 0,
+                'formats': {
+                    'cbr': 0,
+                    'cbz': 0,
+                    'cb7': 0,
+                    'cbt': 0,
+                    'pdf': 0
+                }
+            },
+            'audiobooks': {
+                'total': 0,
+                'formats': {
+                    'mp3': 0,
+                    'm4a': 0,
+                    'm4b': 0,
+                    'aac': 0,
+                    'flac': 0,
+                    'other': 0
+                }
+            },
             'total_files': 0,
             'suggested_type': 'ebooks'
         }
 
         try:
             for root, dirs, files in os.walk(folder_path):
-                # Limit depth for performance
+                # Allow deeper recursion but limit to reasonable depth for performance
                 depth = root[len(folder_path):].count(os.sep)
-                if depth >= 2:
+                if depth >= 8:  # Increased from 2 to 8 for better coverage
                     dirs[:] = []
                     continue
 
                 for file in files:
                     file_lower = file.lower()
+                    file_ext = os.path.splitext(file_lower)[1]
 
-                    if file_lower.endswith(('.epub', '.mobi', '.azw', '.azw3', '.fb2')):
-                        analysis['epub_count'] += 1
-                    elif file_lower.endswith('.pdf'):
-                        analysis['pdf_count'] += 1
-                    elif file_lower.endswith(('.cbr', '.cbz', '.cb7', '.cbt')):
-                        analysis['comic_count'] += 1
-                    elif file_lower.endswith(('.mp3', '.m4a', '.m4b', '.aac', '.flac', '.ogg')):
-                        analysis['audio_count'] += 1
+                    # Check if this is a supported media file
+                    if file_ext not in get_all_media_extensions():
+                        continue
 
-                    analysis['total_files'] += 1
+                    # Ebook formats
+                    if file_ext in [f'.{fmt}' for fmt in EBOOK_FORMATS]:
+                        if file_ext == '.epub':
+                            analysis['ebooks']['formats']['epub'] += 1
+                        elif file_ext in ['.mobi', '.azw', '.azw3']:
+                            analysis['ebooks']['formats']['mobi'] += 1
+                        elif file_ext == '.pdf':
+                            # PDF could be ebook or comic, check folder context
+                            if 'comic' in folder_path.lower() or 'manga' in folder_path.lower():
+                                analysis['comics']['formats']['pdf'] += 1
+                                analysis['comics']['total'] += 1
+                                analysis['total_files'] += 1
+                                continue  # Skip the ebook counting below
+                            else:
+                                analysis['ebooks']['formats']['pdf'] += 1
+                        else:  # fb2, lit, pdb, prc, etc.
+                            analysis['ebooks']['formats']['other'] += 1
 
-                    # Stop counting at reasonable limit for performance
-                    if analysis['total_files'] >= 200:
+                        analysis['ebooks']['total'] += 1
+                        analysis['total_files'] += 1
+
+                    # Comic formats (excluding PDF which is handled above)
+                    elif file_ext in [f'.{fmt}' for fmt in COMIC_FORMATS if fmt != 'pdf']:
+                        if file_ext == '.cbr':
+                            analysis['comics']['formats']['cbr'] += 1
+                        elif file_ext == '.cbz':
+                            analysis['comics']['formats']['cbz'] += 1
+                        elif file_ext == '.cb7':
+                            analysis['comics']['formats']['cb7'] += 1
+                        elif file_ext == '.cbt':
+                            analysis['comics']['formats']['cbt'] += 1
+
+                        analysis['comics']['total'] += 1
+                        analysis['total_files'] += 1
+
+                    # Audiobook formats
+                    elif file_ext in [f'.{fmt}' for fmt in AUDIOBOOK_FORMATS]:
+                        if file_ext == '.mp3':
+                            analysis['audiobooks']['formats']['mp3'] += 1
+                        elif file_ext in ['.m4a', '.m4b']:
+                            analysis['audiobooks']['formats']['m4a'] += 1
+                        elif file_ext == '.aac':
+                            analysis['audiobooks']['formats']['aac'] += 1
+                        elif file_ext == '.flac':
+                            analysis['audiobooks']['formats']['flac'] += 1
+                        else:  # ogg, wav, etc.
+                            analysis['audiobooks']['formats']['other'] += 1
+
+                        analysis['audiobooks']['total'] += 1
+                        analysis['total_files'] += 1
+
+                    # Increased limit and only count relevant files
+                    if analysis['total_files'] >= 2000:  # Increased from 200 to 2000
                         break
 
         except (PermissionError, OSError):
             pass
 
         # Suggest content type based on analysis
-        if analysis['comic_count'] > analysis['epub_count'] and analysis['comic_count'] > analysis['pdf_count']:
+        if analysis['comics']['total'] > analysis['ebooks']['total'] and analysis['comics']['total'] > analysis['audiobooks']['total']:
             analysis['suggested_type'] = 'comics'
-        elif analysis['audio_count'] > analysis['epub_count']:
+        elif analysis['audiobooks']['total'] > analysis['ebooks']['total']:
             analysis['suggested_type'] = 'audiobooks'
         elif 'comic' in folder_path.lower() or 'manga' in folder_path.lower():
             analysis['suggested_type'] = 'comics'
@@ -270,6 +462,15 @@ class WizardScrapersView(SetupWizardView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        wizard = context['wizard']
+
+        # Get existing scraper configuration
+        existing_config = wizard.scraper_config or {}
+
+        # Check environment variables as fallback
+        import os
+        env_google_key = os.environ.get('GOOGLE_BOOKS_API_KEY', '')
+        env_comicvine_key = os.environ.get('COMICVINE_API_KEY', '')
 
         # Get available data sources that might need configuration
         scrapers_info = [
@@ -286,6 +487,7 @@ class WizardScrapersView(SetupWizardView):
                 'required': False,
                 'config_needed': True,
                 'config_field': 'google_books_api_key',
+                'current_value': existing_config.get('google_books_api_key', env_google_key),
                 'status': 'Optional API Key'
             },
             {
@@ -294,6 +496,7 @@ class WizardScrapersView(SetupWizardView):
                 'required': False,
                 'config_needed': True,
                 'config_field': 'comicvine_api_key',
+                'current_value': existing_config.get('comicvine_api_key', env_comicvine_key),
                 'status': 'Optional API Key'
             }
         ]
@@ -416,22 +619,27 @@ def wizard_validate_folder(request):
         if not os.path.isdir(folder_path):
             return JsonResponse({'valid': False, 'error': 'Path is not a directory'})
 
-        # Count ebook files
+        # Count media files (ebooks, comics, audiobooks)
         try:
             file_count = 0
-            extensions = {'.epub', '.pdf', '.mobi', '.azw', '.azw3', '.cbr', '.cbz', '.fb2'}
+            # Use centralized extension list
+            extensions = get_all_media_extensions()
 
             for root, dirs, files in os.walk(folder_path):
                 depth = root[len(folder_path):].count(os.sep)
-                if depth >= 2:  # Limit depth
+                if depth >= 8:  # Match the analysis function depth
                     dirs[:] = []
                     continue
 
                 for file in files:
                     if any(file.lower().endswith(ext) for ext in extensions):
                         file_count += 1
-                        if file_count >= 50:  # Limit for performance
-                            break
+                        if file_count >= 2000:  # Match the analysis function limit
+                            return JsonResponse({
+                                'valid': True,
+                                'file_count': "1000+",
+                                'name': os.path.basename(folder_path) or folder_path
+                            })
 
             return JsonResponse({
                 'valid': True,
@@ -473,4 +681,12 @@ def wizard_dispatcher(request, step):
         from django.http import Http404
         raise Http404(f"Unknown wizard step: {step}")
 
-    return view_class.as_view()(request)
+    # For GET requests (navigation), we don't update the wizard's current_step
+    # This allows users to go back and forth without losing their progress
+    # Instantiate view and manually set the kwargs
+    view_instance = view_class()
+    view_instance.kwargs = {'step': step}
+    view_instance.request = request
+    view_instance.args = []
+
+    return view_instance.dispatch(request)

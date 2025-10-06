@@ -14,14 +14,13 @@ class EnhancedEbookList {
     }
 
     bindEvents() {
-        // Handle clear filters button
-        const clearBtn = document.querySelector('[onclick*="clearFilters"]');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', (e) => {
+        // Handle clear filters button using CSS class
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('.clear-filters-btn')) {
                 e.preventDefault();
                 this.clearFilters();
-            });
-        }
+            }
+        });
 
         // Initialize table sorting when content is loaded
         this.initializeTableSorting();

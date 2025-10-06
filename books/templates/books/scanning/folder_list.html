@@ -40,33 +40,28 @@
         <table class="table unified-table table-striped table-hover">
             <thead>
                 <tr>
-                    <th class="sortable-header {% if sort_by == 'name' %}active sort-{{ sort_order }}{% endif %}" 
-                        onclick="sortTable('name')" 
+                    <th class="sortable-header sort-table-btn {% if sort_by == 'name' %}active sort-{{ sort_order }}{% endif %}" 
                         data-sort="name">
                         Name
                         <span class="sort-indicator"></span>
                     </th>
                     <th>Path</th>
-                    <th class="sortable-header {% if sort_by == 'content_type' %}active sort-{{ sort_order }}{% endif %}" 
-                        onclick="sortTable('content_type')" 
+                    <th class="sortable-header sort-table-btn {% if sort_by == 'content_type' %}active sort-{{ sort_order }}{% endif %}" 
                         data-sort="content_type">
                         Content Type
                         <span class="sort-indicator"></span>
                     </th>
-                    <th class="sortable-header {% if sort_by == 'language' %}active sort-{{ sort_order }}{% endif %}" 
-                        onclick="sortTable('language')" 
+                    <th class="sortable-header sort-table-btn {% if sort_by == 'language' %}active sort-{{ sort_order }}{% endif %}" 
                         data-sort="language">
                         Language
                         <span class="sort-indicator"></span>
                     </th>
-                    <th class="sortable-header {% if sort_by == 'is_active' %}active sort-{{ sort_order }}{% endif %}" 
-                        onclick="sortTable('is_active')" 
+                    <th class="sortable-header sort-table-btn {% if sort_by == 'is_active' %}active sort-{{ sort_order }}{% endif %}" 
                         data-sort="is_active">
                         Status
                         <span class="sort-indicator"></span>
                     </th>
-                    <th class="sortable-header {% if sort_by == 'last_scanned' %}active sort-{{ sort_order }}{% endif %}" 
-                        onclick="sortTable('last_scanned')" 
+                    <th class="sortable-header sort-table-btn {% if sort_by == 'last_scanned' %}active sort-{{ sort_order }}{% endif %}" 
                         data-sort="last_scanned">
                         Last Scanned
                         <span class="sort-indicator"></span>

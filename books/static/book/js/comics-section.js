@@ -683,7 +683,34 @@ function onItemActivate(comicId) {
     }
 }
 
+// Template compatibility function for clearFilters
+function clearFilters() {
+    // Clear all form inputs
+    const form = document.querySelector('form[method="get"]');
+    if (form) {
+        const inputs = form.querySelectorAll('input[type="text"], select');
+        inputs.forEach(input => {
+            if (input.type === 'text') {
+                input.value = '';
+            } else if (input.tagName === 'SELECT') {
+                input.selectedIndex = 0;
+            }
+        });
+        
+        // Refresh the page without parameters
+        window.location.href = window.location.pathname;
+    }
+}
+
 // Initialize the comics manager when the DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
     window.comicsManager = new ComicsSectionManager();
+    
+    // Set up event delegation for clear filters button
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.clear-filters-btn')) {
+            e.preventDefault();
+            clearFilters();
+        }
+    });
 });

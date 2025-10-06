@@ -58,10 +58,10 @@ class RenamingViewsTestCase(TestCase):
         # Create metadata relationships
         from books.models import DataSource, BookTitle, BookAuthor, BookSeries, FinalMetadata
 
-        # Create data source
-        self.data_source = DataSource.objects.create(
+        # Create data source (use get_or_create to avoid duplicates)
+        self.data_source, created = DataSource.objects.get_or_create(
             name=DataSource.INITIAL_SCAN,
-            trust_level=0.9
+            defaults={'trust_level': 0.9}
         )
 
         # Create book titles

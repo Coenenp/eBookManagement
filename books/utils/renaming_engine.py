@@ -287,9 +287,9 @@ class RenamingEngine:
     def _get_publication_year(self) -> Optional[str]:
         """Get publication year."""
         if hasattr(self.current_book, 'finalmetadata') and self.current_book.finalmetadata:
-            pub_date = self.current_book.finalmetadata.final_publication_date
-            if pub_date:
-                return str(pub_date.year)
+            pub_year = self.current_book.finalmetadata.publication_year
+            if pub_year:
+                return str(pub_year)
         # Fallback to direct field
         pub_year = getattr(self.current_book, 'publication_year', None)
         return str(pub_year) if pub_year else None
@@ -396,7 +396,7 @@ class RenamingEngine:
     def _get_language(self) -> Optional[str]:
         """Get book language."""
         if hasattr(self.current_book, 'finalmetadata') and self.current_book.finalmetadata:
-            return self.current_book.finalmetadata.final_language
+            return self.current_book.finalmetadata.language
         # Fallback to direct field
         return getattr(self.current_book, 'language', None)
 
@@ -408,14 +408,25 @@ class RenamingEngine:
     def _get_category(self) -> Optional[str]:
         """Get book category."""
         if hasattr(self.current_book, 'finalmetadata') and self.current_book.finalmetadata:
-            return self.current_book.finalmetadata.final_category
+            # Try to determine category from genre
+            genre = self._get_genre()
+            if genre:
+                # Simple category mapping based on genre
+                fiction_keywords = ['fiction', 'novel', 'fantasy', 'science fiction', 'mystery', 'romance', 'thriller']
+                if any(keyword in genre.lower() for keyword in fiction_keywords):
+                    return "Fiction"
+                else:
+                    return "Non-Fiction"
         # Fallback to direct field
         return getattr(self.current_book, 'category', None)
 
     def _get_genre(self) -> Optional[str]:
         """Get book genre."""
-        if hasattr(self.current_book, 'finalmetadata') and self.current_book.finalmetadata:
-            return self.current_book.finalmetadata.final_genre
+        if hasattr(self.current_book, 'bookgenre') and self.current_book.bookgenre.exists():
+            # Get the first active genre with highest confidence
+            genre_relation = self.current_book.bookgenre.filter(is_active=True).order_by('-confidence').first()
+            if genre_relation and genre_relation.genre:
+                return genre_relation.genre.name
         return None
 
     def _get_extension(self) -> Optional[str]:

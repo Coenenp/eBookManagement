@@ -4,9 +4,34 @@
 
 /* Wizard Layout */
 .wizard-container {
-    max-width: 800px;
+    max-width: 900px;
     margin: 0 auto;
     padding: 20px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Force proper sizing */
+.wizard-container * {
+    box-sizing: border-box;
+}
+
+/* Override Bootstrap container constraints for wizard pages */
+main.container:has(.wizard-container) {
+    max-width: none !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Fallback for browsers that don't support :has() */
+body:has(.wizard-container) main.container,
+.wizard-page main.container {
+    max-width: none !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
 }
 
 .wizard-header {
@@ -19,11 +44,20 @@
 }
 
 .wizard-step {
-    background: var(--bs-body-bg);
+    background: var(--bs-body-bg) !important;
     border: 1px solid var(--bs-border-color);
     border-radius: var(--bs-border-radius-lg);
-    padding: 30px;
+    padding: 40px !important;
     margin-bottom: 20px;
+    width: 100% !important;
+    height: auto !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    flex: 1;
+    min-height: 600px !important;
+    display: flex !important;
+    flex-direction: column !important;
 }
 
 /* Step Indicator */
@@ -101,30 +135,33 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 30px;
-    padding-top: 20px;
+    margin-top: auto;
+    padding-top: 30px;
     border-top: 1px solid var(--bs-border-color);
+    min-height: 80px;
 }
 
 /* Folder Selection */
 .folder-suggestion {
-    border: 1px solid var(--bs-border-color);
-    border-radius: var(--bs-border-radius);
-    padding: 15px;
-    margin-bottom: 10px;
     cursor: pointer;
-    transition: all 0.2s ease;
-    background: var(--bs-body-bg);
+    transition: all 0.3s ease;
+    border: 1px solid var(--bs-border-color);
 }
 
 .folder-suggestion:hover {
     border-color: var(--bs-primary);
+    transform: translateY(-2px);
+    box-shadow: var(--bs-box-shadow);
+}
+
+.folder-suggestion.selected,
+.folder-suggestion.border-primary {
+    border-color: var(--bs-primary);
     background-color: var(--bs-primary-bg-subtle);
 }
 
-.folder-suggestion.selected {
-    border-color: var(--bs-primary);
-    background-color: var(--bs-primary-bg-subtle);
+.cursor-pointer {
+    cursor: pointer;
 }
 
 .folder-path {
@@ -141,16 +178,181 @@
 
 /* Content Type Assignment */
 .content-type-assignment {
-    border: 1px solid var(--bs-border-color);
-    border-radius: var(--bs-border-radius);
+    margin-bottom: 20px;
+    box-shadow: var(--bs-box-shadow-sm);
+    transition: box-shadow 0.2s ease;
+}
+
+.content-type-assignment:hover {
+    box-shadow: var(--bs-box-shadow);
+}
+
+.content-type-assignment .card-header {
+    background: var(--bs-light);
+    border-bottom: 1px solid var(--bs-border-color);
+    padding: 1rem;
+}
+
+.folder-info {
+    flex: 1;
+    min-width: 0; /* Allow text truncation */
+}
+
+.folder-info h5 {
+    margin: 0;
+    max-width: 300px;
+}
+
+.folder-path {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.8em;
+    background: var(--bs-gray-100);
+    padding: 2px 6px;
+    border-radius: var(--bs-border-radius-sm);
+    margin-top: 4px;
+    word-break: break-all;
+}
+
+.content-selector {
+    min-width: 150px;
+    text-align: right;
+}
+
+.content-selector .form-label {
+    display: block;
+    margin-bottom: 4px;
+}
+
+/* Content Analysis */
+.content-analysis-header {
+    margin-bottom: 8px;
+}
+
+.content-analysis-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    gap: 15px;
     padding: 15px;
-    margin-bottom: 15px;
-    background: var(--bs-body-bg);
+    background: var(--bs-gray-50);
+    border-radius: var(--bs-border-radius);
+    align-items: start;
+}
+
+.analysis-category {
+    text-align: center;
+}
+
+.analysis-item {
+    text-align: center;
+    padding: 8px;
+    border-radius: var(--bs-border-radius);
+    background: white;
+    border: 1px solid var(--bs-border-color-translucent);
+    transition: all 0.2s ease;
+    margin-bottom: 8px;
+}
+
+.analysis-item.main {
+    margin-bottom: 5px;
+}
+
+.analysis-item:hover {
+    transform: translateY(-1px);
+}
+
+.format-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 5px;
+}
+
+.format-item {
+    font-size: 0.75rem;
+    color: var(--bs-text-muted);
+    background: var(--bs-gray-100);
+    padding: 2px 6px;
+    border-radius: var(--bs-border-radius-sm);
+    white-space: nowrap;
+}
+    box-shadow: var(--bs-box-shadow-sm);
+}
+
+.analysis-item.total {
+    background: var(--bs-primary-bg-subtle);
+    border-color: var(--bs-primary-border-subtle);
+    font-weight: 600;
+}
+
+.analysis-count {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: var(--bs-primary);
+    display: block;
+    margin-bottom: 2px;
+}
+
+.analysis-item.total .analysis-count {
+    color: var(--bs-primary-text-emphasis);
+}
+
+.analysis-label {
+    font-size: 0.75em;
+    color: var(--bs-secondary);
+    line-height: 1.2;
+}
+
+/* Content Suggestion */
+.content-suggestion {
+    border-top: 1px solid var(--bs-border-color-translucent);
+    padding-top: 12px;
+    margin-top: 12px;
+}
+
+.content-type-preview {
+    font-size: 0.85em;
 }
 
 .content-type-assignment h6 {
     color: var(--bs-body-color);
     margin-bottom: 10px;
+}
+
+/* Responsive design for content types */
+@media (max-width: 768px) {
+    .content-type-assignment .card-header .d-flex {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .folder-info h5 {
+        max-width: 100%;
+    }
+    
+    .content-selector {
+        text-align: left;
+        min-width: auto;
+    }
+    
+    .content-analysis-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+    
+    .content-suggestion .d-flex {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .content-type-preview {
+        text-align: left;
+    }
+}
+
+@media (max-width: 480px) {
+    .content-analysis-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 .content-type-grid {
@@ -245,7 +447,7 @@
 
 .quick-start-card:hover {
     transform: translateY(-2px);
-    box-shadow: var(--bs-box-shadow);
+    box-shadow: var(--bs-box-shadow-lg);
     border-color: var(--bs-primary);
 }
 
@@ -281,6 +483,24 @@
     .quick-start-grid {
         grid-template-columns: 1fr;
     }
+    
+    /* Feature highlights stack on mobile */
+    .feature-highlights-row {
+        flex-direction: column;
+    }
+    
+    .feature-highlights-row .col-md-4 {
+        margin-bottom: 1rem;
+    }
+    
+    /* Adjust action cards on mobile */
+    .quick-actions .row {
+        flex-direction: column;
+    }
+    
+    .quick-actions .col-md-4 {
+        margin-bottom: 0.5rem;
+    }
 }
 
 /* Animation Enhancements */
@@ -307,6 +527,75 @@
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/* Standardized Alert Components for Wizard */
+.wizard-alert {
+    border: 0;
+    border-left: 4px solid;
+    border-radius: var(--bs-border-radius);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    text-align: left; /* Override any parent text-center */
+}
+
+.wizard-alert-info {
+    border-left-color: var(--bs-info);
+    background-color: var(--bs-info-bg-subtle, rgba(13, 202, 240, 0.1));
+    color: var(--bs-info-text-emphasis, var(--bs-info));
+}
+
+.wizard-alert-warning {
+    border-left-color: var(--bs-warning);
+    background-color: var(--bs-warning-bg-subtle, rgba(255, 193, 7, 0.1));
+    color: var(--bs-warning-text-emphasis, var(--bs-warning));
+}
+
+.wizard-alert-success {
+    border-left-color: var(--bs-success);
+    background-color: var(--bs-success-bg-subtle, rgba(25, 135, 84, 0.1));
+    color: var(--bs-success-text-emphasis, var(--bs-success));
+}
+
+.wizard-alert-light {
+    border-left-color: var(--bs-gray-400, #adb5bd);
+    background-color: var(--bs-light, #f8f9fa);
+    color: var(--bs-body-color);
+}
+
+.wizard-alert .wizard-alert-icon {
+    color: inherit;
+    margin-right: 0.75rem;
+    font-size: 1.1em;
+}
+
+.wizard-alert .wizard-alert-heading {
+    color: inherit;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+}
+
+.wizard-alert .wizard-alert-body {
+    margin-bottom: 0;
+    line-height: 1.5;
+}
+
+.wizard-alert ul {
+    margin-bottom: 0;
+    padding-left: 1.25rem;
+}
+
+.wizard-alert .alert-link {
+    color: inherit;
+    text-decoration: underline;
+    font-weight: 600;
+}
+
+.wizard-alert .alert-link:hover {
+    text-decoration: none;
+    opacity: 0.8;
 }
 
 /* Wizard Complete Page Specific Styles */
@@ -343,6 +632,7 @@
     padding: 1rem;
     border: 1px solid var(--bs-border-color);
     transition: all 0.2s ease;
+    display: block;
 }
 
 .action-card:hover {
@@ -350,11 +640,56 @@
     box-shadow: var(--bs-box-shadow-sm);
 }
 
+/* Clickable action cards */
+.action-card-clickable {
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+}
+
+.action-card-clickable:hover {
+    border-color: var(--bs-primary);
+    box-shadow: var(--bs-box-shadow);
+    transform: translateY(-2px);
+    color: inherit;
+}
+
+.action-card-clickable:active {
+    transform: translateY(0);
+    box-shadow: var(--bs-box-shadow-sm);
+}
+
+.action-card-clickable h6 {
+    color: var(--bs-body-color);
+    transition: color 0.2s ease;
+}
+
+.action-card-clickable:hover h6 {
+    color: var(--bs-primary);
+}
+
+/* Disabled action cards */
+.action-card-disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: var(--bs-secondary-bg);
+}
+
+.action-card-disabled:hover {
+    border-color: var(--bs-border-color);
+    box-shadow: none;
+    transform: none;
+}
+
 .feature-highlight {
     background: var(--bs-secondary-bg);
     border-radius: var(--bs-border-radius);
     border: 1px solid var(--bs-border-color);
     transition: all 0.2s ease;
+    height: 100%; /* Make all cards same height */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .feature-highlight:hover {
@@ -362,6 +697,24 @@
     border-color: var(--bs-primary);
     box-shadow: var(--bs-box-shadow);
 }
+
+/* Ensure feature highlights row alignment */
+.feature-highlights-row {
+    display: flex;
+    align-items: stretch;
+}
+
+.feature-highlights-row .col-md-4 {
+    display: flex;
+}
+
+/* Hide skip option on completion page */
+body:has(.wizard-complete-page) .skip-option,
+.wizard-container:has(.wizard-complete-page) .skip-option {
+    display: none !important;
+}
+
+
 
 /* Bootstrap Integration */
 .wizard-progress .progress {
@@ -373,3 +726,86 @@
     background-color: var(--bs-primary);
     transition: width 0.6s ease;
 }
+
+/* Enhanced Folder Selection Styling */
+.folder-suggestion .form-check-input:checked + .form-check-label {
+    color: var(--bs-primary);
+}
+
+.folder-suggestion .card-title {
+    color: var(--bs-primary);
+    font-weight: 600;
+}
+
+.folder-suggestion code {
+    font-size: 0.875rem;
+    color: var(--bs-dark);
+}
+
+/* Path Examples Styling */
+#pathExamples {
+    transition: all 0.3s ease;
+}
+
+#pathExamples.collapse.show {
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Improved Navigation */
+.wizard-navigation {
+    background-color: var(--bs-light);
+    border-radius: var(--bs-border-radius);
+    padding: 1.5rem;
+    margin-top: 2rem;
+}
+
+/* File Format Cards */
+.card.border-0.bg-light:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--bs-box-shadow);
+    transition: all 0.3s ease;
+}
+
+/* Custom folder input enhancements */
+.form-control:focus {
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+.input-group-text.bg-light {
+    border-color: var(--bs-border-color);
+}
+
+/* Welcome page specific styles */
+.wizard-step .text-center {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 100%;
+}
+
+.wizard-step .row {
+    margin-bottom: 2rem;
+}
+
+.wizard-step .card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.wizard-step .card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+}
+
+/* Removed old alert-info rule - now using wizard-alert classes */

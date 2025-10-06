@@ -19,6 +19,7 @@ from books.mixins import BookNavigationMixin, MetadataContextMixin, BookListCont
 from books.services.common import CoverService, DashboardService
 from books.book_utils import MetadataProcessor, CoverManager, GenreManager, MetadataResetter
 from books.queries.book_queries import build_book_queryset
+from books.views.wizard import WizardRequiredMixin
 
 logger = logging.getLogger('books.scanner')
 
@@ -42,7 +43,7 @@ def signup(request):
     return render(request, 'books/signup.html', {'form': form})
 
 
-class DashboardView(LoginRequiredMixin, TemplateView):
+class DashboardView(WizardRequiredMixin, LoginRequiredMixin, TemplateView):
     """Enhanced dashboard view using extracted analytics helpers."""
     template_name = 'books/dashboard.html'
 

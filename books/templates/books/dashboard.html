@@ -63,7 +63,7 @@
     <div class="row mb-4">
         <!-- Total Books -->
         <div class="col-lg-2 col-md-4 col-6 mb-3">
-            <div class="card stat-card h-100 bg-primary text-white" onclick="navigateToBooks()" role="button" tabindex="0" aria-label="Navigate to all books">
+            <div class="card stat-card h-100 bg-primary text-white nav-card" data-nav="books" role="button" tabindex="0" aria-label="Navigate to all books">
                 <div class="card-body text-center">
                     <i class="fas fa-book stat-icon" aria-hidden="true"></i>
                     <div class="stat-number">{{ total_books|default:0 }}</div>
@@ -78,7 +78,7 @@
 
         <!-- E-books -->
         <div class="col-lg-2 col-md-4 col-6 mb-3">
-            <div class="card stat-card h-100 bg-success text-white" onclick="navigateToEbooks()" role="button" tabindex="0" aria-label="Navigate to ebooks">
+            <div class="card stat-card h-100 bg-success text-white nav-card" data-nav="ebooks" role="button" tabindex="0" aria-label="Navigate to ebooks">
                 <div class="card-body text-center">
                     <i class="fas fa-book-open stat-icon" aria-hidden="true"></i>
                     <div class="stat-number">{{ ebook_count|default:0 }}</div>
@@ -94,7 +94,7 @@
 
         <!-- Comics -->
         <div class="col-lg-2 col-md-4 col-6 mb-3">
-            <div class="card stat-card h-100 bg-info text-white" onclick="navigateToComics()" role="button" tabindex="0" aria-label="Navigate to comics">
+            <div class="card stat-card h-100 bg-info text-white nav-card" data-nav="comics" role="button" tabindex="0" aria-label="Navigate to comics">
                 <div class="card-body text-center">
                     <i class="fas fa-mask stat-icon" aria-hidden="true"></i>
                     <div class="stat-number">{{ comic_count|default:0 }}</div>
@@ -110,7 +110,7 @@
 
         <!-- Audiobooks -->
         <div class="col-lg-2 col-md-4 col-6 mb-3">
-            <div class="card stat-card h-100 bg-warning text-white" onclick="navigateToAudiobooks()" role="button" tabindex="0" aria-label="Navigate to audiobooks">
+            <div class="card stat-card h-100 bg-warning text-white nav-card" data-nav="audiobooks" role="button" tabindex="0" aria-label="Navigate to audiobooks">
                 <div class="card-body text-center">
                     <i class="fas fa-headphones stat-icon" aria-hidden="true"></i>
                     <div class="stat-number">{{ audiobook_count|default:0 }}</div>
@@ -126,7 +126,7 @@
 
         <!-- Series -->
         <div class="col-lg-2 col-md-4 col-6 mb-3">
-            <div class="card stat-card h-100 bg-purple text-white" onclick="navigateToSeries()" role="button" tabindex="0" aria-label="Navigate to series">
+            <div class="card stat-card h-100 bg-purple text-white nav-card" data-nav="series" role="button" tabindex="0" aria-label="Navigate to series">
                 <div class="card-body text-center">
                     <i class="fas fa-layer-group stat-icon" aria-hidden="true"></i>
                     <div class="stat-number">{{ series_count|default:0 }}</div>
@@ -146,7 +146,7 @@
 
         <!-- Authors -->
         <div class="col-lg-2 col-md-4 col-6 mb-3">
-            <div class="card stat-card h-100 bg-secondary text-white" onclick="navigateToAuthors()" role="button" tabindex="0" aria-label="Navigate to authors">
+            <div class="card stat-card h-100 bg-secondary text-white nav-card" data-nav="authors" role="button" tabindex="0" aria-label="Navigate to authors">
                 <div class="card-body text-center">
                     <i class="fas fa-users stat-icon" aria-hidden="true"></i>
                     <div class="stat-number">{{ author_count|default:0 }}</div>

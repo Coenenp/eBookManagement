@@ -12,6 +12,9 @@ import bleach
 logger = logging.getLogger('books.scanner')
 register = template.Library()
 
+# Store built-in hash function before defining template filter
+builtin_hash = hash
+
 
 @register.filter
 def mul(value, arg):
@@ -233,4 +236,4 @@ def isbn_type(isbn):
 @register.filter
 def hash(value):
     """Return a hash of the given value, useful for creating unique IDs."""
-    return str(abs(hash(str(value))))
+    return str(abs(builtin_hash(str(value))))

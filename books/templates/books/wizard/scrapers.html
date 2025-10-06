@@ -36,11 +36,23 @@
                     <span class="input-group-text">
                         <i class="fas fa-key"></i>
                     </span>
-                    <input type="text" class="form-control" 
+                    <input type="text" class="form-control{% if scraper.current_value %} is-valid{% endif %}" 
                            name="{{ scraper.config_field }}" 
+                           value="{{ scraper.current_value|default:'' }}"
                            placeholder="API Key (optional)"
                            autocomplete="off">
+                    {% if scraper.current_value %}
+                    <span class="input-group-text bg-success text-white">
+                        <i class="fas fa-check"></i>
+                    </span>
+                    {% endif %}
                 </div>
+                {% if scraper.current_value %}
+                <small class="text-success">
+                    <i class="fas fa-info-circle me-1"></i>
+                    API Key configured
+                </small>
+                {% endif %}
             </div>
             {% else %}
             <div class="ms-4">
@@ -134,35 +146,33 @@
     
     <!-- Configuration Tips -->
     <div class="mt-4">
-        <div class="alert alert-info">
-            <div class="d-flex">
-                <i class="fas fa-lightbulb me-3"></i>
-                <div>
-                    <h6 class="alert-heading mb-2">Configuration Tips</h6>
-                    <ul class="mb-0 small">
-                        <li><strong>Optional Setup:</strong> All scrapers are optional. The library works great with just file-based metadata.</li>
-                        <li><strong>API Keys:</strong> You can add API keys later in the settings if you skip this step.</li>
-                        <li><strong>Privacy:</strong> API keys are stored securely and only used for metadata requests.</li>
-                        <li><strong>Rate Limits:</strong> Most services have daily request limits, but they're usually sufficient for personal use.</li>
-                        <li><strong>Offline Mode:</strong> The library works perfectly without internet connectivity using built-in metadata extraction.</li>
-                    </ul>
-                </div>
+        <div class="wizard-alert wizard-alert-info">
+            <div class="wizard-alert-heading">
+                <i class="fas fa-lightbulb wizard-alert-icon"></i>
+                Configuration Tips
+            </div>
+            <div class="wizard-alert-body">
+                <ul class="mb-0 small">
+                    <li><strong>Optional Setup:</strong> All scrapers are optional. The library works great with just file-based metadata.</li>
+                    <li><strong>API Keys:</strong> You can add API keys later in the settings if you skip this step.</li>
+                    <li><strong>Privacy:</strong> API keys are stored securely and only used for metadata requests.</li>
+                    <li><strong>Rate Limits:</strong> Most services have daily request limits, but they're usually sufficient for personal use.</li>
+                    <li><strong>Offline Mode:</strong> The library works perfectly without internet connectivity using built-in metadata extraction.</li>
+                </ul>
             </div>
         </div>
     </div>
     
     <!-- Performance Note -->
-    <div class="alert alert-success">
-        <div class="d-flex">
-            <i class="fas fa-rocket me-3"></i>
-            <div>
-                <h6 class="alert-heading mb-2">Performance Benefits</h6>
-                <p class="mb-0 small">
-                    Configured scrapers will automatically enrich your library with professional metadata, 
-                    high-quality covers, and detailed information. This happens in the background and 
-                    makes browsing and organizing your collection much more enjoyable.
-                </p>
-            </div>
+    <div class="wizard-alert wizard-alert-success">
+        <div class="wizard-alert-heading">
+            <i class="fas fa-rocket wizard-alert-icon"></i>
+            Performance Benefits
+        </div>
+        <div class="wizard-alert-body">
+            Configured scrapers will automatically enrich your library with professional metadata, 
+            high-quality covers, and detailed information. This happens in the background and 
+            makes browsing and organizing your collection much more enjoyable.
         </div>
     </div>
 

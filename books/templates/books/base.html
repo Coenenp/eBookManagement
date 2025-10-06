@@ -30,6 +30,30 @@
     <!-- Navigation -->
     {% include 'books/navigation.html' %}
 
+    <!-- Wizard Banner -->
+    {% if should_show_wizard_banner %}
+    <div class="alert alert-info alert-dismissible fade show m-3" role="alert">
+        <div class="d-flex align-items-center">
+            <div class="flex-shrink-0">
+                <i class="fas fa-magic fa-2x text-primary"></i>
+            </div>
+            <div class="flex-grow-1 ms-3">
+                <h5 class="alert-heading mb-2">Welcome to Your Ebook Library!</h5>
+                <p class="mb-2">It looks like this is your first time here. Let's set up your library with a quick setup wizard.</p>
+                <div class="d-flex gap-2">
+                    <a href="{{ wizard_step_url }}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-arrow-right me-1"></i>Start Setup Wizard
+                    </a>
+                    <button type="button" class="btn btn-outline-secondary btn-sm skip-wizard-btn">
+                        <i class="fas fa-skip-forward me-1"></i>Skip for Now
+                    </button>
+                </div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Content -->
     <main class="container mt-4">
         {% if messages %}
@@ -55,6 +79,43 @@
     <script src="{% static 'book/js/shared-utils.js' %}"></script>
     <script src="{% static 'book/js/metadata-utils.js' %}"></script>
     <script src="{% static 'book/js/script.js' %}"></script>
+    
+    <!-- Wizard skip functionality -->
+    {% if should_show_wizard_banner %}
+    <script>
+    // Configuration for wizard skip functionality
+    window.wizardConfig = window.wizardConfig || {};
+    window.wizardConfig.skipUrl = '{% url "books:wizard_skip" %}';
+    
+    // Legacy function for onclick handlers
+    function skipWizard() {
+        if (window.Wizard && window.Wizard.UI) {
+            window.Wizard.UI.skipWizard();
+        } else {
+            // Fallback if wizard-common.js hasn't loaded yet
+            console.warn('Wizard utilities not loaded, falling back to inline skip');
+            if (confirm('Are you sure you want to skip the setup wizard?')) {
+                fetch('{% url "books:wizard_skip" %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': '{{ csrf_token }}',
+                        'Content-Type': 'application/json',
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.reload();
+                    } else {
+                        alert('Error skipping wizard: ' + data.error);
+                    }
+                });
+            }
+        }
+    }
+    </script>
+    <script src="{% static 'book/js/wizard-common.js' %}"></script>
+    {% endif %}
     
     {% block extra_js %}{% endblock %}
 </body>

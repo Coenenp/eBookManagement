@@ -5,7 +5,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'book/css/theme-components.css' %}">
-<link rel="stylesheet" href="{% static 'book/css/wizard.css' %}>
+<link rel="stylesheet" href="{% static 'book/css/wizard.css' %}">
 <!-- Wizard styles already included in wizard.css -->
 {% endblock %}
 
@@ -66,9 +66,9 @@
                 <div class="step-label">Scrapers</div>
             </div>
             
-            <div class="step-item {% if wizard.is_completed %}completed{% elif step == 'complete' %}active{% else %}pending{% endif %}">
+            <div class="step-item {% if wizard.is_completed and step == 'complete' %}completed{% elif step == 'complete' %}active{% else %}pending{% endif %}">
                 <div class="step-number">
-                    {% if wizard.is_completed %}
+                    {% if wizard.is_completed and step == 'complete' %}
                         <i class="fas fa-check"></i>
                     {% else %}
                         5
@@ -81,10 +81,11 @@
         <!-- Progress Bar -->
         <div class="progress mb-3">
             <div class="progress-bar" role="progressbar"
-                 data-progress="{{ progress_percentage|default:0 }}"
+                 data-progress="{{ current_position_percentage|default:0 }}"
                  aria-valuemin="0" aria-valuemax="100"
-                 aria-label="Setup progress">
-                {{ progress_percentage|default:0 }}%
+                 aria-label="Setup progress"
+                 style="width: {{ current_position_percentage|default:0 }}%;">
+                {{ current_position_percentage|default:0 }}%
             </div>
         </div>
     </div>
@@ -118,5 +119,6 @@ window.wizardConfig = {
     validateUrl: '{% url "books:wizard_validate_folder" %}'
 };
 </script>
+<script src="{% static 'book/js/wizard-common.js' %}"></script>
 <script src="{% static 'book/js/wizard-system.js' %}"></script>
 {% endblock %}

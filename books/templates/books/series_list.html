@@ -17,10 +17,10 @@
                     <small class="text-muted">{{ series|length }} series • {{ total_books|default:"0" }} books</small>
                 </div>
                 <div class="btn-group btn-group-sm" role="group">
-                    <button type="button" class="btn btn-outline-secondary" onclick="toggleViewMode('grid')" title="Grid View">
+                    <button type="button" class="btn btn-outline-secondary view-mode-btn" data-view="grid" title="Grid View">
                         <i class="fas fa-th"></i>
                     </button>
-                    <button type="button" class="btn btn-outline-secondary active" onclick="toggleViewMode('table')" title="Table View">
+                    <button type="button" class="btn btn-outline-secondary active view-mode-btn" data-view="table" title="Table View">
                         <i class="fas fa-list"></i>
                     </button>
                 </div>
@@ -80,7 +80,7 @@
                                 <button type="submit" class="btn btn-primary">
                                     <i class="fas fa-search me-1"></i>Filter
                                 </button>
-                                <button type="button" class="btn btn-outline-secondary" onclick="clearFilters()">
+                                <button type="button" class="btn btn-outline-secondary clear-filters-btn">
                                     <i class="fas fa-times me-1"></i>Clear
                                 </button>
                             </div>
@@ -155,8 +155,8 @@
                                         </div>
                                         <div class="series-info">
                                             <div class="series-title fw-semibold text-truncate">
-                                                <a href="#" onclick="selectSeries({{ series.id }}); return false;" 
-                                                   class="text-decoration-none text-dark">
+                                                <a href="#" class="text-decoration-none text-dark series-select-link" 
+                                                   data-series-id="{{ series.id }}">
                                                     {{ series.name }}
                                                 </a>
                                             </div>
@@ -229,15 +229,15 @@
                                 <td class="align-middle">
                                     <div class="btn-group btn-group-sm" role="group">
                                         <button type="button" 
-                                                class="btn btn-outline-primary btn-sm" 
-                                                onclick="event.stopPropagation(); viewSeriesDetails({{ series.id }})"
+                                                class="btn btn-outline-primary btn-sm series-view-btn" 
+                                                data-series-id="{{ series.id }}"
                                                 title="View series details"
                                                 aria-label="View series details">
                                             <i class="fas fa-eye"></i>
                                         </button>
                                         <button type="button" 
-                                                class="btn btn-outline-secondary btn-sm" 
-                                                onclick="event.stopPropagation(); editSeries({{ series.id }})"
+                                                class="btn btn-outline-secondary btn-sm series-edit-btn" 
+                                                data-series-id="{{ series.id }}"
                                                 title="Edit series"
                                                 aria-label="Edit series">
                                             <i class="fas fa-edit"></i>
@@ -252,7 +252,7 @@
                                         <i class="fas fa-layer-group fa-3x text-muted mb-3"></i>
                                         <h5 class="text-muted">No series found</h5>
                                         <p class="text-muted">No series match your current search criteria</p>
-                                        <button type="button" class="btn btn-outline-primary" onclick="clearFilters()">
+                                        <button type="button" class="btn btn-outline-primary clear-filters-btn">
                                             <i class="fas fa-filter me-2"></i>Clear Filters
                                         </button>
                                     </div>
@@ -285,8 +285,8 @@
                         </div>
                         <div class="card-body">
                             <h6 class="card-title text-truncate">
-                                <a href="#" onclick="selectSeries({{ series.id }}); return false;" 
-                                   class="text-decoration-none text-dark">
+                                <a href="#" class="text-decoration-none text-dark series-select-link" 
+                                   data-series-id="{{ series.id }}">
                                     {{ series.name }}
                                 </a>
                             </h6>
@@ -302,8 +302,8 @@
                                     {% endif %}
                                 </div>
                                 <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-primary btn-sm" 
-                                            onclick="viewSeriesDetails({{ series.id }})"
+                                    <button class="btn btn-outline-primary btn-sm series-view-btn" 
+                                            data-series-id="{{ series.id }}"
                                             title="View series details"
                                             aria-label="View series details">
                                         <i class="fas fa-eye"></i>

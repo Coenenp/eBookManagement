@@ -30,6 +30,9 @@ urlpatterns = [
 
     # Setup Wizard
     path('wizard/', wizard_views.WizardWelcomeView.as_view(), name='wizard'),
+    path('wizard/welcome/', wizard_views.WizardWelcomeView.as_view(), name='wizard_welcome'),
+    path('wizard/folders/', wizard_views.WizardFoldersView.as_view(), name='wizard_folders'),
+    path('wizard/content-types/', wizard_views.WizardContentTypesView.as_view(), name='wizard_content_types'),
     path('wizard/<str:step>/', wizard_views.wizard_dispatcher, name='wizard_step'),
     path('wizard/ajax/validate-folder/', wizard_views.wizard_validate_folder, name='wizard_validate_folder'),
     path('wizard/ajax/skip/', wizard_views.wizard_skip, name='wizard_skip'),
@@ -92,6 +95,7 @@ urlpatterns = [
 
     # Book renaming/organization
     path('rename-books/', views.BookRenamerView.as_view(), name='book_renamer'),
+    path('rename-books-enhanced/', views.BookRenamerView.as_view(), name='book_renamer_enhanced'),
     path('rename-books/preview/', views.BookRenamerPreviewView.as_view(), name='book_renamer_preview'),
     path('rename-books/execute/', views.BookRenamerExecuteView.as_view(), name='book_renamer_execute'),
     path('rename-books/file-details/', views.BookRenamerFileDetailsView.as_view(), name='book_renamer_file_details'),

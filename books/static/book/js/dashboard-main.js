@@ -101,6 +101,32 @@ const DashboardNavigation = {
         if (this.urls.author_list) {
             window.location.href = this.urls.author_list;
         }
+    },
+
+    // Handle navigation based on data attribute
+    handleNavigation: function(navType) {
+        switch (navType) {
+            case 'books':
+                this.navigateToBooks();
+                break;
+            case 'ebooks':
+                this.navigateToEbooks();
+                break;
+            case 'comics':
+                this.navigateToComics();
+                break;
+            case 'audiobooks':
+                this.navigateToAudiobooks();
+                break;
+            case 'series':
+                this.navigateToSeries();
+                break;
+            case 'authors':
+                this.navigateToAuthors();
+                break;
+            default:
+                console.warn('Unknown navigation type:', navType);
+        }
     }
 };
 
@@ -123,7 +149,26 @@ const DashboardMain = {
     initializeNavigation: function() {
         DashboardNavigation.init();
         
-        // Bind navigation functions to window for onclick handlers
+        // Set up event delegation for navigation cards
+        document.addEventListener('click', function(e) {
+            const navCard = e.target.closest('.nav-card');
+            if (navCard) {
+                const navType = navCard.getAttribute('data-nav');
+                DashboardNavigation.handleNavigation(navType);
+            }
+        });
+        
+        // Set up keyboard navigation for nav cards
+        document.addEventListener('keydown', function(e) {
+            const navCard = e.target.closest('.nav-card');
+            if (navCard && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                const navType = navCard.getAttribute('data-nav');
+                DashboardNavigation.handleNavigation(navType);
+            }
+        });
+        
+        // Bind navigation functions to window for legacy onclick handlers (if any remain)
         window.navigateToBooks = () => DashboardNavigation.navigateToBooks();
         window.navigateToEbooks = () => DashboardNavigation.navigateToEbooks();
         window.navigateToComics = () => DashboardNavigation.navigateToComics();

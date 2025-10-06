@@ -42,7 +42,7 @@
 
 .analytics-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(var(--bs-dark-rgb), 0.15);
+    box-shadow: var(--bs-box-shadow-lg);
 }
 
 .progress-stat {
@@ -97,8 +97,8 @@
     border: 2px solid transparent;
     height: 120px;
 }
-.theme-preview-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-.theme-preview-card.active { border-color: var(--bs-primary); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.theme-preview-card:hover { transform: translateY(-2px); box-shadow: var(--bs-box-shadow-lg); }
+.theme-preview-card.active { border-color: var(--bs-primary); transform: translateY(-2px); box-shadow: var(--bs-box-shadow-lg); }
 .theme-preview-content {
     background: linear-gradient(45deg, var(--bs-primary) 0%, var(--bs-secondary) 100%);
     height: 60px;

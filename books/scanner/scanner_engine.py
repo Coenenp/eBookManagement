@@ -3,7 +3,7 @@ import os
 import json
 from django.utils import timezone
 
-from books.models import ScanStatus, ScanFolder
+from books.models import ScanStatus, ScanFolder, COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
 from books.scanner.folder import scan_directory
 from books.scanner.ai import initialize_ai_system
 
@@ -15,7 +15,15 @@ class EbookScanner:
         self.rescan = rescan
         self.resume = resume
         self.cover_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
-        self.ebook_extensions = {".epub", ".mobi", ".pdf", ".azw", ".azw3", ".cbr", ".cbz"}
+
+        # Use centralized extension lists from models
+        self.ebook_extensions = set()
+        for fmt in EBOOK_FORMATS:
+            self.ebook_extensions.add(f'.{fmt}')
+        for fmt in COMIC_FORMATS:
+            self.ebook_extensions.add(f'.{fmt}')
+        for fmt in AUDIOBOOK_FORMATS:
+            self.ebook_extensions.add(f'.{fmt}')
 
         # Initialize AI filename recognition system
         self.ai_recognizer = None

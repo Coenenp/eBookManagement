@@ -1,4 +1,5 @@
 {% extends 'books/wizard/base.html' %}
+{% load static %}
 {% load custom_filters %}
 
 {% block wizard_content %}
@@ -17,107 +18,176 @@
     {% csrf_token %}
     
     {% for folder in folder_analysis %}
-    <div class="content-type-assignment">
-        <div class="d-flex justify-content-between align-items-start mb-3">
-            <div class="flex-grow-1">
-                <h5 class="mb-1">
-                    <i class="fas fa-folder text-warning me-2"></i>
-                    {{ folder.name }}
-                </h5>
-                <div class="folder-path">{{ folder.path }}</div>
+    <div class="content-type-assignment card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="folder-info">
+                    <h5 class="mb-1 text-truncate">
+                        <i class="fas fa-folder text-warning me-2"></i>
+                        {{ folder.name }}
+                    </h5>
+                    <div class="folder-path text-muted small">{{ folder.path }}</div>
+                </div>
+                
+                <div class="content-selector">
+                    <label for="folder_{{ forloop.counter }}" class="form-label small text-muted mb-1">
+                        Content Type
+                    </label>
+                    <select class="form-select form-select-sm" name="folder_{{ folder.path|hash }}" 
+                            id="folder_{{ forloop.counter }}"
+                            aria-label="Content type for {{ folder.name }}"
+                            title="Select content type for {{ folder.name }}">
+                        {% for choice_value, choice_display in content_type_choices %}
+                        <option value="{{ choice_value }}" 
+                                {% if choice_value == folder.current_assignment %}selected{% endif %}>
+                            {{ choice_display }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card-body">
+            <!-- Content Analysis -->
+            <div class="content-analysis mb-3">
+                <div class="content-analysis-header">
+                    <small class="text-muted fw-semibold">File Analysis</small>
+                </div>
+                <div class="content-analysis-grid">
+                    <!-- Ebooks Section -->
+                    <div class="analysis-category">
+                        <div class="analysis-item main">
+                            <div class="analysis-count">{{ folder.analysis.ebooks.total }}</div>
+                            <div class="analysis-label">📚 Ebooks</div>
+                        </div>
+                        {% if folder.analysis.ebooks.total > 0 %}
+                            <div class="format-breakdown">
+                                {% if folder.analysis.ebooks.formats.epub > 0 %}
+                                    <span class="format-item">EPUB: {{ folder.analysis.ebooks.formats.epub }}</span>
+                                {% endif %}
+                                {% if folder.analysis.ebooks.formats.pdf > 0 %}
+                                    <span class="format-item">PDF: {{ folder.analysis.ebooks.formats.pdf }}</span>
+                                {% endif %}
+                                {% if folder.analysis.ebooks.formats.mobi > 0 %}
+                                    <span class="format-item">Kindle: {{ folder.analysis.ebooks.formats.mobi }}</span>
+                                {% endif %}
+                                {% if folder.analysis.ebooks.formats.other > 0 %}
+                                    <span class="format-item">Other: {{ folder.analysis.ebooks.formats.other }}</span>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Comics Section -->
+                    <div class="analysis-category">
+                        <div class="analysis-item main">
+                            <div class="analysis-count">{{ folder.analysis.comics.total }}</div>
+                            <div class="analysis-label">🖼️ Comics</div>
+                        </div>
+                        {% if folder.analysis.comics.total > 0 %}
+                            <div class="format-breakdown">
+                                {% if folder.analysis.comics.formats.cbz > 0 %}
+                                    <span class="format-item">CBZ: {{ folder.analysis.comics.formats.cbz }}</span>
+                                {% endif %}
+                                {% if folder.analysis.comics.formats.cbr > 0 %}
+                                    <span class="format-item">CBR: {{ folder.analysis.comics.formats.cbr }}</span>
+                                {% endif %}
+                                {% if folder.analysis.comics.formats.pdf > 0 %}
+                                    <span class="format-item">PDF: {{ folder.analysis.comics.formats.pdf }}</span>
+                                {% endif %}
+                                {% if folder.analysis.comics.formats.cb7 > 0 %}
+                                    <span class="format-item">CB7: {{ folder.analysis.comics.formats.cb7}}</span>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Audiobooks Section -->
+                    <div class="analysis-category">
+                        <div class="analysis-item main">
+                            <div class="analysis-count">{{ folder.analysis.audiobooks.total }}</div>
+                            <div class="analysis-label">🔊 Audiobooks</div>
+                        </div>
+                        {% if folder.analysis.audiobooks.total > 0 %}
+                            <div class="format-breakdown">
+                                {% if folder.analysis.audiobooks.formats.mp3 > 0 %}
+                                    <span class="format-item">MP3: {{ folder.analysis.audiobooks.formats.mp3 }}</span>
+                                {% endif %}
+                                {% if folder.analysis.audiobooks.formats.m4a > 0 %}
+                                    <span class="format-item">M4A/M4B: {{ folder.analysis.audiobooks.formats.m4a }}</span>
+                                {% endif %}
+                                {% if folder.analysis.audiobooks.formats.flac > 0 %}
+                                    <span class="format-item">FLAC: {{ folder.analysis.audiobooks.formats.flac }}</span>
+                                {% endif %}
+                                {% if folder.analysis.audiobooks.formats.other > 0 %}
+                                    <span class="format-item">Other: {{ folder.analysis.audiobooks.formats.other }}</span>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Total Section -->
+                    <div class="analysis-item total">
+                        <div class="analysis-count">{{ folder.analysis.total_files }}</div>
+                        <div class="analysis-label">📁 Total</div>
+                    </div>
+                </div>
             </div>
             
-            <div class="ms-3">
-                <label for="folder_{{ forloop.counter }}" class="form-label visually-hidden">
-                    Content type for {{ folder.name }}
-                </label>
-                <select class="form-select" name="folder_{{ folder.path|hash }}" 
-                        id="folder_{{ forloop.counter }}"
-                        aria-label="Content type for {{ folder.name }}"
-                        title="Select content type for {{ folder.name }}">
-                    {% for choice_value, choice_display in content_type_choices %}
-                    <option value="{{ choice_value }}" 
-                            {% if choice_value == folder.suggested_type %}selected{% endif %}>
-                        {{ choice_display }}
-                    </option>
-                    {% endfor %}
-                </select>
+            <!-- Suggestion and Preview -->
+            <div class="content-suggestion">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="badge bg-info bg-opacity-75">
+                            <i class="fas fa-lightbulb me-1"></i>
+                            Suggested: {{ folder.analysis.suggested_type|capfirst }}
+                        </span>
+                        {% if folder.analysis.suggested_type == 'comics' %}
+                            <small class="text-muted ms-2">
+                                High comic file ratio detected
+                            </small>
+                        {% elif folder.analysis.suggested_type == 'audiobooks' %}
+                            <small class="text-muted ms-2">
+                                Audio files detected
+                            </small>
+                        {% else %}
+                            <small class="text-muted ms-2">
+                                Standard ebook collection
+                            </small>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="content-type-preview text-muted small">
+                        Will scan as: <span class="fw-bold text-primary">{{ folder.suggested_type|title }}</span>
+                    </div>
+                </div>
             </div>
-        </div>
-        
-        <!-- Content Analysis -->
-        <div class="content-analysis">
-            <div class="analysis-item">
-                <span class="analysis-count">{{ folder.analysis.epub_count }}</span>
-                <div class="analysis-label">📚 Ebooks</div>
-            </div>
-            <div class="analysis-item">
-                <span class="analysis-count">{{ folder.analysis.pdf_count }}</span>
-                <div class="analysis-label">📄 PDFs</div>
-            </div>
-            <div class="analysis-item">
-                <span class="analysis-count">{{ folder.analysis.comic_count }}</span>
-                <div class="analysis-label">🖼️ Comics</div>
-            </div>
-            <div class="analysis-item">
-                <span class="analysis-count">{{ folder.analysis.audio_count }}</span>
-                <div class="analysis-label">🔊 Audio</div>
-            </div>
-            <div class="analysis-item">
-                <span class="analysis-count">{{ folder.analysis.total_files }}</span>
-                <div class="analysis-label">📁 Total</div>
-            </div>
-        </div>
-        
-        <!-- Suggestion Badge -->
-        <div class="mt-3">
-            <span class="badge bg-info">
-                <i class="fas fa-lightbulb me-1"></i>
-                Suggested: {{ folder.analysis.suggested_type|capfirst }}
-            </span>
-            {% if folder.analysis.suggested_type == 'comics' %}
-                <small class="text-muted ms-2">
-                    High comic file ratio detected
-                </small>
-            {% elif folder.analysis.suggested_type == 'audiobooks' %}
-                <small class="text-muted ms-2">
-                    Audio files detected
-                </small>
-            {% else %}
-                <small class="text-muted ms-2">
-                    Standard ebook collection
-                </small>
-            {% endif %}
-        </div>
-        
-        <div class="content-type-preview mt-2 text-muted small">
-            Will scan as: <span class="fw-bold">{{ folder.suggested_type|title }}</span>
         </div>
     </div>
     {% empty %}
-    <div class="alert alert-warning">
-        <div class="d-flex">
-            <i class="fas fa-exclamation-triangle me-2"></i>
-            <div>
-                <strong>No folders selected</strong>
-                <p class="mb-0 mt-1">
-                    You need to select at least one folder in the previous step.
-                    <a href="{% url 'books:wizard_step' step='folders' %}" class="alert-link">
-                        Go back to folder selection
-                    </a>
-                </p>
-            </div>
+    <div class="wizard-alert wizard-alert-warning">
+        <div class="wizard-alert-heading">
+            <i class="fas fa-exclamation-triangle wizard-alert-icon"></i>
+            No folders selected
+        </div>
+        <div class="wizard-alert-body">
+            You need to select at least one folder in the previous step.
+            <a href="{% url 'books:wizard_step' step='folders' %}" class="alert-link">
+                Go back to folder selection
+            </a>
         </div>
     </div>
     {% endfor %}
     
     <!-- Content Type Information -->
     <div class="mt-4">
-        <div class="alert alert-info">
-            <h6 class="alert-heading">
-                <i class="fas fa-info-circle me-2"></i>
+        <div class="wizard-alert wizard-alert-info">
+            <div class="wizard-alert-heading">
+                <i class="fas fa-info-circle wizard-alert-icon"></i>
                 Content Type Guide
-            </h6>
+            </div>
+            <div class="wizard-alert-body">
             <div class="row">
                 <div class="col-md-4">
                     <strong>📘 Ebooks</strong>
@@ -146,6 +216,7 @@
                         <li>Audio drama and fiction</li>
                     </ul>
                 </div>
+            </div>
             </div>
         </div>
     </div>

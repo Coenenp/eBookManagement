@@ -1,6 +1,7 @@
 {% extends 'books/wizard/base.html' %}
 
 {% block wizard_content %}
+<div class="wizard-complete-page">
 <div class="text-center mb-5">
     <div class="completion-icon">
         <i class="fas fa-check-circle text-success icon-xl"></i>
@@ -14,131 +15,149 @@
     </p>
 </div>
 
-<div class="row">
-    <!-- Configuration Summary -->
-    <div class="col-md-8">
-        <div class="setup-summary">
-            <h5 class="mb-3">
-                <i class="fas fa-clipboard-check text-primary me-2"></i>
-                Configuration Summary
-            </h5>
-            
-            <!-- Folders -->
-            <div class="summary-item">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <h6 class="mb-0">
-                        <i class="fas fa-folder text-warning me-2"></i>
-                        Scan Folders
-                    </h6>
-                    <span class="badge bg-light text-dark">{{ folder_count }} configured</span>
-                </div>
-                {% if configured_folders %}
-                <ul class="list-unstyled small text-muted mb-3">
-                    {% for folder in configured_folders %}
-                    <li class="ms-3">
-                        <i class="fas fa-folder-open me-2"></i>
-                        <code>{{ folder.path }}</code>
-                        {% if folder.content_type %}
-                        <span class="badge bg-secondary ms-2">{{ folder.content_type }}</span>
-                        {% endif %}
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% endif %}
-            </div>
-            
-            <!-- Scrapers -->
-            <div class="summary-item">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <h6 class="mb-0">
-                        <i class="fas fa-robot text-info me-2"></i>
-                        Metadata Scrapers
-                    </h6>
-                    <span class="badge bg-light text-dark">{{ configured_scrapers|length }} active</span>
-                </div>
-                {% if configured_scrapers %}
-                <ul class="list-unstyled small text-muted mb-3">
-                    {% for scraper in configured_scrapers %}
-                    <li class="ms-3">
-                        <i class="fas fa-check-circle text-success me-2"></i>
-                        {{ scraper.name }}
-                        {% if scraper.has_api_key %}
-                        <span class="badge bg-success ms-2">API Key Configured</span>
-                        {% else %}
-                        <span class="badge bg-secondary ms-2">Built-in</span>
-                        {% endif %}
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <p class="small text-muted ms-3 mb-3">No external scrapers configured (using built-in metadata extraction)</p>
-                {% endif %}
-            </div>
+<!-- Configuration Summary -->
+<div class="setup-summary">
+    <h5 class="mb-3">
+        <i class="fas fa-clipboard-check text-primary me-2"></i>
+        Configuration Summary
+    </h5>
+    
+    <!-- Folders -->
+    <div class="summary-item">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+            <h6 class="mb-0">
+                <i class="fas fa-folder text-warning me-2"></i>
+                Scan Folders
+            </h6>
+            <span class="badge bg-light text-dark">{{ folder_count }} configured</span>
         </div>
+        {% if configured_folders %}
+        <ul class="list-unstyled small text-muted mb-3">
+            {% for folder in configured_folders %}
+            <li class="ms-3">
+                <i class="fas fa-folder-open me-2"></i>
+                <code>{{ folder.path }}</code>
+                {% if folder.content_type %}
+                <span class="badge bg-secondary ms-2">{{ folder.content_type }}</span>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
     </div>
     
-    <!-- Quick Actions -->
-    <div class="col-md-4">
-        <div class="quick-actions">
-            <h5 class="mb-3">
-                <i class="fas fa-rocket text-primary me-2"></i>
-                Quick Actions
-            </h5>
-            
-            <div class="action-card mb-3">
+    <!-- Scrapers -->
+    <div class="summary-item">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+            <h6 class="mb-0">
+                <i class="fas fa-robot text-info me-2"></i>
+                Metadata Scrapers
+            </h6>
+            <span class="badge bg-light text-dark">{{ configured_scrapers|length }} active</span>
+        </div>
+        {% if configured_scrapers %}
+        <ul class="list-unstyled small text-muted mb-3">
+            {% for scraper in configured_scrapers %}
+            <li class="ms-3">
+                <i class="fas fa-check-circle text-success me-2"></i>
+                {{ scraper.name }}
+                {% if scraper.has_api_key %}
+                <span class="badge bg-success ms-2">API Key Configured</span>
+                {% else %}
+                <span class="badge bg-secondary ms-2">Built-in</span>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="small text-muted ms-3 mb-3">No external scrapers configured (using built-in metadata extraction)</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="quick-actions mt-4">
+    <h5 class="mb-3">
+        <i class="fas fa-rocket text-primary me-2"></i>
+        Quick Actions
+    </h5>
+    
+    <div class="row">
+        <div class="col-md-4">
+            {% if folder_count > 0 %}
+            <a href="{% url 'books:scan_dashboard' %}" class="action-card action-card-clickable mb-3 text-decoration-none">
                 <div class="d-flex align-items-center">
                     <i class="fas fa-search text-primary me-3 icon-sm"></i>
                     <div>
                         <h6 class="mb-1">Start Initial Scan</h6>
                         <p class="small text-muted mb-0">Scan configured folders for books</p>
                     </div>
+                    <i class="fas fa-chevron-right ms-auto text-muted"></i>
+                </div>
+            </a>
+            {% else %}
+            <div class="action-card action-card-disabled mb-3">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-search text-muted me-3 icon-sm"></i>
+                    <div>
+                        <h6 class="mb-1 text-muted">Start Initial Scan</h6>
+                        <p class="small text-muted mb-0">Configure folders first</p>
+                    </div>
                 </div>
             </div>
-            
-            <div class="action-card mb-3">
+            {% endif %}
+        </div>
+        
+        <div class="col-md-4">
+            <a href="{% url 'books:dashboard' %}" class="action-card action-card-clickable mb-3 text-decoration-none">
                 <div class="d-flex align-items-center">
                     <i class="fas fa-tachometer-alt text-success me-3 icon-sm"></i>
                     <div>
                         <h6 class="mb-1">View Dashboard</h6>
                         <p class="small text-muted mb-0">See your library statistics</p>
                     </div>
+                    <i class="fas fa-chevron-right ms-auto text-muted"></i>
                 </div>
-            </div>
-            
-            <div class="action-card">
+            </a>
+        </div>
+        
+        <div class="col-md-4">
+            <a href="{% url 'books:user_settings' %}" class="action-card action-card-clickable mb-3 text-decoration-none">
                 <div class="d-flex align-items-center">
                     <i class="fas fa-cog text-warning me-3 icon-sm"></i>
                     <div>
                         <h6 class="mb-1">Adjust Settings</h6>
                         <p class="small text-muted mb-0">Fine-tune your configuration</p>
                     </div>
+                    <i class="fas fa-chevron-right ms-auto text-muted"></i>
                 </div>
-            </div>
+            </a>
         </div>
     </div>
 </div>
 
 <!-- Next Steps -->
 <div class="mt-4">
-    <div class="alert alert-light border">
-        <div class="d-flex">
-            <i class="fas fa-lightbulb text-warning me-3 icon-xs"></i>
-            <div>
-                <h6 class="alert-heading mb-2">What's Next?</h6>
-                <div class="row small">
-                    <div class="col-md-6">
-                        <ul class="mb-0">
-                            <li><strong>Scan your library:</strong> Start with the initial scan to discover your books</li>
-                            <li><strong>Browse your collection:</strong> Use the main library view to explore your books</li>
-                            <li><strong>Organize with tags:</strong> Add custom tags and categories</li>
-                        </ul>
-                    </div>
-                    <div class="col-md-6">
-                        <ul class="mb-0">
-                            <li><strong>Set up reading lists:</strong> Create custom collections</li>
-                            <li><strong>Configure additional scrapers:</strong> Add more metadata sources</li>
-                            <li><strong>Explore advanced features:</strong> Discover all the tools available</li>
-                        </ul>
+    <div class="wizard-alert wizard-alert-light">
+        <div class="wizard-alert-heading">
+            <i class="fas fa-lightbulb wizard-alert-icon"></i>
+            What's Next?
+        </div>
+        <div class="wizard-alert-body">
+            <div class="row small">
+                <div class="col-md-6">
+                    <ul class="mb-0">
+                        <li><strong>Scan your library:</strong> Start with the initial scan to discover your books</li>
+                        <li><strong>Browse your collection:</strong> Use the main library view to explore your books</li>
+                        <li><strong>Organize with tags:</strong> Add custom tags and categories</li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <ul class="mb-0">
+                        <li><strong>Set up reading lists:</strong> Create custom collections</li>
+                        <li><strong>Configure additional scrapers:</strong> Add more metadata sources</li>
+                        <li><strong>Explore advanced features:</strong> Discover all the tools available</li>
+                    </ul>
                     </div>
                 </div>
             </div>
@@ -182,7 +201,7 @@
         Key Features Ready to Use
     </h5>
     
-    <div class="row">
+    <div class="row feature-highlights-row">
         <div class="col-md-4">
             <div class="feature-highlight text-center p-3">
                 <i class="fas fa-books text-primary mb-2 icon-lg"></i>
@@ -208,9 +227,36 @@
         </div>
     </div>
 </div>
+</div> <!-- Close wizard-complete-page -->
 {% endblock %}
 
 {% block extra_css %}
 {{ block.super }}
 <!-- Wizard completion styles already included in wizard.css -->
+<style>
+body { /* Mark completion page for CSS targeting */
+    --wizard-page: complete;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+// Fix completion page button issues
+document.addEventListener('DOMContentLoaded', function() {
+    // Remove any spinning icons from buttons
+    const buttons = document.querySelectorAll('.wizard-navigation button');
+    buttons.forEach(button => {
+        const spinners = button.querySelectorAll('i.fa-spin, i.fa-spinner');
+        spinners.forEach(spinner => {
+            if (button.name === 'start_scan') {
+                spinner.className = 'fas fa-search me-2';
+            } else {
+                spinner.className = 'fas fa-check me-2';
+            }
+        });
+    });
+});
+</script>
 {% endblock %}
