@@ -5,7 +5,9 @@
 {% block title %}Scanning Dashboard{% endblock %}
 
 {% block extra_css %}
-<!-- Scanning dashboard styles already included in dashboard.css -->
+{{ block.super }}
+<link href="{% static 'book/css/bootstrap-components.css' %}" rel="stylesheet">
+<link href="{% static 'book/css/scanning-dashboard.css' %}" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -23,6 +25,9 @@
                 <a href="{% url 'books:scan_history' %}" class="btn btn-outline-primary">
                     <i class="fas fa-history me-2"></i>Scan History
                 </a>
+                <button class="btn btn-success" id="scan-all-folders-btn">
+                    <i class="fas fa-search me-2"></i>Scan All Folders
+                </button>
                 <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newScanModal">
                     <i class="fas fa-plus me-2"></i>Start New Scan
                 </button>
@@ -196,41 +201,75 @@
                                 <td>{{ folder.name }}</td>
                                 <td><code>{{ folder.path }}</code></td>
                                 <td>
-                                    <span class="badge 
-                                        {% if folder.content_type == 'ebooks' %}bg-primary
-                                        {% elif folder.content_type == 'comics' %}bg-warning
-                                        {% elif folder.content_type == 'audiobooks' %}bg-info
-                                        {% elif folder.content_type == 'mixed' %}bg-secondary
-                                        {% else %}bg-light text-dark{% endif %}">
+                                    <span class="badge content-type-{{ folder.content_type }}">
                                         {{ folder.get_content_type_display }}
                                     </span>
                                 </td>
                                 <td>{{ folder.language|upper }}</td>
                                 <td>
                                     {% if folder.progress_info %}
-                                        <div class="d-flex align-items-center">
-                                            <span class="me-2">
-                                                {{ folder.progress_info.scanned }}/{{ folder.progress_info.total_files }}
-                                            </span>
-                                            {% if folder.progress_info.needs_scan %}
-                                                <div class="progress flex-grow-1 me-2 progress-thin">
-                                                    <div class="progress-bar bg-info progress-bar-dynamic" role="progressbar"
-                                                         data-width="{{ folder.progress_info.percentage|default:0 }}"
-                                                         aria-label="Folder scan progress"
-                                                         aria-valuemin="0"
-                                                         aria-valuemax="100"
-                                                         title="{{ folder.progress_info.percentage|default:0 }}% scanned">
+                                        <div class="folder-progress-container" data-folder-id="{{ folder.id }}">
+                                            {% if folder.progress_info.loading %}
+                                                <!-- Loading State -->
+                                                <div class="text-center mb-1">
+                                                    <span class="progress-numbers fw-bold">
+                                                        {{ folder.progress_info.scanned }}/<span class="total-files">...</span>
+                                                    </span>
+                                                </div>
+                                                <div class="progress progress-thin mb-1">
+                                                    <div class="progress-bar progress-loading progress-bar-striped progress-bar-animated" 
+                                                         role="progressbar"
+                                                         title="Loading progress information...">
                                                     </div>
                                                 </div>
-                                                <small class="text-muted">{{ folder.progress_info.percentage }}%</small>
+                                                <div class="text-center">
+                                                    <small class="text-muted progress-percent">
+                                                        <i class="fas fa-spinner fa-spin me-1"></i>Loading...
+                                                    </small>
+                                                </div>
                                             {% else %}
-                                                <span class="badge bg-success ms-2">
-                                                    <i class="fas fa-check"></i> Complete
-                                                </span>
+                                                <!-- Normal State -->
+                                                <div class="text-center mb-1">
+                                                    <span class="progress-numbers fw-bold">
+                                                        {{ folder.progress_info.scanned }}/{{ folder.progress_info.total_files }}
+                                                    </span>
+                                                </div>
+                                                {% if folder.progress_info.needs_scan %}
+                                                    <div class="progress progress-thin mb-1">
+                                                        <div class="progress-bar progress-active progress-bar-dynamic" role="progressbar"
+                                                             data-width="{{ folder.progress_info.percentage|default:0 }}"
+                                                             style="--progress-width: {{ folder.progress_info.percentage|default:0 }};"
+                                                             aria-label="Folder scan progress"
+                                                             aria-valuemin="0"
+                                                             aria-valuemax="100"
+                                                             aria-valuenow="{{ folder.progress_info.percentage|default:0 }}"
+                                                             title="{{ folder.progress_info.percentage|default:0 }}% scanned">
+                                                        </div>
+                                                    </div>
+                                                    <div class="text-center">
+                                                        <small class="text-muted progress-percent">{{ folder.progress_info.percentage }}%</small>
+                                                    </div>
+                                                {% else %}
+                                                    <div class="progress progress-thin mb-1">
+                                                        <div class="progress-bar progress-complete" role="progressbar"
+                                                             title="Fully scanned"
+                                                             aria-valuenow="100"
+                                                             aria-valuemin="0" 
+                                                             aria-valuemax="100">
+                                                        </div>
+                                                    </div>
+                                                    <div class="text-center">
+                                                        <span class="badge bg-success">
+                                                            <i class="fas fa-check me-1"></i>Complete
+                                                        </span>
+                                                    </div>
+                                                {% endif %}
                                             {% endif %}
                                         </div>
                                     {% else %}
-                                        {{ folder.book_count }}
+                                        <div class="text-center">
+                                            <span class="text-muted">{{ folder.book_count }} books</span>
+                                        </div>
                                     {% endif %}
                                 </td>
                                 <td>
@@ -482,12 +521,15 @@
 window.scanningDashboardConfig = {
     activeScanUrl: '{% url "books:active_scans_ajax" %}',
     scanProgressUrl: '{% url "books:scan_progress_ajax" job_id="PLACEHOLDER" %}',
+    bulkFolderProgressUrl: '{% url "books:ajax_bulk_folder_progress" %}',
     apiStatusUrl: '{% url "books:api_status_ajax" %}',
     cancelScanUrl: '{% url "books:cancel_scan_ajax" job_id="PLACEHOLDER" %}',
     startFolderScanUrl: '{% url "books:start_folder_scan" %}',
     startBookRescanUrl: '{% url "books:start_book_rescan" %}',
+    scanAllFoldersUrl: '{% url "books:ajax_trigger_scan_all_folders" %}',
     csrfToken: '{{ csrf_token }}'
 };
 </script>
+<script src="{% static 'book/js/scanning-dashboard-inline.js' %}"></script>
 <script src="{% static 'book/js/scanning-dashboard.js' %}"></script>
 {% endblock %}

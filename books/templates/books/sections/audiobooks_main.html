@@ -38,6 +38,7 @@
 {% block extra_js %}
 {{ block.super }}
 <script src="{% static 'book/js/media-library-utils.js' %}"></script>
+<script src="{% static 'book/js/base-section-manager.js' %}"></script>
 <script src="{% static 'book/js/audiobooks-section.js' %}"></script>
 <script>
 // Configuration for audiobooks section
@@ -55,6 +56,8 @@ window.audiobooksConfig = {
 };
 
 document.addEventListener('DOMContentLoaded', function() {
-    new AudiobooksSectionManager();
+    if (typeof AudiobooksSectionManager !== 'undefined') {
+        window.sectionManager = new AudiobooksSectionManager();
+    }
 });</script>
 {% endblock %}

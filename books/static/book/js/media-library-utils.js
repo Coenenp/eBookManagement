@@ -344,7 +344,9 @@ class MediaLibraryUtils {
         
         // Remove script tags and event handlers
         temp.querySelectorAll('script').forEach(el => el.remove());
-        temp.querySelectorAll('[on*]').forEach(el => {
+        
+        // Remove all event handler attributes (onclick, onload, etc.)
+        temp.querySelectorAll('*').forEach(el => {
             Array.from(el.attributes).forEach(attr => {
                 if (attr.name.startsWith('on')) {
                     el.removeAttribute(attr.name);

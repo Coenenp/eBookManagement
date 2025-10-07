@@ -1,4 +1,5 @@
 {% extends 'books/wizard/base.html' %}
+{% load static %}
 
 {% block wizard_content %}
 <div class="wizard-complete-page">
@@ -232,31 +233,11 @@
 
 {% block extra_css %}
 {{ block.super }}
-<!-- Wizard completion styles already included in wizard.css -->
-<style>
-body { /* Mark completion page for CSS targeting */
-    --wizard-page: complete;
-}
-</style>
+<!-- Wizard completion page styles -->
+<link href="{% static 'book/css/wizard-complete.css' %}" rel="stylesheet">
 {% endblock %}
 
 {% block extra_js %}
 {{ block.super }}
-<script>
-// Fix completion page button issues
-document.addEventListener('DOMContentLoaded', function() {
-    // Remove any spinning icons from buttons
-    const buttons = document.querySelectorAll('.wizard-navigation button');
-    buttons.forEach(button => {
-        const spinners = button.querySelectorAll('i.fa-spin, i.fa-spinner');
-        spinners.forEach(spinner => {
-            if (button.name === 'start_scan') {
-                spinner.className = 'fas fa-search me-2';
-            } else {
-                spinner.className = 'fas fa-check me-2';
-            }
-        });
-    });
-});
-</script>
+<script src="{% static 'book/js/wizard-complete.js' %}"></script>
 {% endblock %}

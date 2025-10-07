@@ -116,10 +116,10 @@ class RenamingTestUtils:
         defaults.update(kwargs)
 
         book = Book.objects.create(**defaults)
-        
+
         # Create BookTitle relationship
         BookTitle.objects.create(book=book, title=title)
-        
+
         return book
 
     @staticmethod

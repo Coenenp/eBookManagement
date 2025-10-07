@@ -323,13 +323,15 @@ def series_ajax_list(request):
         # Get all series from final metadata as primary source
         series_data = {}
 
-        # Get books with series information from final metadata
+        # Get books with series information from final metadata - EBOOKS ONLY
         books_with_series = Book.objects.filter(
             finalmetadata__final_series__isnull=False,
-            is_placeholder=False
+            is_placeholder=False,
+            scan_folder__content_type='ebooks',  # Only include ebooks in series section
+            scan_folder__is_active=True
         ).exclude(
             finalmetadata__final_series=''
-        ).select_related('finalmetadata').prefetch_related('metadata')
+        ).select_related('finalmetadata', 'scan_folder').prefetch_related('metadata')
 
         for book in books_with_series:
             final_meta = book.finalmetadata

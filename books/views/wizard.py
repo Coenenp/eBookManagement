@@ -576,7 +576,9 @@ class WizardCompleteView(SetupWizardView):
         if request.POST.get('start_scan') == 'true':
             # Create scan folders first
             self._create_scan_folders(wizard)
-            return redirect('books:trigger_scan')
+            # Redirect to scanning dashboard with auto-start parameter
+            messages.success(request, "Setup complete! Starting scan for all configured folders...")
+            return redirect('books:scan_dashboard')
 
         messages.success(request, "Setup complete! Welcome to your ebook library.")
         return redirect('books:dashboard')

@@ -1,0 +1,75 @@
+/* Scanning Dashboard Styles - Bootstrap Compatible */
+
+.progress-thin {
+    height: 8px;
+}
+
+.folder-progress-container .progress-bar {
+    transition: width 0.3s ease-in-out;
+}
+
+/* Remove custom bg-success-darker - use Bootstrap utilities instead */
+
+.folder-progress-container .total-files {
+    min-width: 20px;
+    display: inline-block;
+}
+
+/* Dashboard loading states */
+.progress-bar-loading {
+    width: 100% !important;
+}
+
+/* Notification styles using Bootstrap utilities */
+.notification-fixed {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: var(--bs-zindex-modal, 1055);
+    min-width: 300px;
+}
+
+/* Button states */
+.scan-all-btn-loading {
+    opacity: 0.7;
+}
+
+/* Progress container animations */
+.folder-progress-container {
+    transition: all 0.2s ease-in-out;
+    min-width: 140px; /* Ensure consistent width */
+}
+
+.folder-progress-container:hover {
+    background-color: var(--bs-secondary-bg, rgba(0, 0, 0, 0.02));
+}
+
+/* Progress numbers styling using Bootstrap text colors */
+.progress-numbers {
+    font-size: 0.9em;
+    color: var(--bs-body-color);
+}
+
+/* Enhanced progress bar styling */
+.progress-bar-dynamic {
+    transition: width 0.6s ease-in-out;
+}
+
+/* Error state styling using Bootstrap colors */
+.folder-progress-container .progress-error {
+    color: var(--bs-danger);
+}
+
+.folder-progress-container .fa-exclamation-triangle {
+    color: var(--bs-warning);
+}
+
+/* Ensure progress bars have minimum height for visibility */
+.progress-thin .progress-bar {
+    min-height: 8px;
+}
+
+/* Loading state improvements using Bootstrap muted color */
+.folder-progress-container .fa-spinner {
+    color: var(--bs-secondary);
+}

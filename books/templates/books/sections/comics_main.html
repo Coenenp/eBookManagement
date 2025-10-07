@@ -67,8 +67,15 @@
         }
     }
 
+// Initialize comics manager
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof ComicsSectionManager !== 'undefined') {
+        window.comicsManager = new ComicsSectionManager();
+    }
+});
 </script>
 <script src="{% static 'book/js/media-library-utils.js' %}"></script>
 <script src="{% static 'book/js/base-section.js' %}"></script>
+<script src="{% static 'book/js/base-section-manager.js' %}"></script>
 <script src="{% static 'book/js/comics-section.js' %}"></script>
 {% endblock %}

@@ -55,11 +55,23 @@ def scan_dashboard(request):
         book_count=Count('book')
     ).order_by('-created_at')[:10]
 
-    # Add progress information to each folder
+    # Get actual progress info for dashboard display
     folders_with_progress = []
     for folder in recent_folders:
-        progress_info = folder.get_scan_progress_info()
-        folder.progress_info = progress_info
+        # Get real progress info (this may be slower but gives accurate results)
+        try:
+            progress_info = folder.get_scan_progress_info()
+            folder.progress_info = progress_info
+            folder.progress_info['loading'] = False  # Not loading since we have real data
+        except Exception:
+            # Fallback to basic info if scan fails
+            folder.progress_info = {
+                'scanned': folder.book_count,  # Already annotated
+                'total_files': 0,  # Unknown
+                'percentage': 0,  # Unknown
+                'needs_scan': True,  # Assume true on error
+                'loading': True  # Flag for UI to show loading state
+            }
         folders_with_progress.append(folder)
 
     recent_folders = folders_with_progress

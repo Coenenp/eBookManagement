@@ -1,0 +1,159 @@
+/**
+ * Reusable Bootstrap Components
+ * Ensures consistency across the application
+ */
+
+/* Standardized badge variants */
+.badge-stat {
+    font-size: 0.875rem; /* Consistent size for statistics */
+}
+
+.badge-status {
+    font-size: 0.75rem; /* Smaller for status indicators */
+}
+
+/* Content type color mapping (reusable across components) */
+.content-type-ebooks {
+    background-color: var(--bs-primary) !important;
+    color: var(--bs-white) !important;
+}
+
+.content-type-comics {
+    background-color: var(--bs-warning) !important;
+    color: var(--bs-dark) !important;
+}
+
+.content-type-audiobooks {
+    background-color: var(--bs-info) !important;
+    color: var(--bs-white) !important;
+}
+
+.content-type-mixed {
+    background-color: var(--bs-secondary) !important;
+    color: var(--bs-white) !important;
+}
+
+.content-type-other {
+    background-color: var(--bs-light) !important;
+    color: var(--bs-dark) !important;
+}
+
+/* Status indicators with consistent semantic colors */
+.status-success {
+    background-color: var(--bs-success) !important;
+    color: var(--bs-white) !important;
+}
+
+.status-warning {
+    background-color: var(--bs-warning) !important;
+    color: var(--bs-dark) !important;
+}
+
+.status-danger {
+    background-color: var(--bs-danger) !important;
+    color: var(--bs-white) !important;
+}
+
+.status-info {
+    background-color: var(--bs-info) !important;
+    color: var(--bs-white) !important;
+}
+
+.status-neutral {
+    background-color: var(--bs-secondary) !important;
+    color: var(--bs-white) !important;
+}
+
+/* Progress states using consistent Bootstrap colors */
+.progress-loading {
+    background-color: var(--bs-secondary) !important;
+}
+
+.progress-active {
+    background-color: var(--bs-info) !important;
+}
+
+.progress-complete {
+    background-color: var(--bs-success) !important;
+}
+
+.progress-error {
+    background-color: var(--bs-warning) !important;
+}
+
+/* Button loading states */
+.btn-loading {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.btn-loading .spinner-border {
+    width: 1rem;
+    height: 1rem;
+}
+
+/* Consistent spacing for inline elements */
+.inline-stat {
+    margin-inline-end: 0.5rem;
+}
+
+.inline-status {
+    margin-inline-start: 0.5rem;
+}
+
+/* Progress container consistency */
+.progress-container {
+    min-width: 120px;
+}
+
+.progress-text {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--bs-body-color);
+}
+
+/* Icon sizes for consistency */
+.icon-sm {
+    width: 1rem;
+    height: 1rem;
+}
+
+.icon-md {
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+.icon-lg {
+    width: 2rem;
+    height: 2rem;
+}
+
+/* Progress bar specific styles for dashboard */
+.progress-thin {
+    height: 0.5rem;
+}
+
+.progress-numbers {
+    font-size: 0.875rem;
+    color: var(--bs-body-color);
+    font-weight: 600;
+}
+
+.progress-bar-dynamic {
+    transition: width 0.3s ease-in-out;
+}
+
+/* Loading state with full width */
+.progress-loading {
+    width: 100% !important;
+}
+
+/* Complete state with full width */
+.progress-complete {
+    width: 100% !important;
+}
+
+/* Dynamic width for active progress bars using CSS custom properties */
+.progress-bar-dynamic {
+    width: calc(var(--progress-width, 0) * 1%);
+}

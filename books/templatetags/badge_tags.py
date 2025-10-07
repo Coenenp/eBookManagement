@@ -16,13 +16,13 @@ def confidence_badge(confidence, size=""):
     size_class = f" badge-{size}" if size else ""
 
     if confidence >= 0.8:
-        badge_class = "badge bg-success"
+        badge_class = "badge status-success"
         level = "High"
     elif confidence >= 0.5:
-        badge_class = "badge bg-warning text-dark"
+        badge_class = "badge status-warning"
         level = "Medium"
     else:
-        badge_class = "badge bg-danger"
+        badge_class = "badge status-danger"
         level = "Low"
 
     percentage = int(confidence * 100)
@@ -34,31 +34,31 @@ def status_badge(status_type, value=None, text=None, title=None):
     """Generate status badges with consistent styling"""
     badges = {
         'reviewed': {
-            True: ('badge bg-success text-white', '✅ Reviewed'),
-            False: ('badge bg-warning text-dark', '⚠️ Not Reviewed')
+            True: ('badge status-success', '✅ Reviewed'),
+            False: ('badge status-warning', '⚠️ Not Reviewed')
         },
         'needs_review': {
-            True: ('badge bg-warning text-dark', '⚠️ Needs Review'),
-            False: ('badge bg-success', '✅ Reviewed')
+            True: ('badge status-warning', '⚠️ Needs Review'),
+            False: ('badge status-success', '✅ Reviewed')
         },
         'duplicate': {
-            True: ('badge bg-danger', '🔄 Duplicate'),
-            False: ('badge bg-success', '✅ Unique')
+            True: ('badge status-danger', '🔄 Duplicate'),
+            False: ('badge status-success', '✅ Unique')
         },
         'placeholder': {
-            True: ('badge bg-info', '📄 Placeholder'),
-            False: ('badge bg-success', '📚 Real File')
+            True: ('badge status-info', '📄 Placeholder'),
+            False: ('badge status-success', '📚 Real File')
         },
         'active': {
-            True: ('badge bg-success', 'Active'),
-            False: ('badge bg-secondary', 'Inactive')
+            True: ('badge status-success', 'Active'),
+            False: ('badge status-neutral', 'Inactive')
         },
-        'final': ('badge bg-primary', 'Final'),
-        'selected': ('badge bg-primary', 'Selected'),
-        'new': ('badge bg-success', 'New'),
-        'primary_source': ('badge bg-primary', 'Primary Source'),
-        'alternate_source': ('badge bg-light text-dark', 'Alternate Source'),
-        'initial_scan': ('badge bg-secondary', 'Initial Scan')
+        'final': ('badge status-info', 'Final'),
+        'selected': ('badge status-info', 'Selected'),
+        'new': ('badge status-success', 'New'),
+        'primary_source': ('badge status-info', 'Primary Source'),
+        'alternate_source': ('badge status-neutral', 'Alternate Source'),
+        'initial_scan': ('badge status-neutral', 'Initial Scan')
     }
 
     if status_type in ['reviewed', 'needs_review', 'duplicate', 'placeholder', 'active']:
@@ -86,13 +86,13 @@ def metadata_source_badge(source_name, is_final=False, confidence=None):
 
     # Determine badge style based on source name
     source_styles = {
-        'opf': 'badge bg-secondary',
-        'initial_scan': 'badge bg-info',
-        'external': 'badge bg-warning text-dark',
-        'manual': 'badge bg-success'
+        'opf': 'badge status-neutral',
+        'initial_scan': 'badge status-info',
+        'external': 'badge status-warning',
+        'manual': 'badge status-success'
     }
 
-    badge_class = source_styles.get(source_name.lower(), 'badge bg-light text-dark')
+    badge_class = source_styles.get(source_name.lower(), 'badge status-neutral')
 
     if confidence is not None:
         confidence_text = f" ({int(float(confidence) * 100)}%)"
@@ -108,12 +108,12 @@ def legend_badges():
     return '''
     <div class="d-flex flex-wrap gap-2 align-items-center">
         <small class="text-muted me-2">Confidence Levels:</small>
-        <span class="badge bg-success">High (≥0.8)</span>
-        <span class="badge bg-warning text-dark">Medium (0.5-0.8)</span>
-        <span class="badge bg-danger">Low (<0.5)</span>
-        <span class="badge bg-primary">Primary Source</span>
-        <span class="badge bg-light text-dark">Alternate Source</span>
-        <span class="badge bg-secondary">Initial Scan</span>
+        <span class="badge status-success">High (≥0.8)</span>
+        <span class="badge status-warning">Medium (0.5-0.8)</span>
+        <span class="badge status-danger">Low (<0.5)</span>
+        <span class="badge status-info">Primary Source</span>
+        <span class="badge status-neutral">Alternate Source</span>
+        <span class="badge status-neutral">Initial Scan</span>
     </div>
     '''
 

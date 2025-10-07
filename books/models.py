@@ -154,12 +154,27 @@ class ScanFolder(models.Model):
         return f"{self.name} ({self.get_content_type_display()})"
 
     def count_files_on_disk(self):
-        """Count ebook files recursively in the scan folder path on disk"""
+        """Count ebook files recursively in the scan folder path on disk with caching"""
+        from django.core.cache import cache
         import os
         import glob
+        import time
 
         if not os.path.exists(self.path):
             return 0
+
+        # Create cache key based on folder path, content type, and last modified time
+        try:
+            last_modified = os.path.getmtime(self.path)
+        except OSError:
+            last_modified = time.time()
+
+        cache_key = f"folder_file_count_{self.id}_{self.content_type}_{int(last_modified)}"
+
+        # Try to get cached result
+        cached_count = cache.get(cache_key)
+        if cached_count is not None:
+            return cached_count
 
         # Define file patterns based on content type
         if self.content_type == 'comics':
@@ -183,6 +198,8 @@ class ScanFolder(models.Model):
                 # Handle cases where we can't access the directory
                 continue
 
+        # Cache the result for 5 minutes (300 seconds)
+        cache.set(cache_key, file_count, 300)
         return file_count
 
     def get_extensions(self):

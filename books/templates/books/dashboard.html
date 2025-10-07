@@ -5,6 +5,7 @@
 {% block title %}Dashboard - Ebook Library Manager{% endblock %}
 
 {% block extra_css %}
+<link href="{% static 'book/css/bootstrap-components.css' %}" rel="stylesheet">
 <!-- Dashboard styles already included in dashboard.css -->
 {% endblock %}
 
@@ -281,8 +282,9 @@
                             <span class="badge bg-success">{{ avg_confidence|default:0|floatformat:'1' }}%</span>
                         </div>
                         <div class="progress">
-                            <div class="progress-bar bg-success progress-bar-confidence" role="progressbar"
+                            <div class="progress-bar progress-active progress-bar-dynamic" role="progressbar"
                                  data-width="{{ avg_confidence|default:0|floatformat:'0' }}"
+                                 style="--progress-width: {{ avg_confidence|default:0|floatformat:'0' }};"
                                  aria-label="Average confidence {{ avg_confidence|default:0|floatformat:'1' }} percent">
                             </div>
                         </div>
@@ -294,8 +296,9 @@
                             <span class="badge bg-info">{{ avg_completeness|default:0|floatformat:'1' }}%</span>
                         </div>
                         <div class="progress">
-                            <div class="progress-bar bg-info progress-bar-completeness" role="progressbar"
+                            <div class="progress-bar progress-active progress-bar-dynamic" role="progressbar"
                                  data-width="{{ avg_completeness|default:0|floatformat:'0' }}"
+                                 style="--progress-width: {{ avg_completeness|default:0|floatformat:'0' }};"
                                  aria-label="Average completeness {{ avg_completeness|default:0|floatformat:'1' }} percent">
                             </div>
                         </div>
@@ -545,24 +548,18 @@
                                             <small class="text-muted font-monospace">{{ folder.path|truncatechars:30 }}</small>
                                         </td>
                                         <td>
-                                            {% if folder.content_type == 'ebooks' %}
-                                                <span class="badge bg-primary">{{ folder.get_content_type_display }}</span>
-                                            {% elif folder.content_type == 'comics' %}
-                                                <span class="badge bg-warning">{{ folder.get_content_type_display }}</span>
-                                            {% elif folder.content_type == 'audiobooks' %}
-                                                <span class="badge bg-info">{{ folder.get_content_type_display }}</span>
-                                            {% else %}
-                                                <span class="badge bg-secondary">{{ folder.get_content_type_display|default:"Mixed" }}</span>
-                                            {% endif %}
+                                            <span class="badge content-type-{{ folder.content_type|default:'mixed' }}">
+                                                {{ folder.get_content_type_display|default:"Mixed" }}
+                                            </span>
                                         </td>
                                         <td>
                                             <span class="badge bg-secondary">{{ folder.book_count }}</span>
                                         </td>
                                         <td>
                                             {% if folder.is_active %}
-                                                <span class="badge bg-success">Active</span>
+                                                <span class="badge status-success">Active</span>
                                             {% else %}
-                                                <span class="badge bg-secondary">Inactive</span>
+                                                <span class="badge status-neutral">Inactive</span>
                                             {% endif %}
                                         </td>
                                     </tr>

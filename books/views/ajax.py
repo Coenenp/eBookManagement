@@ -659,6 +659,74 @@ def ajax_trigger_scan(request):
 
 @login_required
 @require_http_methods(["POST"])
+def ajax_trigger_scan_all_folders(request):
+    """AJAX endpoint to trigger scans for all active scan folders."""
+    try:
+        import json
+        from django.apps import apps
+
+        # Parse JSON data
+        data = json.loads(request.body) if request.body else {}
+        use_external_apis = data.get('use_external_apis', True)
+
+        # Get all active scan folders
+        ScanFolder = apps.get_model('books', 'ScanFolder')
+        active_folders = ScanFolder.objects.filter(is_active=True)
+
+        if not active_folders.exists():
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No active scan folders found'
+            })
+
+        # Import scanning functionality
+        from books.scanner.background import scan_folder_in_background
+
+        job_ids = []
+        folder_names = []
+
+        # Trigger scan for each active folder
+        for scan_folder in active_folders:
+            try:
+                job_id = scan_folder_in_background(
+                    folder_id=scan_folder.id,
+                    folder_path=scan_folder.path,
+                    folder_name=scan_folder.name,
+                    content_type=scan_folder.content_type,
+                    language=scan_folder.language,
+                    enable_external_apis=use_external_apis
+                )
+                job_ids.append(job_id)
+                folder_names.append(scan_folder.name)
+            except Exception as e:
+                logger.error(f'Failed to start scan for folder {scan_folder.name}: {str(e)}')
+                continue
+
+        if job_ids:
+            api_status = "with external APIs" if use_external_apis else "without external APIs"
+            folder_list = ", ".join(folder_names)
+            return JsonResponse({
+                'status': 'success',
+                'message': f'Started scans for {len(job_ids)} folder(s) {api_status}: {folder_list}',
+                'job_ids': job_ids,
+                'folder_count': len(job_ids)
+            })
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Failed to start any scans'
+            })
+
+    except Exception as e:
+        logger.error(f'Failed to trigger scan all folders: {str(e)}')
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Failed to start scans: {str(e)}'
+        })
+
+
+@login_required
+@require_http_methods(["POST"])
 def ajax_rescan_folder(request):
     """AJAX rescan folder endpoint."""
     try:
@@ -1036,6 +1104,70 @@ def ajax_delete_book_file(request):
 def ajax_clear_cache(request):
     """AJAX clear cache."""
     return JsonResponse({'status': 'success', 'message': 'Clear cache not yet implemented'})
+
+
+@login_required
+def ajax_folder_progress(request, folder_id):
+    """AJAX endpoint to get folder progress information asynchronously."""
+    try:
+        from django.apps import apps
+        ScanFolder = apps.get_model('books', 'ScanFolder')
+
+        folder = ScanFolder.objects.get(id=folder_id)
+        progress_info = folder.get_scan_progress_info()
+
+        return JsonResponse({
+            'success': True,
+            'progress': progress_info
+        })
+    except ScanFolder.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Folder not found'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@login_required
+def ajax_bulk_folder_progress(request):
+    """AJAX endpoint to get progress for multiple folders at once."""
+    try:
+        import json
+        from django.apps import apps
+
+        if request.method == 'POST':
+            data = json.loads(request.body)
+            folder_ids = data.get('folder_ids', [])
+        else:
+            folder_ids = request.GET.getlist('folder_ids[]')
+
+        ScanFolder = apps.get_model('books', 'ScanFolder')
+
+        progress_data = {}
+        folders = ScanFolder.objects.filter(id__in=folder_ids)
+
+        for folder in folders:
+            try:
+                progress_info = folder.get_scan_progress_info()
+                progress_data[str(folder.id)] = progress_info
+            except Exception as e:
+                progress_data[str(folder.id)] = {
+                    'error': str(e)
+                }
+
+        return JsonResponse({
+            'success': True,
+            'progress_data': progress_data
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
 
 
 @login_required

@@ -12,6 +12,7 @@ from . import views
 from .views import scanning as scanning_views
 from .views import wizard as wizard_views
 from .views import sections as sections_views
+from .views import ajax as ajax_views
 # All scanning and sections views are now imported via views module
 from .views import SeriesListView, SeriesDetailView
 
@@ -33,6 +34,8 @@ urlpatterns = [
     path('wizard/welcome/', wizard_views.WizardWelcomeView.as_view(), name='wizard_welcome'),
     path('wizard/folders/', wizard_views.WizardFoldersView.as_view(), name='wizard_folders'),
     path('wizard/content-types/', wizard_views.WizardContentTypesView.as_view(), name='wizard_content_types'),
+    path('wizard/scrapers/', wizard_views.WizardScrapersView.as_view(), name='wizard_scrapers'),
+    path('wizard/complete/', wizard_views.WizardCompleteView.as_view(), name='wizard_complete'),
     path('wizard/<str:step>/', wizard_views.wizard_dispatcher, name='wizard_step'),
     path('wizard/ajax/validate-folder/', wizard_views.wizard_validate_folder, name='wizard_validate_folder'),
     path('wizard/ajax/skip/', wizard_views.wizard_skip, name='wizard_skip'),
@@ -161,6 +164,9 @@ urlpatterns = [
 
     # Scanning AJAX
     path('ajax/trigger-scan/', views.ajax_trigger_scan, name='ajax_trigger_scan'),
+    path('ajax/trigger-scan-all-folders/', ajax_views.ajax_trigger_scan_all_folders, name='ajax_trigger_scan_all_folders'),
+    path('ajax/folder-progress/<int:folder_id>/', ajax_views.ajax_folder_progress, name='ajax_folder_progress'),
+    path('ajax/bulk-folder-progress/', ajax_views.ajax_bulk_folder_progress, name='ajax_bulk_folder_progress'),
     path('trigger-scan/', views.ajax_trigger_scan, name='ajax_trigger_scan_compat'),  # For JS compatibility
     path('rescan-folder/', views.ajax_rescan_folder, name='ajax_rescan_folder'),  # For JS compatibility
     path('ajax/add-scan-folder/', views.ajax_add_scan_folder, name='ajax_add_scan_folder'),

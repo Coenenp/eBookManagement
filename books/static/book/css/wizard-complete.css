@@ -1,0 +1,27 @@
+/**
+ * Wizard Complete Page Styles
+ * Extracted from wizard/complete.html inline CSS
+ */
+
+body {
+    --wizard-page: complete;
+}
+
+/* Ensure wizard navigation buttons don't have spinning icons by default */
+.wizard-navigation button:not(.loading) i {
+    animation: none !important;
+}
+
+.wizard-navigation button:not(.loading) .fa-spin {
+    animation: none !important;
+}
+
+/* Only allow spinning when explicitly loading */
+.wizard-navigation button.loading i.fa-spin {
+    animation: fa-spin 2s infinite linear;
+}
+
+@keyframes fa-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

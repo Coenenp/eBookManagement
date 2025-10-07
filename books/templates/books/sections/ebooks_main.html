@@ -49,8 +49,15 @@
         }
     };
 
+// Initialize ebooks section manager
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof EbooksSectionManager !== 'undefined') {
+        window.sectionManager = new EbooksSectionManager();
+    }
+});
 </script>
 <script src="{% static 'book/js/media-library-utils.js' %}"></script>
 <script src="{% static 'book/js/base-section.js' %}"></script>
+<script src="{% static 'book/js/base-section-manager.js' %}"></script>
 <script src="{% static 'book/js/ebooks-section.js' %}"></script>
 {% endblock %}
