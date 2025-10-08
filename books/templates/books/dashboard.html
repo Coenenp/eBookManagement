@@ -548,8 +548,8 @@
                                             <small class="text-muted font-monospace">{{ folder.path|truncatechars:30 }}</small>
                                         </td>
                                         <td>
-                                            <span class="badge content-type-{{ folder.content_type|default:'mixed' }}">
-                                                {{ folder.get_content_type_display|default:"Mixed" }}
+                                            <span class="badge content-type-{{ folder.content_type|default:'ebooks' }}">
+                                                {{ folder.get_content_type_display|default:"Ebooks" }}
                                             </span>
                                         </td>
                                         <td>

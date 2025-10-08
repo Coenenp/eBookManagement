@@ -8,8 +8,8 @@ class EbooksSectionManager extends BaseSectionManager {
         super('ebooks', {
             listContainer: '#ebooks-list-container',
             detailContainer: '#ebook-detail-container',
-            apiEndpoint: window.ebooksConfig?.ajax_urls?.list || '/books/ebooks/ajax/',
-            detailEndpoint: window.ebooksConfig?.ajax_urls?.detail || '/books/ebooks/ajax/'
+            apiEndpoint: window.ebooksConfig?.ajax_urls?.list || '/books/ebooks/ajax/list/',
+            detailEndpoint: window.ebooksConfig?.ajax_urls?.detail || '/books/ebooks/ajax/detail/'
         });
         
         this.expandedEbooks = new Set();
@@ -624,36 +624,7 @@ class EbooksSectionManager extends BaseSectionManager {
     }
 }
 
-// Legacy function compatibility for templates
-function customLoadItems() {
-    if (window.ebookManager) {
-        window.ebookManager.loadItems();
-    }
-}
-
-function customFilterItems(searchTerm, sortBy, formatFilter, statusFilter) {
-    if (window.ebookManager) {
-        window.ebookManager.filterItems(searchTerm, sortBy, formatFilter, statusFilter);
-    }
-}
-
-function customRenderView(viewType) {
-    if (window.ebookManager) {
-        window.ebookManager.renderList(viewType);
-    }
-}
-
-function customRefreshItems() {
-    if (window.ebookManager) {
-        window.ebookManager.loadItems();
-    }
-}
-
-function customLoadDetail(ebookId) {
-    if (window.ebookManager) {
-        window.ebookManager.loadDetail(ebookId);
-    }
-}
+// Legacy functions removed - now handled by base-section.js global compatibility layer
 
 function selectItem(itemId) {
     if (window.ebookManager) {

@@ -235,20 +235,18 @@
                                                     </span>
                                                 </div>
                                                 {% if folder.progress_info.needs_scan %}
+                                                    {% with progress_value=folder.progress_info.percentage|default:0 %}
                                                     <div class="progress progress-thin mb-1">
-                                                        <div class="progress-bar progress-active progress-bar-dynamic" role="progressbar"
-                                                             data-width="{{ folder.progress_info.percentage|default:0 }}"
-                                                             style="--progress-width: {{ folder.progress_info.percentage|default:0 }};"
-                                                             aria-label="Folder scan progress"
-                                                             aria-valuemin="0"
-                                                             aria-valuemax="100"
-                                                             aria-valuenow="{{ folder.progress_info.percentage|default:0 }}"
-                                                             title="{{ folder.progress_info.percentage|default:0 }}% scanned">
+                                                        <div class="progress-bar progress-active progress-bar-dynamic" 
+                                                             data-width="{{ progress_value }}"
+                                                             style="--progress-width: {{ progress_value }}%;"
+                                                             title="{{ progress_value }}% scanned">
                                                         </div>
                                                     </div>
                                                     <div class="text-center">
-                                                        <small class="text-muted progress-percent">{{ folder.progress_info.percentage }}%</small>
+                                                        <small class="text-muted progress-percent">{{ progress_value }}%</small>
                                                     </div>
+                                                    {% endwith %}
                                                 {% else %}
                                                     <div class="progress progress-thin mb-1">
                                                         <div class="progress-bar progress-complete" role="progressbar"
@@ -520,10 +518,11 @@
 // Configuration for scanning dashboard
 window.scanningDashboardConfig = {
     activeScanUrl: '{% url "books:active_scans_ajax" %}',
-    scanProgressUrl: '{% url "books:scan_progress_ajax" job_id="PLACEHOLDER" %}',
+    scanProgressUrlTemplate: '/scanning/progress/PLACEHOLDER/',
+    folderProgressUrlTemplate: '/scanning/folder-progress/PLACEHOLDER/',
     bulkFolderProgressUrl: '{% url "books:ajax_bulk_folder_progress" %}',
     apiStatusUrl: '{% url "books:api_status_ajax" %}',
-    cancelScanUrl: '{% url "books:cancel_scan_ajax" job_id="PLACEHOLDER" %}',
+    cancelScanUrlTemplate: '/scanning/cancel/PLACEHOLDER/',
     startFolderScanUrl: '{% url "books:start_folder_scan" %}',
     startBookRescanUrl: '{% url "books:start_book_rescan" %}',
     scanAllFoldersUrl: '{% url "books:ajax_trigger_scan_all_folders" %}',

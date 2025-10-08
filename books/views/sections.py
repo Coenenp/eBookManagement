@@ -438,90 +438,67 @@ class ComicsMainView(LoginRequiredMixin, TemplateView):
 
 @login_required
 def comics_ajax_list(request):
-    """AJAX endpoint for comics list"""
+    """AJAX endpoint for comics list using Comic/ComicIssue models"""
     try:
-        FinalMetadata = apps.get_model('books', 'FinalMetadata')
+        from books.models import Comic, ScanFolder
+        from django.db.models import Sum, Count, Q
 
-        # Get comics from FinalMetadata - filter by scan folder content type
-        comics_from_final = FinalMetadata.objects.filter(
-            book__scan_folder__content_type='comics',
-            book__scan_folder__is_active=True,
-            book__file_format__in=COMIC_FORMATS
-        ).exclude(
-            book__file_format__in=EBOOK_FORMATS  # Exclude ebook formats
-        ).select_related('book', 'book__scan_folder')
+        # Get active scan folders for comics
+        comic_folders = ScanFolder.objects.filter(
+            content_type='comics',
+            is_active=True
+        )
 
-        # Group by series if available
-        series_data = {}
-        standalone_comics = []
+        # Get all comic series from these folders
+        comics_query = Comic.objects.filter(
+            scan_folder__in=comic_folders
+        ).prefetch_related('issues').annotate(
+            total_issues=Count('issues'),
+            read_issues=Count('issues', filter=Q(issues__is_read=True)),
+            total_size=Sum('issues__file_size'),
+        ).order_by('title')
 
-        for final_meta in comics_from_final:
-            book = final_meta.book
-            if not book:
-                continue
+        comics_data = []
+        for comic in comics_query:
+            # Get latest issue for cover
+            latest_issue = comic.issues.order_by('-issue_number_sort').first()
 
-            book_data = {
-                'id': book.id,
-                'title': final_meta.final_title or 'Unknown Title',
-                'author': final_meta.final_author or 'Unknown Author',
-                'file_format': book.file_format,
-                'file_size': book.file_size,
-                'last_scanned': book.last_scanned.isoformat() if book.last_scanned else None,
-                'position': final_meta.final_series_number,
+            # Calculate reading progress
+            read_percentage = 0
+            if comic.total_issues > 0:
+                read_percentage = int((comic.read_issues / comic.total_issues) * 100)
+
+            comic_data = {
+                'id': comic.id,
+                'title': comic.title,
+                'publisher': comic.publisher or '',
+                'volume': comic.volume,
+                'start_year': comic.start_year,
+                'end_year': comic.end_year,
+                'description': comic.description or '',
+                'issue_count': comic.total_issues,
+                'read_count': comic.read_issues,
+                'read_percentage': read_percentage,
+                'total_size': comic.total_size or 0,
+                'scan_folder': comic.scan_folder.path if comic.scan_folder else '',
+                'last_updated': comic.last_updated.isoformat() if comic.last_updated else None,
+                'cover_url': _get_comic_cover_url(comic, latest_issue),
+                'first_issue_date': latest_issue.cover_date.isoformat() if latest_issue and latest_issue.cover_date else None,
+                'formats': list(comic.issues.values_list('file_format', flat=True).distinct()),
             }
-
-            # Check if this comic is part of a series
-            if final_meta.final_series and final_meta.final_series.strip():
-                series_name = final_meta.final_series.strip()
-                if series_name not in series_data:
-                    series_data[series_name] = {
-                        'name': series_name,
-                        'books': [],
-                        'book_count': 0,
-                        'total_size': 0,
-                        'authors': set(),
-                        'formats': set()
-                    }
-
-                series_data[series_name]['books'].append(book_data)
-                series_data[series_name]['book_count'] += 1
-                series_data[series_name]['total_size'] += book_data['file_size'] or 0
-                if book_data['author'] and book_data['author'] != 'Unknown Author':
-                    series_data[series_name]['authors'].add(book_data['author'])
-                if book_data['file_format']:
-                    series_data[series_name]['formats'].add(book_data['file_format'])
-            else:
-                standalone_comics.append(book_data)
-
-        # Convert sets to lists for JSON serialization and sort books
-        for series_name, data in series_data.items():
-            data['authors'] = list(data['authors'])
-            data['formats'] = list(data['formats'])
-            # Sort books by position, handling None values
-            data['books'].sort(key=lambda x: float(x['position']) if x['position'] and str(x['position']).replace('.', '').isdigit() else 999.0)
-
-        # Convert series to list and sort
-        series_list = list(series_data.values())
-        series_list.sort(key=lambda x: x['name'])
-
-        # Sort standalone comics by title
-        standalone_comics.sort(key=lambda x: x['title'])
-
-        # Combine all comics for the comics field that tests expect
-        all_comics = []
-        for series in series_list:
-            all_comics.extend(series['books'])
-        all_comics.extend(standalone_comics)
+            comics_data.append(comic_data)
 
         return JsonResponse({
             'success': True,
-            'series': series_list,
-            'standalone': standalone_comics,
-            'comics': all_comics,  # Tests expect this field
-            'total_count': len(series_list) + len(standalone_comics)
+            'comics': comics_data,  # Use 'comics' key to match base class expectation
+            'total_count': len(comics_data),
+            'version': 'integrated'  # Indicate this uses the integrated functionality
         })
 
     except Exception as e:
+        import logging
+        logger = logging.getLogger('books.scanner')
+        logger.error(f"Error in comics_ajax_list: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -529,93 +506,77 @@ def comics_ajax_list(request):
 
 
 @login_required
-def comics_ajax_detail(request, book_id):
-    """AJAX endpoint for comic detail"""
+def comics_ajax_detail(request, comic_id):
+    """AJAX endpoint for comic series detail"""
     try:
-        Book = apps.get_model('books', 'Book')
+        from books.models import Comic
 
-        # Check if book exists first
-        if not Book.objects.filter(id=book_id).exists():
-            return JsonResponse({
-                'success': False,
-                'error': f'Comic with ID {book_id} not found'
-            }, status=404)
+        comic = get_object_or_404(Comic, id=comic_id)
 
-        book = get_object_or_404(Book, id=book_id)
+        # Get all issues for this comic
+        issues = comic.issues.order_by('issue_number_sort')
 
-        # Get metadata safely
-        try:
-            metadata = get_book_metadata_dict(book)
-        except Exception:
-            metadata = {
-                'title': book.filename or 'Unknown Title',
-                'author': 'Unknown Author',
-                'publisher': '',
-                'description': '',
-                'isbn': '',
-                'language': '',
-                'publication_date': None,
-                'issue_number': '',
-                'genre': '',
+        issues_data = []
+        for issue in issues:
+            issue_data = {
+                'id': issue.id,
+                'issue_number': issue.issue_number,
+                'issue_number_sort': issue.issue_number_sort,
+                'file_path': issue.file_path,
+                'file_format': issue.file_format,
+                'file_size': issue.file_size,
+                'page_count': issue.page_count,
+                'cover_date': issue.cover_date.isoformat() if issue.cover_date else None,
+                'release_date': issue.release_date.isoformat() if issue.release_date else None,
+                'is_read': issue.is_read,
+                'read_date': issue.read_date.isoformat() if issue.read_date else None,
+                'cover_url': _get_issue_cover_url(issue),
+                'filename': os.path.basename(issue.file_path) if issue.file_path else '',
             }
+            issues_data.append(issue_data)
 
-        # Get series information safely
-        try:
-            series_info = book.series_info.first()
-            series_name = series_info.series.name if series_info and series_info.series else ''
-            series_position = series_info.series_number if series_info else None
-        except Exception:
-            series_name = ''
-            series_position = None
+        # Calculate statistics
+        total_issues = len(issues_data)
+        read_issues = sum(1 for issue in issues_data if issue['is_read'])
+        total_size = sum(issue['file_size'] or 0 for issue in issues_data)
 
-        # Get genres safely
-        genres = []
-        try:
-            for meta in book.metadata.all():
-                if hasattr(meta, 'genre') and meta.genre:
-                    genres.extend([g.strip() for g in meta.genre.split(',') if g.strip()])
-            genres = list(set(genres))  # Remove duplicates
-        except Exception:
-            genres = []
-
-        # Get cover URL safely
-        try:
-            cover_url = get_book_cover_url(book)
-        except Exception:
-            cover_url = ''
-
-        comic_data = {
-            'id': book.id,
-            'title': metadata.get('title', 'Unknown Title'),
-            'author': metadata.get('author', 'Unknown Author'),
-            'publisher': metadata.get('publisher', ''),
-            'description': metadata.get('description', ''),
-            'isbn': metadata.get('isbn', ''),
-            'language': metadata.get('language', ''),
-            'publication_date': metadata.get('publication_date'),
-            'issue_number': metadata.get('issue_number', ''),
-            'genre': ', '.join(genres) if genres else metadata.get('genre', ''),
-            'file_format': book.file_format or 'UNKNOWN',
-            'file_size': book.file_size,
-            'file_path': book.file_path,
-            'filename': book.filename,
-            'last_scanned': book.last_scanned.isoformat() if book.last_scanned else None,
-            'series': series_name,
-            'series_position': series_position,
-            'genres': genres,
-            'cover_url': cover_url,
-            'is_read': getattr(book, 'is_read', False),
-            'reading_progress': getattr(book, 'reading_progress', 0),
+        comic_detail = {
+            'id': comic.id,
+            'title': comic.title,
+            'publisher': comic.publisher or '',
+            'volume': comic.volume,
+            'start_year': comic.start_year,
+            'end_year': comic.end_year,
+            'description': comic.description or '',
+            'status': comic.status,
+            'scan_folder': comic.scan_folder.path if comic.scan_folder else '',
+            'first_scanned': comic.first_scanned.isoformat() if comic.first_scanned else None,
+            'last_updated': comic.last_updated.isoformat() if comic.last_updated else None,
+            'issues': issues_data,
+            'statistics': {
+                'total_issues': total_issues,
+                'read_issues': read_issues,
+                'unread_issues': total_issues - read_issues,
+                'read_percentage': int((read_issues / total_issues) * 100) if total_issues > 0 else 0,
+                'total_size': total_size,
+                'formats': list(set(issue['file_format'] for issue in issues_data if issue['file_format'])),
+                'date_range': {
+                    'earliest': min((issue['cover_date'] for issue in issues_data if issue['cover_date']), default=None),
+                    'latest': max((issue['cover_date'] for issue in issues_data if issue['cover_date']), default=None),
+                }
+            }
         }
 
         return JsonResponse({
             'success': True,
-            'comic': comic_data
+            'comic': comic_detail,
+            'version': 'integrated'
         })
 
     except Exception as e:
-        import traceback
-        print(f"Error in comics_ajax_detail: {str(e)}\n{traceback.format_exc()}")
+        import logging
+        logger = logging.getLogger('books.scanner')
+        logger.error(f"Error in comics_ajax_detail: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -624,33 +585,52 @@ def comics_ajax_detail(request, book_id):
 
 @login_required
 def comics_ajax_toggle_read(request):
-    """AJAX endpoint for toggling comic read status"""
-    try:
-        if request.method != 'POST':
-            return JsonResponse({'success': False, 'error': 'POST method required'}, status=405)
+    """Endpoint to toggle read status for comic issues"""
+    from django.views.decorators.http import require_http_methods
 
-        import json
-        data = json.loads(request.body)
-        book_id = data.get('comic_id') or data.get('book_id')
+    @require_http_methods(["POST"])
+    def toggle_read_handler(request):
+        try:
+            from books.models import ComicIssue
 
-        if not book_id:
-            return JsonResponse({'success': False, 'error': 'Comic ID required'}, status=400)
+            issue_id = request.POST.get('issue_id')
+            if not issue_id:
+                return JsonResponse({'success': False, 'error': 'Missing issue_id'})
 
-        Book = apps.get_model('books', 'Book')
-        book = get_object_or_404(Book, id=book_id)
+            issue = get_object_or_404(ComicIssue, id=issue_id)
 
-        # Toggle read status
-        book.is_read = not getattr(book, 'is_read', False)
-        book.save()
+            # Toggle read status
+            issue.is_read = not issue.is_read
+            if issue.is_read:
+                from django.utils import timezone
+                issue.read_date = timezone.now()
+            else:
+                issue.read_date = None
+            issue.save()
 
-        return JsonResponse({
-            'success': True,
-            'is_read': book.is_read,
-            'message': f'Comic marked as {"read" if book.is_read else "unread"}'
-        })
+            # Calculate updated statistics for the series
+            comic = issue.comic
+            total_issues = comic.issues.count()
+            read_issues = comic.issues.filter(is_read=True).count()
 
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+            return JsonResponse({
+                'success': True,
+                'is_read': issue.is_read,
+                'read_date': issue.read_date.isoformat() if issue.read_date else None,
+                'series_stats': {
+                    'read_count': read_issues,
+                    'total_count': total_issues,
+                    'read_percentage': int((read_issues / total_issues) * 100) if total_issues > 0 else 0
+                }
+            })
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger('books.scanner')
+            logger.error(f"Error in comics_ajax_toggle_read: {e}")
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+    return toggle_read_handler(request)
 
 
 @login_required
@@ -698,44 +678,71 @@ class AudiobooksMainView(LoginRequiredMixin, TemplateView):
 
 @login_required
 def audiobooks_ajax_list(request):
-    """AJAX endpoint for audiobooks list"""
+    """AJAX endpoint for audiobooks using Audiobook model"""
     try:
-        Book = apps.get_model('books', 'Book')
+        from books.models import Audiobook, ScanFolder
+        from django.db.models import Sum, Count, Avg
 
-        # Get audiobooks from scan folders designated as 'audiobooks'
-        audiobooks_query = Book.objects.filter(
-            scan_folder__content_type='audiobooks',
-            scan_folder__is_active=True
-        ).select_related('scan_folder').prefetch_related(
-            'metadata',
-            'series_info'
-        ).order_by('id')  # Use simple ordering instead of metadata__title
+        # Get active scan folders for audiobooks
+        audiobook_folders = ScanFolder.objects.filter(
+            content_type='audiobooks',
+            is_active=True
+        )
+
+        # Get all audiobooks from these folders
+        audiobooks_query = Audiobook.objects.filter(
+            scan_folder__in=audiobook_folders
+        ).prefetch_related('files').annotate(
+            total_files=Count('files'),
+            total_size=Sum('files__file_size'),
+            avg_duration=Avg('files__duration_seconds'),
+        ).order_by('title')
 
         audiobooks_data = []
-        for book in audiobooks_query:
-            metadata = get_book_metadata_dict(book)
-            series_info = book.series_info.first()
+        for audiobook in audiobooks_query:
+            # Calculate total duration from files
+            total_duration = audiobook.files.aggregate(
+                total=Sum('duration_seconds')
+            )['total'] or 0
 
-            audiobooks_data.append({
-                'id': book.id,
-                'title': metadata.get('title', 'Unknown Title'),
-                'author': metadata.get('author', 'Unknown Author'),
-                'narrator': metadata.get('narrator', ''),  # Will be added if available
-                'duration': metadata.get('duration', ''),  # Will be added if available
-                'file_format': book.file_format or 'UNKNOWN',
-                'file_size': book.file_size,
-                'last_scanned': book.last_scanned.isoformat() if book.last_scanned else None,
-                'series_name': series_info.series.name if series_info and series_info.series else '',
-                'series_position': series_info.series_number if series_info else None,
-            })
+            audiobook_data = {
+                'id': audiobook.id,
+                'title': audiobook.title,
+                'author': audiobook.author or '',
+                'narrator': audiobook.narrator or '',
+                'publisher': audiobook.publisher or '',
+                'description': audiobook.description or '',
+                'series_title': audiobook.series_title or '',
+                'series_number': audiobook.series_number or '',
+                'publication_date': audiobook.publication_date.isoformat() if audiobook.publication_date else None,
+                'isbn': audiobook.isbn or '',
+                'language': audiobook.language or '',
+                'file_count': audiobook.total_files or 0,
+                'total_size': audiobook.total_size or 0,
+                'total_duration_seconds': total_duration,
+                'total_duration_formatted': _format_duration(total_duration),
+                'is_finished': audiobook.is_finished,
+                'current_position_seconds': audiobook.current_position_seconds,
+                'progress_percentage': audiobook.progress_percentage,
+                'last_played': audiobook.last_played.isoformat() if audiobook.last_played else None,
+                'scan_folder': audiobook.scan_folder.path if audiobook.scan_folder else '',
+                'last_updated': audiobook.last_updated.isoformat() if audiobook.last_updated else None,
+                'cover_url': _get_audiobook_cover_url(audiobook),
+                'formats': list(audiobook.files.values_list('file_format', flat=True).distinct()),
+            }
+            audiobooks_data.append(audiobook_data)
 
         return JsonResponse({
             'success': True,
             'audiobooks': audiobooks_data,
-            'total_count': len(audiobooks_data)
+            'total_count': len(audiobooks_data),
+            'version': 'integrated'
         })
 
     except Exception as e:
+        import logging
+        logger = logging.getLogger('books.scanner')
+        logger.error(f"Error in audiobooks_ajax_list: {e}")
         return JsonResponse({
             'success': False,
             'error': str(e)
@@ -778,10 +785,13 @@ def audiobooks_ajax_detail(request, book_id):
             'file_format': book.file_format or 'UNKNOWN',
             'file_size': book.file_size,
             'file_path': book.file_path,
+            'filename': book.filename,
             'last_scanned': book.last_scanned.isoformat() if book.last_scanned else None,
-            'series_name': series_info.series.name if series_info and series_info.series else '',
+            'series': series_info.series.name if series_info and series_info.series else '',
             'series_position': series_info.series_number if series_info else None,
             'cover_url': cover_url,
+            'is_finished': getattr(book, 'is_finished', False),
+            'reading_progress': getattr(book, 'reading_progress', 0),
         }
 
         return JsonResponse({
@@ -827,6 +837,55 @@ def audiobooks_ajax_toggle_read(request):
 
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+def audiobooks_ajax_update_progress(request):
+    """Endpoint to update listening progress for audiobooks"""
+    from django.views.decorators.http import require_http_methods
+
+    @require_http_methods(["POST"])
+    def update_progress_handler(request):
+        try:
+            from books.models import Audiobook
+
+            audiobook_id = request.POST.get('audiobook_id')
+            position_seconds = request.POST.get('position_seconds')
+
+            if not audiobook_id or position_seconds is None:
+                return JsonResponse({'success': False, 'error': 'Missing required parameters'})
+
+            audiobook = get_object_or_404(Audiobook, id=audiobook_id)
+
+            # Update position
+            audiobook.current_position_seconds = int(position_seconds)
+
+            # Update last played time
+            from django.utils import timezone
+            audiobook.last_played = timezone.now()
+
+            # Check if finished (within 30 seconds of end)
+            if audiobook.total_duration_seconds:
+                remaining = audiobook.total_duration_seconds - audiobook.current_position_seconds
+                audiobook.is_finished = remaining <= 30
+
+            audiobook.save()
+
+            return JsonResponse({
+                'success': True,
+                'current_position_seconds': audiobook.current_position_seconds,
+                'progress_percentage': audiobook.progress_percentage,
+                'is_finished': audiobook.is_finished,
+                'last_played': audiobook.last_played.isoformat()
+            })
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger('books.scanner')
+            logger.error(f"Error in audiobooks_ajax_update_progress: {e}")
+            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+    return update_progress_handler(request)
 
 
 @login_required
@@ -1004,3 +1063,65 @@ def series_ajax_download_book(request, book_id):
         'success': True,
         'message': 'Book download initiated'
     })
+
+
+# ===============================
+# UTILITY FUNCTIONS
+# ===============================
+
+def _get_comic_cover_url(comic, latest_issue=None):
+    """Get cover URL for a comic series"""
+    # Try to get cover from latest issue first
+    if latest_issue and hasattr(latest_issue, 'cover_path') and latest_issue.cover_path:
+        return _convert_path_to_url(latest_issue.cover_path)
+
+    # Fallback to comic series cover if available
+    if hasattr(comic, 'cover_path') and comic.cover_path:
+        return _convert_path_to_url(comic.cover_path)
+
+    return None
+
+
+def _get_issue_cover_url(issue):
+    """Get cover URL for a comic issue"""
+    if hasattr(issue, 'cover_path') and issue.cover_path:
+        return _convert_path_to_url(issue.cover_path)
+    return None
+
+
+def _get_audiobook_cover_url(audiobook):
+    """Get cover URL for an audiobook"""
+    if audiobook.cover_path:
+        return _convert_path_to_url(audiobook.cover_path)
+    return None
+
+
+def _convert_path_to_url(path):
+    """Convert local file path to media URL"""
+    if not path:
+        return None
+
+    if path.startswith('http'):
+        return path
+
+    from django.conf import settings
+    if path.startswith(settings.MEDIA_ROOT):
+        relative_path = path[len(settings.MEDIA_ROOT):].lstrip('\\/')
+        return settings.MEDIA_URL + relative_path.replace('\\', '/')
+
+    return None
+
+
+def _format_duration(seconds):
+    """Format duration in seconds to HH:MM:SS or MM:SS format"""
+    if not seconds:
+        return "0:00"
+
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    seconds = seconds % 60
+
+    if hours > 0:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    else:
+        return f"{minutes}:{seconds:02d}"

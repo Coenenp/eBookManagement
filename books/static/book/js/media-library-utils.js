@@ -359,9 +359,10 @@ class MediaLibraryUtils {
 }
 
 /**
- * Base Section Manager Class
- * Provides common functionality for all media section managers
+ * OLD Base Section Manager Class - REMOVED
+ * This class has been moved to base-section-manager.js
  */
+/*
 class BaseSectionManager {
     constructor(sectionType, config = {}) {
         this.sectionType = sectionType;
@@ -465,7 +466,8 @@ class BaseSectionManager {
         console.log(`Rendering ${this.sectionType} detail for:`, item);
     }
 }
+*/
 
 // Export for global access
 window.MediaLibraryUtils = MediaLibraryUtils;
-window.BaseSectionManager = BaseSectionManager;
+// window.BaseSectionManager = BaseSectionManager; // REMOVED - use base-section-manager.js instead

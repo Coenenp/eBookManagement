@@ -33,76 +33,75 @@ def scan_dashboard(request):
     # Get active scans
     active_scans = get_all_active_scans()
 
-    # Get API status
-    api_status = get_api_status()
-    api_health = check_api_health()
+    # Get API status (with timeout to prevent hanging)
+    try:
+        api_status = get_api_status()
+        api_health = check_api_health()
 
-    # Combine API status with health
-    api_info = {}
-    for api_name, status in api_status.items():
-        api_info[api_name] = {
-            **status,
-            'healthy': api_health.get(api_name, False)
-        }
+        # Combine API status with health
+        api_info = {}
+        for api_name, status in api_status.items():
+            api_info[api_name] = {
+                **status,
+                'healthy': api_health.get(api_name, False)
+            }
+    except Exception as e:
+        logger.warning(f"Failed to get API status: {e}")
+        api_info = {}
 
-    # Get recent scan folders with book count annotation and scan status
+    # Get recent scan folders with book count annotation - DATABASE ONLY (FAST)
     from django.db.models import Count, Q
     ScanFolder = apps.get_model('books', 'ScanFolder')
     ScanStatus = apps.get_model('books', 'ScanStatus')
 
-    # Get folders with their scan progress information
-    recent_folders = ScanFolder.objects.annotate(
+    # Get folders with basic info only - no filesystem operations (OPTIMIZED)
+    recent_folders = list(ScanFolder.objects.annotate(
         book_count=Count('book')
-    ).order_by('-created_at')[:10]
+    ).select_related().order_by('-created_at')[:10])
 
-    # Get actual progress info for dashboard display
-    folders_with_progress = []
+    # Add basic progress info without filesystem calls (FAST)
     for folder in recent_folders:
-        # Get real progress info (this may be slower but gives accurate results)
-        try:
-            progress_info = folder.get_scan_progress_info()
-            folder.progress_info = progress_info
-            folder.progress_info['loading'] = False  # Not loading since we have real data
-        except Exception:
-            # Fallback to basic info if scan fails
-            folder.progress_info = {
-                'scanned': folder.book_count,  # Already annotated
-                'total_files': 0,  # Unknown
-                'percentage': 0,  # Unknown
-                'needs_scan': True,  # Assume true on error
-                'loading': True  # Flag for UI to show loading state
-            }
-        folders_with_progress.append(folder)
+        folder.progress_info = {
+            'scanned': folder.book_count,  # From annotation
+            'total_files': 0,  # Will be loaded via AJAX
+            'percentage': 0,  # Will be calculated via AJAX
+            'needs_scan': True,  # Assume true, will be updated via AJAX
+            'loading': True  # Flag for UI to show loading spinner
+        }
 
-    recent_folders = folders_with_progress
-
-    # Check for interrupted scans (Failed status with progress > 0)
+    # Check for interrupted scans (Failed status with progress > 0) - OPTIMIZED
     interrupted_scans = ScanStatus.objects.filter(
         Q(status='Failed') & Q(processed_files__gt=0),
         scan_folders__isnull=False
     ).order_by('-updated')[:5]
 
-    # Get recent scan history for dashboard
+    # Get recent scan history for dashboard - OPTIMIZED
     from books.models import ScanHistory, ScanQueue
-    recent_scan_history = ScanHistory.objects.order_by('-completed_at')[:5]
+    recent_scan_history = ScanHistory.objects.select_related().order_by('-completed_at')[:5]
 
-    # Enhance interrupted scans with progress details
-    interrupted_scans_enhanced = []
+    # Pre-calculate interrupted scan progress (DATABASE ONLY - FAST)
+    interrupted_scans_with_progress = []
     for scan in interrupted_scans:
-        total_files = scan.total_files if hasattr(scan, 'total_files') else 0
-        processed_files = scan.processed_files if hasattr(scan, 'processed_files') else 0
+        total_files = getattr(scan, 'total_files', 0)
+        processed_files = getattr(scan, 'processed_files', 0)
 
         # Calculate progress percentage
         progress_percentage = 0
         if total_files > 0:
-            progress_percentage = (processed_files / total_files) * 100
+            progress_percentage = round((processed_files / total_files) * 100, 1)
 
-        # Get folder info if available
+        # Get folder info if available (scan_folders is a JSON TextField)
         folder_name = "Unknown"
-        if scan.scan_folders.exists():
-            folder_name = scan.scan_folders.first().name
+        if scan.scan_folders:
+            try:
+                import json
+                folders_data = json.loads(scan.scan_folders)
+                if folders_data and len(folders_data) > 0:
+                    folder_name = folders_data[0].get('name', 'Unknown') if isinstance(folders_data[0], dict) else str(folders_data[0])
+            except (json.JSONDecodeError, (AttributeError, KeyError, IndexError)):
+                folder_name = "Unknown"
 
-        interrupted_scans_enhanced.append({
+        interrupted_scans_with_progress.append({
             'scan': scan,
             'folder_name': folder_name,
             'processed_files': processed_files,
@@ -111,17 +110,17 @@ def scan_dashboard(request):
             'progress_display': f"{processed_files}/{total_files}" if total_files > 0 else f"{processed_files}/?"
         })
 
-    # Get upcoming scan queue (next 5 pending items)
+    # Get upcoming scan queue (next 5 pending items) - OPTIMIZED
     scan_queue = ScanQueue.objects.filter(
         status__in=['pending', 'scheduled']
-    ).order_by('-priority', 'created_at')[:5]
+    ).select_related().order_by('-priority', 'created_at')[:5]
 
     context = {
         'active_scans': active_scans,
         'api_status': api_info,
         'recent_folders': recent_folders,
         'interrupted_scans': interrupted_scans,
-        'interrupted_scans_enhanced': interrupted_scans_enhanced,
+        'interrupted_scans_with_progress': interrupted_scans_with_progress,
         'scan_queue': scan_queue,
         'recent_scan_history': recent_scan_history,
         'language_choices': LanguageManager.get_language_choices(),
@@ -537,3 +536,31 @@ def scanning_help(request):
     }
 
     return render(request, 'books/scanning/help.html', context)
+
+
+@login_required
+def scan_folder_progress_ajax(request, folder_id):
+    """AJAX endpoint to get detailed progress info for a specific folder."""
+    try:
+        ScanFolder = apps.get_model('books', 'ScanFolder')
+        folder = ScanFolder.objects.get(id=folder_id)
+
+        # Get progress info (this is the expensive operation, now done individually)
+        progress_info = folder.get_scan_progress_info()
+
+        return JsonResponse({
+            'success': True,
+            'progress': progress_info
+        })
+
+    except ScanFolder.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Folder not found'
+        }, status=404)
+    except Exception as e:
+        logger.error(f"Error getting progress for folder {folder_id}: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

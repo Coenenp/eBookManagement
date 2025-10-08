@@ -20,6 +20,7 @@ class ScanningDashboard {
         this.initializeProgressBars();
         this.bindEvents();
         this.startAutoRefresh();
+        this.loadFolderProgress();
     }
 
     initializeProgressBars() {
@@ -541,7 +542,7 @@ class ScanningDashboard {
      */
     async updateScanProgress(jobId) {
         try {
-            const baseUrl = this.config.scanProgressUrl || '/books/scanning/progress/PLACEHOLDER/';
+            const baseUrl = this.config.scanProgressUrlTemplate || '/books/scanning/progress/PLACEHOLDER/';
             const url = baseUrl.replace('PLACEHOLDER', jobId);
             const response = await fetch(url);
             const data = await response.json();
@@ -600,7 +601,7 @@ class ScanningDashboard {
      */
     async cancelScanJob(jobId) {
         try {
-            const baseUrl = this.config.cancelScanUrl || '/books/scanning/cancel/PLACEHOLDER/';
+            const baseUrl = this.config.cancelScanUrlTemplate || '/books/scanning/cancel/PLACEHOLDER/';
             const url = baseUrl.replace('PLACEHOLDER', jobId);
             const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
             
@@ -829,6 +830,92 @@ class ScanningDashboard {
         });
         
         return await response.json();
+    }
+
+    /**
+     * Load progress information for folders asynchronously
+     */
+    async loadFolderProgress() {
+        const folderContainers = document.querySelectorAll('.folder-progress-container[data-folder-id]');
+        
+        // Load progress for each folder asynchronously (in parallel for better performance)
+        const promises = Array.from(folderContainers).map(async (container) => {
+            const folderId = container.getAttribute('data-folder-id');
+            
+            try {
+                const url = this.config.folderProgressUrlTemplate.replace('PLACEHOLDER', folderId);
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': this.config.csrfToken
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        this.updateFolderProgressUI(container, data.progress);
+                    }
+                } else {
+                    console.warn(`Failed to load progress for folder ${folderId}:`, response.status);
+                }
+            } catch (error) {
+                console.error(`Error loading progress for folder ${folderId}:`, error);
+            }
+        });
+        
+        // Wait for all requests to complete
+        await Promise.allSettled(promises);
+    }
+    
+    /**
+     * Update the UI for a folder's progress information
+     */
+    updateFolderProgressUI(container, progressInfo) {
+        const numbersElement = container.querySelector('.progress-numbers');
+        const progressBar = container.querySelector('.progress-bar');
+        const progressPercent = container.querySelector('.progress-percent');
+        const totalFilesElement = container.querySelector('.total-files');
+        
+        if (numbersElement) {
+            numbersElement.textContent = `${progressInfo.scanned}/${progressInfo.total_files}`;
+        }
+        
+        if (totalFilesElement) {
+            totalFilesElement.textContent = progressInfo.total_files;
+        }
+        
+        if (progressBar) {
+            // Remove loading animation
+            progressBar.classList.remove('progress-loading', 'progress-bar-striped', 'progress-bar-animated');
+            
+            // Set progress value and color
+            const percentage = Math.round(progressInfo.percentage || 0);
+            progressBar.style.width = `${percentage}%`;
+            progressBar.setAttribute('aria-valuenow', percentage);
+            
+            // Set appropriate color based on progress
+            if (percentage >= 100) {
+                progressBar.className = 'progress-bar bg-success';
+                progressBar.setAttribute('title', 'Scanning complete');
+            } else if (percentage > 0) {
+                progressBar.className = 'progress-bar bg-primary';
+                progressBar.setAttribute('title', `${percentage}% scanned`);
+            } else {
+                progressBar.className = 'progress-bar bg-warning';
+                progressBar.setAttribute('title', 'Not scanned yet');
+            }
+        }
+        
+        if (progressPercent) {
+            const percentage = Math.round(progressInfo.percentage || 0);
+            if (progressInfo.needs_scan) {
+                progressPercent.innerHTML = `<strong>${percentage}%</strong> scanned`;
+            } else {
+                progressPercent.innerHTML = '<i class="fas fa-check-circle text-success me-1"></i><strong>Complete</strong>';
+            }
+        }
     }
 
     destroy() {

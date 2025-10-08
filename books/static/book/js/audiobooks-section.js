@@ -7,9 +7,9 @@ class AudiobooksSectionManager extends BaseSectionManager {
     constructor() {
         super('audiobooks', {
             listContainer: '#audiobooks-list-container',
-            detailContainer: '#audiobooks-detail-container',
-            apiEndpoint: window.audiobooksConfig?.ajax_urls?.list || '/books/audiobooks/ajax/',
-            detailEndpoint: window.audiobooksConfig?.ajax_urls?.detail || '/books/audiobooks/ajax/'
+            detailContainer: '#audiobook-detail-container',
+            apiEndpoint: window.audiobooksConfig?.ajax_urls?.list || '/books/audiobooks/ajax/list/',
+            detailEndpoint: window.audiobooksConfig?.ajax_urls?.detail || '/books/audiobooks/ajax/detail/'
         });
         
         this.expandedAudiobooks = new Set();

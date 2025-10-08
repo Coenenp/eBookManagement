@@ -78,10 +78,18 @@ from .views.sections import (  # noqa: F401
     series_ajax_download_book,
     ComicsMainView,
     comics_ajax_list,
+    comics_ajax_detail,
+    comics_ajax_toggle_read,
+    comics_ajax_download,
     AudiobooksMainView,
     audiobooks_ajax_list,
-    audiobooks_ajax_detail
+    audiobooks_ajax_detail,
+    audiobooks_ajax_toggle_read,
+    audiobooks_ajax_download,
+    audiobooks_ajax_update_progress
 )
+
+# Phase 2: Media sections using new models (imported at end of file)
 
 # Administrative functionality
 from .views.management import (  # noqa: F401
@@ -217,3 +225,5 @@ from .views.ajax import (  # noqa: F401
 
 # Series detail view needed by URLs
 from .views.management import SeriesDetailView  # noqa: F401
+
+# Functionality now integrated directly into regular endpoints

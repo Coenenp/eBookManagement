@@ -201,10 +201,7 @@
     color: var(--bs-info-text);
 }
 
-.content-type-mixed { 
-    background-color: var(--bs-secondary-bg-subtle);
-    color: var(--bs-secondary-text);
-}
+
 
 /* Path display */
 .path-display {

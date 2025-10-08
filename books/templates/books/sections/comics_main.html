@@ -18,7 +18,7 @@
 
 {% block items_list %}
 <div id="comics-list-container">
-    {% include 'books/comic_list.html' with series=series standalone=standalone %}
+    <!-- Comics will be loaded via AJAX -->
 </div>
 {% endblock %}
 
@@ -35,7 +35,7 @@
 {% block extra_js %}
 {{ block.super }}
 <script>
-    // Configuration for the comics section
+    // Configuration for the comics section - SET BEFORE loading JS files
     window.comicsConfig = {
         ajax_urls: {
             list: '{% url "books:comics_ajax_list" %}',
@@ -67,11 +67,8 @@
         }
     }
 
-// Initialize comics manager
 document.addEventListener('DOMContentLoaded', function() {
-    if (typeof ComicsSectionManager !== 'undefined') {
-        window.comicsManager = new ComicsSectionManager();
-    }
+    window.comicsManager = new ComicsSectionManager();
 });
 </script>
 <script src="{% static 'book/js/media-library-utils.js' %}"></script>

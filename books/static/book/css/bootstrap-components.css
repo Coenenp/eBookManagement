@@ -28,10 +28,7 @@
     color: var(--bs-white) !important;
 }
 
-.content-type-mixed {
-    background-color: var(--bs-secondary) !important;
-    color: var(--bs-white) !important;
-}
+
 
 .content-type-other {
     background-color: var(--bs-light) !important;

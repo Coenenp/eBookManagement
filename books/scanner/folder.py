@@ -71,6 +71,48 @@ def scan_directory(directory, scan_folder, rescan=False, ebook_extensions=None, 
     total_files = scan_status.total_files or len(ebook_files)
     logger.info(f"Processing {len(ebook_files)} files in {directory}")
 
+    # Phase 1 Enhancement: Use content-type specific processing if enabled
+    try:
+        from books.scanner.content_processing import process_files_by_type
+
+        # Check if this folder should use content-type specific processing
+        if scan_folder.content_type in ['comics', 'audiobooks'] or _should_use_content_type_processing(ebook_files):
+            logger.info(f"Using content-type specific processing for {scan_folder.content_type}")
+            process_files_by_type(ebook_files, scan_folder, cover_files, opf_files, rescan)
+
+            # Update progress for all files at once
+            scan_status.processed_files += len(ebook_files)
+            if ebook_files:
+                scan_status.last_processed_file = ebook_files[-1]
+            update_scan_progress(scan_status, scan_status.processed_files, total_files, "Content-type processing complete")
+        else:
+            # Use original individual file processing for ebooks
+            _process_files_individually(ebook_files, scan_folder, cover_files, opf_files, rescan, scan_status, total_files)
+
+    except ImportError:
+        logger.info("Content-type processing not available, using standard processing")
+        _process_files_individually(ebook_files, scan_folder, cover_files, opf_files, rescan, scan_status, total_files)
+
+    # Handle orphaned files at the end
+    _handle_orphans(directory, cover_files, opf_files, ebook_files, scan_folder)
+
+
+def _should_use_content_type_processing(ebook_files):
+    """Determine if content-type specific processing should be used based on file types"""
+    if not ebook_files:
+        return False
+
+    # Count file types
+    comic_count = sum(1 for f in ebook_files if any(f.lower().endswith(f'.{ext}') for ext in COMIC_FORMATS))
+    audio_count = sum(1 for f in ebook_files if any(f.lower().endswith(f'.{ext}') for ext in AUDIOBOOK_FORMATS))
+
+    # Use content-type specific processing if majority are comics or audiobooks
+    total_files = len(ebook_files)
+    return (comic_count > total_files * 0.5) or (audio_count > total_files * 0.5)
+
+
+def _process_files_individually(ebook_files, scan_folder, cover_files, opf_files, rescan, scan_status, total_files):
+    """Process files using the original individual approach"""
     for i, ebook_path in enumerate(ebook_files, 1):
         try:
             _process_book(ebook_path, scan_folder, cover_files, opf_files, rescan)
@@ -88,8 +130,6 @@ def scan_directory(directory, scan_folder, rescan=False, ebook_extensions=None, 
             scan_status.processed_files += 1
 
         update_scan_progress(scan_status, scan_status.processed_files, total_files, Path(ebook_path).name)
-
-    _handle_orphans(directory, cover_files, opf_files, ebook_files, scan_folder)
 
 
 def _find_incomplete_metadata_books(directory, scan_folder):

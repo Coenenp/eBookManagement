@@ -29,7 +29,7 @@
         <div class="text-center">
             <i class="fas fa-headphones fa-3x mb-3"></i>
             <h5>Select an audiobook to view details</h5>
-            <p class="text-muted">Choose from {{ audiobooks_count }} available audiobooks</p>
+            <p class="mb-0">Choose an audiobook from the list to see detailed information.</p>
         </div>
     </div>
 </div>
@@ -37,11 +37,8 @@
 
 {% block extra_js %}
 {{ block.super }}
-<script src="{% static 'book/js/media-library-utils.js' %}"></script>
-<script src="{% static 'book/js/base-section-manager.js' %}"></script>
-<script src="{% static 'book/js/audiobooks-section.js' %}"></script>
 <script>
-// Configuration for audiobooks section
+// Configuration for audiobooks section - SET BEFORE loading JS files
 window.audiobooksConfig = {
     ajax_urls: {
         list: '{% url "books:audiobooks_ajax_list" %}',
@@ -56,8 +53,10 @@ window.audiobooksConfig = {
 };
 
 document.addEventListener('DOMContentLoaded', function() {
-    if (typeof AudiobooksSectionManager !== 'undefined') {
-        window.sectionManager = new AudiobooksSectionManager();
-    }
-});</script>
+    window.audiobooksManager = new AudiobooksSectionManager();
+});
+</script>
+<script src="{% static 'book/js/media-library-utils.js' %}"></script>
+<script src="{% static 'book/js/base-section-manager.js' %}"></script>
+<script src="{% static 'book/js/audiobooks-section.js' %}"></script>
 {% endblock %}

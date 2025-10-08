@@ -8,41 +8,15 @@ class ComicsSectionManager extends BaseSectionManager {
         super('comics', {
             listContainer: '#comics-list-container',
             detailContainer: '#comic-detail-container',
-            apiEndpoint: window.comicsConfig?.ajax_urls?.list || '/books/comics/ajax/',
-            detailEndpoint: window.comicsConfig?.ajax_urls?.detail || '/books/comics/ajax/'
+            apiEndpoint: window.comicsConfig?.ajax_urls?.list || '/books/comics/ajax/list/',
+            detailEndpoint: window.comicsConfig?.ajax_urls?.detail || '/books/comics/ajax/detail/'
         });
         
-        this.currentStandaloneComics = [];
-        this.filteredStandalone = [];
         this.expandedSeries = new Set();
     }
 
-    async loadItems() {
-        try {
-            const container = document.querySelector(this.config.listContainer);
-            MediaLibraryUtils.showLoadingState(container, 'Loading comics...');
-            
-            const data = await MediaLibraryUtils.makeRequest(this.config.apiEndpoint);
-            
-            if (data.success || data.series || data.standalone) {
-                this.currentData = data.series || [];
-                this.currentStandaloneComics = data.standalone || [];
-                this.filteredData = [...this.currentData];
-                this.filteredStandalone = [...this.currentStandaloneComics];
-                this.renderList();
-                this.updateItemCount(this.filteredData.length + this.filteredStandalone.length);
-            } else {
-                throw new Error(data.message || 'Failed to load comics');
-            }
-        } catch (error) {
-            console.error('Error loading comics:', error);
-            const container = document.querySelector(this.config.listContainer);
-            MediaLibraryUtils.showErrorState(container, 'Failed to load comics');
-        }
-    }
-
     filterItems(searchTerm, sortBy, formatFilter, statusFilter) {
-        // Filter series
+        // Filter comics data
         this.filteredData = this.currentData.filter(series => {
             const matchesSearch = !searchTerm || 
                 series.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -62,27 +36,11 @@ class ComicsSectionManager extends BaseSectionManager {
             return matchesSearch && matchesFormat && matchesStatus;
         });
         
-        // Filter standalone comics
-        this.filteredStandalone = this.currentStandaloneComics.filter(comic => {
-            const matchesSearch = !searchTerm || 
-                comic.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                comic.author.toLowerCase().includes(searchTerm.toLowerCase());
-            
-            const matchesFormat = !formatFilter || comic.file_format === formatFilter;
-            
-            const matchesStatus = !statusFilter || 
-                (statusFilter === 'read' && comic.is_read) ||
-                (statusFilter === 'unread' && !comic.is_read) ||
-                (statusFilter === 'reading' && comic.reading_progress > 0 && !comic.is_read);
-            
-            return matchesSearch && matchesFormat && matchesStatus;
-        });
-        
         // Sort results
         this.sortComicsData(sortBy);
         
         this.renderList();
-        this.updateItemCount(this.filteredData.length + this.filteredStandalone.length);
+        this.updateItemCount(this.filteredData.length);
     }
 
     sortComicsData(sortBy) {
@@ -104,28 +62,13 @@ class ComicsSectionManager extends BaseSectionManager {
                     return a.name.localeCompare(b.name);
             }
         });
-        
-        this.filteredStandalone.sort((a, b) => {
-            switch(sortBy) {
-                case 'title':
-                    return a.title.localeCompare(b.title);
-                case 'author':
-                    return a.author.localeCompare(b.author);
-                case 'date':
-                    return new Date(b.last_scanned || 0) - new Date(a.last_scanned || 0);
-                case 'size':
-                    return (b.file_size || 0) - (a.file_size || 0);
-                default:
-                    return a.title.localeCompare(b.title);
-            }
-        });
     }
 
     renderList(viewType = null) {
         const container = document.querySelector(this.config.listContainer);
         const currentView = viewType || this.getCurrentViewType();
         
-        if (this.filteredData.length === 0 && this.filteredStandalone.length === 0) {
+        if (this.filteredData.length === 0) {
             MediaLibraryUtils.showEmptyState(container, 'No Comics Found', 'No comics match your current filters.', 'fas fa-mask');
             return;
         }
@@ -169,36 +112,6 @@ class ComicsSectionManager extends BaseSectionManager {
                     <div class="item-meta">
                         <div class="text-muted small">
                             ${MediaLibraryUtils.formatFileSize(series.total_size)}
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-            html += '</div>';
-        }
-        
-        // Render standalone comics
-        if (this.filteredStandalone.length > 0) {
-            html += '<div class="comics-section mt-4"><h6 class="text-muted mb-3">Standalone Comics</h6>';
-            html += this.filteredStandalone.map(comic => `
-                <div class="list-item grid-item" data-item-id="${comic.id}" onclick="window.comicsManager.selectItem(${comic.id})">
-                    <div class="grid-cover mb-3">
-                        ${comic.cover_url ? `
-                            <img src="${comic.cover_url}" alt="Comic Cover" class="img-fluid rounded shadow">
-                        ` : `
-                            <div class="placeholder-cover d-flex align-items-center justify-content-center bg-light rounded">
-                                <i class="fas fa-mask text-muted fa-2x"></i>
-                            </div>
-                        `}
-                    </div>
-                    <div class="item-title">${MediaLibraryUtils.escapeHtml(comic.title)}</div>
-                    <div class="item-subtitle">${MediaLibraryUtils.escapeHtml(comic.author)}</div>
-                    <div class="item-meta">
-                        <div class="item-badges">
-                            <span class="badge bg-secondary">${comic.file_format.toUpperCase()}</span>
-                            ${comic.is_read ? '<span class="badge bg-success">Read</span>' : ''}
-                        </div>
-                        <div class="text-muted small mt-1">
-                            ${MediaLibraryUtils.formatFileSize(comic.file_size)}
                         </div>
                     </div>
                 </div>
@@ -253,45 +166,7 @@ class ComicsSectionManager extends BaseSectionManager {
             `;
         }
         
-        // Render standalone comics
-        if (this.filteredStandalone.length > 0) {
-            html += `
-                <div class="comics-section mt-3">
-                    <div class="section-header">
-                        <h6 class="text-muted mb-2">Standalone Comics</h6>
-                    </div>
-                    <div class="list-header">
-                        <div class="list-header-title">Title</div>
-                        <div class="list-header-author">Author</div>
-                        <div class="list-header-info">Size • Format</div>
-                    </div>
-                    ${this.filteredStandalone.map(comic => `
-                        <div class="list-item" data-item-id="${comic.id}" onclick="window.comicsManager.selectItem(${comic.id})">
-                            <div class="item-cover-tiny">
-                                ${comic.cover_url ? `
-                                    <img src="${comic.cover_url}" alt="Comic Cover">
-                                ` : `
-                                    <div class="placeholder-cover">
-                                        <i class="fas fa-mask"></i>
-                                    </div>
-                                `}
-                            </div>
-                            <div class="item-title">${MediaLibraryUtils.escapeHtml(comic.title)}</div>
-                            <div class="item-subtitle">${MediaLibraryUtils.escapeHtml(comic.author)}</div>
-                            <div class="item-info">
-                                <div class="item-badges">
-                                    <span class="badge bg-secondary">${comic.file_format.toUpperCase()}</span>
-                                    ${comic.is_read ? '<span class="badge bg-success">✓</span>' : ''}
-                                </div>
-                                <div class="text-muted small">
-                                    ${MediaLibraryUtils.formatFileSize(comic.file_size)}
-                                </div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-        }
+
         
         return html;
     }
@@ -634,36 +509,7 @@ class ComicsSectionManager extends BaseSectionManager {
     }
 }
 
-// Legacy function compatibility for templates
-function customLoadItems() {
-    if (window.comicsManager) {
-        window.comicsManager.loadItems();
-    }
-}
-
-function customFilterItems(searchTerm, sortBy, formatFilter, statusFilter) {
-    if (window.comicsManager) {
-        window.comicsManager.filterItems(searchTerm, sortBy, formatFilter, statusFilter);
-    }
-}
-
-function customRenderView(viewType) {
-    if (window.comicsManager) {
-        window.comicsManager.renderList(viewType);
-    }
-}
-
-function customRefreshItems() {
-    if (window.comicsManager) {
-        window.comicsManager.loadItems();
-    }
-}
-
-function customLoadDetail(comicId) {
-    if (window.comicsManager) {
-        window.comicsManager.loadDetail(comicId);
-    }
-}
+// Legacy functions removed - now handled by base-section.js global compatibility layer
 
 function selectItem(itemId) {
     if (window.comicsManager) {
@@ -704,7 +550,13 @@ function clearFilters() {
 
 // Initialize the comics manager when the DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
-    window.comicsManager = new ComicsSectionManager();
+    console.log('Comics DOMContentLoaded - Creating ComicsSectionManager');
+    try {
+        window.comicsManager = new ComicsSectionManager();
+        console.log('Comics manager created successfully:', window.comicsManager);
+    } catch (error) {
+        console.error('Error creating comics manager:', error);
+    }
     
     // Set up event delegation for clear filters button
     document.addEventListener('click', function(e) {

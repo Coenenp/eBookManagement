@@ -18,8 +18,82 @@ class BaseSectionManager {
         this.filteredData = [];
         this.selectedItemId = null;
         this.isLoading = false;
+        this.expandedItems = new Set(); // Universal expanded items tracker
+        
+        // Field mapping for different content types
+        this.fieldMap = this.getFieldMapping();
         
         this.initialize();
+    }
+
+    /**
+     * Get field mapping for different content types
+     * This allows unified filtering/sorting across different data structures
+     */
+    getFieldMapping() {
+        const mappings = {
+            'series': {
+                title: 'name',
+                author: 'authors[0]',
+                format: 'formats',
+                isArray: { authors: true, formats: true },
+                books: 'books'
+            },
+            'ebooks': {
+                title: 'title', 
+                author: 'author',
+                format: 'file_format',
+                isArray: {},
+                books: null
+            },
+            'audiobooks': {
+                title: 'title',
+                author: 'author', 
+                format: 'file_format',
+                isArray: {},
+                books: null
+            },
+            'comics': {
+                title: 'name',
+                author: 'books[0].author',
+                format: 'books[0].file_format', 
+                isArray: {},
+                books: 'books'
+            }
+        };
+        return mappings[this.sectionType] || mappings['ebooks'];
+    }
+
+    /**
+     * Get field value using the field mapping
+     */
+    getFieldValue(item, fieldType) {
+        const fieldPath = this.fieldMap[fieldType];
+        if (!fieldPath) return '';
+        
+        return this.getNestedValue(item, fieldPath) || '';
+    }
+
+    /**
+     * Helper to get nested object values using dot notation
+     */
+    getNestedValue(obj, path) {
+        if (!path) return '';
+        
+        // Handle array access like 'authors[0]' or 'books[0].title'
+        return path.split('.').reduce((current, key) => {
+            if (!current) return '';
+            
+            // Handle array indexing
+            const arrayMatch = key.match(/^(.+)\[(\d+)\]$/);
+            if (arrayMatch) {
+                const [, arrayKey, index] = arrayMatch;
+                const array = current[arrayKey];
+                return Array.isArray(array) ? array[parseInt(index)] : '';
+            }
+            
+            return current[key];
+        }, obj);
     }
 
     initialize() {
@@ -121,21 +195,201 @@ class BaseSectionManager {
                 this.renderList();
                 this.updateItemCount(this.currentData.length);
             } else {
-                this.showErrorState(container, data.error || 'Failed to load data');
+                // Use friendly error messages instead of generic ones
+                const sectionName = this.sectionType.charAt(0).toUpperCase() + this.sectionType.slice(1);
+                this.showFriendlyEmptyState(container, `No ${sectionName} Found`, `No ${this.sectionType} match your current filters.`);
             }
         })
         .catch(error => {
             console.error(`Error loading ${this.sectionType}:`, error);
-            this.showErrorState(container, 'Network error occurred. Please try again.');
+            const sectionName = this.sectionType.charAt(0).toUpperCase() + this.sectionType.slice(1);
+            this.showFriendlyEmptyState(container, `Unable to Load ${sectionName}`, `There was a problem loading ${this.sectionType}. Please try again.`);
         })
         .finally(() => {
             this.isLoading = false;
         });
     }
 
+    /**
+     * UNIFIED FILTERING METHOD
+     * Works for all section types using field mapping
+     */
     filterItems(searchTerm, sortBy, formatFilter, statusFilter) {
-        // Override in child classes
-        console.warn('filterItems method should be overridden in child classes');
+        this.filteredData = this.currentData.filter(item => {
+            // Search filter - works across all content types
+            const matchesSearch = !searchTerm || this.matchesSearchTerm(item, searchTerm);
+            
+            // Format filter - unified approach
+            const matchesFormat = !formatFilter || this.matchesFormat(item, formatFilter);
+            
+            // Status filter - unified approach
+            const matchesStatus = !statusFilter || this.matchesStatus(item, statusFilter);
+            
+            return matchesSearch && matchesFormat && matchesStatus;
+        });
+        
+        // Sort results using unified sorting
+        this.sortData(sortBy);
+        
+        this.renderList();
+        this.updateItemCount(this.filteredData.length);
+    }
+
+    /**
+     * Unified search matching across all content types
+     */
+    matchesSearchTerm(item, searchTerm) {
+        const term = searchTerm.toLowerCase();
+        
+        // Check title field
+        const title = this.getFieldValue(item, 'title').toLowerCase();
+        if (title.includes(term)) return true;
+        
+        // Check author field(s)
+        const author = this.getFieldValue(item, 'author');
+        if (Array.isArray(author)) {
+            if (author.some(a => a.toLowerCase().includes(term))) return true;
+        } else if (typeof author === 'string') {
+            if (author.toLowerCase().includes(term)) return true;
+        }
+        
+        // For series/comics, also search within books
+        const books = item[this.fieldMap.books];
+        if (Array.isArray(books)) {
+            return books.some(book => 
+                (book.title && book.title.toLowerCase().includes(term)) ||
+                (book.author && book.author.toLowerCase().includes(term))
+            );
+        }
+        
+        return false;
+    }
+
+    /**
+     * Unified format matching
+     */
+    matchesFormat(item, formatFilter) {
+        const format = this.getFieldValue(item, 'format');
+        
+        if (Array.isArray(format)) {
+            return format.includes(formatFilter);
+        } else if (typeof format === 'string') {
+            return format === formatFilter;
+        }
+        
+        // For series/comics, check books
+        const books = item[this.fieldMap.books];
+        if (Array.isArray(books)) {
+            return books.some(book => book.file_format === formatFilter);
+        }
+        
+        return false;
+    }
+
+    /**
+     * Unified status matching
+     */
+    matchesStatus(item, statusFilter) {
+        switch (statusFilter) {
+            case 'read':
+                return this.isItemRead(item);
+            case 'unread':
+                return !this.isItemRead(item);
+            case 'reading':
+            case 'listening':
+                return this.isItemInProgress(item);
+            default:
+                return true;
+        }
+    }
+
+    isItemRead(item) {
+        if (item.is_read !== undefined) {
+            return item.is_read;
+        }
+        
+        // For series/comics, check if all books are read
+        const books = item[this.fieldMap.books];
+        if (Array.isArray(books)) {
+            return books.length > 0 && books.every(book => book.is_read);
+        }
+        
+        return false;
+    }
+
+    isItemInProgress(item) {
+        if (item.reading_progress > 0 || item.listening_progress > 0) {
+            return !item.is_read;
+        }
+        
+        // For series/comics, check if any books are in progress
+        const books = item[this.fieldMap.books];
+        if (Array.isArray(books)) {
+            return books.some(book => (book.reading_progress > 0) && !book.is_read);
+        }
+        
+        return false;
+    }
+
+    /**
+     * UNIFIED SORTING METHOD
+     * Works for all section types using field mapping
+     */
+    sortData(sortBy) {
+        this.filteredData.sort((a, b) => {
+            switch(sortBy) {
+                case 'title':
+                    const titleA = this.getFieldValue(a, 'title');
+                    const titleB = this.getFieldValue(b, 'title');
+                    return titleA.localeCompare(titleB);
+                    
+                case 'author':
+                    const authorA = this.getFieldValue(a, 'author');
+                    const authorB = this.getFieldValue(b, 'author');
+                    const authStrA = Array.isArray(authorA) ? authorA[0] || '' : authorA;
+                    const authStrB = Array.isArray(authorB) ? authorB[0] || '' : authorB;
+                    return authStrA.localeCompare(authStrB);
+                    
+                case 'date':
+                    return this.compareDates(a, b);
+                    
+                case 'size':
+                    return this.compareSizes(a, b);
+                    
+                case 'duration':
+                    return (b.duration_seconds || 0) - (a.duration_seconds || 0);
+                    
+                default:
+                    const defTitleA = this.getFieldValue(a, 'title');
+                    const defTitleB = this.getFieldValue(b, 'title');
+                    return defTitleA.localeCompare(defTitleB);
+            }
+        });
+    }
+
+    compareDates(a, b) {
+        // For series/comics, compare most recent book
+        const booksA = a[this.fieldMap.books];
+        const booksB = b[this.fieldMap.books];
+        
+        if (Array.isArray(booksA) && Array.isArray(booksB)) {
+            const aLatest = Math.max(...booksA.map(book => new Date(book.last_scanned || 0)));
+            const bLatest = Math.max(...booksB.map(book => new Date(book.last_scanned || 0)));
+            return bLatest - aLatest;
+        }
+        
+        // For individual items
+        return new Date(b.last_scanned || 0) - new Date(a.last_scanned || 0);
+    }
+
+    compareSizes(a, b) {
+        // For series/comics, use total_size if available
+        if (a.total_size !== undefined && b.total_size !== undefined) {
+            return b.total_size - a.total_size;
+        }
+        
+        // For individual items
+        return (b.file_size || 0) - (a.file_size || 0);
     }
 
     renderList(viewType = null) {
@@ -171,9 +425,31 @@ class BaseSectionManager {
         }
     }
 
-    loadDetail(itemId) {
-        // Override in child classes or implement generic detail loading
-        console.warn('loadDetail method should be overridden in child classes');
+    async loadDetail(itemId) {
+        try {
+            const container = document.querySelector(this.config.detailContainer);
+            this.showLoadingState(container, 'Loading details...');
+            
+            const endpoint = this.config.detailEndpoint.replace('{id}', itemId).replace('0', itemId);
+            const data = await fetch(endpoint, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(r => r.json());
+            
+            if (data.success) {
+                this.renderDetail(data);
+            } else {
+                throw new Error(data.message || 'Failed to load details');
+            }
+        } catch (error) {
+            console.error(`Error loading ${this.sectionType} details:`, error);
+            const container = document.querySelector(this.config.detailContainer);
+            this.showFriendlyEmptyState(container, 'Unable to Load Details', `There was a problem loading details. Please try again.`);
+        }
+    }
+
+    renderDetail(data) {
+        // Override in child classes
+        console.warn('renderDetail method should be overridden in child classes');
     }
 
     showLoadingState(container, message = 'Loading...') {
@@ -202,6 +478,32 @@ class BaseSectionManager {
         `;
     }
 
+    showFriendlyEmptyState(container, title, message) {
+        const icon = this.getSectionIcon();
+        if (typeof MediaLibraryUtils !== 'undefined' && MediaLibraryUtils.showEmptyState) {
+            MediaLibraryUtils.showEmptyState(container, title, message, icon);
+        } else {
+            // Fallback if MediaLibraryUtils is not available
+            container.innerHTML = `
+                <div class="empty-state text-center py-5">
+                    <i class="${icon} fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">${title}</h5>
+                    <p class="text-muted">${message}</p>
+                </div>
+            `;
+        }
+    }
+
+    getSectionIcon() {
+        const icons = {
+            'ebooks': 'fas fa-book',
+            'audiobooks': 'fas fa-headphones', 
+            'comics': 'fas fa-mask',
+            'series': 'fas fa-layer-group'
+        };
+        return icons[this.sectionType] || 'fas fa-inbox';
+    }
+
     updateItemCount(count) {
         const countElement = document.getElementById('item-count');
         if (countElement) {
@@ -210,17 +512,15 @@ class BaseSectionManager {
     }
 
     getCurrentViewType() {
-        const activeButton = document.querySelector('[data-view-type].active');
-        return activeButton ? activeButton.dataset.viewType : 'list';
+        return localStorage.getItem(`${this.sectionType}-view-type`) || 'list';
     }
 
     setViewType(viewType) {
-        // Store view type preference
-        localStorage.setItem(`${this.sectionType}_view_type`, viewType);
+        localStorage.setItem(`${this.sectionType}-view-type`, viewType);
     }
 
     getViewType() {
-        return localStorage.getItem(`${this.sectionType}_view_type`) || 'list';
+        return this.getCurrentViewType();
     }
 
     handleMobileLayout() {
@@ -290,6 +590,72 @@ class BaseSectionManager {
         // Override in child classes for double-click or enter key handling
     }
 }
+
+// Global functions for backward compatibility
+function customLoadItems() {
+    const manager = getManagerForCurrentSection();
+    if (manager && manager.loadData) {
+        manager.loadData();
+    }
+}
+
+function customFilterItems(searchTerm, sortBy, formatFilter, statusFilter) {
+    const manager = getManagerForCurrentSection();
+    if (manager && manager.filterItems) {
+        manager.filterItems(searchTerm, sortBy, formatFilter, statusFilter);
+    }
+}
+
+function customRenderView(viewType) {
+    const manager = getManagerForCurrentSection();
+    if (manager && manager.renderList) {
+        manager.renderList(viewType);
+    }
+}
+
+function customRefreshItems() {
+    const manager = getManagerForCurrentSection();
+    if (manager && manager.loadData) {
+        manager.loadData();
+    }
+}
+
+function customLoadDetail(itemId) {
+    const manager = getManagerForCurrentSection();
+    if (manager && manager.loadDetail) {
+        manager.loadDetail(itemId);
+    }
+}
+
+function selectItem(itemId) {
+    const manager = getManagerForCurrentSection();
+    if (manager && manager.selectItem) {
+        manager.selectItem(itemId);
+    }
+}
+
+function getManagerForCurrentSection() {
+    const path = window.location.pathname;
+    
+    if (path.includes('/ebooks/')) return window.ebooksManager;
+    if (path.includes('/comics/')) return window.comicsManager;  
+    if (path.includes('/audiobooks/')) return window.audiobooksManager;
+    if (path.includes('/series/')) return window.seriesManager;
+    
+    return null;
+}
+
+// Export for global access
+window.BaseSectionManager = BaseSectionManager;
+window.SectionUtils = {
+    customLoadItems,
+    customFilterItems,
+    customRenderView,
+    customRefreshItems,
+    customLoadDetail,
+    selectItem,
+    getManagerForCurrentSection
+};
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {

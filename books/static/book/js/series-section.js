@@ -8,8 +8,8 @@ class SeriesSectionManager extends BaseSectionManager {
         super('series', {
             listContainer: '#series-list-container',
             detailContainer: '#series-detail-container',
-            apiEndpoint: window.seriesConfig?.ajax_urls?.list || '/books/series/ajax/',
-            detailEndpoint: window.seriesConfig?.ajax_urls?.detail || '/books/series/ajax/'
+            apiEndpoint: window.seriesConfig?.ajax_urls?.list || '/books/series/ajax/list/',
+            detailEndpoint: window.seriesConfig?.ajax_urls?.detail || '/books/series/ajax/detail/'
         });
         
         this.expandedSeries = new Set();
@@ -589,36 +589,7 @@ class SeriesSectionManager extends BaseSectionManager {
     }
 }
 
-// Legacy function compatibility for templates
-function customLoadItems() {
-    if (window.seriesManager) {
-        window.seriesManager.loadItems();
-    }
-}
-
-function customFilterItems(searchTerm, sortBy, formatFilter, statusFilter) {
-    if (window.seriesManager) {
-        window.seriesManager.filterItems(searchTerm, sortBy, formatFilter, statusFilter);
-    }
-}
-
-function customRenderView(viewType) {
-    if (window.seriesManager) {
-        window.seriesManager.renderList(viewType);
-    }
-}
-
-function customRefreshItems() {
-    if (window.seriesManager) {
-        window.seriesManager.loadItems();
-    }
-}
-
-function customLoadDetail(itemId) {
-    if (window.seriesManager) {
-        window.seriesManager.loadDetail(itemId);
-    }
-}
+// Legacy functions removed - now handled by base-section.js global compatibility layer
 
 function selectItem(itemId) {
     if (window.seriesManager) {

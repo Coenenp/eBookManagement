@@ -87,7 +87,7 @@ from .user_settings import (  # noqa: F401
 # Scanning views - COMPLETED (moved from views_modules/scanning.py)
 from .scanning import (  # noqa: F401
     scan_dashboard, start_folder_scan, start_book_rescan,
-    scan_progress_ajax, api_status_ajax, active_scans_ajax,
+    scan_progress_ajax, scan_folder_progress_ajax, api_status_ajax, active_scans_ajax,
     cancel_scan_ajax, scan_history, scanning_help
 )
 
@@ -97,7 +97,7 @@ from .sections import (  # noqa: F401
     SeriesMainView, series_ajax_list, ComicsMainView, comics_ajax_list, comics_ajax_detail,
     comics_ajax_toggle_read, comics_ajax_download,
     AudiobooksMainView, audiobooks_ajax_list, audiobooks_ajax_detail,
-    audiobooks_ajax_toggle_read, audiobooks_ajax_download
+    audiobooks_ajax_toggle_read, audiobooks_ajax_download, audiobooks_ajax_update_progress
 )
 
 # Utility functions - COMPLETED (needed by tests and views)
@@ -151,7 +151,7 @@ __all__ = [
 
     # Scanning views
     'scan_dashboard', 'start_folder_scan', 'start_book_rescan',
-    'scan_progress_ajax', 'api_status_ajax', 'active_scans_ajax',
+    'scan_progress_ajax', 'scan_folder_progress_ajax', 'api_status_ajax', 'active_scans_ajax',
     'cancel_scan_ajax', 'scan_history', 'scanning_help',
 
     # Media sections views
@@ -159,7 +159,7 @@ __all__ = [
     'SeriesMainView', 'series_ajax_list', 'ComicsMainView', 'comics_ajax_list', 'comics_ajax_detail',
     'comics_ajax_toggle_read', 'comics_ajax_download',
     'AudiobooksMainView', 'audiobooks_ajax_list', 'audiobooks_ajax_detail',
-    'audiobooks_ajax_toggle_read', 'audiobooks_ajax_download',
+    'audiobooks_ajax_toggle_read', 'audiobooks_ajax_download', 'audiobooks_ajax_update_progress',
 
     # Utility functions
     'get_filter_params', 'build_filter_context', 'paginate_queryset', 'format_file_size',

@@ -104,52 +104,37 @@ class BackgroundScanner:
                     scan_folder.content_type = content_type
                     scan_folder.save()
 
-            # Discover books
-            self.progress.update(10, 100, "Discovering files", "Finding book files...")
-            discovered_books = folder_scanner.discover_books_in_folder(folder_path)
+            # Use proper folder scanning with content-type support
+            self.progress.update(10, 100, "Scanning folder", "Processing files by content type...")
 
-            if not discovered_books:
-                self.progress.complete(True, "No books found in folder")
-                return {'success': True, 'message': 'No books found', 'books_processed': 0}
+            try:
+                # Use the folder scanner directly which supports content-type processing
+                folder_scanner.scan_directory(
+                    directory=folder_path,
+                    scan_folder=scan_folder,
+                    rescan=False  # This is a new scan, not a rescan
+                )
 
-            total_books = len(discovered_books)
-            logger.info(f"[BACKGROUND SCAN] Found {total_books} books to process")
+                # Count processed books for the progress report
+                processed_count = Book.objects.filter(scan_folder=scan_folder).count()
 
-            # Process each book
-            processed_count = 0
-            error_count = 0
+                # If content-type specific processing was used, count those objects too
+                if scan_folder.content_type == 'audiobooks':
+                    from books.models import Audiobook
+                    audiobook_count = Audiobook.objects.filter(scan_folder=scan_folder).count()
+                    logger.info(f"[BACKGROUND SCAN] Created {audiobook_count} audiobook objects")
 
-            for i, book_path in enumerate(discovered_books):
-                try:
-                    current_progress = 20 + int((i / total_books) * 70)  # 20-90% for processing
+                elif scan_folder.content_type == 'comics':
+                    from books.models import Comic
+                    comic_count = Comic.objects.filter(scan_folder=scan_folder).count()
+                    logger.info(f"[BACKGROUND SCAN] Created {comic_count} comic objects")
 
-                    self.progress.update(
-                        current_progress, 100,
-                        "Processing books",
-                        f"Processing: {book_path.split('/')[-1] or book_path.split('\\')[-1]}"
-                    )
+                error_count = 0  # folder_scanner handles errors internally
 
-                    # Check if book already exists
-                    existing_book = Book.objects.filter(file_path=book_path).first()
-                    if existing_book:
-                        logger.debug(f"[BACKGROUND SCAN] Book already exists: {book_path}")
-                        processed_count += 1
-                        continue
-
-                    # Process the book
-                    success = self._process_single_book(book_path, scan_folder, enable_external_apis)
-
-                    if success:
-                        processed_count += 1
-                    else:
-                        error_count += 1
-
-                    # Add delay to prevent overwhelming the system
-                    time.sleep(0.1)
-
-                except Exception as e:
-                    logger.error(f"[BACKGROUND SCAN] Error processing {book_path}: {e}")
-                    error_count += 1
+            except Exception as e:
+                logger.error(f"[BACKGROUND SCAN] Error during folder scan: {e}")
+                processed_count = 0
+                error_count = 1
 
             # Finalize
             self.progress.update(95, 100, "Finalizing", "Cleaning up...")
@@ -289,6 +274,19 @@ class BackgroundScanner:
 # Background job functions for Django-RQ
 def background_scan_folder(job_id: str, folder_path: str, language: str = None, enable_external_apis: bool = True, content_type: str = None):
     """Background job for scanning a folder."""
+    import inspect
+
+    # Log the function call with all arguments
+    frame = inspect.currentframe()
+    args, _, _, values = inspect.getargvalues(frame)
+    logger.info("[FUNCTION CALL] background_scan_folder called with:")
+    for arg in args:
+        logger.info(f"  {arg} = {values[arg]}")
+
+    # Also log the original arguments if this was called via *args
+    all_args = inspect.getfullargspec(background_scan_folder)
+    logger.info(f"[FUNCTION SIGNATURE] Expected: {all_args}")
+
     scanner = BackgroundScanner(job_id)
     return scanner.scan_folder(folder_path, language, enable_external_apis, content_type)
 
@@ -325,13 +323,28 @@ def scan_folder_in_background(folder_id: int, folder_path: str, folder_name: str
     # Add to active scans
     add_active_scan(job_id)
 
+    # Log function parameters for debugging
+    logger.info(f"[DEBUG] scan_folder_in_background received: folder_id={folder_id}, folder_path={folder_path}, folder_name={folder_name}, content_type={content_type}, language={language}, enable_external_apis={enable_external_apis}")
+    logger.info(f"[DEBUG] Calling background_scan_folder with args: job_id={job_id}, folder_path={folder_path}, language={language}, enable_external_apis={enable_external_apis}, content_type={content_type}")
+
     # Start background scan thread
     thread = threading.Thread(
         target=background_scan_folder,
         args=(job_id, folder_path, language, enable_external_apis, content_type),
-        daemon=True
+        daemon=True,
+        name="background_scan_folder"
     )
-    thread.start()
+
+    logger.info(f"[THREAD START] Creating background thread for job {job_id}")
+
+    try:
+        thread.start()
+        logger.info(f"[THREAD STARTED] Background thread started for job {job_id}, thread: {thread.name}")
+    except Exception as e:
+        logger.error(f"[THREAD ERROR] Failed to start thread: {e}")
+        raise
+
+    return job_id
 
     logger.info(f"Started background scan for folder '{folder_name}' (ID: {folder_id}, Job ID: {job_id})")
     return job_id

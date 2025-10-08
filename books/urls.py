@@ -13,6 +13,7 @@ from .views import scanning as scanning_views
 from .views import wizard as wizard_views
 from .views import sections as sections_views
 from .views import ajax as ajax_views
+# Sections functionality now integrated into regular views
 # All scanning and sections views are now imported via views module
 from .views import SeriesListView, SeriesDetailView
 
@@ -74,11 +75,16 @@ urlpatterns = [
     path('comics/ajax/toggle_read/', views.comics_ajax_toggle_read, name='comics_ajax_toggle_read'),
     path('comics/ajax/download/<int:book_id>/', views.comics_ajax_download, name='comics_ajax_download'),
 
+    # Comics endpoints now use integrated functionality directly
+
     path('audiobooks/', views.AudiobooksMainView.as_view(), name='audiobooks_main'),
     path('audiobooks/ajax/list/', views.audiobooks_ajax_list, name='audiobooks_ajax_list'),
     path('audiobooks/ajax/detail/<int:book_id>/', views.audiobooks_ajax_detail, name='audiobooks_ajax_detail'),
     path('audiobooks/ajax/toggle_read/', views.audiobooks_ajax_toggle_read, name='audiobooks_ajax_toggle_read'),
     path('audiobooks/ajax/download/<int:book_id>/', views.audiobooks_ajax_download, name='audiobooks_ajax_download'),
+
+    # Audiobooks endpoints now use integrated functionality directly
+    path('audiobooks/ajax/update_progress/', views.audiobooks_ajax_update_progress, name='audiobooks_ajax_update_progress'),
     path('book/<int:pk>/', views.BookDetailView.as_view(), name='book_detail'),
     path('book/<int:pk>/metadata/', views.BookMetadataView.as_view(), name='book_metadata'),
     path('book/<int:pk>/metadata/update/', views.BookMetadataUpdateView.as_view(), name='book_metadata_update'),
@@ -98,7 +104,7 @@ urlpatterns = [
 
     # Book renaming/organization
     path('rename-books/', views.BookRenamerView.as_view(), name='book_renamer'),
-    path('rename-books-enhanced/', views.BookRenamerView.as_view(), name='book_renamer_enhanced'),
+    # Rename books functionality now integrated into main renamer
     path('rename-books/preview/', views.BookRenamerPreviewView.as_view(), name='book_renamer_preview'),
     path('rename-books/execute/', views.BookRenamerExecuteView.as_view(), name='book_renamer_execute'),
     path('rename-books/file-details/', views.BookRenamerFileDetailsView.as_view(), name='book_renamer_file_details'),
@@ -110,6 +116,7 @@ urlpatterns = [
     path('scanning/start-folder/', views.start_folder_scan, name='start_folder_scan'),
     path('scanning/start-rescan/', views.start_book_rescan, name='start_book_rescan'),
     path('scanning/progress/<str:job_id>/', views.scan_progress_ajax, name='scan_progress_ajax'),
+    path('scanning/folder-progress/<int:folder_id>/', views.scan_folder_progress_ajax, name='scan_folder_progress_ajax'),
     path('scanning/api-status/', views.api_status_ajax, name='api_status_ajax'),
     path('scanning/active-scans/', views.active_scans_ajax, name='active_scans_ajax'),
     path('scanning/cancel/<str:job_id>/', views.cancel_scan_ajax, name='cancel_scan_ajax'),
@@ -247,7 +254,7 @@ urlpatterns = [
     path('bulk_rename_execute/', views.ajax_bulk_rename_execute, name='bulk_rename_execute'),
     path('rename_book/<int:book_id>/', views.rename_book, name='rename_book'),
 
-    # Enhanced renaming pattern endpoints
+    # Renaming pattern endpoints
     path('renamer/preview-pattern/', views.preview_pattern, name='renamer_preview_pattern'),
     path('renamer/execute-batch/', views.execute_batch_rename, name='renamer_execute_batch'),
     path('renamer/validate-pattern/', views.validate_pattern, name='renamer_validate_pattern'),

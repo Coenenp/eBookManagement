@@ -118,6 +118,8 @@ class WizardFinalValidationTests(TestCase):
                 'TestFolder': 'ebooks'
             }
         )
+        # Verify wizard was created successfully
+        self.assertIsNotNone(wizard.id)
 
         # Test scrapers pre-population
         response = self.client.get(reverse('books:wizard_scrapers'))
@@ -405,8 +407,7 @@ class WizardSystemHealthCheck(TestCase):
 
         # Test endpoints
         try:
-            wizard_endpoints = ['wizard_welcome', 'wizard_folders', 'wizard_content_types',
-                              'wizard_scrapers', 'wizard_complete']
+            wizard_endpoints = ['wizard_welcome', 'wizard_folders', 'wizard_content_types', 'wizard_scrapers', 'wizard_complete']
             for endpoint in wizard_endpoints:
                 response = self.client.get(reverse(f'books:{endpoint}'))
                 if response.status_code == 200:
@@ -487,6 +488,8 @@ class WizardRegressionTests(TestCase):
             scraper_config={'old_format': 'data'},  # Old format
             current_step='welcome'
         )
+        # Verify wizard with old-style data was created
+        self.assertEqual(wizard.current_step, 'welcome')
 
         # Should handle old data gracefully
         response = self.client.get(reverse('books:wizard_scrapers'))
@@ -507,8 +510,7 @@ class WizardRegressionTests(TestCase):
     def test_wizard_no_breaking_changes(self):
         """Test that no breaking changes were introduced"""
         # Test core functionality remains
-        endpoints = ['wizard_welcome', 'wizard_folders', 'wizard_content_types',
-                    'wizard_scrapers', 'wizard_complete']
+        endpoints = ['wizard_welcome', 'wizard_folders', 'wizard_content_types', 'wizard_scrapers', 'wizard_complete']
 
         for endpoint in endpoints:
             response = self.client.get(reverse(f'books:{endpoint}'))

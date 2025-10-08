@@ -129,7 +129,7 @@ class DataSource(models.Model):
         ordering = ['-trust_level', 'name']
 
 
-class ScanFolder(models.Model):
+class ScanFolder(HashFieldMixin, models.Model):
     CONTENT_TYPE_CHOICES = [
         ('ebooks', 'Ebooks'),
         ('comics', 'Comics'),
@@ -138,6 +138,7 @@ class ScanFolder(models.Model):
 
     name = models.CharField(max_length=100, default='Untitled', blank=False, null=False)
     path = models.CharField(max_length=500)
+    path_hash = models.CharField(max_length=64, editable=False, default='', unique=True)  # SHA256 hash for uniqueness
     content_type = models.CharField(
         max_length=20,
         choices=CONTENT_TYPE_CHOICES,
@@ -149,6 +150,12 @@ class ScanFolder(models.Model):
     last_scanned = models.DateTimeField(null=True, blank=True)
     # Optional: created_at for admin tracking
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        """Generate hash of path for unique constraint"""
+        if self.path:
+            self.path_hash = self.generate_hash(self.path)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.name} ({self.get_content_type_display()})"
@@ -232,9 +239,7 @@ class ScanFolder(models.Model):
         }
 
     class Meta:
-        # Allow multiple scan folders for the same path with different content types
-        # e.g. /library/mixed/ can be scanned as both 'comics' and 'ebooks'
-        unique_together = ['path', 'content_type']
+        # Each folder path can only have one content type assignment
         verbose_name = "Scan Folder"
         verbose_name_plural = "Scan Folders"
 
@@ -1692,3 +1697,218 @@ class ScanQueue(models.Model):
         self.retry_count += 1
         self.completed_at = timezone.now()
         self.save(update_fields=['status', 'error_message', 'retry_count', 'completed_at', 'updated_at'])
+
+
+# ============================================================================
+# PHASE 1: New Models for Comics and Audiobooks Architecture
+# ============================================================================
+
+class Comic(HashFieldMixin, models.Model):
+    """Represents a comic series/title with multiple issues"""
+    title = models.CharField(max_length=500, help_text="Comic series title")
+    title_hash = models.CharField(max_length=64, editable=False, default='')  # SHA256 hash for uniqueness
+    publisher = models.CharField(max_length=200, blank=True)
+    writer = models.CharField(max_length=500, blank=True)
+    artist = models.CharField(max_length=500, blank=True)
+    description = models.TextField(blank=True)
+
+    # Publication details
+    start_year = models.IntegerField(null=True, blank=True)
+    end_year = models.IntegerField(null=True, blank=True)
+    volume = models.IntegerField(default=1)
+
+    # Status
+    status = models.CharField(max_length=20, choices=[
+        ('ongoing', 'Ongoing'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+        ('unknown', 'Unknown')
+    ], default='unknown')
+
+    # Metadata tracking
+    scan_folder = models.ForeignKey('ScanFolder', on_delete=models.CASCADE)
+    first_scanned = models.DateTimeField(auto_now_add=True)
+    last_updated = models.DateTimeField(auto_now=True)
+    metadata_extracted = models.BooleanField(default=False)
+
+    # Cover and additional files
+    cover_path = models.CharField(max_length=1000, blank=True)
+
+    def save(self, *args, **kwargs):
+        """Generate hash of title for unique constraint"""
+        if self.title:
+            self.title_hash = self.generate_hash(self.title)
+        super().save(*args, **kwargs)
+
+    class Meta:
+        unique_together = ['title_hash', 'publisher', 'volume', 'scan_folder']
+        verbose_name = "Comic"
+        verbose_name_plural = "Comics"
+
+    def __str__(self):
+        return f"{self.title} Vol.{self.volume} ({self.publisher})" if self.publisher else f"{self.title} Vol.{self.volume}"
+
+    @property
+    def issue_count(self):
+        return self.issues.count()
+
+    @property
+    def read_issue_count(self):
+        return self.issues.filter(is_read=True).count()
+
+
+class ComicIssue(HashFieldMixin, models.Model):
+    """Individual comic issue file"""
+    comic = models.ForeignKey(Comic, on_delete=models.CASCADE, related_name='issues')
+    issue_number = models.CharField(max_length=20, help_text="Issue number (e.g., '1', '1.5', 'Annual 1')")
+
+    # File information
+    file_path = models.CharField(max_length=1000, help_text="Full file path")
+    file_path_hash = models.CharField(max_length=64, unique=True, editable=False, default='', help_text="SHA256 hash for uniqueness")
+    file_format = models.CharField(max_length=20)
+    file_size = models.BigIntegerField(null=True, blank=True)
+    page_count = models.IntegerField(null=True, blank=True)
+
+    # Issue-specific metadata (minimal)
+    cover_date = models.DateField(null=True, blank=True)
+    release_date = models.DateField(null=True, blank=True)
+
+    # Reading tracking
+    is_read = models.BooleanField(default=False)
+    read_date = models.DateTimeField(null=True, blank=True)
+
+    # Scanning metadata
+    first_scanned = models.DateTimeField(auto_now_add=True)
+    last_scanned = models.DateTimeField(auto_now=True)
+
+    # Auto-generated sortable issue number
+    issue_number_sort = models.FloatField(default=999.0, help_text="Auto-generated sortable issue number")
+
+    class Meta:
+        unique_together = ['comic', 'issue_number']
+        ordering = ['comic', 'issue_number_sort']
+        verbose_name = "Comic Issue"
+        verbose_name_plural = "Comic Issues"
+
+    def save(self, *args, **kwargs):
+        # Generate hash of file_path for unique constraint
+        if self.file_path:
+            self.file_path_hash = self.generate_hash(self.file_path)
+
+        # Generate sortable issue number
+        self.issue_number_sort = self._get_sortable_issue_number()
+        super().save(*args, **kwargs)
+
+    def _get_sortable_issue_number(self):
+        """Convert issue number to sortable format"""
+        import re
+        # Extract numeric part for sorting
+        match = re.search(r'(\d+(?:\.\d+)?)', str(self.issue_number))
+        if match:
+            return float(match.group(1))
+        return 999.0  # Put non-numeric issues at end
+
+    def __str__(self):
+        return f"{self.comic.title} #{self.issue_number}"
+
+
+class Audiobook(HashFieldMixin, models.Model):
+    """Represents a complete audiobook composed of multiple audio files"""
+    title = models.CharField(max_length=500)
+    title_hash = models.CharField(max_length=64, db_index=True, editable=False)
+    author = models.CharField(max_length=500, blank=True)
+    author_hash = models.CharField(max_length=64, db_index=True, editable=False)
+    narrator = models.CharField(max_length=500, blank=True)
+    publisher = models.CharField(max_length=200, blank=True)
+    description = models.TextField(blank=True)
+
+    # Audio metadata
+    total_duration_seconds = models.IntegerField(null=True, blank=True, help_text="Total duration across all files")
+    total_size_bytes = models.BigIntegerField(null=True, blank=True, help_text="Total size across all files")
+
+    # Series information (optional)
+    series_title = models.CharField(max_length=500, blank=True)
+    series_number = models.CharField(max_length=20, blank=True)
+
+    # Publication details
+    publication_date = models.DateField(null=True, blank=True)
+    isbn = models.CharField(max_length=20, blank=True)
+    language = models.CharField(max_length=10, blank=True)
+
+    # Metadata tracking
+    scan_folder = models.ForeignKey('ScanFolder', on_delete=models.CASCADE)
+    first_scanned = models.DateTimeField(auto_now_add=True)
+    last_updated = models.DateTimeField(auto_now=True)
+    metadata_extracted = models.BooleanField(default=False)
+
+    # Listening progress
+    is_finished = models.BooleanField(default=False)
+    current_position_seconds = models.IntegerField(default=0)
+    last_played = models.DateTimeField(null=True, blank=True)
+
+    # Cover
+    cover_path = models.CharField(max_length=1000, blank=True)
+
+    def save(self, *args, **kwargs):
+        """Generate hash fields before saving"""
+        self.title_hash = self.generate_hash(self.title)
+        self.author_hash = self.generate_hash(self.author)
+        super().save(*args, **kwargs)
+
+    class Meta:
+        unique_together = ['title_hash', 'author_hash', 'scan_folder']
+        verbose_name = "Audiobook"
+        verbose_name_plural = "Audiobooks"
+
+    def __str__(self):
+        return f"{self.title} by {self.author}" if self.author else self.title
+
+    @property
+    def file_count(self):
+        return self.files.count()
+
+    @property
+    def progress_percentage(self):
+        if not self.total_duration_seconds or self.total_duration_seconds == 0:
+            return 0
+        return min(100, (self.current_position_seconds / self.total_duration_seconds) * 100)
+
+
+class AudiobookFile(HashFieldMixin, models.Model):
+    """Individual audio file part of an audiobook"""
+    audiobook = models.ForeignKey(Audiobook, on_delete=models.CASCADE, related_name='files')
+
+    # File information
+    file_path = models.CharField(max_length=1000, help_text="Full file path")
+    file_path_hash = models.CharField(max_length=64, unique=True, editable=False, default='', help_text="SHA256 hash for uniqueness")
+    file_format = models.CharField(max_length=20)
+    file_size = models.BigIntegerField(null=True, blank=True)
+
+    # Audio-specific metadata
+    duration_seconds = models.IntegerField(null=True, blank=True)
+    bitrate = models.CharField(max_length=20, blank=True)
+    sample_rate = models.CharField(max_length=20, blank=True)
+
+    # Chapter information
+    chapter_number = models.IntegerField(null=True, blank=True)
+    chapter_title = models.CharField(max_length=500, blank=True)
+    track_number = models.IntegerField(null=True, blank=True)
+
+    # Scanning metadata
+    first_scanned = models.DateTimeField(auto_now_add=True)
+    last_scanned = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['audiobook', 'track_number', 'chapter_number', 'file_path']
+        verbose_name = "Audiobook File"
+        verbose_name_plural = "Audiobook Files"
+
+    def save(self, *args, **kwargs):
+        # Generate hash of file_path for unique constraint
+        if self.file_path:
+            self.file_path_hash = self.generate_hash(self.file_path)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        chapter_info = f" - {self.chapter_title}" if self.chapter_title else ""
+        return f"{self.audiobook.title} - File {self.track_number or 'Unknown'}{chapter_info}"
