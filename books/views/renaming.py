@@ -142,7 +142,7 @@ class BookRenamerView(LoginRequiredMixin, ListView):
     def _enhance_books_with_previews(self, books, folder_pattern, filename_pattern):
         """Enhance books with rename previews if patterns are provided."""
         if not folder_pattern or not filename_pattern:
-            return [{'book': book, 'current_path': book.file_path, 'preview': None} for book in books]
+            return [{'book': book, 'current_path': book.primary_file.file_path if book.primary_file else '', 'preview': None} for book in books]
 
         from books.utils.renaming_engine import RenamingEngine
         engine = RenamingEngine()

@@ -10,7 +10,7 @@ import rarfile
 import traceback
 from pathlib import Path
 from books.models import (
-    Book, DataSource, BookTitle,
+    Book, BookFile, DataSource, BookTitle,
     Series, BookSeries, ScanStatus,
     COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
 )
@@ -23,6 +23,55 @@ from books.scanner.logging_helpers import log_scan_error, update_scan_progress
 from books.utils.author import attach_authors
 
 logger = logging.getLogger("books.scanner")
+
+
+def _get_book_file_path(book):
+    """Helper function to get the file path from a book's primary file."""
+    primary_file = book.primary_file
+    return primary_file.file_path if primary_file else f"Book {book.id} (no file)"
+
+
+def _get_or_create_book_by_path(file_path, scan_folder, file_format=None, file_size=None, content_type='ebook'):
+    """
+    Get or create a Book and BookFile by file path.
+
+    This replaces the old Book.get_or_create_by_path method.
+    Returns (book, created) tuple like the old method.
+    """
+    from django.db import transaction
+
+    # Check if a BookFile with this path already exists
+    existing_file = BookFile.objects.filter(file_path=file_path).first()
+    if existing_file:
+        return existing_file.book, False
+
+    # Create new Book and BookFile
+    with transaction.atomic():
+        # Determine content type from file format if not specified
+        if not file_format:
+            file_format = get_file_format(file_path)
+
+        if content_type == 'ebook':
+            if file_format.lower() in ['cbr', 'cbz', 'cb7', 'cbt']:
+                content_type = 'comic'
+            elif file_format.lower() in ['mp3', 'm4a', 'm4b', 'aac', 'flac', 'ogg', 'wav']:
+                content_type = 'audiobook'
+
+        # Create the book
+        book = Book.objects.create(
+            content_type=content_type,
+            scan_folder=scan_folder
+        )
+
+        # Create the book file
+        BookFile.objects.create(
+            book=book,
+            file_path=file_path,
+            file_format=file_format or get_file_format(file_path),
+            file_size=file_size or (os.path.getsize(file_path) if os.path.exists(file_path) else None)
+        )
+
+        return book, True
 
 
 def scan_directory(directory, scan_folder, rescan=False, ebook_extensions=None, cover_extensions=None, scan_status=None, resume_from=None):
@@ -238,22 +287,23 @@ def _collect_files(directory, ebook_exts, cover_exts):
 
 
 def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
-    book, created = Book.get_or_create_by_path(
+    book, created = _get_or_create_book_by_path(
         file_path=file_path,
-        defaults={
-            "file_format": get_file_format(file_path),
-            "file_size": os.path.getsize(file_path),
-            "scan_folder": scan_folder,
-        }
+        scan_folder=scan_folder,
+        file_format=get_file_format(file_path),
+        file_size=os.path.getsize(file_path) if os.path.exists(file_path) else None
     )
     if not created and not rescan:
         return
 
-    book.cover_path = find_cover_file(file_path, cover_files)
-    book.opf_path = find_opf_file(file_path, opf_files)
-    book.save()
+    # Update the BookFile with cover and OPF paths
+    primary_file = book.primary_file
+    if primary_file:
+        primary_file.cover_path = find_cover_file(file_path, cover_files) or ''
+        primary_file.opf_path = find_opf_file(file_path, opf_files) or ''
+        primary_file.save()
 
-    logger.info(f"[FILENAME PARSE] Path: {book.file_path}")
+    logger.info(f"[FILENAME PARSE] Path: {file_path}")
     _extract_filename_metadata(book)
 
     try:
@@ -406,17 +456,20 @@ def _handle_orphans(directory, cover_files, opf_files, ebook_files, scan_folder)
 
 def _create_placeholder_book(file_path, scan_folder):
     try:
-        book, created = Book.get_or_create_by_path(
+        book, created = _get_or_create_book_by_path(
             file_path=file_path,
-            defaults={
-                "file_format": "placeholder",
-                "scan_folder": scan_folder,
-                "is_placeholder": True
-            }
+            scan_folder=scan_folder,
+            file_format="placeholder"
         )
         if created:
-            book.opf_path = file_path
+            book.is_placeholder = True
             book.save()
+
+            # Set OPF path on the BookFile
+            primary_file = book.primary_file
+            if primary_file:
+                primary_file.opf_path = file_path
+                primary_file.save()
 
             opf.extract(book)
             resolve_final_metadata(book)
@@ -438,13 +491,11 @@ def create_book_from_file(file_path, scan_folder):
         Book object or None if creation failed
     """
     try:
-        book, created = Book.get_or_create_by_path(
+        book, created = _get_or_create_book_by_path(
             file_path=file_path,
-            defaults={
-                "file_format": get_file_format(file_path),
-                "file_size": os.path.getsize(file_path),
-                "scan_folder": scan_folder,
-            }
+            scan_folder=scan_folder,
+            file_format=get_file_format(file_path),
+            file_size=os.path.getsize(file_path) if os.path.exists(file_path) else None
         )
 
         if created:

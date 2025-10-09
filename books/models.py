@@ -23,6 +23,31 @@ COMIC_FORMATS = ['cbr', 'cbz', 'cb7', 'cbt', 'pdf']
 EBOOK_FORMATS = ['epub', 'pdf', 'mobi', 'azw', 'azw3', 'fb2', 'lit', 'prc']
 AUDIOBOOK_FORMATS = ['mp3', 'm4a', 'm4b', 'aac', 'flac', 'ogg', 'wav']
 
+# Standard metadata field names for use with BookMetadata table
+# These ensure consistent field naming across different sources and content types
+STANDARD_METADATA_FIELDS = {
+    # Universal fields (all content types)
+    'description': 'description',
+    'isbn': 'isbn',
+    'language': 'language',
+    'publication_year': 'publication_year',
+
+    # Audiobook-specific metadata
+    'narrator': 'narrator',
+
+    # Comic issue-specific metadata
+    'issue_number': 'issue_number',
+    'volume': 'volume',
+    'writer': 'writer',
+    'artist': 'artist',
+    'cover_date': 'cover_date',
+    'release_date': 'release_date',
+
+    # Additional metadata that might come from various sources
+    'page_count': 'page_count',
+    'chapter_count': 'chapter_count',
+}
+
 
 LANGUAGE_CHOICES = [
     ('en', 'English'),
@@ -245,22 +270,28 @@ class ScanFolder(HashFieldMixin, models.Model):
 
 
 class Book(HashFieldMixin, models.Model):
-    """Main book record with file paths"""
-    FORMAT_CHOICES = [
-        ('epub', 'EPUB'),
-        ('mobi', 'MOBI'),
-        ('pdf', 'PDF'),
-        ('cbr', 'CBR'),
-        ('cbz', 'CBZ'),
-        ('placeholder', 'Placeholder'),
+    """Unified content record - represents a single work (ebook, audiobook, or comic issue)"""
+    CONTENT_TYPE_CHOICES = [
+        ('ebook', 'Ebook'),
+        ('audiobook', 'Audiobook'),
+        ('comic', 'Comic Issue'),
     ]
 
-    file_path = models.CharField(max_length=1000, help_text="Full file path")  # Consistent with BookCover.cover_path
-    file_path_hash = models.CharField(max_length=64, unique=True, editable=False, default='')  # SHA256 hash for uniqueness
-    file_format = models.CharField(max_length=20, choices=FORMAT_CHOICES)
-    file_size = models.BigIntegerField(null=True, blank=True)
-    cover_path = models.CharField(max_length=1000, blank=True, help_text="Local cover file path")  # Consistent field type
-    opf_path = models.CharField(max_length=1000, blank=True, help_text="OPF metadata file path")  # Consistent field type
+    # Core identification - minimal fields for the book entity itself
+    content_type = models.CharField(max_length=20, choices=CONTENT_TYPE_CHOICES, default='ebook')
+
+    # NOTE: All metadata (authors, series, publishers, genres, descriptions, etc.)
+    # is stored in linked tables with source tracking and confidence scores:
+    # - BookAuthor (with Author table)
+    # - BookSeries (with Series table)
+    # - BookPublisher (with Publisher table)
+    # - BookGenre (with Genre table)
+    # - BookMetadata (for additional fields like description, isbn, language, etc.)
+    # - BookTitle (for alternative titles from different sources)
+    # - BookCover (for cover images from different sources)
+    #
+    # This allows multiple sources to contribute metadata with different confidence levels
+    # All file information is stored in the BookFile table with proper relationships
 
     # Scan metadata
     first_scanned = models.DateTimeField(auto_now_add=True)
@@ -274,83 +305,70 @@ class Book(HashFieldMixin, models.Model):
     is_available = models.BooleanField(default=True, help_text="Whether the book file is still available on disk")
     last_scan_status = models.CharField(max_length=20, blank=True, null=True, help_text="Status from last scan: 'found', 'removed', 'updated'")
 
-    def save(self, *args, **kwargs):
-        """Generate hash of file_path for unique constraint"""
-        from django.db import IntegrityError
-
-        if self.file_path:
-            self.file_path_hash = self.generate_hash(self.file_path)
-
-        try:
-            super().save(*args, **kwargs)
-        except IntegrityError as e:
-            if 'file_path_hash' in str(e):
-                # Handle duplicate file_path_hash by checking if book already exists
-                import logging
-                logger = logging.getLogger("books.models")
-                logger.warning(f"Duplicate file_path_hash for {self.file_path}: {e}")
-
-                # If this is an update operation (book has pk), check if file_path changed
-                if self.pk:
-                    existing = Book.objects.get(pk=self.pk)
-                    if existing.file_path != self.file_path:
-                        # File path changed and conflicts with another book
-                        raise IntegrityError(f"File path {self.file_path} already exists in database")
-                else:
-                    # New book creation - check if book already exists
-                    try:
-                        existing_book = Book.objects.get(file_path_hash=self.file_path_hash)
-                        raise IntegrityError(f"Book with file path {self.file_path} already exists (ID: {existing_book.id})")
-                    except Book.DoesNotExist:
-                        # Hash collision or other integrity issue
-                        raise
-            else:
-                # Different integrity error
-                raise
-
     @classmethod
-    def get_or_create_by_path(cls, file_path, defaults=None):
-        """Get or create book by file path, using hash for lookup"""
-        from django.db import IntegrityError
+    def get_or_create_by_title(cls, title, content_type='ebook', defaults=None, source_name='filename', confidence=0.8):
+        """Get or create book by title and content type using BookTitle table"""
+        from django.db import transaction
 
-        # Create a temporary instance to use the generate_hash method
-        temp_instance = cls()
-        file_path_hash = temp_instance.generate_hash(file_path)
-
+        # First try to find an existing book with this title
+        from books.models import BookTitle
         try:
-            book = cls.objects.get(file_path_hash=file_path_hash)
-            return book, False
-        except cls.DoesNotExist:
+            book_title = BookTitle.objects.filter(
+                title__iexact=title,
+                book__content_type=content_type
+            ).select_related('book').first()
+
+            if book_title:
+                return book_title.book, False
+        except Exception:
+            pass
+
+        # No existing book found, create new book and title
+        with transaction.atomic():
             if defaults is None:
                 defaults = {}
-            defaults['file_path'] = file_path
-            defaults['file_path_hash'] = file_path_hash
+            defaults['content_type'] = content_type
 
-            try:
-                book = cls.objects.create(**defaults)
-                return book, True
-            except IntegrityError:
-                # Handle race condition where another process created the book
-                # between our check and creation attempt
-                try:
-                    book = cls.objects.get(file_path_hash=file_path_hash)
-                    return book, False
-                except cls.DoesNotExist:
-                    # If still not found, there might be a different integrity issue
-                    # Try with a slightly modified path to avoid infinite loops
-                    import logging
-                    logger = logging.getLogger("books.models")
-                    logger.warning(f"Integrity error creating book for path: {file_path}")
-                    raise
+            # Get or create the DataSource
+            from books.models import DataSource
+            data_source, _ = DataSource.objects.get_or_create(
+                name=source_name,
+                defaults={'trust_level': 0.8, 'is_active': True}
+            )
+
+            # Create the book
+            book = cls.objects.create(**defaults)
+
+            # Create the title record
+            BookTitle.objects.create(
+                book=book,
+                title=title,
+                source=data_source,
+                confidence=confidence,
+                is_active=True
+            )
+
+            return book, True
 
     def __str__(self):
+        # Get the primary title from BookTitle table
+        primary_title = self.titles.filter(is_active=True).first()
+        title_str = primary_title.title if primary_title else f"Book #{self.pk}"
+
         if self.is_placeholder:
-            return f"Placeholder: {os.path.basename(self.file_path)}"
-        return os.path.basename(self.file_path)
+            return f"Placeholder: {title_str}"
+        return title_str
 
     @property
-    def filename(self):
-        return os.path.basename(self.file_path)
+    def title(self):
+        """Get the primary title from BookTitle table for backwards compatibility"""
+        primary_title = self.titles.filter(is_active=True).first()
+        return primary_title.title if primary_title else f"Untitled Book #{self.pk}"
+
+    @property
+    def primary_file(self):
+        """Get the primary BookFile for this book"""
+        return self.files.first()
 
     @property
     def final_metadata(self):
@@ -361,26 +379,116 @@ class Book(HashFieldMixin, models.Model):
 
     @property
     def effective_path(self):
-        """Get the current effective file path - either final_path if renamed, or original file_path"""
+        """Get the current effective file path - either final_path if renamed, or primary file path"""
         if hasattr(self, 'finalmetadata') and self.finalmetadata and self.finalmetadata.is_renamed and self.finalmetadata.final_path:
             return self.finalmetadata.final_path
-        return self.file_path
+        primary_file = self.primary_file
+        return primary_file.file_path if primary_file else ''
 
     @property
     def relative_path(self):
+        """Get relative path from scan folder to the primary file"""
         import os
 
-        if self.scan_folder and self.scan_folder.path and self.file_path:
+        primary_file = self.primary_file
+        if self.scan_folder and self.scan_folder.path and primary_file and primary_file.file_path:
             scan_root = os.path.normpath(self.scan_folder.path)
-            full_path = os.path.normpath(self.file_path)
+            full_path = os.path.normpath(primary_file.file_path)
             # Trim scan folder prefix
             subpath = full_path.replace(scan_root, '').lstrip(os.sep)
             # Remove the filename from the subpath
             return os.path.dirname(subpath)
         return ''
 
+    def save(self, *args, **kwargs):
+        """Save the book instance"""
+        super().save(*args, **kwargs)
+
     class Meta:
-        ordering = ['-last_scanned', 'file_path']
+        ordering = ['-last_scanned', 'id']
+        indexes = [
+            models.Index(fields=['content_type', 'scan_folder']),
+        ]
+
+
+class BookFile(HashFieldMixin, models.Model):
+    """Individual files that make up a book/content work"""
+    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='files')
+
+    # Core file information
+    file_path = models.CharField(max_length=1000, help_text="Full file path")
+    file_path_hash = models.CharField(max_length=64, unique=True, editable=False, default='', help_text="SHA256 hash for uniqueness")
+    file_format = models.CharField(max_length=20, help_text="File extension: epub, mp3, cbr, etc.")
+    file_size = models.BigIntegerField(null=True, blank=True, help_text="File size in bytes")
+
+    # Content-type specific fields - FILE PROPERTIES, not metadata
+    # (Metadata like title, author, description goes in BookMetadata, BookAuthor, etc.)
+
+    # Audiobook file properties
+    duration_seconds = models.IntegerField(null=True, blank=True, help_text="Audio file duration")
+    chapter_number = models.IntegerField(null=True, blank=True, help_text="Chapter number in audiobook")
+    chapter_title = models.CharField(max_length=500, blank=True, help_text="Chapter title from file tags")
+    track_number = models.IntegerField(null=True, blank=True, help_text="Track number in audiobook")
+    bitrate = models.CharField(max_length=20, blank=True, help_text="Audio bitrate")
+    sample_rate = models.CharField(max_length=20, blank=True, help_text="Audio sample rate")
+
+    # Comic file properties
+    page_count = models.IntegerField(null=True, blank=True, help_text="Number of pages in comic file")
+
+    # Reading/Progress tracking (per-file)
+    is_read = models.BooleanField(default=False, help_text="Whether this file/issue has been read")
+    read_date = models.DateTimeField(null=True, blank=True, help_text="When this was marked as read")
+    current_position = models.IntegerField(default=0, help_text="Current reading/listening position")
+
+    # Companion files (file-specific paths)
+    cover_path = models.CharField(max_length=1000, blank=True, help_text="Associated cover file")
+    opf_path = models.CharField(max_length=1000, blank=True, help_text="Associated OPF metadata file")
+
+    # Scanning metadata
+    first_scanned = models.DateTimeField(auto_now_add=True)
+    last_scanned = models.DateTimeField(auto_now=True)
+
+    # Auto-generated sortable fields
+    chapter_sort = models.FloatField(default=999.0, help_text="Auto-generated sortable chapter number")
+
+    def save(self, *args, **kwargs):
+        """Generate hash and sort fields before saving"""
+        if self.file_path:
+            self.file_path_hash = self.generate_hash(self.file_path)
+
+        # Generate sortable numbers for ordering
+        if self.chapter_number:
+            try:
+                self.chapter_sort = float(self.chapter_number)
+            except (ValueError, TypeError):
+                self.chapter_sort = 999.0
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        if self.book.content_type == 'audiobook' and self.chapter_number:
+            return f"{self.book.title} - Chapter {self.chapter_number}"
+        else:
+            return f"{self.book.title} - {os.path.basename(self.file_path)}"
+
+    @property
+    def filename(self):
+        """Get just the filename from the full path"""
+        import os
+        return os.path.basename(self.file_path)
+
+    @property
+    def extension(self):
+        """Get file extension"""
+        import os
+        return os.path.splitext(self.file_path)[1].lower()
+
+    class Meta:
+        ordering = ['book', 'chapter_sort', 'track_number']
+        indexes = [
+            models.Index(fields=['book', 'file_format']),
+            models.Index(fields=['book', 'chapter_number']),
+        ]
 
 
 class Author(models.Model):
@@ -427,8 +535,21 @@ class Author(models.Model):
 
 class BookAuthor(FinalMetadataSyncMixin, SourceConfidenceMixin, models.Model):
     """M2M relationship between books and authors with source tracking"""
+
+    # Author role constants for content-type specific contributors
+    AUTHOR_ROLES = [
+        ('author', 'Author'),           # Default for books
+        ('writer', 'Writer'),           # Comics writer
+        ('artist', 'Artist'),           # Comics artist
+        ('narrator', 'Narrator'),       # Audiobook narrator
+        ('editor', 'Editor'),           # Book editor
+        ('illustrator', 'Illustrator'),  # Book illustrator
+        ('translator', 'Translator'),   # Translated works
+    ]
+
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='bookauthor')
     author = models.ForeignKey(Author, on_delete=models.CASCADE)
+    role = models.CharField(max_length=20, choices=AUTHOR_ROLES, default='author')
     is_main_author = models.BooleanField(default=False)
 
     def save(self, *args, **kwargs):
@@ -436,7 +557,7 @@ class BookAuthor(FinalMetadataSyncMixin, SourceConfidenceMixin, models.Model):
         self.post_deactivation_sync()
 
     class Meta:
-        unique_together = ['book', 'author', 'source']
+        unique_together = ['book', 'author', 'role', 'source']
         ordering = ['-confidence', '-is_main_author']
 
 
@@ -510,7 +631,7 @@ class BookCover(FinalMetadataSyncMixin, SourceConfidenceMixin, HashFieldMixin, m
 
 
 class Series(models.Model):
-    """Book series"""
+    """Content series for books, audiobooks, and comics"""
     name = models.CharField(max_length=200, unique=True)
 
     def __str__(self):
@@ -522,7 +643,7 @@ class Series(models.Model):
 
 
 class BookSeries(FinalMetadataSyncMixin, SourceConfidenceMixin, models.Model):
-    """Book series information with source tracking"""
+    """Series information for all content types (books, audiobooks, comics) with source tracking"""
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='series_info')
     series = models.ForeignKey(Series, on_delete=models.CASCADE, null=True, blank=True)
     series_number = models.CharField(max_length=20, null=True, blank=True)
@@ -819,8 +940,8 @@ class FinalMetadata(models.Model):
                 self.final_cover_path = next_cover.cover_path
                 self.final_cover_confidence = next_cover.confidence
                 self.has_cover = True
-            elif self.book.cover_path:
-                self.final_cover_path = self.book.cover_path
+            elif self.book.primary_file and self.book.primary_file.cover_path:
+                self.final_cover_path = self.book.primary_file.cover_path
                 self.final_cover_confidence = 0.9  # Default confidence for original cover
                 self.has_cover = True
             else:
@@ -902,14 +1023,15 @@ class FinalMetadata(models.Model):
             book=self.book,
             operation_type='rename',
             status='completed',
-            original_file_path=self.book.file_path,
+            original_file_path=self.book.primary_file.file_path if self.book.primary_file else '',
             new_file_path=new_file_path,
             operation_date=timezone.now(),
             user=user,
             notes="Book renamed via renaming interface"
         )
 
-        logger.info(f"Book {self.book.id} marked as renamed: {self.book.file_path} -> {new_file_path}")
+        old_path = self.book.primary_file.file_path if self.book.primary_file else 'unknown'
+        logger.info(f"Book {self.book.id} marked as renamed: {old_path} -> {new_file_path}")
 
     def save(self, *args, **kwargs):
         # Check if this is a manual update (set by views when user makes manual changes)
@@ -1697,218 +1819,3 @@ class ScanQueue(models.Model):
         self.retry_count += 1
         self.completed_at = timezone.now()
         self.save(update_fields=['status', 'error_message', 'retry_count', 'completed_at', 'updated_at'])
-
-
-# ============================================================================
-# PHASE 1: New Models for Comics and Audiobooks Architecture
-# ============================================================================
-
-class Comic(HashFieldMixin, models.Model):
-    """Represents a comic series/title with multiple issues"""
-    title = models.CharField(max_length=500, help_text="Comic series title")
-    title_hash = models.CharField(max_length=64, editable=False, default='')  # SHA256 hash for uniqueness
-    publisher = models.CharField(max_length=200, blank=True)
-    writer = models.CharField(max_length=500, blank=True)
-    artist = models.CharField(max_length=500, blank=True)
-    description = models.TextField(blank=True)
-
-    # Publication details
-    start_year = models.IntegerField(null=True, blank=True)
-    end_year = models.IntegerField(null=True, blank=True)
-    volume = models.IntegerField(default=1)
-
-    # Status
-    status = models.CharField(max_length=20, choices=[
-        ('ongoing', 'Ongoing'),
-        ('completed', 'Completed'),
-        ('cancelled', 'Cancelled'),
-        ('unknown', 'Unknown')
-    ], default='unknown')
-
-    # Metadata tracking
-    scan_folder = models.ForeignKey('ScanFolder', on_delete=models.CASCADE)
-    first_scanned = models.DateTimeField(auto_now_add=True)
-    last_updated = models.DateTimeField(auto_now=True)
-    metadata_extracted = models.BooleanField(default=False)
-
-    # Cover and additional files
-    cover_path = models.CharField(max_length=1000, blank=True)
-
-    def save(self, *args, **kwargs):
-        """Generate hash of title for unique constraint"""
-        if self.title:
-            self.title_hash = self.generate_hash(self.title)
-        super().save(*args, **kwargs)
-
-    class Meta:
-        unique_together = ['title_hash', 'publisher', 'volume', 'scan_folder']
-        verbose_name = "Comic"
-        verbose_name_plural = "Comics"
-
-    def __str__(self):
-        return f"{self.title} Vol.{self.volume} ({self.publisher})" if self.publisher else f"{self.title} Vol.{self.volume}"
-
-    @property
-    def issue_count(self):
-        return self.issues.count()
-
-    @property
-    def read_issue_count(self):
-        return self.issues.filter(is_read=True).count()
-
-
-class ComicIssue(HashFieldMixin, models.Model):
-    """Individual comic issue file"""
-    comic = models.ForeignKey(Comic, on_delete=models.CASCADE, related_name='issues')
-    issue_number = models.CharField(max_length=20, help_text="Issue number (e.g., '1', '1.5', 'Annual 1')")
-
-    # File information
-    file_path = models.CharField(max_length=1000, help_text="Full file path")
-    file_path_hash = models.CharField(max_length=64, unique=True, editable=False, default='', help_text="SHA256 hash for uniqueness")
-    file_format = models.CharField(max_length=20)
-    file_size = models.BigIntegerField(null=True, blank=True)
-    page_count = models.IntegerField(null=True, blank=True)
-
-    # Issue-specific metadata (minimal)
-    cover_date = models.DateField(null=True, blank=True)
-    release_date = models.DateField(null=True, blank=True)
-
-    # Reading tracking
-    is_read = models.BooleanField(default=False)
-    read_date = models.DateTimeField(null=True, blank=True)
-
-    # Scanning metadata
-    first_scanned = models.DateTimeField(auto_now_add=True)
-    last_scanned = models.DateTimeField(auto_now=True)
-
-    # Auto-generated sortable issue number
-    issue_number_sort = models.FloatField(default=999.0, help_text="Auto-generated sortable issue number")
-
-    class Meta:
-        unique_together = ['comic', 'issue_number']
-        ordering = ['comic', 'issue_number_sort']
-        verbose_name = "Comic Issue"
-        verbose_name_plural = "Comic Issues"
-
-    def save(self, *args, **kwargs):
-        # Generate hash of file_path for unique constraint
-        if self.file_path:
-            self.file_path_hash = self.generate_hash(self.file_path)
-
-        # Generate sortable issue number
-        self.issue_number_sort = self._get_sortable_issue_number()
-        super().save(*args, **kwargs)
-
-    def _get_sortable_issue_number(self):
-        """Convert issue number to sortable format"""
-        import re
-        # Extract numeric part for sorting
-        match = re.search(r'(\d+(?:\.\d+)?)', str(self.issue_number))
-        if match:
-            return float(match.group(1))
-        return 999.0  # Put non-numeric issues at end
-
-    def __str__(self):
-        return f"{self.comic.title} #{self.issue_number}"
-
-
-class Audiobook(HashFieldMixin, models.Model):
-    """Represents a complete audiobook composed of multiple audio files"""
-    title = models.CharField(max_length=500)
-    title_hash = models.CharField(max_length=64, db_index=True, editable=False)
-    author = models.CharField(max_length=500, blank=True)
-    author_hash = models.CharField(max_length=64, db_index=True, editable=False)
-    narrator = models.CharField(max_length=500, blank=True)
-    publisher = models.CharField(max_length=200, blank=True)
-    description = models.TextField(blank=True)
-
-    # Audio metadata
-    total_duration_seconds = models.IntegerField(null=True, blank=True, help_text="Total duration across all files")
-    total_size_bytes = models.BigIntegerField(null=True, blank=True, help_text="Total size across all files")
-
-    # Series information (optional)
-    series_title = models.CharField(max_length=500, blank=True)
-    series_number = models.CharField(max_length=20, blank=True)
-
-    # Publication details
-    publication_date = models.DateField(null=True, blank=True)
-    isbn = models.CharField(max_length=20, blank=True)
-    language = models.CharField(max_length=10, blank=True)
-
-    # Metadata tracking
-    scan_folder = models.ForeignKey('ScanFolder', on_delete=models.CASCADE)
-    first_scanned = models.DateTimeField(auto_now_add=True)
-    last_updated = models.DateTimeField(auto_now=True)
-    metadata_extracted = models.BooleanField(default=False)
-
-    # Listening progress
-    is_finished = models.BooleanField(default=False)
-    current_position_seconds = models.IntegerField(default=0)
-    last_played = models.DateTimeField(null=True, blank=True)
-
-    # Cover
-    cover_path = models.CharField(max_length=1000, blank=True)
-
-    def save(self, *args, **kwargs):
-        """Generate hash fields before saving"""
-        self.title_hash = self.generate_hash(self.title)
-        self.author_hash = self.generate_hash(self.author)
-        super().save(*args, **kwargs)
-
-    class Meta:
-        unique_together = ['title_hash', 'author_hash', 'scan_folder']
-        verbose_name = "Audiobook"
-        verbose_name_plural = "Audiobooks"
-
-    def __str__(self):
-        return f"{self.title} by {self.author}" if self.author else self.title
-
-    @property
-    def file_count(self):
-        return self.files.count()
-
-    @property
-    def progress_percentage(self):
-        if not self.total_duration_seconds or self.total_duration_seconds == 0:
-            return 0
-        return min(100, (self.current_position_seconds / self.total_duration_seconds) * 100)
-
-
-class AudiobookFile(HashFieldMixin, models.Model):
-    """Individual audio file part of an audiobook"""
-    audiobook = models.ForeignKey(Audiobook, on_delete=models.CASCADE, related_name='files')
-
-    # File information
-    file_path = models.CharField(max_length=1000, help_text="Full file path")
-    file_path_hash = models.CharField(max_length=64, unique=True, editable=False, default='', help_text="SHA256 hash for uniqueness")
-    file_format = models.CharField(max_length=20)
-    file_size = models.BigIntegerField(null=True, blank=True)
-
-    # Audio-specific metadata
-    duration_seconds = models.IntegerField(null=True, blank=True)
-    bitrate = models.CharField(max_length=20, blank=True)
-    sample_rate = models.CharField(max_length=20, blank=True)
-
-    # Chapter information
-    chapter_number = models.IntegerField(null=True, blank=True)
-    chapter_title = models.CharField(max_length=500, blank=True)
-    track_number = models.IntegerField(null=True, blank=True)
-
-    # Scanning metadata
-    first_scanned = models.DateTimeField(auto_now_add=True)
-    last_scanned = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['audiobook', 'track_number', 'chapter_number', 'file_path']
-        verbose_name = "Audiobook File"
-        verbose_name_plural = "Audiobook Files"
-
-    def save(self, *args, **kwargs):
-        # Generate hash of file_path for unique constraint
-        if self.file_path:
-            self.file_path_hash = self.generate_hash(self.file_path)
-        super().save(*args, **kwargs)
-
-    def __str__(self):
-        chapter_info = f" - {self.chapter_title}" if self.chapter_title else ""
-        return f"{self.audiobook.title} - File {self.track_number or 'Unknown'}{chapter_info}"

@@ -66,9 +66,9 @@ class DashboardAnalytics:
         """Get file format distribution for pie chart."""
         format_data = Book.objects.exclude(
             Q(is_placeholder=True) | Q(is_duplicate=True) | Q(is_corrupted=True)
-        ).values('file_format').annotate(
+        ).values('files__file_format').annotate(
             count=Count('id')
-        ).order_by('-count')
+        ).filter(files__file_format__isnull=False).order_by('-count')
 
         # Convert to chart-ready format
         labels = []
@@ -81,8 +81,10 @@ class DashboardAnalytics:
         fallback_index = 0
 
         for item in format_data:
-            format_lower = item['file_format'].lower()
-            labels.append(item['file_format'].upper())
+            file_format = item['files__file_format']
+            if file_format:
+                format_lower = file_format.lower()
+                labels.append(file_format.upper())
             data.append(item['count'])
 
             # Use semantic color if available, otherwise use fallback palette

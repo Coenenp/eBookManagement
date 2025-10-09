@@ -123,8 +123,8 @@ class DashboardView(WizardRequiredMixin, LoginRequiredMixin, TemplateView):
                 }
                 recent_activity = {}
                 chart_data = {
-                    'format_labels': [item['file_format'].upper() for item in format_stats],
-                    'format_data': [item['count'] for item in format_stats],
+                    'format_labels': [item['files__file_format'].upper() for item in format_stats if item['files__file_format']],
+                    'format_data': [item['count'] for item in format_stats if item['files__file_format']],
                     'format_colors': ['#0d6efd', '#198754', '#fd7e14', '#dc3545', '#6f42c1', '#20c997', '#ffc107', '#6c757d'],
                     'completeness_labels': ['Title', 'Author', 'Cover', 'ISBN', 'Series'],
                     'completeness_data': [
@@ -153,7 +153,7 @@ class DashboardView(WizardRequiredMixin, LoginRequiredMixin, TemplateView):
         placeholder_count = Book.objects.filter(is_placeholder=True).count()
         corrupted_count = Book.objects.filter(is_corrupted=True).count()
         needs_review_count = FinalMetadata.objects.filter(is_reviewed=False).count()
-        books_with_original_cover = Book.objects.exclude(cover_path='').count()
+        books_with_original_cover = Book.objects.filter(files__cover_path__isnull=False).exclude(files__cover_path='').distinct().count()
 
         # Calculate percentages
         missing_cover_percentage = ((total_books - metadata_stats.get('books_with_cover', 0)) / total_books * 100)
@@ -328,6 +328,10 @@ class BookDetailView(LoginRequiredMixin, DetailView, BookNavigationMixin, Metada
                 'covers__source'
             ).get(pk=book.pk)
 
+        # Get cover path from first file
+        first_file = book.files.first()
+        cover_path = first_file.cover_path if first_file else ''
+
         # Get or create final metadata
         final_metadata, created = FinalMetadata.objects.get_or_create(
             book=book,
@@ -337,7 +341,7 @@ class BookDetailView(LoginRequiredMixin, DetailView, BookNavigationMixin, Metada
                 'final_series': '',
                 'final_series_number': '',
                 'final_publisher': '',
-                'final_cover_path': book.cover_path or '',
+                'final_cover_path': cover_path,
                 'language': book.scan_folder.language if book.scan_folder else 'en',
                 'isbn': '',
                 'publication_year': None,

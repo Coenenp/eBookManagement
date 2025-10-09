@@ -6,7 +6,7 @@ comprehensive admin views with filtering, search, and bulk operations.
 """
 from django.contrib import admin
 from .models import (
-    Author, Book, BookAuthor, BookCover, BookGenre, BookMetadata, BookSeries, BookTitle, BookPublisher,
+    Author, Book, BookAuthor, BookCover, BookFile, BookGenre, BookMetadata, BookSeries, BookTitle, BookPublisher,
     DataSource, FinalMetadata, Genre, Publisher, ScanFolder, ScanLog, ScanStatus, Series
 )
 
@@ -55,6 +55,19 @@ class BookPublisherInline(admin.TabularInline):
     model = BookPublisher
     extra = 0
     readonly_fields = ('created_at',)
+
+
+class BookFileInline(admin.TabularInline):
+    model = BookFile
+    extra = 0
+    readonly_fields = ('file_path_hash', 'first_scanned', 'file_size_display')
+    fields = ('file_path', 'file_format', 'file_size_display', 'opf_path', 'cover_path', 'file_path_hash')
+
+    def file_size_display(self, obj):
+        if obj.file_size:
+            return f"{obj.file_size // (1024*1024)} MB" if obj.file_size > 1024*1024 else f"{obj.file_size // 1024} KB"
+        return "Unknown"
+    file_size_display.short_description = 'File Size'
 
 
 class FinalMetadataInline(admin.StackedInline):
@@ -144,12 +157,13 @@ class ScanFolderAdmin(admin.ModelAdmin):
 
 @admin.register(Book)
 class BookAdmin(admin.ModelAdmin):
-    list_display = ('filename', 'file_format', 'file_size_mb', 'is_placeholder', 'is_duplicate', 'is_corrupted', 'last_scanned')
-    list_filter = ('file_format', 'is_placeholder', 'is_duplicate', 'is_corrupted', 'last_scanned', 'cover_path', 'opf_path')
-    search_fields = ('file_path', 'titles__title', 'bookauthor__author__name')
-    readonly_fields = ('first_scanned', 'last_scanned', 'filename', 'file_size_mb', 'relative_path')
+    list_display = ('title', 'content_type', 'file_format', 'file_size_mb', 'is_placeholder', 'is_duplicate', 'is_corrupted', 'last_scanned')
+    list_filter = ('content_type', 'is_placeholder', 'is_duplicate', 'is_corrupted', 'last_scanned', 'files__file_format')
+    search_fields = ('titles__title', 'bookauthor__author__name', 'files__file_path')
+    readonly_fields = ('first_scanned', 'last_scanned', 'file_format', 'file_size_mb', 'file_path_display')
 
     inlines = [
+        BookFileInline,
         FinalMetadataInline,
         BookTitleInline,
         BookAuthorInline,
@@ -159,9 +173,36 @@ class BookAdmin(admin.ModelAdmin):
         BookMetadataInline,
     ]
 
+    def file_format(self, obj):
+        """Get file format from first BookFile"""
+        first_file = obj.files.first()
+        return first_file.file_format if first_file else 'No files'
+    file_format.short_description = 'Format'
+
+    def file_size_mb(self, obj):
+        """Get file size in MB from first BookFile"""
+        first_file = obj.files.first()
+        if first_file and first_file.file_size:
+            if first_file.file_size >= 1024*1024:
+                return f"{first_file.file_size / (1024*1024):.2f} MB"
+            else:
+                return f"{first_file.file_size / (1024*1024):.2f} MB"
+        return "Unknown"
+    file_size_mb.short_description = 'File Size'
+
+    def file_path_display(self, obj):
+        """Get file path from first BookFile for display"""
+        first_file = obj.files.first()
+        return first_file.file_path if first_file else 'No files'
+    file_path_display.short_description = 'File Path'
+
     fieldsets = (
+        ('Book Information', {
+            'fields': ('content_type',)
+        }),
         ('File Information', {
-            'fields': ('file_path', 'file_format', 'file_size', 'file_size_mb', 'cover_path', 'opf_path', 'relative_path')
+            'fields': ('file_format', 'file_size_mb', 'file_path_display'),
+            'classes': ('collapse',)
         }),
         ('Status', {
             'fields': ('is_placeholder', 'is_duplicate', 'is_corrupted'),
@@ -172,18 +213,12 @@ class BookAdmin(admin.ModelAdmin):
         }),
     )
 
-    def file_size_mb(self, obj):
-        if obj.file_size:
-            return f"{obj.file_size / (1024 * 1024):.2f} MB"
-        return "Unknown"
-    file_size_mb.short_description = 'File Size (MB)'
-
 
 @admin.register(BookTitle)
 class BookTitleAdmin(admin.ModelAdmin):
     list_display = ('title', 'book', 'source', 'confidence', 'created_at')
     list_filter = ('source', 'confidence', 'created_at')
-    search_fields = ('title', 'book__file_path')
+    search_fields = ('title', 'book__id')
     readonly_fields = ('created_at',)
 
 
@@ -194,7 +229,7 @@ class BookAuthorAdmin(admin.ModelAdmin):
         'book', 'source', 'confidence', 'is_main_author', 'created_at'
     )
     list_filter = ('source', 'confidence', 'is_main_author', 'created_at')
-    search_fields = ('author__name', 'author__first_name', 'author__last_name', 'book__file_path')
+    search_fields = ('author__name', 'author__first_name', 'author__last_name', 'book__files__file_path')
     readonly_fields = ('created_at',)
 
     def author_full_name(self, obj):
@@ -214,7 +249,7 @@ class BookAuthorAdmin(admin.ModelAdmin):
 class BookCoverAdmin(admin.ModelAdmin):
     list_display = ('book', 'source', 'confidence', 'resolution_str', 'is_high_resolution', 'format', 'created_at')
     list_filter = ('source', 'confidence', 'is_high_resolution', 'format', 'created_at')
-    search_fields = ('book__file_path', 'cover_path')
+    search_fields = ('book__files__file_path', 'cover_path')
     readonly_fields = ('created_at', 'aspect_ratio', 'is_high_resolution', 'resolution_str', 'is_local_file')
 
     fieldsets = (
@@ -239,7 +274,7 @@ class BookCoverAdmin(admin.ModelAdmin):
 class BookSeriesAdmin(admin.ModelAdmin):
     list_display = ('series', 'book', 'series_number', 'source', 'confidence', 'created_at')
     list_filter = ('source', 'confidence', 'created_at')
-    search_fields = ('series__name', 'book__file_path')
+    search_fields = ('series__name', 'book__files__file_path')
     readonly_fields = ('created_at',)
 
 
@@ -247,7 +282,7 @@ class BookSeriesAdmin(admin.ModelAdmin):
 class BookGenreAdmin(admin.ModelAdmin):
     list_display = ('genre', 'book', 'source', 'confidence', 'created_at')
     list_filter = ('source', 'confidence', 'created_at')
-    search_fields = ('genre__name', 'book__file_path')
+    search_fields = ('genre__name', 'book__files__file_path')
     readonly_fields = ('created_at',)
 
 
@@ -255,7 +290,7 @@ class BookGenreAdmin(admin.ModelAdmin):
 class BookPublisherAdmin(admin.ModelAdmin):
     list_display = ('book', 'publisher', 'source', 'confidence', 'created_at')
     list_filter = ('source', 'confidence', 'created_at')
-    search_fields = ('publisher__name', 'book__file_path')
+    search_fields = ('publisher__name', 'book__files__file_path')
     readonly_fields = ('created_at',)
 
 
@@ -263,7 +298,7 @@ class BookPublisherAdmin(admin.ModelAdmin):
 class BookMetadataAdmin(admin.ModelAdmin):
     list_display = ('field_name', 'book', 'source', 'confidence', 'created_at')
     list_filter = ('field_name', 'source', 'confidence', 'created_at')
-    search_fields = ('field_name', 'field_value', 'book__file_path')
+    search_fields = ('field_name', 'field_value', 'book__files__file_path')
     readonly_fields = ('created_at',)
 
 
@@ -284,7 +319,7 @@ class FinalMetadataAdmin(admin.ModelAdmin):
         'has_cover',
     )
     list_filter = ('is_reviewed', 'has_cover', 'overall_confidence', 'completeness_score', 'language', 'publication_year')
-    search_fields = ('final_title', 'final_author', 'book__file_path')
+    search_fields = ('final_title', 'final_author', 'book__files__file_path')
     readonly_fields = ('overall_confidence', 'completeness_score', 'last_updated')
 
     fieldsets = (
@@ -335,3 +370,51 @@ class ScanStatusAdmin(admin.ModelAdmin):
             return obj.message[:100] + "..." if len(obj.message) > 100 else obj.message
         return "No message"
     message_preview.short_description = 'Message Preview'
+
+
+@admin.register(BookFile)
+class BookFileAdmin(admin.ModelAdmin):
+    list_display = ('book', 'file_path_short', 'file_format', 'file_size_display', 'file_hash_short', 'first_scanned')
+    list_filter = ('file_format', 'first_scanned')
+    search_fields = ('file_path', 'book__titles__title', 'file_path_hash')
+    readonly_fields = ('file_path_hash', 'first_scanned', 'file_size_display')
+
+    fieldsets = (
+        ('File Information', {
+            'fields': ('book', 'file_path', 'file_format', 'file_size', 'file_size_display')
+        }),
+        ('Associated Files', {
+            'fields': ('opf_path', 'cover_path'),
+            'classes': ('collapse',)
+        }),
+        ('System Information', {
+            'fields': ('file_path_hash', 'first_scanned', 'last_scanned'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def file_path_short(self, obj):
+        """Show shortened file path for list display"""
+        if obj.file_path:
+            return obj.file_path if len(obj.file_path) <= 50 else "..." + obj.file_path[-47:]
+        return "No path"
+    file_path_short.short_description = 'File Path'
+
+    def file_size_display(self, obj):
+        """Show file size in human readable format"""
+        if obj.file_size:
+            if obj.file_size > 1024*1024*1024:
+                return f"{obj.file_size / (1024*1024*1024):.1f} GB"
+            elif obj.file_size > 1024*1024:
+                return f"{obj.file_size // (1024*1024)} MB"
+            elif obj.file_size > 1024:
+                return f"{obj.file_size // 1024} KB"
+            else:
+                return f"{obj.file_size} B"
+        return "Unknown"
+    file_size_display.short_description = 'File Size'
+
+    def file_hash_short(self, obj):
+        """Show shortened hash for list display"""
+        return obj.file_path_hash[:8] + "..." if obj.file_path_hash else "No hash"
+    file_hash_short.short_description = 'Hash'

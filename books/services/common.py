@@ -14,14 +14,21 @@ class CoverService:
     def get_cover_context(book, final_metadata):
         """Get cover context for template."""
         context = {}
-        context['primary_cover'] = final_metadata.final_cover_path or book.cover_path
+
+        # Get cover path from first file if not in final metadata
+        fallback_cover = ''
+        if book.files.exists():
+            first_file = book.files.first()
+            fallback_cover = first_file.cover_path or ''
+
+        context['primary_cover'] = final_metadata.final_cover_path or fallback_cover
 
         if context['primary_cover'] and not context['primary_cover'].startswith("http"):
             context['primary_cover_base64'] = encode_cover_to_base64(context['primary_cover'])
         else:
             context['primary_cover_base64'] = None
 
-        context['book_cover_base64'] = encode_cover_to_base64(book.cover_path)
+        context['book_cover_base64'] = encode_cover_to_base64(fallback_cover)
         return context
 
     @staticmethod
@@ -32,9 +39,20 @@ class CoverService:
         for book in books:
             # Safely get cover path, handling books without finalmetadata
             try:
-                cover_path = getattr(book.finalmetadata, 'final_cover_path', '') or book.cover_path
+                final_cover = getattr(book.finalmetadata, 'final_cover_path', '')
+                # Get fallback from first file
+                fallback_cover = ''
+                if book.files.exists():
+                    first_file = book.files.first()
+                    fallback_cover = first_file.cover_path or ''
+                cover_path = final_cover or fallback_cover
             except Exception:
-                cover_path = book.cover_path
+                # Get fallback from first file
+                fallback_cover = ''
+                if book.files.exists():
+                    first_file = book.files.first()
+                    fallback_cover = first_file.cover_path or ''
+                cover_path = fallback_cover
 
             is_url = str(cover_path).startswith("http")
             base64_image = encode_cover_to_base64(cover_path) if cover_path and not is_url else None
@@ -132,8 +150,8 @@ class DashboardService:
         # Add the correct total book count
         metadata_stats['total_books'] = total_books
 
-        format_stats = Book.objects.exclude(is_placeholder=True).values('file_format').annotate(
+        format_stats = Book.objects.exclude(is_placeholder=True).values('files__file_format').annotate(
             count=Count('id')
-        ).order_by('-count')
+        ).filter(files__file_format__isnull=False).order_by('-count')
 
         return metadata_stats, format_stats

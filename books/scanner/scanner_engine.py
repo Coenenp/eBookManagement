@@ -231,14 +231,14 @@ class EbookScanner:
                 # Get books in this folder that don't have complete metadata
                 incomplete_books = Book.objects.filter(
                     scan_folder=scan_folder,
-                    file_path__startswith=folder_path
+                    files__file_path__startswith=folder_path
                 ).exclude(
                     # Exclude books that have FinalMetadata (considered complete)
                     id__in=FinalMetadata.objects.values_list('book_id', flat=True)
                 ).exclude(
                     # Exclude corrupted books
                     is_corrupted=True
-                )
+                ).distinct()
 
                 all_incomplete_books.extend(list(incomplete_books))
                 logger.info(f"Found {incomplete_books.count()} incomplete books in {folder_path}")
@@ -252,7 +252,9 @@ class EbookScanner:
             # Complete metadata for these books
             for i, book in enumerate(all_incomplete_books, 1):
                 try:
-                    logger.info(f"[METADATA COMPLETION] Processing book {book.id}: {book.file_path}")
+                    primary_file = book.primary_file
+                    file_path = primary_file.file_path if primary_file else f"Book {book.id}"
+                    logger.info(f"[METADATA COMPLETION] Processing book {book.id}: {file_path}")
 
                     # Update status to show what we're doing
                     status.message = f"Completing metadata for book {book.id} ({i}/{len(all_incomplete_books)})"
@@ -263,15 +265,15 @@ class EbookScanner:
 
                     # Skip the file creation part, book already exists
                     # Go straight to metadata collection steps
-                    logger.info(f"[METADATA and COVER CANDIDATES QUERY] Path: {book.file_path}")
+                    logger.info(f"[METADATA and COVER CANDIDATES QUERY] Path: {file_path}")
                     query_metadata_and_covers(book)
 
                     try:
-                        logger.info(f"[FINAL METADATA RESOLVE] Path: {book.file_path}")
+                        logger.info(f"[FINAL METADATA RESOLVE] Path: {file_path}")
                         resolve_final_metadata(book)
                         logger.info(f"Completed metadata for book {book.id}")
                     except Exception as e:
-                        logger.error(f"Final metadata resolution failed for {book.file_path}: {str(e)}")
+                        logger.error(f"Final metadata resolution failed for {file_path}: {str(e)}")
 
                 except Exception as e:
                     logger.error(f"[METADATA COMPLETION ERROR] Book {book.id}: {str(e)}")

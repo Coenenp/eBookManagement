@@ -9,8 +9,7 @@ from pathlib import Path
 from typing import List
 
 from books.models import (
-    ScanFolder,
-    Comic, ComicIssue, Audiobook, AudiobookFile,
+    ScanFolder, Book, BookFile,
     COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
 )
 from books.scanner.grouping import ComicFileGrouper, AudiobookFileGrouper
@@ -42,7 +41,7 @@ def process_files_by_content_type(file_paths: List[str], scan_folder: ScanFolder
 
 def _process_comic_files(file_paths: List[str], scan_folder: ScanFolder,
                          cover_files: List[str], opf_files: List[str], rescan: bool):
-    """Process comic files by grouping them into series"""
+    """Process comic files by grouping them into issues"""
 
     # Group files by series
     comic_grouper = ComicFileGrouper()
@@ -53,69 +52,110 @@ def _process_comic_files(file_paths: List[str], scan_folder: ScanFolder,
     for series_name, issue_files in comic_groups.items():
         logger.info(f"Processing comic series: {series_name} ({len(issue_files)} issues)")
 
-        # Get or create the Comic (series)
-        comic, created = Comic.objects.get_or_create(
-            title=series_name,
-            scan_folder=scan_folder,
-            defaults={
-                'description': f'Comic series: {series_name}',
-                'issue_count': len(issue_files)
-            }
-        )
-
-        if created:
-            logger.info(f"Created new comic series: {series_name}")
-        else:
-            # Update issue count if we found more issues
-            comic.issue_count = max(comic.issue_count, len(issue_files))
-            comic.save()
-            logger.info(f"Updated comic series: {series_name}")
-
-        # Process each issue file
+        # Process each issue file as a separate Book (content_type='comic')
         for issue_file in issue_files:
-            _process_comic_issue(issue_file, comic, comic_grouper, cover_files, opf_files, rescan)
+            _process_comic_issue(issue_file, series_name, comic_grouper, cover_files, opf_files, rescan, scan_folder)
 
 
-def _process_comic_issue(file_path: str, comic: Comic, comic_grouper: ComicFileGrouper,
-                         cover_files: List[str], opf_files: List[str], rescan: bool):
-    """Process a single comic issue file"""
+def _process_comic_issue(file_path: str, series_name: str, comic_grouper: ComicFileGrouper,
+                         cover_files: List[str], opf_files: List[str], rescan: bool, scan_folder: ScanFolder):
+    """Process a single comic issue file using unified Book + BookFile architecture"""
 
     # Extract issue information
-    issue_info = comic_grouper.extract_issue_info(file_path, comic.title)
+    issue_info = comic_grouper.extract_issue_info(file_path, series_name)
 
-    # Get or create the ComicIssue
-    issue, created = ComicIssue.objects.get_or_create(
-        comic=comic,
+    # Create issue title (series name + issue number)
+    issue_number = issue_info.get('issue_number', '1')
+    issue_title = f"{series_name} #{issue_number}"
+
+    # Get or create the Book (comic issue)
+    book, created = Book.get_or_create_by_title(
+        title=issue_title,
+        content_type='comic',
+        defaults={
+            'scan_folder': scan_folder,
+        }
+    )
+
+    if created:
+        logger.info(f"Created comic issue: {issue_title}")
+    else:
+        logger.info(f"Found existing comic issue: {issue_title}")
+
+    # Get or create the BookFile
+    book_file, file_created = BookFile.objects.get_or_create(
+        book=book,
         file_path=file_path,
         defaults={
-            'issue_number': issue_info.get('issue_number', '1'),
-            'volume': issue_info.get('volume', 1),
-            'publication_year': issue_info.get('year'),
             'file_format': get_file_format(file_path),
             'file_size': os.path.getsize(file_path),
         }
     )
 
-    if created:
-        logger.info(f"Created comic issue: {comic.title} #{issue_info.get('issue_number', '1')}")
+    if file_created:
+        logger.info(f"Created BookFile for: {issue_title}")
     elif rescan:
         # Update file info on rescan
-        issue.file_size = os.path.getsize(file_path)
-        issue.file_format = get_file_format(file_path)
-        issue.save()
-        logger.info(f"Updated comic issue: {comic.title} #{issue_info.get('issue_number', '1')}")
+        book_file.file_size = os.path.getsize(file_path)
+        book_file.file_format = get_file_format(file_path)
+        book_file.save()
+        logger.info(f"Updated BookFile for: {issue_title}")
+
+    # Store comic-specific metadata
+    _store_comic_metadata(book, issue_info)
 
     # Find associated cover file
     from books.scanner.file_ops import find_cover_file
     cover_path = find_cover_file(file_path, cover_files)
     if cover_path:
-        issue.cover_path = cover_path
-        issue.save()
+        book_file.cover_path = cover_path
+        book_file.save()
+
+
+def _store_comic_metadata(book: Book, issue_info: dict):
+    """Store comic-specific metadata using the BookMetadata system"""
+    from books.models import BookMetadata, STANDARD_METADATA_FIELDS
+
+    # Store issue number
+    if issue_info.get('issue_number'):
+        BookMetadata.objects.update_or_create(
+            book=book,
+            field_name=STANDARD_METADATA_FIELDS['issue_number'],
+            defaults={
+                'field_value': str(issue_info['issue_number']),
+                'source': 'file_scanner',
+                'confidence': 0.8
+            }
+        )
+
+    # Store volume
+    if issue_info.get('volume'):
+        BookMetadata.objects.update_or_create(
+            book=book,
+            field_name=STANDARD_METADATA_FIELDS['volume'],
+            defaults={
+                'field_value': str(issue_info['volume']),
+                'source': 'file_scanner',
+                'confidence': 0.8
+            }
+        )
+
+    # Store year
+    if issue_info.get('year'):
+        BookMetadata.objects.update_or_create(
+            book=book,
+            field_name=STANDARD_METADATA_FIELDS['publication_year'],
+            defaults={
+                'field_value': str(issue_info['year']),
+                'source': 'file_scanner',
+                'confidence': 0.8
+            }
+        )
 
 
 def _process_audiobook_files(file_paths: List[str], scan_folder: ScanFolder,
                              cover_files: List[str], opf_files: List[str], rescan: bool):
-    """Process audiobook files by grouping them into audiobooks"""
+    """Process audiobook files by grouping them into audiobooks using unified Book + BookFile architecture"""
 
     # Group files by audiobook
     audiobook_grouper = AudiobookFileGrouper()
@@ -126,13 +166,12 @@ def _process_audiobook_files(file_paths: List[str], scan_folder: ScanFolder,
     for book_key, audio_files in audiobook_groups.items():
         logger.info(f"Processing audiobook: {book_key} ({len(audio_files)} files)")
 
-        # Get or create the Audiobook
-        audiobook, created = Audiobook.objects.get_or_create(
+        # Get or create the Book (audiobook)
+        book, created = Book.get_or_create_by_title(
             title=book_key,
-            scan_folder=scan_folder,
+            content_type='audiobook',
             defaults={
-                'total_duration_seconds': 0,  # Will be calculated later
-                'total_size_bytes': 0  # Will be calculated later
+                'scan_folder': scan_folder,
             }
         )
 
@@ -145,58 +184,86 @@ def _process_audiobook_files(file_paths: List[str], scan_folder: ScanFolder,
         total_duration = 0
         total_size = 0
         for audio_file in audio_files:
-            duration, size = _process_audiobook_file(audio_file, audiobook, audiobook_grouper, cover_files, opf_files, rescan)
+            duration, size = _process_audiobook_file(audio_file, book, audiobook_grouper, cover_files, opf_files, rescan)
             total_duration += duration or 0
             total_size += size or 0
 
-        # Update totals
-        audiobook.total_duration_seconds = total_duration
-        audiobook.total_size_bytes = total_size
-        audiobook.save()
+        # Store total duration and size as metadata
+        _store_audiobook_totals(book, total_duration, total_size)
         logger.info(f"Updated audiobook totals: {total_duration}s, {total_size} bytes")
 
+        # Query external metadata for this audiobook (once per audiobook, not per file)
+        if created or rescan:  # Only query for new audiobooks or during rescan
+            _query_audiobook_external_metadata(book)
 
-def _process_audiobook_file(file_path: str, audiobook: Audiobook, audiobook_grouper: AudiobookFileGrouper,
+
+def _process_audiobook_file(file_path: str, book: Book, audiobook_grouper: AudiobookFileGrouper,
                             cover_files: List[str], opf_files: List[str], rescan: bool) -> tuple:
-    """Process a single audiobook file, returns (duration_seconds, file_size_bytes)"""
+    """Process a single audiobook file using unified BookFile architecture, returns (duration_seconds, file_size_bytes)"""
 
     # Extract file information
-    file_info = audiobook_grouper.extract_file_info(file_path, audiobook.title)
+    file_info = audiobook_grouper.extract_file_info(file_path, book.title)
 
-    # Get or create the AudiobookFile
-    audiobook_file, created = AudiobookFile.objects.get_or_create(
-        audiobook=audiobook,
+    # Get or create the BookFile
+    book_file, created = BookFile.objects.get_or_create(
+        book=book,
         file_path=file_path,
         defaults={
+            'file_format': get_file_format(file_path),
+            'file_size': os.path.getsize(file_path),
             'chapter_number': file_info.get('chapter_number'),
             'track_number': file_info.get('track_number'),
             'chapter_title': file_info.get('chapter_title') or f'Chapter {file_info.get("chapter_number", "")}',
-
-            'file_format': get_file_format(file_path),
-            'file_size': os.path.getsize(file_path),
             'duration_seconds': 0  # Will be extracted from file metadata
         }
     )
 
     if created:
-        logger.info(f"Created audiobook file: {audiobook.title} - Chapter {file_info.get('chapter_number', 'Unknown')}")
+        logger.info(f"Created audiobook file: {book.title} - Chapter {file_info.get('chapter_number', 'Unknown')}")
     elif rescan:
         # Update file info on rescan
-        audiobook_file.file_size = os.path.getsize(file_path)
-        audiobook_file.file_format = get_file_format(file_path)
-        audiobook_file.save()
-        logger.info(f"Updated audiobook file: {audiobook.title} - Chapter {file_info.get('chapter_number', 'Unknown')}")
+        book_file.file_size = os.path.getsize(file_path)
+        book_file.file_format = get_file_format(file_path)
+        book_file.save()
+        logger.info(f"Updated audiobook file: {book.title} - Chapter {file_info.get('chapter_number', 'Unknown')}")
 
     # Try to extract duration from audio metadata
     try:
         duration = _extract_audio_duration(file_path)
         if duration:
-            audiobook_file.duration_seconds = duration
-            audiobook_file.save()
+            book_file.duration_seconds = duration
+            book_file.save()
     except Exception as e:
         logger.warning(f"Could not extract duration from {file_path}: {e}")
 
-    return audiobook_file.duration_seconds or 0, audiobook_file.file_size or 0
+    return book_file.duration_seconds or 0, book_file.file_size or 0
+
+
+def _store_audiobook_totals(book: Book, total_duration: int, total_size: int):
+    """Store audiobook total duration and size as metadata"""
+    from books.models import BookMetadata
+
+    # Store total duration
+    BookMetadata.objects.update_or_create(
+        book=book,
+        field_name='total_duration_seconds',
+        defaults={
+            'field_value': str(total_duration),
+            'source': 'file_scanner',
+            'confidence': 0.9
+        }
+    )
+
+    # Store total size
+    BookMetadata.objects.update_or_create(
+        book=book,
+        field_name='total_size_bytes',
+        defaults={
+            'field_value': str(total_size),
+            'source': 'file_scanner',
+            'confidence': 0.9
+        }
+    )
 
 
 def _extract_audio_duration(file_path: str) -> int:
@@ -282,6 +349,64 @@ def process_files_by_type(file_paths: List[str], scan_folder: ScanFolder,
             # Process as individual ebooks
             for file_path in file_paths:
                 _process_individual_ebook(file_path, scan_folder, cover_files, opf_files, rescan)
+
+
+def _query_audiobook_external_metadata(book):
+    """Query external metadata for an audiobook using its title and author"""
+    try:
+        # Skip if no title available
+        if not book.title or book.title.strip() == "":
+            logger.info(f"[AUDIOBOOK EXTERNAL] Skipping external query - no title: {book.id}")
+            return
+
+        # Get author from book metadata if available
+        author = None
+        try:
+            author_relation = book.bookauthor.filter(is_active=True).first()
+            if author_relation:
+                author = author_relation.author.name
+        except Exception:
+            author = None
+
+        # Create a cache key to prevent duplicate queries for the same audiobook
+        from books.utils.cache_key import make_cache_key
+        cache_key = f"audiobook_external_metadata:{make_cache_key(book.title, author or 'unknown')}"
+
+        from django.core.cache import cache
+        if cache.get(cache_key):
+            logger.info(f"[AUDIOBOOK EXTERNAL] Cache hit for: {book.title}")
+            return
+
+        logger.info(f"[AUDIOBOOK EXTERNAL] Querying external metadata for: {book.title} by {author or 'unknown'}")
+
+        # Query external APIs using the book's title and author
+        from books.scanner.external import query_metadata_and_covers_with_terms
+
+        # Get ISBN from book metadata if available
+        isbn = None
+        try:
+            isbn_metadata = book.bookmetadata.filter(field_name='isbn', is_active=True).first()
+            if isbn_metadata:
+                isbn = isbn_metadata.field_value
+        except Exception:
+            isbn = None
+
+        query_metadata_and_covers_with_terms(
+            book,
+            search_title=book.title,
+            search_author=author,
+            search_isbn=isbn
+        )
+
+        logger.info(f"[AUDIOBOOK EXTERNAL] Completed external metadata query for: {book.title}")
+
+        # Cache that we've processed this audiobook to prevent duplicates
+        cache.set(cache_key, True, timeout=3600 * 24)  # Cache for 24 hours
+
+    except Exception as e:
+        logger.error(f"[AUDIOBOOK EXTERNAL ERROR] Failed for book {book.id}: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 # Test function

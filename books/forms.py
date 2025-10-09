@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
-from .models import ScanFolder, Book, FinalMetadata, BookCover, DataSource
+from .models import ScanFolder, Book, FinalMetadata, BookCover, DataSource, COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
 from .mixins import StandardFormMixin, MetadataFormMixin, BaseMetadataValidator
 from .utils.language_manager import LanguageManager
 import os
@@ -134,7 +134,9 @@ class BookSearchForm(StandardFormMixin, forms.Form):
     )
 
     file_format = forms.ChoiceField(
-        choices=[('', 'All Formats')] + Book.FORMAT_CHOICES,
+        choices=[('', 'All Formats')] + [(fmt, fmt.upper()) for fmt in sorted(set(
+            COMIC_FORMATS + EBOOK_FORMATS + AUDIOBOOK_FORMATS
+        ))],
         required=False
     )
 
@@ -285,16 +287,10 @@ class BookEditForm(StandardFormMixin, forms.ModelForm):
     class Meta:
         model = Book
         fields = [
-            'file_format',
-            'cover_path',
-            'opf_path',
             'is_placeholder',
             'is_duplicate',
         ]
-        widgets = {
-            'cover_path': forms.TextInput(attrs={'placeholder': 'Path to cover image'}),
-            'opf_path': forms.TextInput(attrs={'placeholder': 'Path to .opf metadata file'}),
-        }
+        widgets = {}
 
 
 class BookCoverForm(MetadataFormMixin, forms.ModelForm):
@@ -415,7 +411,9 @@ class AdvancedSearchForm(StandardFormMixin, forms.Form):
     )
 
     file_format = forms.ChoiceField(
-        choices=[('', 'All Formats')] + Book.FORMAT_CHOICES,
+        choices=[('', 'All Formats')] + [(fmt, fmt.upper()) for fmt in sorted(set(
+            COMIC_FORMATS + EBOOK_FORMATS + AUDIOBOOK_FORMATS
+        ))],
         required=False
     )
 

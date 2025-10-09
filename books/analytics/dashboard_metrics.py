@@ -75,11 +75,11 @@ def get_content_type_statistics() -> Dict[str, int]:
     common_filter = Q(is_placeholder=False) & Q(is_duplicate=False) & Q(is_corrupted=False)
     return {
         # Count distinct formats in each category present in the library
-        'ebook_count': Book.objects.filter(common_filter & Q(file_format__in=EBOOK_FORMATS)).values('file_format').distinct().count(),
-        'comic_count': Book.objects.filter(common_filter & Q(file_format__in=COMIC_FORMATS)).values('file_format').distinct().count(),
+        'ebook_count': Book.objects.filter(common_filter & Q(files__file_format__in=EBOOK_FORMATS)).values('files__file_format').distinct().count(),
+        'comic_count': Book.objects.filter(common_filter & Q(files__file_format__in=COMIC_FORMATS)).values('files__file_format').distinct().count(),
         'audiobook_count': Book.objects.filter(
-            common_filter & Q(file_format__in=AUDIOBOOK_FORMATS)
-        ).values('file_format').distinct().count(),
+            common_filter & Q(files__file_format__in=AUDIOBOOK_FORMATS)
+        ).values('files__file_format').distinct().count(),
         'series_count': Series.objects.count(),
         'series_with_books': Series.objects.annotate(
             book_count=Count('bookseries__book', filter=Q(bookseries__is_active=True))
@@ -116,7 +116,7 @@ def prepare_chart_data(format_stats, metadata_stats, issue_stats) -> Dict[str, D
     """
     import json
 
-    format_labels = [item['file_format'].upper() for item in format_stats]
+    format_labels = [item['files__file_format'].upper() for item in format_stats]
     format_data = [item['count'] for item in format_stats]
 
     completeness_labels = ['Title', 'Author', 'Cover', 'ISBN', 'Series']
