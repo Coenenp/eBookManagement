@@ -25,6 +25,12 @@ from books.utils.author import attach_authors
 logger = logging.getLogger("books.scanner")
 
 
+def _get_initial_scan_source():
+    """Get or create the 'Initial Scan' DataSource."""
+    source, created = DataSource.objects.get_or_create(name=DataSource.INITIAL_SCAN)
+    return source
+
+
 def _get_book_file_path(book):
     """Helper function to get the file path from a book's primary file."""
     primary_file = book.primary_file
@@ -207,20 +213,20 @@ def _complete_metadata_for_books(books, scan_status):
 
     for i, book in enumerate(books, 1):
         try:
-            logger.info(f"[METADATA COMPLETION] Processing book {book.id}: {book.file_path}")
+            logger.info(f"[METADATA COMPLETION] Processing book {book.id}: {book.primary_file.file_path if book.primary_file else 'No file'}")
 
             # Skip the file creation part, book already exists
             # Go straight to metadata collection steps
 
-            logger.info(f"[METADATA and COVER CANDIDATES QUERY] Path: {book.file_path}")
+            logger.info(f"[METADATA and COVER CANDIDATES QUERY] Path: {book.primary_file.file_path if book.primary_file else 'No file'}")
             query_metadata_and_covers(book)
 
             try:
-                logger.info(f"[FINAL METADATA RESOLVE] Path: {book.file_path}")
+                logger.info(f"[FINAL METADATA RESOLVE] Path: {book.primary_file.file_path if book.primary_file else 'No file'}")
                 resolve_final_metadata(book)
                 logger.info(f"Completed metadata for book {book.id}")
             except Exception as e:
-                logger.error(f"Final metadata resolution failed for {book.file_path}: {str(e)}")
+                logger.error(f"Final metadata resolution failed for {book.primary_file.file_path if book.primary_file else 'No file'}: {str(e)}")
 
         except Exception as e:
             logger.error(f"[METADATA COMPLETION ERROR] Book {book.id}: {str(e)}")
@@ -313,22 +319,22 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
         book.is_corrupted = True
         book.save()
 
-    logger.info(f"[INTERNAL METADATA PARSE] Path: {book.file_path}")
+    logger.info(f"[INTERNAL METADATA PARSE] Path: {book.primary_file.file_path if book.primary_file else 'No file'}")
     _extract_internal_metadata(book)
 
     # Skip ISBN scanning for comic books (comics don't typically have ISBNs)
-    is_comic = book.file_format.lower() in COMIC_FORMATS
+    is_comic = book.primary_file.file_format.lower() in COMIC_FORMATS if book.primary_file else False
 
     if not is_comic:
-        logger.info(f"[CONTENT ISBN SCAN] Path: {book.file_path}")
+        logger.info(f"[CONTENT ISBN SCAN] Path: {book.primary_file.file_path if book.primary_file else 'No file'}")
         try:
             from books.scanner.extractors.content_isbn import save_content_isbns
             save_content_isbns(book)
         except Exception as e:
             logger.warning(f"Content ISBN extraction failed: {str(e)}")
 
-    logger.info(f"[OPF PARSE] Path: {book.file_path}")
-    if book.opf_path:
+    logger.info(f"[OPF PARSE] Path: {book.primary_file.file_path if book.primary_file else 'No file'}")
+    if book.primary_file and book.primary_file.opf_path:
         try:
             opf.extract(book)
         except Exception as e:
@@ -338,16 +344,16 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
 
     # Skip external metadata queries for comic books
     if not is_comic:
-        logger.info(f"[METADATA and COVER CANDIDATES QUERY] Path: {book.file_path}")
+        logger.info(f"[METADATA and COVER CANDIDATES QUERY] Path: {book.primary_file.file_path if book.primary_file else 'No file'}")
         query_metadata_and_covers(book)
     else:
-        logger.info(f"[SKIPPING EXTERNAL QUERIES] Comic book detected: {book.file_path}")
+        logger.info(f"[SKIPPING EXTERNAL QUERIES] Comic book detected: {book.primary_file.file_path if book.primary_file else 'No file'}")
 
     try:
-        logger.info(f"[FINAL METADATA RESOLVE] Path: {book.file_path}")
+        logger.info(f"[FINAL METADATA RESOLVE] Path: {book.primary_file.file_path if book.primary_file else 'No file'}")
         resolve_final_metadata(book)
     except Exception as e:
-        logger.error(f"Final metadata resolution failed for {book.file_path}: {str(e)}")
+        logger.error(f"Final metadata resolution failed for {book.primary_file.file_path if book.primary_file else 'No file'}: {str(e)}")
         # Optionally create a minimal FinalMetadata record here
         # final_metadata, created = FinalMetadata.objects.get_or_create(book=book)
         #   if created:
@@ -357,15 +363,15 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
 
 
 def _extract_filename_metadata(book):
-    source = DataSource.objects.get(name=DataSource.INITIAL_SCAN)
+    source = _get_initial_scan_source()
 
     # Use comic-specific parsing for comic books
-    is_comic = book.file_format.lower() in COMIC_FORMATS
+    is_comic = book.primary_file.file_format.lower() in COMIC_FORMATS if book.primary_file else False
     if is_comic:
         from books.scanner.parsing import parse_comic_metadata
-        parsed = parse_comic_metadata(book.file_path)
+        parsed = parse_comic_metadata(book.primary_file.file_path)
     else:
-        parsed = parse_path_metadata(book.file_path)
+        parsed = parse_path_metadata(book.primary_file.file_path if book.primary_file else '')
 
     # 🎯 Debug output for filename parsing
     logger.info(f"[FILENAME PARSE] Parsed title: {parsed.get('title')}")
@@ -400,12 +406,12 @@ def _extract_filename_metadata(book):
 
 
 def _extract_internal_metadata(book):
-    fmt = book.file_format.lower()
+    fmt = book.primary_file.file_format.lower() if book.primary_file else ""
     extractor = None
 
     try:
         if fmt == "epub":
-            if not zipfile.is_zipfile(book.file_path):
+            if not zipfile.is_zipfile(book.primary_file.file_path):
                 raise ValueError("EPUB file is not a valid ZIP archive.")
             extractor = epub.extract
 
@@ -416,12 +422,12 @@ def _extract_internal_metadata(book):
             extractor = mobi.extract
 
         elif fmt == "cbr":
-            if not rarfile.is_rarfile(book.file_path):
+            if not rarfile.is_rarfile(book.primary_file.file_path):
                 raise ValueError("CBR file is not a valid RAR archive.")
             extractor = comic.extract_cbr
 
         elif fmt == "cbz":
-            if not zipfile.is_zipfile(book.file_path):
+            if not zipfile.is_zipfile(book.primary_file.file_path):
                 raise ValueError("CBZ file is not a valid ZIP archive.")
             extractor = comic.extract_cbz
 

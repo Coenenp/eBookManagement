@@ -29,6 +29,25 @@ class EbookScanner:
         self.ai_recognizer = None
         self._initialize_ai_system()
 
+    def scan_folder(self, folder_path):
+        """Scan a folder and return results in expected format."""
+        try:
+            self.run(folder_path)
+            # Count processed books as a rough measure of success
+            from books.models import Book
+            processed_count = Book.objects.count()
+            return {
+                'success': True,
+                'files_processed': processed_count,
+                'errors': []
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'files_processed': 0,
+                'errors': [str(e)]
+            }
+
     def run(self, folder_path=None):
         # Handle resume mode
         if self.resume:

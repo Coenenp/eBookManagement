@@ -14,6 +14,15 @@ import json
 logger = logging.getLogger("books.scanner")
 
 
+def _get_mobi_internal_source():
+    """Get or create the MOBI Internal DataSource."""
+    source, created = DataSource.objects.get_or_create(
+        name=DataSource.MOBI_INTERNAL,
+        defaults={'trust_level': 0.75}
+    )
+    return source
+
+
 def extract(book):
     try:
         # Extract the MOBI file
@@ -38,7 +47,7 @@ def extract(book):
         logger.info(f"Title: {title or 'Unknown'}, Author: {author or 'Unknown'}, Encoding: {encoding or 'Unknown'}")
 
         # Get internal source
-        source = DataSource.objects.get(name=DataSource.MOBI_INTERNAL)
+        source = _get_mobi_internal_source()
 
         # Title
         if title:

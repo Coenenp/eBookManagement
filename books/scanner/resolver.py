@@ -22,13 +22,13 @@ def resolve_final_metadata(book):
         final_metadata.final_title_confidence = best_title.confidence
 
     # 👤 Author
-    best_author = book.bookauthor.filter(is_active=True).order_by('-confidence', '-is_main_author').first()
+    best_author = book.author_relationships.filter(is_active=True).order_by('-confidence', '-is_main_author').first()
     if best_author:
         final_metadata.final_author = best_author.author.name
         final_metadata.final_author_confidence = best_author.confidence
 
     # 📚 Series
-    best_series = book.series_info.filter(is_active=True).order_by('-confidence').first()
+    best_series = book.series_relationships.filter(is_active=True).order_by('-confidence').first()
     if best_series:
         final_metadata.final_series = best_series.series.name
         final_metadata.final_series_number = str(best_series.series_number) if best_series.series_number is not None else ''
@@ -44,7 +44,7 @@ def resolve_final_metadata(book):
         final_metadata.has_cover = False
 
     # 🏢 Publisher
-    best_pub = book.bookpublisher.filter(is_active=True).order_by('-confidence').first()
+    best_pub = book.publisher_relationships.filter(is_active=True).order_by('-confidence').first()
     if best_pub:
         final_metadata.final_publisher = best_pub.publisher.name
         final_metadata.final_publisher_confidence = best_pub.confidence

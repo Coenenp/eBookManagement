@@ -117,7 +117,7 @@ class EbooksMainView(LoginRequiredMixin, TemplateView):
             ebooks_count = Book.objects.filter(
                 scan_folder__content_type='ebooks',
                 scan_folder__is_active=True,
-                file_format__in=EBOOK_FORMATS  # Use EBOOK_FORMATS for consistency
+                files__file_format__in=EBOOK_FORMATS  # Use EBOOK_FORMATS for consistency
             ).count()
         except Exception:
             # Fallback count if there's an issue
@@ -142,7 +142,7 @@ def ebooks_ajax_list(request):
             files__file_format__in=EBOOK_FORMATS  # Use EBOOK_FORMATS for consistency
         ).select_related('scan_folder').prefetch_related(
             'metadata',
-            'series_info',
+            'series_relationships',
             'files'
         )
 
@@ -181,7 +181,7 @@ def ebooks_ajax_list(request):
             metadata = get_book_metadata_dict(book)
 
             # Get series information
-            series_info = book.series_info.first()
+            series_info = book.series_relationships.first()
 
             # Get file info from first BookFile (most books have one file)
             book_file = book.files.first()
@@ -253,7 +253,7 @@ def ebooks_ajax_detail(request, book_id):
 
         # Get series information safely
         try:
-            series_info = book.series_info.first()
+            series_info = book.series_relationships.first()
             series_name = series_info.series.name if series_info and series_info.series else ''
             series_position = series_info.series_number if series_info else None
         except Exception:
@@ -357,7 +357,7 @@ def ebooks_ajax_detail(request, book_id):
             'language': metadata.get('language', ''),
             'publication_date': metadata.get('publication_date'),
             'file_format': first_file.file_format if first_file else 'UNKNOWN',
-            'file_size': first_file.file_size if first_file else 0,
+            'file_size': (first_file.file_size or 0) if first_file else 0,
             'last_scanned': book.last_scanned.isoformat() if book.last_scanned else None,
             'series_name': series_name,
             'series_position': series_position,
@@ -443,7 +443,7 @@ def series_ajax_list(request):
             # Get file info from first BookFile
             first_file = book.files.first()
             file_format = first_file.file_format if first_file else 'UNKNOWN'
-            file_size = first_file.file_size if first_file else 0
+            file_size = (first_file.file_size or 0) if first_file else 0
 
             book_data = {
                 'id': book.id,
@@ -500,8 +500,6 @@ class ComicsMainView(LoginRequiredMixin, TemplateView):
             book__scan_folder__content_type='comics',
             book__scan_folder__is_active=True,
             book__files__file_format__in=COMIC_FORMATS
-        ).exclude(
-            book__files__file_format__in=EBOOK_FORMATS  # Exclude ebook formats
         ).select_related('book')
 
         # Count unique series + standalone comics
@@ -522,8 +520,6 @@ class ComicsMainView(LoginRequiredMixin, TemplateView):
                 scan_folder__content_type='comics',
                 scan_folder__is_active=True,
                 files__file_format__in=COMIC_FORMATS
-            ).exclude(
-                files__file_format__in=EBOOK_FORMATS  # Exclude ebook formats
             ).count()
 
         context['comics_count'] = comics_count
@@ -543,10 +539,11 @@ def comics_ajax_list(request):
         except NameError:
             comic_formats = ['cbr', 'cbz', 'cb7', 'cbt', 'pdf']
 
-        # Get all comic books
+        # Get all comic books from comics folders
         comics_query = Book.objects.filter(
             scan_folder__content_type='comics',
-            scan_folder__is_active=True
+            scan_folder__is_active=True,
+            files__file_format__in=comic_formats
         ).prefetch_related(
             'files', 'metadata', 'finalmetadata'
         ).select_related('scan_folder').distinct()
@@ -567,12 +564,12 @@ def comics_ajax_list(request):
 
             # Get metadata if available
             try:
-                metadata = book.finalmetadata.first()
+                metadata = book.finalmetadata  # OneToOneField, no .first() needed
             except AttributeError:
                 metadata = None
             if not metadata:
                 try:
-                    metadata = book.metadata.first()
+                    metadata = book.metadata.first()  # This is a related manager
                 except AttributeError:
                     metadata = None
 
@@ -581,22 +578,30 @@ def comics_ajax_list(request):
             title = book_title.title if book_title else f"Book {book.id}"
 
             # Get author from BookAuthor
-            book_author = book.bookauthor.first()
+            book_author = book.author_relationships.first()
             author = book_author.author.name if book_author else ''
 
-            # Get series info from BookSeries
-            book_series = book.series_info.first()
-            series_name = book_series.series.name if book_series else None
-            position = book_series.position if book_series else 0
+            # Get series info from BookSeries first, then fallback to FinalMetadata
+            book_series = book.series_relationships.first()
+            if book_series:
+                series_name = book_series.series.name
+                position = book_series.position or 0
+            else:
+                # Fallback to FinalMetadata
+                series_name = metadata.final_series if metadata and hasattr(metadata, 'final_series') and metadata.final_series else None
+                if metadata and hasattr(metadata, 'final_series_number') and metadata.final_series_number:
+                    position = metadata.final_series_number
+                else:
+                    position = 0
 
             comic_data = {
                 'id': book.id,
                 'title': title,
                 'author': author,
-                'publisher': metadata.publisher if metadata else '',
+                'publisher': getattr(metadata, 'final_publisher', '') or getattr(metadata, 'publisher', '') if metadata else '',
                 'series': series_name or title,
-                'volume': metadata.volume if metadata else '',
-                'description': metadata.description if metadata else '',
+                'volume': getattr(metadata, 'volume', '') if metadata else '',
+                'description': getattr(metadata, 'final_description', '') or getattr(metadata, 'description', '') if metadata else '',
                 'file_format': first_file.file_format,
                 'file_size': first_file.file_size or 0,
                 'page_count': getattr(metadata, 'page_count', None) if metadata else None,
@@ -709,7 +714,7 @@ def comics_ajax_detail(request, comic_id):
         title = book_title.title if book_title else f"Book {book.id}"
 
         # Get author from BookAuthor
-        book_author = book.bookauthor.first()
+        book_author = book.author_relationships.first()
         author = book_author.author.name if book_author else ''
 
         # Build covers list
@@ -880,7 +885,7 @@ def audiobooks_ajax_list(request):
             files__file_format__in=AUDIOBOOK_FORMATS  # Use AUDIOBOOK_FORMATS for consistency
         ).select_related('scan_folder').prefetch_related(
             'metadata',
-            'series_info',
+            'series_relationships',
             'files'
         )
 
@@ -923,12 +928,12 @@ def audiobooks_ajax_list(request):
             metadata = get_book_metadata_dict(book)
 
             # Get series information
-            series_info = book.series_info.first()
+            series_info = book.series_relationships.first()
 
             # Get file info from first BookFile
             first_file = book.files.first()
             file_format = first_file.file_format if first_file else 'UNKNOWN'
-            file_size = first_file.file_size if first_file else 0
+            file_size = (first_file.file_size or 0) if first_file else 0
             cover_path = first_file.cover_path if first_file and first_file.cover_path else ''
 
             audiobooks_data.append({
@@ -974,13 +979,16 @@ def audiobooks_ajax_list(request):
 def audiobooks_ajax_detail(request, book_id):
     """AJAX endpoint for audiobook detail - supports both Book and Audiobook models"""
     try:
-        from books.models import Audiobook
-
-        # Try to find as Audiobook first (new model)
+        # Try to import and use Audiobook model if it exists (for future compatibility)
         try:
+            from books.models import Audiobook
             audiobook = get_object_or_404(Audiobook, id=book_id)
             return _get_audiobook_detail_from_audiobook_model(audiobook)
+        except (ImportError, AttributeError):
+            # Audiobook model doesn't exist, fall back to Book model
+            pass
         except (Audiobook.DoesNotExist, Exception):
+            # Audiobook exists but this book isn't found, fall back to Book model
             pass
 
         # Fall back to Book model (legacy)
@@ -997,7 +1005,10 @@ def audiobooks_ajax_detail(request, book_id):
         metadata = get_book_metadata_dict(book)
 
         # Get series information
-        series_info = book.series_info.first() if hasattr(book, 'series_info') else None
+        series_info = book.series_relationships.first() if hasattr(book, 'series_relationships') else None
+
+        # Get first file for format and size info
+        first_file = book.files.first()
 
         # Get cover URL
         cover_url = get_book_cover_url(book)
@@ -1006,21 +1017,21 @@ def audiobooks_ajax_detail(request, book_id):
         files_list = []
 
         # Main audiobook file
-        if book.file_path and os.path.exists(book.file_path):
+        if first_file and first_file.file_path and os.path.exists(first_file.file_path):
             files_list.append({
                 'type': 'main',
-                'filename': os.path.basename(book.primary_file.file_path) if book.primary_file else 'Unknown',
-                'path': book.primary_file.file_path if book.primary_file else '',
-                'size': book.primary_file.file_size if book.primary_file else 0,
-                'format': book.primary_file.file_format if book.primary_file else 'UNKNOWN',
+                'filename': os.path.basename(first_file.file_path),
+                'path': first_file.file_path,
+                'size': (first_file.file_size or 0),
+                'format': first_file.file_format,
                 'duration': metadata.get('duration', ''),
                 'description': 'Main audiobook file'
             })
 
         # Look for companion files
-        if book.file_path:
-            book_dir = os.path.dirname(book.file_path)
-            book_name_base = os.path.splitext(os.path.basename(book.file_path))[0]
+        if first_file and first_file.file_path:
+            book_dir = os.path.dirname(first_file.file_path)
+            book_name_base = os.path.splitext(os.path.basename(first_file.file_path))[0]
 
             # Look for additional audio files (multi-part audiobooks)
             for ext in ['.mp3', '.m4a', '.m4b', '.aac', '.flac', '.ogg']:
@@ -1081,8 +1092,8 @@ def audiobooks_ajax_detail(request, book_id):
             'language': metadata.get('language', ''),
             'duration': metadata.get('duration', ''),
             'publication_date': metadata.get('publication_date'),
-            'file_format': book.primary_file.file_format if book.primary_file else 'UNKNOWN',
-            'file_size': book.primary_file.file_size if book.primary_file else 0,
+            'file_format': first_file.file_format if first_file else 'UNKNOWN',
+            'file_size': (first_file.file_size or 0) if first_file else 0,
             'last_scanned': book.last_scanned.isoformat() if book.last_scanned else None,
             'series': series_info.series.name if series_info and series_info.series else '',
             'series_position': series_info.series_number if series_info else None,

@@ -201,8 +201,14 @@ def get_image_metadata(url):
 def _query_open_library_combined(book, title, author, isbn=None):
     """Combined Open Library query for both metadata and covers"""
     try:
-        metadata_source = DataSource.objects.get(name=DataSource.OPEN_LIBRARY)
-        cover_source = DataSource.objects.get(name=DataSource.OPEN_LIBRARY_COVERS)
+        metadata_source, _ = DataSource.objects.get_or_create(
+            name=DataSource.OPEN_LIBRARY,
+            defaults={'trust_level': 0.8}
+        )
+        cover_source, _ = DataSource.objects.get_or_create(
+            name=DataSource.OPEN_LIBRARY_COVERS,
+            defaults={'trust_level': 0.7}
+        )
 
         # Build query - prefer ISBN if available
         if isbn:
@@ -290,8 +296,14 @@ def _query_google_books_combined(book, title, author, isbn=None):
         if not settings.GOOGLE_BOOKS_API_KEY or not (title or author or isbn):
             return
 
-        metadata_source = DataSource.objects.get(name=DataSource.GOOGLE_BOOKS)
-        cover_source = DataSource.objects.get(name=DataSource.GOOGLE_BOOKS_COVERS)
+        metadata_source, _ = DataSource.objects.get_or_create(
+            name=DataSource.GOOGLE_BOOKS,
+            defaults={'trust_level': 0.85}
+        )
+        cover_source, _ = DataSource.objects.get_or_create(
+            name=DataSource.GOOGLE_BOOKS_COVERS,
+            defaults={'trust_level': 0.8}
+        )
 
         # Build query - prefer ISBN if available, otherwise use title/author
         if isbn:
@@ -383,8 +395,14 @@ def _query_goodreads_combined(book, title, author):
         if not token or not (title or author):
             return
 
-        metadata_source = DataSource.objects.get(name=DataSource.GOODREADS)
-        cover_source = DataSource.objects.get(name=DataSource.GOODREADS_COVERS)
+        metadata_source, _ = DataSource.objects.get_or_create(
+            name=DataSource.GOODREADS,
+            defaults={'trust_level': 0.75}
+        )
+        cover_source, _ = DataSource.objects.get_or_create(
+            name=DataSource.GOODREADS_COVERS,
+            defaults={'trust_level': 0.7}
+        )
 
         search_query = f"{title} {author}".strip()
         cache_key = f"goodreads_combined:{make_cache_key(title, author)}"

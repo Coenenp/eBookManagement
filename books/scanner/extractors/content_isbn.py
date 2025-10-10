@@ -270,7 +270,7 @@ def save_content_isbns(book):
         isbns = extract_isbn_from_content(book, page_limit=10)
 
         if not isbns:
-            logger.info(f"No ISBNs found in content for {book.filename}")
+            logger.info(f"No ISBNs found in content for {book.file_path}")
             return
 
         # Save each unique ISBN as metadata
@@ -286,17 +286,17 @@ def save_content_isbns(book):
                 )
                 if created:
                     saved_count += 1
-                    logger.info(f"Found ISBN in content: {isbn} for {book.filename}")
+                    logger.info(f"Found ISBN in content: {isbn} for {book.file_path}")
             except Exception as e:
                 logger.warning(f"Failed to save content ISBN {isbn}: {e}")
 
         if saved_count > 0:
-            logger.info(f"Saved {saved_count} ISBNs from content scan for {book.filename}")
+            logger.info(f"Saved {saved_count} ISBNs from content scan for {book.file_path}")
         else:
-            logger.info(f"All content ISBNs already existed for {book.filename}")
+            logger.info(f"All content ISBNs already existed for {book.file_path}")
 
     except Exception as e:
-        logger.error(f"Failed to save content ISBNs for {book.filename}: {e}")
+        logger.error(f"Failed to save content ISBNs for {book.file_path}: {e}")
 
 
 def bulk_scan_content_isbns(books_queryset=None, page_limit=10):
@@ -334,7 +334,7 @@ def bulk_scan_content_isbns(books_queryset=None, page_limit=10):
             ).count()
 
             if existing_content_isbns > 0:
-                logger.debug(f"Skipping {book.filename}, already has content-scanned ISBNs")
+                logger.debug(f"Skipping {book.file_path}, already has content-scanned ISBNs")
                 continue
 
             # Extract and save ISBNs
@@ -359,6 +359,6 @@ def bulk_scan_content_isbns(books_queryset=None, page_limit=10):
 
         except Exception as e:
             stats['errors'] += 1
-            logger.error(f"Error scanning {book.filename}: {e}")
+            logger.error(f"Error scanning {book.file_path}: {e}")
 
     return stats

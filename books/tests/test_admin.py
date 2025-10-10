@@ -4,6 +4,9 @@ Tests for Django admin interface functionality.
 This module tests the admin interface for all book-related models,
 including superuser creation, admin views, and admin functionality.
 """
+import tempfile
+import shutil
+import os
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.contrib.admin.sites import AdminSite
@@ -12,6 +15,7 @@ from books.models import (
     Genre, Publisher, ScanFolder, Series
 )
 from books.admin import BookAdmin, BookAuthorAdmin
+from books.tests.test_helpers import create_test_book_with_file
 
 
 class AdminSetupTestCase(TestCase):
@@ -66,18 +70,23 @@ class AdminModelAccessTestCase(TestCase):
         )
         self.client.login(username='admin', password='testpass123')
 
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+        
         # Create test data
         self.scan_folder = ScanFolder.objects.create(
             name="Test Folder",
-            path="/test/path",
+            path=self.temp_dir,
             language="en"
         )
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/book.epub",
             file_format="epub",
             file_size=1024,
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type='ebook',
+            title="Test Book"
         )
 
         self.author = Author.objects.create(
@@ -93,11 +102,16 @@ class AdminModelAccessTestCase(TestCase):
             trust_level=0.8
         )
 
+    def tearDown(self):
+        """Clean up temporary directory."""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
     def test_book_admin_access(self):
         """Test access to Book admin."""
         response = self.client.get('/admin/books/book/')
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'book.epub')
+        self.assertContains(response, 'Test Book')
 
     def test_author_admin_access(self):
         """Test access to Author admin."""
@@ -149,18 +163,28 @@ class AdminModelDetailTestCase(TestCase):
         )
         self.client.login(username='admin', password='testpass123')
 
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+
         self.scan_folder = ScanFolder.objects.create(
             name="Test Folder",
-            path="/test/path",
+            path=self.temp_dir,
             language="en"
         )
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/book.epub",
             file_format="epub",
             file_size=1024,
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type='ebook',
+            title="Test Book Admin Detail"
         )
+
+    def tearDown(self):
+        """Clean up temporary directory."""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
     def test_book_detail_admin(self):
         """Test Book detail view in admin."""
@@ -195,17 +219,22 @@ class AdminInlineTestCase(TestCase):
         )
         self.client.login(username='admin', password='testpass123')
 
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+
         self.scan_folder = ScanFolder.objects.create(
             name="Test Folder",
-            path="/test/path",
+            path=self.temp_dir,
             language="en"
         )
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/book.epub",
             file_format="epub",
             file_size=1024,
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type='ebook',
+            title="Test Book Inline"
         )
 
         self.author = Author.objects.create(
@@ -233,6 +262,11 @@ class AdminInlineTestCase(TestCase):
             confidence=0.8
         )
 
+    def tearDown(self):
+        """Clean up temporary directory."""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
     def test_book_inlines_display(self):
         """Test that book inlines display correctly."""
         response = self.client.get(f'/admin/books/book/{self.book.id}/change/')
@@ -258,39 +292,51 @@ class AdminFilteringTestCase(TestCase):
         )
         self.client.login(username='admin', password='testpass123')
 
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+
         self.scan_folder = ScanFolder.objects.create(
             name="Test Folder",
-            path="/test/path",
+            path=self.temp_dir,
             language="en"
         )
 
         # Create multiple books with different formats
-        self.book1 = Book.objects.create(
+        self.book1 = create_test_book_with_file(
             file_path="/test/book1.epub",
             file_format="epub",
             file_size=1024,
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type='ebook',
+            title="Book 1"
         )
 
-        self.book2 = Book.objects.create(
+        self.book2 = create_test_book_with_file(
             file_path="/test/book2.pdf",
             file_format="pdf",
             file_size=2048,
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type='ebook',
+            title="Book 2"
         )
 
     def test_book_format_filtering(self):
         """Test filtering books by format."""
-        response = self.client.get('/admin/books/book/?file_format=epub')
+        response = self.client.get('/admin/books/book/?files__file_format=epub')
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'book1.epub')
-        self.assertNotContains(response, 'book2.pdf')
+        self.assertContains(response, 'Book 1')
+        self.assertNotContains(response, 'Book 2')
 
     def test_book_search(self):
         """Test searching books."""
-        response = self.client.get('/admin/books/book/?q=book1')
+        response = self.client.get('/admin/books/book/?q=Book 1')
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'book1.epub')
+        self.assertContains(response, 'Book 1')
+
+    def tearDown(self):
+        """Clean up temporary directory."""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
 
 class AdminFunctionalityTestCase(TestCase):
@@ -306,17 +352,22 @@ class AdminFunctionalityTestCase(TestCase):
         )
         self.client.login(username='admin', password='testpass123')
 
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+
         self.scan_folder = ScanFolder.objects.create(
             name="Test Folder",
-            path="/test/path",
+            path=self.temp_dir,
             language="en"
         )
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/book.epub",
             file_format="epub",
             file_size=1048576,  # 1MB
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type="ebook",
+            title="Test Book"
         )
 
     def test_book_readonly_fields(self):
@@ -339,6 +390,11 @@ class AdminFunctionalityTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Test Source')
         self.assertContains(response, '0.85')
+
+    def tearDown(self):
+        """Clean up temporary directory."""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
 
 class AdminPermissionTestCase(TestCase):
@@ -397,17 +453,22 @@ class AdminCustomMethodTestCase(TestCase):
         self.site = AdminSite()
 
         # Create test data
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+        
         self.scan_folder = ScanFolder.objects.create(
             name="Test Folder",
-            path="/test/path",
+            path=self.temp_dir,
             language="en"
         )
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/book.epub",
             file_format="epub",
             file_size=1048576,  # 1MB
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type="ebook",
+            title="Test Book"
         )
 
         self.author = Author.objects.create(
@@ -439,10 +500,12 @@ class AdminCustomMethodTestCase(TestCase):
 
     def test_book_admin_file_size_mb_unknown(self):
         """Test BookAdmin file_size_mb with no file size."""
-        book_no_size = Book.objects.create(
+        book_no_size = create_test_book_with_file(
             file_path="/test/unknown.epub",
             file_format="epub",
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type="ebook",
+            title="Unknown Size Book"
         )
         result = self.book_admin.file_size_mb(book_no_size)
         self.assertEqual(result, "Unknown")
@@ -456,6 +519,11 @@ class AdminCustomMethodTestCase(TestCase):
         self.assertEqual(full_name, "John Doe")
         self.assertEqual(first_name, "John")
         self.assertEqual(last_name, "Doe")
+
+    def tearDown(self):
+        """Clean up temporary directory."""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
 
 class AdminBulkActionsTestCase(TestCase):
@@ -471,20 +539,25 @@ class AdminBulkActionsTestCase(TestCase):
         )
         self.client.login(username='admin', password='testpass123')
 
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+        
         self.scan_folder = ScanFolder.objects.create(
             name="Test Folder",
-            path="/test/path",
+            path=self.temp_dir,
             language="en"
         )
 
         # Create multiple books for bulk testing
         self.books = []
         for i in range(3):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f"/test/book{i}.epub",
                 file_format="epub",
                 file_size=1024,
-                scan_folder=self.scan_folder
+                scan_folder=self.scan_folder,
+                content_type="ebook",
+                title=f"Test Book {i}"
             )
             self.books.append(book)
 
@@ -494,6 +567,11 @@ class AdminBulkActionsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'action-select')  # Bulk action checkboxes
         self.assertContains(response, 'Delete selected')
+
+    def tearDown(self):
+        """Clean up temporary directory."""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
 
 class AdminIntegrationTestCase(TestCase):
@@ -509,6 +587,14 @@ class AdminIntegrationTestCase(TestCase):
         )
         self.client.login(username='admin', password='testpass123')
 
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up temporary directory."""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
     def test_full_admin_workflow(self):
         """Test a complete admin workflow."""
         # 1. Access admin index
@@ -518,7 +604,7 @@ class AdminIntegrationTestCase(TestCase):
         # 2. Create a scan folder
         response = self.client.post('/admin/books/scanfolder/add/', {
             'name': 'Integration Test Folder',
-            'path': '/integration/test',
+            'path': self.temp_dir,
             'content_type': 'ebooks',
             'language': 'en',
             'is_active': True
@@ -527,21 +613,24 @@ class AdminIntegrationTestCase(TestCase):
 
         # 3. Verify scan folder was created
         scan_folder = ScanFolder.objects.get(name='Integration Test Folder')
-        self.assertEqual(scan_folder.path, '/integration/test')
+        self.assertEqual(scan_folder.path, self.temp_dir)
 
         # 4. Create a book through the model (testing admin functionality separately)
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path='/integration/test/book.epub',
             file_format='epub',
             file_size=1024,
             scan_folder=scan_folder,
             is_placeholder=False,
             is_duplicate=False,
-            is_corrupted=False
+            is_corrupted=False,
+            content_type="ebook",
+            title="Integration Test Book"
         )
 
         # 5. Verify book was created
-        self.assertEqual(book.file_format, 'epub')
+        first_file = book.files.first()
+        self.assertEqual(first_file.file_format, 'epub')
         self.assertEqual(book.scan_folder, scan_folder)
 
         # 6. Test admin view access for the created book
@@ -551,20 +640,29 @@ class AdminIntegrationTestCase(TestCase):
     def test_admin_model_relationships(self):
         """Test admin handling of model relationships."""
         # Create base objects
+        # Create another temporary directory for this specific test
+        temp_rel_dir = tempfile.mkdtemp()
+        
         scan_folder = ScanFolder.objects.create(
             name="Relationship Test",
-            path="/test/relationships",
+            path=temp_rel_dir,
             language="en"
         )
 
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path="/test/relationships/book.epub",
             file_format="epub",
             file_size=1024,
-            scan_folder=scan_folder
+            scan_folder=scan_folder,
+            content_type="ebook",
+            title="Relationship Test Book"
         )
 
         # Test that admin shows relationships correctly
         response = self.client.get(f'/admin/books/book/{book.id}/change/')
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Relationship Test')  # Should show related scan folder
+        
+        # Clean up the temporary directory created for this test
+        if os.path.exists(temp_rel_dir):
+            shutil.rmtree(temp_rel_dir)

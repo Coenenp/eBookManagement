@@ -43,9 +43,9 @@ class MetadataProcessor:
         # Map field names to their corresponding model queries for checking existing data
         existing_data_checks = {
             'final_title': lambda: book.titles.filter(is_active=True).exists(),
-            'final_author': lambda: book.bookauthor.filter(is_active=True).exists(),
-            'final_series': lambda: book.series_info.filter(is_active=True).exists(),
-            'final_publisher': lambda: book.bookpublisher.filter(is_active=True).exists(),
+            'final_author': lambda: book.author_relationships.filter(is_active=True).exists(),
+            'final_series': lambda: book.series_relationships.filter(is_active=True).exists(),
+            'final_publisher': lambda: book.publisher_relationships.filter(is_active=True).exists(),
             'publication_year': lambda: book.metadata.filter(field_name='publication_year', is_active=True).exists(),
             'language': lambda: book.metadata.filter(field_name='language', is_active=True).exists(),
             'isbn': lambda: book.metadata.filter(field_name='isbn', is_active=True).exists(),
@@ -503,17 +503,19 @@ class CoverManager:
     def _handle_original_cover(book, action):
         """Handle actions on original cover."""
         if action == "select":
-            book.finalmetadata.final_cover_path = book.cover_path
+            cover_path = book.primary_file.cover_path if book.primary_file else ''
+            book.finalmetadata.final_cover_path = cover_path
             book.finalmetadata.final_cover_confidence = 0.96
             book.finalmetadata.save()
             return JsonResponse({
                 "success": True,
                 "message": "Original cover selected",
-                "cover_path": book.cover_path
+                "cover_path": cover_path
             })
         elif action == "remove":
             # Check if original cover is currently selected as final cover
-            was_final_cover = book.finalmetadata.final_cover_path == book.cover_path
+            cover_path = book.primary_file.cover_path if book.primary_file else ''
+            was_final_cover = book.finalmetadata.final_cover_path == cover_path
 
             if was_final_cover:
                 # Find next best cover to use as fallback
@@ -661,18 +663,18 @@ class MetadataResetter:
             final_metadata.final_title = best_title.title
 
         # Reset author
-        best_author = book.bookauthor.filter(is_active=True).order_by('-confidence', '-is_main_author').first()
+        best_author = book.author_relationships.filter(is_active=True).order_by('-confidence', '-is_main_author').first()
         if best_author:
             final_metadata.final_author = best_author.author.name
 
         # Reset series
-        best_series = book.series_info.filter(is_active=True).order_by('-confidence').first()
+        best_series = book.series_relationships.filter(is_active=True).order_by('-confidence').first()
         if best_series:
             final_metadata.final_series = best_series.series.name
             final_metadata.final_series_number = str(best_series.series_number) if best_series.series_number else ''
 
         # Reset publisher
-        best_publisher = book.bookpublisher.filter(is_active=True).order_by('-confidence').first()
+        best_publisher = book.publisher_relationships.filter(is_active=True).order_by('-confidence').first()
         if best_publisher:
             final_metadata.final_publisher = best_publisher.publisher.name
 
@@ -686,8 +688,8 @@ class MetadataResetter:
         best_cover = book.covers.filter(is_active=True).order_by('-confidence', '-is_high_resolution').first()
         if best_cover:
             final_metadata.final_cover_path = best_cover.cover_path
-        elif book.cover_path:
-            final_metadata.final_cover_path = book.cover_path
+        elif book.primary_file and book.primary_file.cover_path:
+            final_metadata.final_cover_path = book.primary_file.cover_path
 
         final_metadata.save()
 
@@ -760,7 +762,7 @@ class MetadataConflictAnalyzer:
     def _get_author_conflicts(book):
         """Get author conflicts."""
         conflicts = []
-        authors = book.bookauthor.filter(is_active=True).order_by('-confidence')
+        authors = book.author_relationships.filter(is_active=True).order_by('-confidence')
         if authors.count() > 1:
             for author in authors:
                 conflicts.append({
@@ -775,7 +777,7 @@ class MetadataConflictAnalyzer:
     def _get_series_conflicts(book):
         """Get series conflicts."""
         conflicts = []
-        series = book.series_info.filter(is_active=True).order_by('-confidence')
+        series = book.series_relationships.filter(is_active=True).order_by('-confidence')
         if series.count() > 1:
             for s in series:
                 value = f"{s.series.name} #{s.series_number}" if s.series_number else s.series.name
@@ -790,7 +792,7 @@ class MetadataConflictAnalyzer:
     def _get_genre_conflicts(book):
         """Get genre conflicts."""
         conflicts = []
-        genres = book.bookgenre.filter(is_active=True).order_by('-confidence')
+        genres = book.genre_relationships.filter(is_active=True).order_by('-confidence')
         unique_genres = {}
 
         for genre in genres:

@@ -422,9 +422,9 @@ class RenamingEngine:
 
     def _get_genre(self) -> Optional[str]:
         """Get book genre."""
-        if hasattr(self.current_book, 'bookgenre') and self.current_book.bookgenre.exists():
+        if hasattr(self.current_book, 'genre_relationships') and self.current_book.genre_relationships.exists():
             # Get the first active genre with highest confidence
-            genre_relation = self.current_book.bookgenre.filter(is_active=True).order_by('-confidence').first()
+            genre_relation = self.current_book.genre_relationships.filter(is_active=True).order_by('-confidence').first()
             if genre_relation and genre_relation.genre:
                 return genre_relation.genre.name
         return None

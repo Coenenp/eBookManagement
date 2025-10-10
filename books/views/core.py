@@ -414,7 +414,7 @@ class BookDetailView(LoginRequiredMixin, DetailView, BookNavigationMixin, Metada
                     final_metadata.save()
 
                     # Update final values to ensure latest data is selected
-                    final_metadata.update_final_values()
+                    final_metadata.sync_from_sources()
 
                 messages.success(request, "Final metadata updated successfully!")
 

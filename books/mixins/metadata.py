@@ -45,9 +45,9 @@ class MetadataContextMixin:
 
         # Get all metadata grouped by type
         context['all_titles'] = book.titles.filter(is_active=True).order_by('-confidence')
-        context['all_authors'] = book.bookauthor.filter(is_active=True).order_by('-confidence', '-is_main_author')
-        context['all_genres'] = book.bookgenre.filter(is_active=True).order_by('-confidence')
-        context['all_series'] = book.series_info.filter(is_active=True).order_by('-confidence')
+        context['all_authors'] = book.author_relationships.filter(is_active=True).order_by('-confidence', '-is_main_author')
+        context['all_genres'] = book.genre_relationships.filter(is_active=True).order_by('-confidence')
+        context['all_series'] = book.series_relationships.filter(is_active=True).order_by('-confidence')
 
         # If no series relationships but there is series info in final metadata
         if not context['all_series'].exists():
@@ -70,11 +70,11 @@ class MetadataContextMixin:
                 context['final_series_name'] = ''
                 context['final_series_number'] = ''
 
-        context['all_publishers'] = book.bookpublisher.filter(is_active=True).order_by('-confidence')
+        context['all_publishers'] = book.publisher_relationships.filter(is_active=True).order_by('-confidence')
         context['all_covers'] = book.covers.filter(is_active=True).order_by('-confidence', '-is_high_resolution')
 
         # Current genres for checkboxes
-        current_genres = list(book.bookgenre.filter(is_active=True).values_list('genre__name', flat=True))
+        current_genres = list(book.genre_relationships.filter(is_active=True).values_list('genre__name', flat=True))
         context['current_genres'] = current_genres
 
         # Data sources ordered by trust level
@@ -129,13 +129,13 @@ class BookListContextMixin:
 
         # Get all datasources that have been used for metadata
         used_datasources = DataSource.objects.filter(
-            Q(booktitle__isnull=False) |
-            Q(bookauthor__isnull=False) |
-            Q(bookgenre__isnull=False) |
-            Q(bookseries__isnull=False) |
-            Q(bookpublisher__isnull=False) |
-            Q(bookcover__isnull=False) |
-            Q(bookmetadata__isnull=False)
+            Q(title_relationships__isnull=False) |
+            Q(author_relationships__isnull=False) |
+            Q(genre_relationships__isnull=False) |
+            Q(series_relationships__isnull=False) |
+            Q(publisher_relationships__isnull=False) |
+            Q(cover_relationships__isnull=False) |
+            Q(metadata_relationships__isnull=False)
         ).distinct().values_list('name', 'name').order_by('name')
 
         context = {

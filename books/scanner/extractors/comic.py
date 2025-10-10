@@ -24,10 +24,19 @@ from books.models import Book, DataSource, BookTitle, BookCover, BookPublisher, 
 logger = logging.getLogger("books.scanner")
 
 
+def _get_content_scan_source():
+    """Get or create the Content Scan DataSource."""
+    source, created = DataSource.objects.get_or_create(
+        name=DataSource.CONTENT_SCAN,
+        defaults={'trust_level': 0.85}
+    )
+    return source
+
+
 def extract_cbr(book):
     """Extract metadata from CBR (Comic Book RAR) files"""
     try:
-        source = DataSource.objects.get(name=DataSource.CONTENT_SCAN)
+        source = _get_content_scan_source()
 
         # Basic validation
         if not rarfile.is_rarfile(book.file_path):
@@ -78,7 +87,7 @@ def extract_cbr(book):
 def extract_cbz(book):
     """Extract metadata from CBZ (Comic Book ZIP) files"""
     try:
-        source = DataSource.objects.get(name=DataSource.CONTENT_SCAN)
+        source = _get_content_scan_source()
 
         # Basic validation
         if not zipfile.is_zipfile(book.file_path):
@@ -457,7 +466,7 @@ def _extract_first_image_as_cover(archive_file, book, format_type):
                         logger.warning(f"Could not remove temporary file: {temp_path}")
 
         # Save cover to database
-        source = DataSource.objects.get(name=DataSource.CONTENT_SCAN)
+        source = _get_content_scan_source()
         BookCover.objects.get_or_create(
             book=book,
             cover_path=cover_path,

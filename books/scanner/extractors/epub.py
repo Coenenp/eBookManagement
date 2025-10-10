@@ -14,10 +14,19 @@ import logging
 logger = logging.getLogger('books.scanner')
 
 
+def _get_epub_internal_source():
+    """Get or create the EPUB Internal DataSource."""
+    source, created = DataSource.objects.get_or_create(
+        name=DataSource.EPUB_INTERNAL,
+        defaults={'trust_level': 0.8}
+    )
+    return source
+
+
 def extract(book):
     try:
         epub_book = epub.read_epub(book.file_path)
-        source = DataSource.objects.get(name=DataSource.EPUB_INTERNAL)
+        source = _get_epub_internal_source()
 
         # Title
         titles = epub_book.get_metadata('DC', 'title')

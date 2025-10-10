@@ -83,6 +83,10 @@ class BackgroundScanner:
         self.job_id = job_id
         self.progress = ScanProgress(job_id)
 
+    def report_progress(self, current: int, total: int, message: str = ""):
+        """Report progress during scanning."""
+        self.progress.update(current, total, "Processing", message)
+
     def scan_folder(self, folder_path: str, language: str = None, enable_external_apis: bool = True, content_type: str = None) -> Dict:
         """Scan a folder for books in the background."""
         try:

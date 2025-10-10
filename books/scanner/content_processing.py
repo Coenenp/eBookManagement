@@ -9,13 +9,22 @@ from pathlib import Path
 from typing import List
 
 from books.models import (
-    ScanFolder, Book, BookFile,
+    ScanFolder, Book, BookFile, DataSource,
     COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
 )
 from books.scanner.grouping import ComicFileGrouper, AudiobookFileGrouper
 from books.scanner.file_ops import get_file_format
 
 logger = logging.getLogger("books.scanner")
+
+
+def _get_file_scanner_source():
+    """Get or create the file_scanner DataSource object"""
+    source, _ = DataSource.objects.get_or_create(
+        name='file_scanner',
+        defaults={'priority': 1}
+    )
+    return source
 
 
 def process_files_by_content_type(file_paths: List[str], scan_folder: ScanFolder,
@@ -69,13 +78,16 @@ def _process_comic_issue(file_path: str, series_name: str, comic_grouper: ComicF
     issue_title = f"{series_name} #{issue_number}"
 
     # Get or create the Book (comic issue)
-    book, created = Book.get_or_create_by_title(
-        title=issue_title,
-        content_type='comic',
-        defaults={
-            'scan_folder': scan_folder,
-        }
-    )
+    book = Book.find_by_title(issue_title, content_type='comic')
+    if book:
+        created = False
+    else:
+        book = Book.create_with_title(
+            title=issue_title,
+            content_type='comic',
+            scan_folder=scan_folder,
+        )
+        created = True
 
     if created:
         logger.info(f"Created comic issue: {issue_title}")
@@ -123,7 +135,7 @@ def _store_comic_metadata(book: Book, issue_info: dict):
             field_name=STANDARD_METADATA_FIELDS['issue_number'],
             defaults={
                 'field_value': str(issue_info['issue_number']),
-                'source': 'file_scanner',
+                'source': _get_file_scanner_source(),
                 'confidence': 0.8
             }
         )
@@ -135,7 +147,7 @@ def _store_comic_metadata(book: Book, issue_info: dict):
             field_name=STANDARD_METADATA_FIELDS['volume'],
             defaults={
                 'field_value': str(issue_info['volume']),
-                'source': 'file_scanner',
+                'source': _get_file_scanner_source(),
                 'confidence': 0.8
             }
         )
@@ -147,7 +159,7 @@ def _store_comic_metadata(book: Book, issue_info: dict):
             field_name=STANDARD_METADATA_FIELDS['publication_year'],
             defaults={
                 'field_value': str(issue_info['year']),
-                'source': 'file_scanner',
+                'source': _get_file_scanner_source(),
                 'confidence': 0.8
             }
         )
@@ -167,13 +179,16 @@ def _process_audiobook_files(file_paths: List[str], scan_folder: ScanFolder,
         logger.info(f"Processing audiobook: {book_key} ({len(audio_files)} files)")
 
         # Get or create the Book (audiobook)
-        book, created = Book.get_or_create_by_title(
-            title=book_key,
-            content_type='audiobook',
-            defaults={
-                'scan_folder': scan_folder,
-            }
-        )
+        book = Book.find_by_title(book_key, content_type='audiobook')
+        if book:
+            created = False
+        else:
+            book = Book.create_with_title(
+                title=book_key,
+                content_type='audiobook',
+                scan_folder=scan_folder,
+            )
+            created = True
 
         if created:
             logger.info(f"Created new audiobook: {book_key}")
@@ -249,7 +264,7 @@ def _store_audiobook_totals(book: Book, total_duration: int, total_size: int):
         field_name='total_duration_seconds',
         defaults={
             'field_value': str(total_duration),
-            'source': 'file_scanner',
+            'source': _get_file_scanner_source(),
             'confidence': 0.9
         }
     )
@@ -260,7 +275,7 @@ def _store_audiobook_totals(book: Book, total_duration: int, total_size: int):
         field_name='total_size_bytes',
         defaults={
             'field_value': str(total_size),
-            'source': 'file_scanner',
+            'source': _get_file_scanner_source(),
             'confidence': 0.9
         }
     )
@@ -362,7 +377,7 @@ def _query_audiobook_external_metadata(book):
         # Get author from book metadata if available
         author = None
         try:
-            author_relation = book.bookauthor.filter(is_active=True).first()
+            author_relation = book.author_relationships.filter(is_active=True).first()
             if author_relation:
                 author = author_relation.author.name
         except Exception:

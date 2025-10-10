@@ -11,10 +11,19 @@ import logging
 logger = logging.getLogger("books.scanner")
 
 
+def _get_pdf_internal_source():
+    """Get or create the PDF Internal DataSource."""
+    source, created = DataSource.objects.get_or_create(
+        name=DataSource.PDF_INTERNAL,
+        defaults={'trust_level': 0.6}
+    )
+    return source
+
+
 def extract(book):
     try:
         reader = PdfReader(book.file_path)
-        source = DataSource.objects.get(name=DataSource.PDF_INTERNAL)
+        source = _get_pdf_internal_source()
         meta = reader.metadata
 
         if meta.title:

@@ -116,11 +116,11 @@ def apply_standard_filters(qs: QuerySet, params: Dict[str, Any]) -> QuerySet:
     if datasource and datasource.strip():
         qs = qs.filter(
             Q(titles__source_id=datasource) |
-            Q(bookauthor__source_id=datasource) |
+            Q(author_relationships__source_id=datasource) |
             Q(covers__source_id=datasource) |
-            Q(series_info__source_id=datasource) |
-            Q(bookpublisher__source_id=datasource) |
-            Q(bookgenre__source_id=datasource) |
+            Q(series_relationships__source_id=datasource) |
+            Q(publisher_relationships__source_id=datasource) |
+            Q(genre_relationships__source_id=datasource) |
             Q(metadata__source_id=datasource)
         ).distinct()
 

@@ -8,54 +8,74 @@ logger = logging.getLogger(__name__)
 
 class FinalMetadataSyncMixin:
     """
-    Mixin that updates FinalMetadata when a related metadata record is marked inactive.
+    Mixin for models that contribute to FinalMetadata.
+
+    Automatically triggers FinalMetadata re-sync when:
+    - New metadata is added (on creation)
+    - Metadata is updated (confidence changes, source changes)
+    - Metadata is deactivated (is_active = False)
+
+    This ensures FinalMetadata always reflects the highest-confidence
+    active metadata from all sources.
     """
 
-    metadata_type_map = {
-        'BookTitle': 'title',
-        'BookAuthor': 'final_author',
-        'BookCover': 'final_cover_path',
-        'BookSeries': 'final_series',
-        'BookPublisher': 'final_publisher',
-        'BookMetadata': {
-            'language': 'language',
-            'isbn': 'isbn',
-            'publication_year': 'publication_year',
-            'description': 'description',
-        },
-    }
-
     def post_deactivation_sync(self):
+        """
+        Trigger FinalMetadata re-sync after this metadata changes.
+
+        Called automatically by save() when metadata is added, updated,
+        or deactivated. This ensures FinalMetadata always shows the
+        best available metadata.
+        """
+        if not hasattr(self, 'book'):
+            logger.warning(f"{self.__class__.__name__} has no 'book' attribute for sync")
+            return
+
+        if not self.book:
+            logger.warning(f"{self.__class__.__name__}.book is None for sync")
+            return
+
         try:
-            final = getattr(self.book, 'finalmetadata', None)
-            if not final or self.is_active:
-                return
+            # Check if FinalMetadata exists
+            if hasattr(self.book, 'finalmetadata') and self.book.finalmetadata:
+                final = self.book.finalmetadata
 
-            model_name = self.__class__.__name__
+                # Only sync if not reviewed (unless forced by user later)
+                if not final.is_reviewed:
+                    logger.debug(
+                        f"Triggering FinalMetadata sync from {self.__class__.__name__} change",
+                        extra={
+                            'book_id': self.book.id,
+                            'metadata_type': self.__class__.__name__,
+                            'is_active': getattr(self, 'is_active', None),
+                            'confidence': getattr(self, 'confidence', None)
+                        }
+                    )
+                    # Explicitly sync (save_after=True by default)
+                    final.sync_from_sources(save_after=True)
+                else:
+                    logger.debug(
+                        "Skipped FinalMetadata sync - book is reviewed",
+                        extra={'book_id': self.book.id}
+                    )
+            else:
+                logger.debug(
+                    f"No FinalMetadata exists for book {self.book.id} - skipping sync"
+                )
 
-            if model_name == 'BookTitle' and hasattr(self, 'title') and self.title == final.final_title:
-                final.update_final_title()
-
-            elif model_name == 'BookAuthor' and hasattr(self, 'author') and self.author and self.author.name == final.final_author:
-                final.update_final_author()
-
-            elif model_name == 'BookCover' and hasattr(self, 'cover_path') and self.cover_path == final.final_cover_path:
-                final.update_final_cover()
-
-            elif model_name == 'BookSeries' and hasattr(self, 'series') and self.series and self.series.name == final.final_series:
-                final.update_final_series()
-
-            elif model_name == 'BookPublisher' and hasattr(self, 'publisher') and self.publisher and self.publisher.name == final.final_publisher:
-                final.update_final_publisher()
-
-            elif model_name == 'BookMetadata':
-                field = self.field_name.lower()
-                target_field = self.metadata_type_map.get('BookMetadata', {}).get(field)
-                if target_field and getattr(final, target_field) == self.field_value:
-                    final.update_dynamic_field(target_field)
         except Exception as e:
-            logger.error(f"Error in post_deactivation_sync: {e}")
+            logger.error(
+                f"Error in post_deactivation_sync for {self.__class__.__name__}",
+                extra={
+                    'book_id': self.book.id if self.book else None,
+                    'error': str(e)
+                },
+                exc_info=True
+            )
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         self.post_deactivation_sync()
+
+    class Meta:
+        abstract = True

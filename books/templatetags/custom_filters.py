@@ -109,7 +109,7 @@ def get_display_author(book):
     try:
         if hasattr(book, 'finalmetadata') and book.finalmetadata.final_author:
             return book.finalmetadata.final_author
-        first_author = book.bookauthor.first()
+        first_author = book.author_relationships.first()
         return first_author.author.name if first_author and first_author.author else 'Unknown Author'
     except Exception:
         return 'Unknown Author'

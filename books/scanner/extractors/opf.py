@@ -17,12 +17,21 @@ import re
 logger = logging.getLogger("books.scanner")
 
 
+def _get_opf_file_source():
+    """Get or create the OPF File DataSource."""
+    source, created = DataSource.objects.get_or_create(
+        name=DataSource.OPF_FILE,
+        defaults={'trust_level': 0.9}
+    )
+    return source
+
+
 def extract(book):
     try:
         if not book.opf_path:
             return
 
-        source = DataSource.objects.get(name=DataSource.OPF_FILE)
+        source = _get_opf_file_source()
 
         with open(book.opf_path, 'r', encoding='utf-8') as f:
             root = ET.parse(f).getroot()

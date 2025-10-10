@@ -159,7 +159,7 @@ class ScanFolderAdmin(admin.ModelAdmin):
 class BookAdmin(admin.ModelAdmin):
     list_display = ('title', 'content_type', 'file_format', 'file_size_mb', 'is_placeholder', 'is_duplicate', 'is_corrupted', 'last_scanned')
     list_filter = ('content_type', 'is_placeholder', 'is_duplicate', 'is_corrupted', 'last_scanned', 'files__file_format')
-    search_fields = ('titles__title', 'bookauthor__author__name', 'files__file_path')
+    search_fields = ('titles__title', 'author_relationships__author__name', 'files__file_path')
     readonly_fields = ('first_scanned', 'last_scanned', 'file_format', 'file_size_mb', 'file_path_display')
 
     inlines = [

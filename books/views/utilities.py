@@ -246,7 +246,8 @@ def generate_filename_from_metadata(book):
         author = sanitize_filename(author)
 
         # Get file extension
-        ext = os.path.splitext(book.file_path)[1] if book.file_path else '.unknown'
+        file_path = book.primary_file.file_path if book.primary_file else ''
+        ext = os.path.splitext(file_path)[1] if file_path else '.unknown'
 
         # Create filename: "Author - Title.ext"
         filename = f"{author} - {title}{ext}"
@@ -258,7 +259,7 @@ def generate_filename_from_metadata(book):
 
     except Exception:
         # Fallback to original filename or generic name
-        if book.file_path:
-            return os.path.basename(book.file_path)
+        if book.primary_file and book.primary_file.file_path:
+            return os.path.basename(book.primary_file.file_path)
         else:
             return "unknown_book.unknown"
