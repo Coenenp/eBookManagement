@@ -68,9 +68,9 @@ class BookNavigationMixin:
         # Navigation by needs review (books with conflicts or low confidence)
         needs_review_qs = base_queryset.filter(
             Q(finalmetadata__is_reviewed=False) |
-            Q(bookauthor__confidence__lt=0.7) |
+            Q(author_relationships__confidence__lt=0.7) |
             Q(titles__confidence__lt=0.7) |
-            Q(series_info__confidence__lt=0.7)
+            Q(series_relationships__confidence__lt=0.7)
         ).distinct()
         prev_needs_review = needs_review_qs.filter(id__lt=book.id).order_by('-id').first()
         next_needs_review = needs_review_qs.filter(id__gt=book.id).order_by('id').first()

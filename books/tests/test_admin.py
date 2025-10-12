@@ -72,7 +72,7 @@ class AdminModelAccessTestCase(TestCase):
 
         # Create temporary directory for testing
         self.temp_dir = tempfile.mkdtemp()
-        
+
         # Create test data
         self.scan_folder = ScanFolder.objects.create(
             name="Test Folder",
@@ -455,7 +455,7 @@ class AdminCustomMethodTestCase(TestCase):
         # Create test data
         # Create temporary directory for testing
         self.temp_dir = tempfile.mkdtemp()
-        
+
         self.scan_folder = ScanFolder.objects.create(
             name="Test Folder",
             path=self.temp_dir,
@@ -541,7 +541,7 @@ class AdminBulkActionsTestCase(TestCase):
 
         # Create temporary directory for testing
         self.temp_dir = tempfile.mkdtemp()
-        
+
         self.scan_folder = ScanFolder.objects.create(
             name="Test Folder",
             path=self.temp_dir,
@@ -642,7 +642,7 @@ class AdminIntegrationTestCase(TestCase):
         # Create base objects
         # Create another temporary directory for this specific test
         temp_rel_dir = tempfile.mkdtemp()
-        
+
         scan_folder = ScanFolder.objects.create(
             name="Relationship Test",
             path=temp_rel_dir,
@@ -662,7 +662,7 @@ class AdminIntegrationTestCase(TestCase):
         response = self.client.get(f'/admin/books/book/{book.id}/change/')
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Relationship Test')  # Should show related scan folder
-        
+
         # Clean up the temporary directory created for this test
         if os.path.exists(temp_rel_dir):
             shutil.rmtree(temp_rel_dir)

@@ -5,19 +5,52 @@ This module contains tests for file uploads, file validation, file processing,
 batch operations, file format handling, error recovery, and security validation.
 """
 
+import os
+import tempfile
+import shutil
 import json
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
-from books.models import Book, ScanLog, ScanFolder
+from books.models import ScanLog, ScanFolder
+from books.tests.test_helpers import create_test_book_with_file
 
 
-class FileUploadTests(TestCase):
+class BaseTestCaseWithTempDir(TestCase):
+    """Base test case with temporary directory management for ScanFolder tests."""
+
+    def setUp(self):
+        """Set up test environment with temporary directories."""
+        super().setUp()
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up temporary directories."""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+        super().tearDown()
+
+    def create_temp_book_file(self, filename, content=b"fake content"):
+        """Create a temporary book file for testing."""
+        file_path = Path(self.temp_dir) / filename
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(file_path, 'wb') as f:
+            f.write(content)
+        return file_path
+
+    def create_test_book_with_file(self, file_path, **kwargs):
+        """Create a Book instance with a temporary file."""
+        return create_test_book_with_file(file_path, **kwargs)
+
+
+class FileUploadTests(BaseTestCaseWithTempDir):
     """Tests for file upload functionality."""
 
     def setUp(self):
+        super().setUp()
         self.client = Client()
         self.user = User.objects.create_user(
             username='testuser',
@@ -25,9 +58,9 @@ class FileUploadTests(TestCase):
         )
         self.client.login(username='testuser', password='testpass123')
 
-        # Create scan folder for book creation
+        # Create scan folder for book creation using temporary directory
         self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
+            path=self.temp_dir,
             is_active=True
         )
 
@@ -192,10 +225,11 @@ class FileUploadTests(TestCase):
                 self.assertEqual(cancel_response.status_code, 200)
 
 
-class FileValidationTests(TestCase):
+class FileValidationTests(BaseTestCaseWithTempDir):
     """Tests for file validation and integrity checking."""
 
     def setUp(self):
+        super().setUp()
         self.client = Client()
         self.user = User.objects.create_user(
             username='testuser',
@@ -203,9 +237,9 @@ class FileValidationTests(TestCase):
         )
         self.client.login(username='testuser', password='testpass123')
 
-        # Create scan folder for book creation
+        # Create scan folder for book creation using temporary directory
         self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
+            path=self.temp_dir,
             is_active=True
         )
 
@@ -214,8 +248,13 @@ class FileValidationTests(TestCase):
         url = reverse('books:ajax_validate_file_integrity')
 
         # Test with valid file ID
-        book = Book.objects.create(
-            file_path="/library/test.epub",
+        # Create test file in temp directory
+        test_file_path = os.path.join(self.temp_dir, 'test.epub')
+        with open(test_file_path, 'w') as f:
+            f.write('test content')
+
+        book = create_test_book_with_file(
+            file_path=test_file_path,
             file_format="epub",
             scan_folder=self.scan_folder,
         )
@@ -238,8 +277,13 @@ class FileValidationTests(TestCase):
         mock_exists.return_value = True
         mock_getsize.return_value = 1024
 
-        book = Book.objects.create(
-            file_path="/library/existing.epub",
+        # Create test file in temp directory
+        test_file_path = os.path.join(self.temp_dir, 'existing.epub')
+        with open(test_file_path, 'w') as f:
+            f.write('test content')
+
+        book = create_test_book_with_file(
+            file_path=test_file_path,
             file_format="epub",
             file_size=1024,
             scan_folder=self.scan_folder,
@@ -258,11 +302,14 @@ class FileValidationTests(TestCase):
         # Mock file doesn't exist
         mock_exists.return_value = False
 
-        book = Book.objects.create(
-            file_path="/library/missing.epub",
+        # Create a book with a file path that starts with '/' to trigger the os.path.exists check
+        non_existent_path = '/nonexistent/missing.epub'
+        book = create_test_book_with_file(
+            file_path=non_existent_path,
             file_format="epub",
             scan_folder=self.scan_folder,
         )
+        # The mock will make os.path.exists return False for any file
 
         url = reverse('books:ajax_validate_file_existence')
         response = self.client.post(url, {'book_id': book.id})
@@ -299,8 +346,13 @@ class FileValidationTests(TestCase):
         # Create multiple books
         books = []
         for i in range(5):
-            book = Book.objects.create(
-                file_path=f"/library/batch_test_{i}.epub",
+            # Create test file in temp directory
+            test_file_path = os.path.join(self.temp_dir, f'batch_test_{i}.epub')
+            with open(test_file_path, 'w') as f:
+                f.write('test content')
+
+            book = create_test_book_with_file(
+                file_path=test_file_path,
                 file_format="epub",
                 scan_folder=self.scan_folder,
             )
@@ -324,8 +376,13 @@ class FileValidationTests(TestCase):
         """Test detection of corrupted files."""
         url = reverse('books:ajax_check_file_corruption')
 
-        book = Book.objects.create(
-            file_path="/library/corruption_test.epub",
+        # Create test file in temp directory
+        test_file_path = os.path.join(self.temp_dir, 'corruption_test.epub')
+        with open(test_file_path, 'w') as f:
+            f.write('test content')
+
+        book = create_test_book_with_file(
+            file_path=test_file_path,
             file_format="epub",
             scan_folder=self.scan_folder,
         )
@@ -341,10 +398,11 @@ class FileValidationTests(TestCase):
             self.assertIn('corrupted', response_data)
 
 
-class FileProcessingTests(TestCase):
+class FileProcessingTests(BaseTestCaseWithTempDir):
     """Tests for file processing and metadata extraction."""
 
     def setUp(self):
+        super().setUp()
         self.client = Client()
         self.user = User.objects.create_user(
             username='testuser',
@@ -352,9 +410,9 @@ class FileProcessingTests(TestCase):
         )
         self.client.login(username='testuser', password='testpass123')
 
-        # Create scan folder for book creation
+        # Create scan folder for book creation using temporary directory
         self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
+            path=self.temp_dir,
             is_active=True
         )
 
@@ -369,8 +427,9 @@ class FileProcessingTests(TestCase):
             'series_number': 1
         }
 
-        book = Book.objects.create(
-            file_path="/library/processing_test.epub",
+        book_file = self.create_temp_book_file("processing_test.epub", b"fake epub content")
+        book = self.create_test_book_with_file(
+            book_file,
             file_format="epub",
             scan_folder=self.scan_folder,
         )
@@ -389,8 +448,9 @@ class FileProcessingTests(TestCase):
 
     def test_cover_image_extraction(self):
         """Test cover image extraction from files."""
-        book = Book.objects.create(
-            file_path="/library/cover_test.epub",
+        book_file = self.create_temp_book_file("cover_test.epub", b"fake epub content")
+        book = self.create_test_book_with_file(
+            book_file,
             file_format="epub",
             scan_folder=self.scan_folder,
         )
@@ -409,8 +469,9 @@ class FileProcessingTests(TestCase):
 
     def test_file_format_conversion(self):
         """Test file format conversion functionality."""
-        book = Book.objects.create(
-            file_path="/library/conversion_test.epub",
+        book_file = self.create_temp_book_file("conversion_test.epub", b"fake epub content")
+        book = self.create_test_book_with_file(
+            book_file,
             file_format="epub",
             scan_folder=self.scan_folder,
         )
@@ -441,8 +502,9 @@ class FileProcessingTests(TestCase):
         # Create multiple books for batch processing
         books = []
         for i in range(10):
-            book = Book.objects.create(
-                file_path=f"/library/batch_{i}.epub",
+            book_file = self.create_temp_book_file(f"batch_{i}.epub", b"fake epub content")
+            book = self.create_test_book_with_file(
+                book_file,
                 file_format="epub",
                 scan_folder=self.scan_folder,
             )
@@ -525,10 +587,11 @@ class FileProcessingTests(TestCase):
             self.assertIn('queue_length', status_data)
 
 
-class FileOperationSecurityTests(TestCase):
+class FileOperationSecurityTests(BaseTestCaseWithTempDir):
     """Security tests for file operations."""
 
     def setUp(self):
+        super().setUp()
         self.client = Client()
         self.user = User.objects.create_user(
             username='testuser',
@@ -536,9 +599,9 @@ class FileOperationSecurityTests(TestCase):
         )
         self.client.login(username='testuser', password='testpass123')
 
-        # Create scan folder for book creation
+        # Create scan folder for book creation using temporary directory
         self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
+            path=self.temp_dir,
             is_active=True
         )
 
@@ -595,8 +658,9 @@ class FileOperationSecurityTests(TestCase):
         """Test protection against zip bombs."""
         url = reverse('books:ajax_validate_file_integrity')
 
-        book = Book.objects.create(
-            file_path="/library/zip_bomb.epub",
+        book_file = self.create_temp_book_file("zip_bomb.epub", b"fake epub content")
+        book = self.create_test_book_with_file(
+            book_file,
             file_format="epub",
             scan_folder=self.scan_folder,
         )
@@ -712,10 +776,11 @@ class FileOperationSecurityTests(TestCase):
                     # For now, just ensure the response includes a filename
 
 
-class FileOperationPerformanceTests(TestCase):
+class FileOperationPerformanceTests(BaseTestCaseWithTempDir):
     """Performance tests for file operations."""
 
     def setUp(self):
+        super().setUp()
         self.client = Client()
         self.user = User.objects.create_user(
             username='testuser',
@@ -723,9 +788,9 @@ class FileOperationPerformanceTests(TestCase):
         )
         self.client.login(username='testuser', password='testpass123')
 
-        # Create scan folder for book creation
+        # Create scan folder for book creation using temporary directory
         self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
+            path=self.temp_dir,
             is_active=True
         )
 
@@ -760,8 +825,9 @@ class FileOperationPerformanceTests(TestCase):
         # Create multiple books for batch processing
         books = []
         for i in range(50):  # Process 50 books
-            book = Book.objects.create(
-                file_path=f"/library/perf_test_{i}.epub",
+            book_file = self.create_temp_book_file(f"perf_test_{i}.epub", b"fake epub content")
+            book = self.create_test_book_with_file(
+                book_file,
                 file_format="epub",
                 scan_folder=self.scan_folder,
             )
@@ -793,8 +859,9 @@ class FileOperationPerformanceTests(TestCase):
         # Create books for validation
         books = []
         for i in range(5):  # Reduced number for sequential testing
-            book = Book.objects.create(
-                file_path=f"/library/concurrent_{i}.epub",
+            book_file = self.create_temp_book_file(f"concurrent_{i}.epub", b"fake epub content")
+            book = self.create_test_book_with_file(
+                book_file,
                 file_format="epub",
                 scan_folder=self.scan_folder,
             )
@@ -833,8 +900,9 @@ class FileOperationPerformanceTests(TestCase):
         # Create and process multiple files
         books = []
         for i in range(10):
-            book = Book.objects.create(
-                file_path=f"/library/memory_test_{i}.epub",
+            book_file = self.create_temp_book_file(f"memory_test_{i}.epub", b"fake epub content")
+            book = self.create_test_book_with_file(
+                book_file,
                 file_format="epub",
                 scan_folder=self.scan_folder,
             )
@@ -859,10 +927,11 @@ class FileOperationPerformanceTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
-class FileOperationIntegrationTests(TestCase):
+class FileOperationIntegrationTests(BaseTestCaseWithTempDir):
     """Integration tests for complete file operation workflows."""
 
     def setUp(self):
+        super().setUp()
         self.client = Client()
         self.user = User.objects.create_user(
             username='testuser',
@@ -870,9 +939,9 @@ class FileOperationIntegrationTests(TestCase):
         )
         self.client.login(username='testuser', password='testpass123')
 
-        # Create scan folder for book creation
+        # Create scan folder for book creation using temporary directory
         self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
+            path=self.temp_dir,
             is_active=True
         )
 
@@ -916,8 +985,8 @@ class FileOperationIntegrationTests(TestCase):
 
     def test_error_recovery_in_file_operations(self):
         """Test error recovery during file operations."""
-        # Create book with invalid file path
-        book = Book.objects.create(
+        # Create book with a Unix-style path that doesn't exist to trigger os.path.exists check
+        book = create_test_book_with_file(
             file_path="/nonexistent/path/error_test.epub",
             file_format="epub",
             scan_folder=self.scan_folder,
@@ -937,8 +1006,9 @@ class FileOperationIntegrationTests(TestCase):
 
     def test_file_operation_logging(self):
         """Test logging of file operations."""
-        book = Book.objects.create(
-            file_path="/library/logging_test.epub",
+        book_file = self.create_temp_book_file("logging_test.epub", b"fake epub content")
+        book = self.create_test_book_with_file(
+            book_file,
             file_format="epub",
             scan_folder=self.scan_folder,
         )

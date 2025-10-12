@@ -36,9 +36,10 @@ SORT_FIELDS = {
 def base_book_queryset() -> QuerySet:
     return Book.objects.select_related('finalmetadata', 'scan_folder').prefetch_related(
         'titles__source',
-        'bookauthor__author', 'bookauthor__source',
-        'bookgenre__genre', 'bookgenre__source',
-        'series_info__series', 'series_info__source'
+        'author_relationships__author', 'author_relationships__source',
+        'genre_relationships__genre', 'genre_relationships__source',
+        'series_relationships__series', 'series_relationships__source',
+        'files'  # Add prefetch for book files to avoid N+1 in cover processing
     )
 
 
@@ -53,7 +54,7 @@ def apply_standard_filters(qs: QuerySet, params: Dict[str, Any]) -> QuerySet:
     if search:
         qs = qs.filter(
             Q(titles__title__icontains=search) |
-            Q(bookauthor__author__name__icontains=search) |
+            Q(author_relationships__author__name__icontains=search) |
             Q(finalmetadata__final_title__icontains=search) |
             Q(finalmetadata__final_author__icontains=search) |
             Q(finalmetadata__final_series__icontains=search) |

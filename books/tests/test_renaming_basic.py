@@ -12,6 +12,7 @@ import tempfile
 import shutil
 
 from books.models import Book, Author, Series
+from books.tests.test_helpers import create_test_book_with_file
 
 
 class BasicRenamingEngineTests(TestCase):
@@ -30,7 +31,7 @@ class BasicRenamingEngineTests(TestCase):
         )
 
         # Create test book using existing model structure
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/Foundation.epub",
             file_format="epub",
             file_size=1024000
@@ -137,7 +138,7 @@ class BasicRenamingViewsTests(TestCase):
         )
 
         # Create test book
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/Foundation.epub",
             file_format="epub",
             file_size=1024000
@@ -151,7 +152,7 @@ class BasicRenamingViewsTests(TestCase):
             response = self.client.get(url)
             # Should redirect to login if not authenticated
             self.assertIn(response.status_code, [302, 404])  # 404 if view not implemented yet
-        except:
+        except Exception:
             # If URL not configured yet, that's expected during development
             self.assertTrue(True, "Renaming views not implemented yet - this is expected")
 
@@ -165,7 +166,7 @@ class BasicRenamingViewsTests(TestCase):
             # If view exists and user is authenticated, should not redirect to login
             if response.status_code != 404:
                 self.assertNotEqual(response.status_code, 302)
-        except:
+        except Exception:
             # If URL not configured yet, that's expected during development
             self.assertTrue(True, "Renaming views not implemented yet - this is expected")
 
@@ -185,7 +186,7 @@ class BasicBatchOperationsTests(TestCase):
             self.test_files.append(file_path)
 
             # Create corresponding book records
-            Book.objects.create(
+            create_test_book_with_file(
                 file_path=str(file_path),
                 file_format="epub",
                 file_size=1024000
@@ -302,7 +303,7 @@ class BasicIntegrationTests(TestCase):
 
         self.books = []
         for i in range(5):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f"/test/book_{i}.epub",
                 file_format="epub",
                 file_size=1024000 + (i * 1000)
@@ -359,62 +360,73 @@ class BasicIntegrationTests(TestCase):
     def test_metadata_preservation_concept(self):
         """Test concept of metadata preservation during renaming"""
         book = self.books[0]
-        original_file_path = book.file_path
-        original_format = book.file_format
-        original_size = book.file_size
+        primary_file = book.primary_file
+
+        original_file_path = primary_file.file_path
+        original_format = primary_file.file_format
+        original_size = primary_file.file_size
 
         # Simulate rename operation (path change only)
         new_path = original_file_path.replace('book_0', 'renamed_book')
 
-        # Mock update operation
-        book.file_path = new_path
-        book.save()
+        # Mock update operation - update the BookFile, not Book
+        primary_file.file_path = new_path
+        primary_file.save()
 
         # Verify metadata preserved
+        primary_file.refresh_from_db()
         book.refresh_from_db()
-        self.assertEqual(book.file_format, original_format)
-        self.assertEqual(book.file_size, original_size)
-        self.assertEqual(book.file_path, new_path)
-        self.assertNotEqual(book.file_path, original_file_path)
+        self.assertEqual(primary_file.file_format, original_format)
+        self.assertEqual(primary_file.file_size, original_size)
+        self.assertEqual(primary_file.file_path, new_path)
+        self.assertNotEqual(primary_file.file_path, original_file_path)
 
     def test_rollback_capability_concept(self):
         """Test concept of operation rollback"""
         # Record original state
         original_paths = {}
+        file_operations = {}
         for book in self.books:
-            original_paths[book.id] = book.file_path
+            primary_file = book.primary_file
+            original_paths[book.id] = primary_file.file_path
+            file_operations[book.id] = primary_file.id
 
         # Simulate rename operations
         rename_operations = []
         for book in self.books:
-            old_path = book.file_path
+            primary_file = book.primary_file
+            old_path = primary_file.file_path
             new_path = old_path.replace('.epub', '_renamed.epub')
 
             rename_operations.append({
                 'book_id': book.id,
+                'file_id': primary_file.id,
                 'old_path': old_path,
                 'new_path': new_path,
                 'operation': 'rename'
             })
 
-            # Apply change
-            book.file_path = new_path
-            book.save()
+            # Apply change to BookFile
+            primary_file.file_path = new_path
+            primary_file.save()
 
         # Verify changes applied
-        for book in Book.objects.filter(id__in=[b.id for b in self.books]):
-            self.assertIn('_renamed', book.file_path)
+        from books.models import BookFile
+        for operation in rename_operations:
+            book_file = BookFile.objects.get(id=operation['file_id'])
+            self.assertIn('_renamed', book_file.file_path)
 
         # Simulate rollback
         for operation in reversed(rename_operations):
-            book = Book.objects.get(id=operation['book_id'])
-            book.file_path = operation['old_path']
-            book.save()
+            book_file = BookFile.objects.get(id=operation['file_id'])
+            book_file.file_path = operation['old_path']
+            book_file.save()
 
         # Verify rollback successful
-        for book in Book.objects.filter(id__in=[b.id for b in self.books]):
-            self.assertEqual(book.file_path, original_paths[book.id])
-            self.assertNotIn('_renamed', book.file_path)
+        for operation in rename_operations:
+            book_file = BookFile.objects.get(id=operation['file_id'])
+            self.assertEqual(book_file.file_path, operation['old_path'])
+            self.assertNotIn('_renamed', book_file.file_path)
 
 
 class PredefinedPatternsTests(TestCase):

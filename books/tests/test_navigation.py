@@ -1,10 +1,12 @@
 """
 Test cases for book detail view navigation functionality.
 """
+import tempfile
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.urls import reverse
-from books.models import Book, FinalMetadata, ScanFolder
+from books.models import FinalMetadata, ScanFolder
+from books.tests.test_helpers import create_test_book_with_file
 
 
 class BookDetailNavigationTestCase(TestCase):
@@ -18,28 +20,25 @@ class BookDetailNavigationTestCase(TestCase):
         # Create a scan folder
         self.scan_folder = ScanFolder.objects.create(
             name='Test Folder',
-            path='/test/path',
+            path=tempfile.mkdtemp(),
             language='en'
         )
 
         # Create test books with proper Book model fields
         # Create books first
-        self.book1 = Book.objects.create(
-            id=1,
+        self.book1 = create_test_book_with_file(
             file_path='/test/book1.epub',
             file_format='epub',
             scan_folder=self.scan_folder
         )
 
-        self.book2 = Book.objects.create(
-            id=2,
+        self.book2 = create_test_book_with_file(
             file_path='/test/book2.epub',
             file_format='epub',
             scan_folder=self.scan_folder
         )
 
-        self.book3 = Book.objects.create(
-            id=3,
+        self.book3 = create_test_book_with_file(
             file_path='/test/book3.epub',
             file_format='epub',
             scan_folder=self.scan_folder
@@ -233,8 +232,7 @@ class BookDetailNavigationTestCase(TestCase):
     def test_navigation_with_placeholder_books(self):
         """Test that placeholder books are excluded from navigation."""
         # Create a placeholder book
-        Book.objects.create(
-            id=10,
+        create_test_book_with_file(
             file_path='/test/placeholder.epub',
             file_format='placeholder',
             scan_folder=self.scan_folder,
@@ -268,8 +266,7 @@ class BookDetailNavigationTestCase(TestCase):
     def test_navigation_with_missing_final_metadata(self):
         """Test navigation works even when final metadata is missing."""
         # Create a book without final metadata
-        Book.objects.create(
-            id=4,
+        create_test_book_with_file(
             file_path='/test/book4.epub',
             file_format='epub',
             scan_folder=self.scan_folder
@@ -300,15 +297,14 @@ class BookDetailNavigationIntegrationTestCase(TestCase):
 
         # Create scan folder
         self.scan_folder = ScanFolder.objects.create(
-            path='/test/path',
+            path=tempfile.mkdtemp(),
             language='en'
         )
 
         # Create multiple books for comprehensive testing
         self.books = []
         for i in range(1, 6):  # Create books 1-5
-            book = Book.objects.create(
-                id=i,
+            book = create_test_book_with_file(
                 file_path=f'/test/book{i}.epub',
                 file_format='epub',
                 scan_folder=self.scan_folder

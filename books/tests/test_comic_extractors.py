@@ -2,7 +2,9 @@
 
 from unittest.mock import patch, MagicMock
 from django.test import TestCase
-from books.models import Book, DataSource, BookMetadata, ScanFolder
+import tempfile
+import shutil
+from books.models import Book, BookFile, DataSource, BookMetadata, ScanFolder
 from books.scanner.extractors.comic import (
     extract_cbr, extract_cbz, _clean_comic_title,
     _parse_filename_metadata, _extract_comic_info_xml,
@@ -21,12 +23,19 @@ class ComicExtractorTests(TestCase):
             defaults={'trust_level': 1.0}
         )
 
+        # Create temporary directory for scan folder
+        self.test_dir = tempfile.mkdtemp()
+
         # Create scan folder
         self.scan_folder = ScanFolder.objects.create(
             name="Test Comics Folder",
-            path="/test/comics",
+            path=self.test_dir,
             content_type="comics"
         )
+
+    def tearDown(self):
+        """Clean up test data"""
+        shutil.rmtree(self.test_dir, ignore_errors=True)
 
     def test_clean_comic_title_basic(self):
         """Test basic title cleaning"""
@@ -67,9 +76,13 @@ class ComicExtractorTests(TestCase):
         """Test basic CBR extraction"""
         # Create test book
         book = Book.objects.create(
-            file_path="/test/comic.cbr",
-            file_format="cbr",
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type='comic'
+        )
+        BookFile.objects.create(
+            book=book,
+            file_path=f"{self.test_dir}/comic.cbr",
+            file_format="cbr"
         )
 
         # Mock rarfile behavior
@@ -90,9 +103,13 @@ class ComicExtractorTests(TestCase):
         """Test basic CBZ extraction"""
         # Create test book
         book = Book.objects.create(
-            file_path="/test/comic.cbz",
-            file_format="cbz",
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type='comic'
+        )
+        BookFile.objects.create(
+            book=book,
+            file_path=f"{self.test_dir}/comic.cbz",
+            file_format="cbz"
         )
 
         # Mock zipfile behavior
@@ -112,9 +129,13 @@ class ComicExtractorTests(TestCase):
         """Test getting comic series list"""
         # Create some test books with metadata
         book1 = Book.objects.create(
-            file_path="/test/batman_001.cbr",
-            file_format="cbr",
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type='comic'
+        )
+        BookFile.objects.create(
+            book=book1,
+            file_path=f"{self.test_dir}/batman_001.cbr",
+            file_format="cbr"
         )
 
         BookMetadata.objects.create(

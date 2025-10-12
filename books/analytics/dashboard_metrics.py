@@ -47,9 +47,9 @@ def _get_incomplete_series_count() -> int:
 
     series_with_gaps = 0
     series_data = Series.objects.annotate(
-        book_count=Count('bookseries__book', filter=Q(bookseries__is_active=True)),
-        min_number=Min('bookseries__series_number'),
-        max_number=Max('bookseries__series_number')
+        book_count=Count('book_relationships__book', filter=Q(book_relationships__is_active=True)),
+        min_number=Min('book_relationships__series_number'),
+        max_number=Max('book_relationships__series_number')
     ).filter(book_count__gt=1)
 
     for series in series_data:
@@ -82,7 +82,7 @@ def get_content_type_statistics() -> Dict[str, int]:
         ).values('files__file_format').distinct().count(),
         'series_count': Series.objects.count(),
         'series_with_books': Series.objects.annotate(
-            book_count=Count('bookseries__book', filter=Q(bookseries__is_active=True))
+            book_count=Count('book_relationships__book', filter=Q(book_relationships__is_active=True))
         ).filter(book_count__gt=0).count(),
         'author_count': Author.objects.count(),
         'publisher_count': Publisher.objects.count(),

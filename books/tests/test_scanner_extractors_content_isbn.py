@@ -1,11 +1,15 @@
 """
 Test cases for Content ISBN Scanner Extractor
 """
+import os
+import tempfile
+import shutil
 from django.test import TestCase
 from unittest.mock import patch, MagicMock
 from books.models import (
     Book, ScanFolder, DataSource, BookMetadata
 )
+from books.tests.test_helpers import create_test_book_with_file
 from books.scanner.extractors.content_isbn import (
     extract_isbn_from_content, save_content_isbns,
     _find_isbn_patterns, _validate_and_dedupe_isbns,
@@ -18,20 +22,23 @@ class ContentISBNExtractorTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+
         self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
+            path=self.temp_dir,
             name="Test Scan Folder"
         )
 
-        self.epub_book = Book.objects.create(
-            file_path="/test/scan/folder/test.epub",
+        self.epub_book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, "test.epub"),
             file_format="epub",
             file_size=1024000,
             scan_folder=self.scan_folder
         )
 
-        self.pdf_book = Book.objects.create(
-            file_path="/test/scan/folder/test.pdf",
+        self.pdf_book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, "test.pdf"),
             file_format="pdf",
             file_size=1024000,
             scan_folder=self.scan_folder
@@ -42,6 +49,11 @@ class ContentISBNExtractorTests(TestCase):
             name=DataSource.CONTENT_SCAN,
             defaults={'trust_level': 0.85}
         )
+
+    def tearDown(self):
+        """Clean up temporary directories"""
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
     def test_find_isbn_patterns_with_isbn_prefix(self):
         """Test finding ISBN patterns with ISBN prefix"""
@@ -178,7 +190,7 @@ class ContentISBNExtractorTests(TestCase):
 
     def test_extract_isbn_from_content_unsupported_format(self):
         """Test ISBN extraction from unsupported file format"""
-        unsupported_book = Book.objects.create(
+        unsupported_book = create_test_book_with_file(
             file_path="/test/scan/folder/test.txt",
             file_format="txt",
             file_size=1024,
@@ -190,7 +202,7 @@ class ContentISBNExtractorTests(TestCase):
 
     def test_extract_isbn_from_content_mobi_not_implemented(self):
         """Test ISBN extraction from MOBI (not implemented)"""
-        mobi_book = Book.objects.create(
+        mobi_book = create_test_book_with_file(
             file_path="/test/scan/folder/test.mobi",
             file_format="mobi",
             file_size=1024000,
@@ -262,7 +274,7 @@ class ContentISBNExtractorTests(TestCase):
     def test_bulk_scan_content_isbns(self, mock_save):
         """Test bulk scanning of content ISBNs"""
         # Create multiple books
-        book2 = Book.objects.create(
+        book2 = create_test_book_with_file(
             file_path="/test/scan/folder/test2.epub",
             file_format="epub",
             file_size=1024000,

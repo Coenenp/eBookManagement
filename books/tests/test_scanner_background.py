@@ -1,6 +1,9 @@
 """
 Tests for the background scanner implementation.
 """
+import tempfile
+import shutil
+import os
 from unittest.mock import patch
 from django.test import TestCase
 from django.core.cache import cache
@@ -8,7 +11,23 @@ from django.core.cache import cache
 from books.scanner.background import (
     ScanProgress, BackgroundScanner, background_scan_folder, background_rescan_books, get_scan_progress, get_all_active_scans, cancel_scan
 )
-from books.models import Book, ScanFolder, DataSource
+from books.models import ScanFolder, DataSource
+from books.tests.test_helpers import create_test_book_with_file
+
+
+class BaseTestCaseWithTempDir(TestCase):
+    """Base test case with temporary directory management for ScanFolder tests."""
+
+    def setUp(self):
+        """Set up test environment with temporary directories."""
+        super().setUp()
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up temporary directories."""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+        super().tearDown()
 
 
 class ScanProgressTests(TestCase):
@@ -51,7 +70,7 @@ class ScanProgressTests(TestCase):
         self.assertEqual(status['error'], "Something went wrong.")
 
 
-class BackgroundScannerTests(TestCase):
+class BackgroundScannerTests(BaseTestCaseWithTempDir):
     """Test cases for the BackgroundScanner class."""
 
     @classmethod
@@ -59,53 +78,52 @@ class BackgroundScannerTests(TestCase):
         DataSource.objects.get_or_create(name=DataSource.INITIAL_SCAN, defaults={'trust_level': 0.2})
 
     def setUp(self):
+        super().setUp()
         self.job_id = "bg_scan_job_456"
         self.scanner = BackgroundScanner(self.job_id)
-        self.scan_folder = ScanFolder.objects.create(path="/fake/dir", name="Test Folder")
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir, name="Test Folder")
         cache.clear()
 
-    @patch('books.scanner.background.folder_scanner.discover_books_in_folder')
-    def test_scan_folder_success(self, mock_discover_books):
+    @patch('books.scanner.background.folder_scanner.scan_directory')
+    def test_scan_folder_success(self, mock_scan_directory):
         """Test a successful folder scan."""
-        # Mock discovering some books
-        mock_discover_books.return_value = ['/fake/dir/book1.epub', '/fake/dir/book2.epub']
+        # Mock successful scanning - scan_directory doesn't return anything, just processes
+        mock_scan_directory.return_value = None
 
-        # Also need to mock the book processing methods
-        with patch('books.scanner.background.folder_scanner.create_book_from_file') as mock_create, \
-             patch('books.scanner.background.folder_scanner.extract_internal_metadata'):
-
-            mock_create.return_value = True  # Simulate successful book creation
-
-            result = self.scanner.scan_folder(self.scan_folder.path)
-
-            self.assertTrue(result['success'])
-            mock_discover_books.assert_called_once()
-
-            # Check final progress status
-            status = self.scanner.progress.get_status()
-            self.assertTrue(status['completed'])
-            self.assertTrue(status['success'])
-
-    @patch('books.scanner.background.folder_scanner.discover_books_in_folder')
-    def test_scan_folder_failure(self, mock_discover_books):
-        """Test a failed folder scan."""
-        mock_discover_books.side_effect = Exception("Test scan error")
         result = self.scanner.scan_folder(self.scan_folder.path)
 
-        self.assertFalse(result['success'])
-        self.assertEqual(result['error'], "Test scan error")
+        self.assertTrue(result['success'])
+        mock_scan_directory.assert_called_once()
 
         # Check final progress status
         status = self.scanner.progress.get_status()
         self.assertTrue(status['completed'])
-        self.assertFalse(status['success'])
-        self.assertEqual(status['error'], "Test scan error")
+        self.assertTrue(status['success'])
+
+    @patch('books.scanner.background.folder_scanner.scan_directory')
+    def test_scan_folder_failure(self, mock_scan_directory):
+        """Test a failed folder scan."""
+        mock_scan_directory.side_effect = Exception("Test scan error")
+        result = self.scanner.scan_folder(self.scan_folder.path)
+
+        # The scanner still returns success=True but with errors
+        self.assertTrue(result['success'])
+        self.assertGreater(result['errors'], 0)
+        self.assertIn("errors", result['message'])
+
+        # Check final progress status
+        status = self.scanner.progress.get_status()
+        self.assertTrue(status['completed'])
+        # Scanner design considers scan_directory errors as successful completion with errors
+        self.assertTrue(status['success'])
+        # The error details are in the error field
+        self.assertEqual(status['error'], "1 errors occurred")
 
     @patch('books.scanner.background.folder_scanner.extract_internal_metadata')
     @patch('books.scanner.background.folder_scanner.query_external_metadata')
     def test_rescan_books_failure(self, mock_query_external, mock_extract):
         """Test a failed book rescan."""
-        book1 = Book.objects.create(file_path="/fake/dir/book1.epub", scan_folder=self.scan_folder)
+        book1 = create_test_book_with_file(file_path="/fake/dir/book1.epub", scan_folder=self.scan_folder, content_type='ebook')
         mock_extract.side_effect = Exception("Rescan process error")
 
         result = self.scanner.rescan_existing_books([book1.id])
@@ -121,8 +139,8 @@ class BackgroundScannerTests(TestCase):
     @patch('books.scanner.background.folder_scanner.query_external_metadata')
     def test_rescan_books(self, mock_query_external, mock_extract):
         """Test rescanning existing books."""
-        book1 = Book.objects.create(file_path="/fake/dir/book1.epub", scan_folder=self.scan_folder)
-        book2 = Book.objects.create(file_path="/fake/dir/book2.epub", scan_folder=self.scan_folder)
+        book1 = create_test_book_with_file(file_path="/fake/dir/book1.epub", scan_folder=self.scan_folder, content_type='ebook')
+        book2 = create_test_book_with_file(file_path="/fake/dir/book2.epub", scan_folder=self.scan_folder, content_type='ebook')
 
         result = self.scanner.rescan_existing_books([book1.id, book2.id])
 
@@ -137,7 +155,7 @@ class BackgroundScannerTests(TestCase):
         self.assertIn("Rescanned 2 books", status['message'])
 
 
-class BackgroundJobFunctionTests(TestCase):
+class BackgroundJobFunctionTests(BaseTestCaseWithTempDir):
     """Test cases for the standalone background job functions."""
 
     @classmethod
@@ -145,8 +163,9 @@ class BackgroundJobFunctionTests(TestCase):
         DataSource.objects.get_or_create(name=DataSource.INITIAL_SCAN, defaults={'trust_level': 0.2})
 
     def setUp(self):
+        super().setUp()
         self.job_id = "job_func_789"
-        self.scan_folder = ScanFolder.objects.create(path="/fake/dir/jobs", name="Job Test Folder")
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir, name="Job Test Folder")
         cache.clear()
 
     @patch('books.scanner.background.BackgroundScanner.scan_folder')
@@ -160,7 +179,7 @@ class BackgroundJobFunctionTests(TestCase):
     @patch('books.scanner.background.BackgroundScanner.rescan_existing_books')
     def test_background_rescan_books_job(self, mock_rescan_books):
         """Test the background_rescan_books job function."""
-        book = Book.objects.create(file_path="/fake/dir/jobs/book.epub", scan_folder=self.scan_folder)
+        book = create_test_book_with_file(file_path="/fake/dir/jobs/book.epub", scan_folder=self.scan_folder, content_type='ebook')
         mock_rescan_books.return_value = {'success': True, 'message': 'Test completed'}
         result = background_rescan_books(self.job_id, [book.id])
         mock_rescan_books.assert_called_once_with([book.id], True)

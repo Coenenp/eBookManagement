@@ -11,7 +11,7 @@ from unittest.mock import patch, MagicMock
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.urls import reverse
-from books.models import Book, FinalMetadata, BookMetadata, DataSource, AIFeedback
+from books.models import Book, BookFile, FinalMetadata, BookMetadata, DataSource, AIFeedback
 
 
 class AIFeedbackListViewTests(TestCase):
@@ -34,7 +34,9 @@ class AIFeedbackListViewTests(TestCase):
         # Create test books with AI predictions
         self.books_with_ai = []
         for i in range(5):
-            book = Book.objects.create(
+            book = Book.objects.create()
+            BookFile.objects.create(
+                book=book,
                 file_path=f"/library/ai_book_{i+1}.epub",
                 file_format="epub"
             )
@@ -143,7 +145,9 @@ class AIFeedbackListViewTests(TestCase):
         """Test pagination in AI feedback list."""
         # Create many books to test pagination
         for i in range(60):  # More than default paginate_by (50)
-            book = Book.objects.create(
+            book = Book.objects.create()
+            BookFile.objects.create(
+                book=book,
                 file_path=f"/library/extra_{i}.epub",
                 file_format="epub"
             )
@@ -199,7 +203,9 @@ class AIFeedbackDetailViewTests(TestCase):
         )
 
         # Create test book with AI predictions
-        self.book = Book.objects.create(
+        self.book = Book.objects.create()
+        BookFile.objects.create(
+            book=self.book,
             file_path="/library/ai_detail_test.epub",
             file_format="epub"
         )
@@ -285,7 +291,9 @@ class AIFeedbackDetailViewTests(TestCase):
     def test_ai_feedback_detail_no_metadata(self):
         """Test detail view when book has no final metadata."""
         # Create book without final metadata
-        book_no_meta = Book.objects.create(
+        book_no_meta = Book.objects.create()
+        BookFile.objects.create(
+            book=book_no_meta,
             file_path="/library/no_meta.epub",
             file_format="epub"
         )
@@ -314,7 +322,9 @@ class AIFeedbackSubmissionTests(TestCase):
         )
         self.client.login(username='testuser', password='testpass123')
 
-        self.book = Book.objects.create(
+        self.book = Book.objects.create()
+        BookFile.objects.create(
+            book=self.book,
             file_path="/library/feedback_test.epub",
             file_format="epub"
         )
@@ -437,7 +447,9 @@ class AIModelRetrainingTests(TestCase):
         # Create test books for feedback
         self.books = []
         for i in range(10):
-            book = Book.objects.create(
+            book = Book.objects.create()
+            BookFile.objects.create(
+                book=book,
                 file_path=f"/library/retrain_{i}.epub",
                 file_format="epub"
             )
@@ -530,7 +542,9 @@ class AIModelStatusTests(TestCase):
         mock_aggregate.return_value = {'avg_rating': 4.2}
 
         # Create test feedback
-        book = Book.objects.create(
+        book = Book.objects.create()
+        BookFile.objects.create(
+            book=book,
             file_path="/library/status_test.epub",
             file_format="epub"
         )
@@ -607,7 +621,9 @@ class AIFeedbackIntegrationTests(TestCase):
         )
 
         # Create book with AI metadata
-        book = Book.objects.create(
+        book = Book.objects.create()
+        BookFile.objects.create(
+            book=book,
             file_path="/library/workflow_test.epub",
             file_format="epub"
         )
@@ -695,7 +711,9 @@ class AIFeedbackIntegrationTests(TestCase):
         # Create many books with AI predictions
         books = []
         for i in range(100):
-            book = Book.objects.create(
+            book = Book.objects.create()
+            BookFile.objects.create(
+                book=book,
                 file_path=f"/library/large_{i}.epub",
                 file_format="epub"
             )
@@ -743,7 +761,9 @@ class AIFeedbackSecurityTests(TestCase):
             password='testpass123'
         )
 
-        self.book = Book.objects.create(
+        self.book = Book.objects.create()
+        BookFile.objects.create(
+            book=self.book,
             file_path="/library/security_test.epub",
             file_format="epub"
         )

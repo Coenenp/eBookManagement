@@ -1,12 +1,16 @@
 """
 Test cases for OPF Scanner Extractor
 """
+import os
+import tempfile
+import shutil
 from django.test import TestCase
 from unittest.mock import patch, mock_open, MagicMock
 from books.models import (
-    Book, ScanFolder, DataSource, BookTitle, BookAuthor,
+    DataSource, BookTitle, BookAuthor,
     BookPublisher, BookMetadata, BookSeries, Publisher, Series
 )
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 from books.scanner.extractors.opf import extract
 
 
@@ -15,17 +19,18 @@ class OPFExtractorTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
 
-        self.book = Book.objects.create(
-            file_path="/test/scan/folder/test.epub",
+        self.scan_folder = create_test_scan_folder()
+
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, "test.epub"),
             file_format="epub",
             file_size=1024000,
             scan_folder=self.scan_folder,
-            opf_path="/test/scan/folder/content.opf"
+            opf_path=os.path.join(self.temp_dir, "content.opf"),
+            title=None  # Don't auto-create title, let extractor create it
         )
 
         # Ensure OPF_FILE data source exists
@@ -34,10 +39,15 @@ class OPFExtractorTests(TestCase):
             defaults={'trust_level': 0.9}
         )
 
+    def tearDown(self):
+        """Clean up temporary directories"""
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+
     def test_extract_no_opf_path(self):
         """Test extraction when book has no OPF path"""
         # Set empty OPF path
-        self.book.opf_path = ""
+        self.book.files.first().opf_path = ""
         self.book.save()
 
         extract(self.book)

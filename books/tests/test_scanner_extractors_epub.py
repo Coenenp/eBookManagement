@@ -1,12 +1,16 @@
 """
 Test cases for EPUB Scanner Extractor
 """
+import os
+import tempfile
+import shutil
 from django.test import TestCase
 from unittest.mock import patch, MagicMock
 from books.models import (
-    Book, ScanFolder, DataSource, BookTitle, BookAuthor,
+    ScanFolder, DataSource, BookTitle, BookAuthor,
     BookPublisher, BookMetadata, Publisher
 )
+from books.tests.test_helpers import create_test_book_with_file
 from books.scanner.extractors.epub import extract
 
 
@@ -15,16 +19,20 @@ class EPUBExtractorTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+
         self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
+            path=self.temp_dir,
             name="Test Scan Folder"
         )
 
-        self.book = Book.objects.create(
-            file_path="/test/scan/folder/test.epub",
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, "test.epub"),
             file_format="epub",
             file_size=1024000,
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            title=None  # Don't auto-create title
         )
 
         # Ensure EPUB_INTERNAL data source exists
@@ -32,6 +40,11 @@ class EPUBExtractorTests(TestCase):
             name=DataSource.EPUB_INTERNAL,
             defaults={'trust_level': 0.9}
         )
+
+    def tearDown(self):
+        """Clean up temporary directories"""
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
     @patch('books.scanner.extractors.epub.epub.read_epub')
     def test_extract_title_success(self, mock_read_epub):
@@ -43,8 +56,11 @@ class EPUBExtractorTests(TestCase):
 
         extract(self.book)
 
-        # Verify title was created
-        book_title = BookTitle.objects.get(book=self.book)
+        # Verify the EPUB-extracted title was created
+        epub_titles = BookTitle.objects.filter(book=self.book, source=self.epub_source)
+        self.assertEqual(epub_titles.count(), 1)
+
+        book_title = epub_titles.first()
         self.assertEqual(book_title.title, 'Test Book Title')
         self.assertEqual(book_title.source, self.epub_source)
         self.assertEqual(book_title.confidence, self.epub_source.trust_level)

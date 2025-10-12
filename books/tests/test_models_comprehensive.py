@@ -4,6 +4,8 @@ Tests for model methods, properties, relationships, and edge cases.
 Focuses on achieving higher coverage for the models module.
 """
 import os
+import tempfile
+import shutil
 import django
 from django.test import TestCase
 from django.db import IntegrityError
@@ -14,14 +16,30 @@ from unittest.mock import patch
 import uuid
 
 from books.models import (
-    DataSource, ScanFolder, Book, Author, BookAuthor, Series, BookSeries,
+    DataSource, ScanFolder, Book, BookFile, Author, BookAuthor, Series, BookSeries,
     Publisher, BookPublisher, BookCover, BookMetadata, FinalMetadata,
     ScanLog, ScanStatus, FileOperation, AIFeedback, UserProfile
 )
+from books.tests.test_helpers import create_test_book_with_file
 
 # Must set Django settings before importing Django models
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ebook_manager.settings')
 django.setup()
+
+
+class BaseTestCaseWithTempDir(TestCase):
+    """Base test case with temporary directory management for ScanFolder tests."""
+
+    def setUp(self):
+        """Set up test environment with temporary directories."""
+        super().setUp()
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up temporary directories."""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+        super().tearDown()
 
 
 class DataSourceModelTests(TestCase):
@@ -78,26 +96,26 @@ class DataSourceModelTests(TestCase):
             source_high.full_clean()
 
 
-class ScanFolderModelTests(TestCase):
+class ScanFolderModelTests(BaseTestCaseWithTempDir):
     """Test ScanFolder model functionality"""
 
     def test_scan_folder_creation(self):
         """Test creating a ScanFolder"""
         folder = ScanFolder.objects.create(
             name='Test Folder',
-            path='/test/path',
+            path=self.temp_dir,
             language='en',
             is_active=True
         )
         self.assertEqual(folder.name, 'Test Folder')
-        self.assertEqual(folder.path, '/test/path')
+        self.assertEqual(folder.path, self.temp_dir)
         self.assertEqual(folder.language, 'en')
         self.assertTrue(folder.is_active)
         self.assertEqual(str(folder), 'Test Folder (Ebooks)')  # Updated to match actual output
 
     def test_scan_folder_defaults(self):
         """Test ScanFolder default values"""
-        folder = ScanFolder.objects.create(path='/test/path')
+        folder = ScanFolder.objects.create(path=self.temp_dir)
         self.assertEqual(folder.name, 'Untitled')
         self.assertEqual(folder.language, 'en')
         self.assertTrue(folder.is_active)
@@ -105,7 +123,7 @@ class ScanFolderModelTests(TestCase):
 
     def test_scan_folder_last_scanned_nullable(self):
         """Test ScanFolder last_scanned can be null"""
-        folder = ScanFolder.objects.create(path='/test/path')
+        folder = ScanFolder.objects.create(path=self.temp_dir)
         self.assertIsNone(folder.last_scanned)
 
         folder.last_scanned = timezone.now()
@@ -113,43 +131,45 @@ class ScanFolderModelTests(TestCase):
         self.assertIsNotNone(folder.last_scanned)
 
 
-class BookModelTests(TestCase):
+class BookModelTests(BaseTestCaseWithTempDir):
     """Test Book model functionality"""
 
     def setUp(self):
+        super().setUp()
         self.scan_folder = ScanFolder.objects.create(
             name='Test Folder',
-            path='/test/path'
+            path=self.temp_dir
         )
 
     def test_book_creation(self):
         """Test creating a Book"""
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path='/test/path/test_book.epub',
-            file_size=1000,
             file_format='epub',
+            file_size=1000,
             scan_folder=self.scan_folder
         )
-        self.assertEqual(book.filename, 'test_book.epub')
-        self.assertEqual(book.file_path, '/test/path/test_book.epub')
-        self.assertEqual(book.file_size, 1000)
-        self.assertEqual(book.file_format, 'epub')
+        self.assertEqual(book.primary_file.filename, 'test_book.epub')
+        self.assertEqual(book.primary_file.file_path, '/test/path/test_book.epub')
+        self.assertEqual(book.primary_file.file_size, 1000)
+        self.assertEqual(book.primary_file.file_format, 'epub')
         self.assertEqual(book.scan_folder, self.scan_folder)
 
     def test_book_str_representation(self):
         """Test Book string representation"""
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path='/test/path/test_book.epub',
             file_size=1000,
             file_format='epub',
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            title="test_book"
         )
-        expected = "test_book.epub"
+        expected = "test_book"  # Updated to match new title-based string representation
         self.assertEqual(str(book), expected)
 
     def test_book_defaults(self):
         """Test Book default values"""
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path='/test/path/test_book.epub',
             file_size=1000,
             file_format='epub',
@@ -161,17 +181,19 @@ class BookModelTests(TestCase):
 
     def test_book_ordering(self):
         """Test Book ordering by filename"""
-        book_a = Book.objects.create(
+        book_a = create_test_book_with_file(
             file_path='/test/a_book.epub',
             file_size=1000,
             file_format='epub',
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            title="a_book"
         )
-        book_z = Book.objects.create(
+        book_z = create_test_book_with_file(
             file_path='/test/z_book.epub',
             file_size=1000,
             file_format='epub',
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            title="z_book"
         )
 
         books = list(Book.objects.all())
@@ -203,12 +225,13 @@ class AuthorModelTests(TestCase):
         self.assertTrue(author.is_reviewed)
 
 
-class BookAuthorModelTests(TestCase):
+class BookAuthorModelTests(BaseTestCaseWithTempDir):
     """Test BookAuthor model functionality"""
 
     def setUp(self):
-        self.scan_folder = ScanFolder.objects.create(path='/test/path')
-        self.book = Book.objects.create(
+        super().setUp()
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir)
+        self.book = create_test_book_with_file(
             file_path='/test/path/test_book.epub',
             file_size=1000,
             file_format='epub',
@@ -295,15 +318,16 @@ class BookAuthorModelTests(TestCase):
         self.assertEqual(book_authors[1], book_author1)
 
 
-class FinalMetadataModelTests(TestCase):
+class FinalMetadataModelTests(BaseTestCaseWithTempDir):
     """Test FinalMetadata model methods and functionality"""
 
     def setUp(self):
-        self.scan_folder = ScanFolder.objects.create(path='/test/path')
-        self.book = Book.objects.create(
-            file_path='/test/path/test_book.epub',
-            file_size=1000,
+        super().setUp()
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir)
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, 'test_book.epub'),
             file_format='epub',
+            file_size=1000,
             scan_folder=self.scan_folder
         )
         self.data_source, _ = DataSource.objects.get_or_create(
@@ -339,10 +363,28 @@ class FinalMetadataModelTests(TestCase):
         self.assertEqual(str(final), 'Test Title by Test Author')
 
         # Test with empty values - create separate book to avoid conflicts
-        book2 = Book.objects.create(
-            file_path='/test/book2.epub',
-            file_format='epub',
+        # Create data source needed for book creation
+        initial_source, _ = DataSource.objects.get_or_create(
+            name=DataSource.INITIAL_SCAN,
+            defaults={'trust_level': 0.2}
+        )
+
+        book2_path = os.path.join(self.temp_dir, 'book2.epub')
+        # Create the file
+        with open(book2_path, 'w') as f:
+            f.write('test content')
+
+        book2 = Book.create_with_title(
+            title='Test Book 2',
+            content_type='ebook',
             scan_folder=self.scan_folder
+        )
+        # Add a file to the book
+        BookFile.objects.create(
+            book=book2,
+            file_path=book2_path,
+            file_format='epub',
+            file_size=100
         )
         final_empty = FinalMetadata.objects.create(
             book=book2,
@@ -407,6 +449,9 @@ class FinalMetadataModelTests(TestCase):
     @patch('books.models.logger')
     def test_update_final_title_no_titles(self, mock_logger):
         """Test update_final_title with no titles"""
+        # Remove all titles to test no-title scenario
+        self.book.titles.all().delete()
+
         final = FinalMetadata.objects.create(book=self.book)
 
         final.update_final_title()
@@ -612,8 +657,8 @@ class FinalMetadataModelTests(TestCase):
             self.assertTrue(hasattr(final, 'update_dynamic_field'))
 
     @patch('books.models.logger')
-    def test_update_final_values(self, mock_logger):
-        """Test update_final_values method"""
+    def test_sync_from_sources(self, mock_logger):
+        """Test sync_from_sources method"""
         final = FinalMetadata.objects.create(book=self.book)
 
         # Mock individual update methods
@@ -626,7 +671,7 @@ class FinalMetadataModelTests(TestCase):
              patch.object(final, 'calculate_overall_confidence') as mock_confidence, \
              patch.object(final, 'calculate_completeness_score') as mock_completeness:
 
-            final.update_final_values()
+            final.sync_from_sources()
 
             mock_title.assert_called_once()
             mock_author.assert_called_once()
@@ -645,15 +690,15 @@ class FinalMetadataModelTests(TestCase):
     @patch('books.models.normalize_language')
     @patch('books.models.logger')
     def test_save_auto_update(self, mock_logger, mock_normalize):
-        """Test FinalMetadata save with auto-update"""
+        """Test FinalMetadata save with auto-update on creation"""
         mock_normalize.return_value = 'en'
 
         # Create FinalMetadata instance without saving to trigger auto-update on first save
         final = FinalMetadata(book=self.book)
 
-        with patch.object(final, 'update_final_values') as mock_update:
+        with patch.object(final, 'sync_from_sources') as mock_update:
             final.save()  # This should trigger auto-update on first save
-            mock_update.assert_called_once()
+            mock_update.assert_called_once_with(save_after=False)
 
     @patch('books.models.normalize_language')
     @patch('books.models.logger')
@@ -664,7 +709,7 @@ class FinalMetadataModelTests(TestCase):
         final = FinalMetadata.objects.create(book=self.book, language='en')
         final._manual_update = True
 
-        with patch.object(final, 'update_final_values') as mock_update:
+        with patch.object(final, 'sync_from_sources') as mock_update:
             final.save()
             mock_update.assert_not_called()
 
@@ -680,20 +725,21 @@ class FinalMetadataModelTests(TestCase):
             is_reviewed=True
         )
 
-        with patch.object(final, 'update_final_values') as mock_update:
+        with patch.object(final, 'sync_from_sources') as mock_update:
             final.save()
             mock_update.assert_not_called()
 
 
-class BookMetadataModelTests(TestCase):
+class BookMetadataModelTests(BaseTestCaseWithTempDir):
     """Test BookMetadata model functionality"""
 
     def setUp(self):
-        self.scan_folder = ScanFolder.objects.create(path='/test/path')
-        self.book = Book.objects.create(
-            file_path='/test/path/test_book.epub',
-            file_size=1000,
+        super().setUp()
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir)
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, 'test_book.epub'),
             file_format='epub',
+            file_size=1000,
             scan_folder=self.scan_folder
         )
         self.data_source, _ = DataSource.objects.get_or_create(
@@ -728,11 +774,12 @@ class BookMetadataModelTests(TestCase):
         self.assertEqual(str(metadata), expected)
 
 
-class ScanLogModelTests(TestCase):
+class ScanLogModelTests(BaseTestCaseWithTempDir):
     """Test ScanLog model functionality"""
 
     def setUp(self):
-        self.scan_folder = ScanFolder.objects.create(path='/test/path')
+        super().setUp()
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir)
 
     def test_scan_log_creation(self):
         """Test creating a ScanLog"""
@@ -813,10 +860,11 @@ class ScanStatusModelTests(TestCase):
         self.assertIn('(100%)', str_repr)
 
 
-class FileOperationModelTests(TestCase):
+class FileOperationModelTests(BaseTestCaseWithTempDir):
     """Test FileOperation model functionality"""
 
     def setUp(self):
+        super().setUp()
         self.user, created = User.objects.get_or_create(
             username='testuser_file',
             defaults={
@@ -824,11 +872,11 @@ class FileOperationModelTests(TestCase):
                 'password': 'testpass'
             }
         )
-        self.scan_folder = ScanFolder.objects.create(path='/test/path')
-        self.book = Book.objects.create(
-            file_path='/test/path/test_book.epub',
-            file_size=1000,
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir)
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, 'test_book.epub'),
             file_format='epub',
+            file_size=1000,
             scan_folder=self.scan_folder
         )
 
@@ -878,10 +926,11 @@ class FileOperationModelTests(TestCase):
         self.assertEqual(operations[1], op1)  # Older operation second
 
 
-class AIFeedbackModelTests(TestCase):
+class AIFeedbackModelTests(BaseTestCaseWithTempDir):
     """Test AIFeedback model functionality"""
 
     def setUp(self):
+        super().setUp()
         self.user, created = User.objects.get_or_create(
             username='testuser_ai',
             defaults={
@@ -889,11 +938,11 @@ class AIFeedbackModelTests(TestCase):
                 'password': 'testpass'
             }
         )
-        self.scan_folder = ScanFolder.objects.create(path='/test/path')
-        self.book = Book.objects.create(
-            file_path='/test/path/test_book.epub',
-            file_size=1000,
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir)
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, 'test_book.epub'),
             file_format='epub',
+            file_size=1000,
             scan_folder=self.scan_folder
         )
 
@@ -1079,15 +1128,16 @@ class UserProfileModelTests(TestCase):
             UserProfile.objects.create(user=self.user)
 
 
-class ModelRelationshipTests(TestCase):
+class ModelRelationshipTests(BaseTestCaseWithTempDir):
     """Test model relationships and cascading"""
 
     def setUp(self):
-        self.scan_folder = ScanFolder.objects.create(path='/test/path')
-        self.book = Book.objects.create(
-            file_path='/test/path/test_book.epub',
-            file_size=1000,
+        super().setUp()
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir)
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, 'test_book.epub'),
             file_format='epub',
+            file_size=1000,
             scan_folder=self.scan_folder
         )
         self.data_source, _ = DataSource.objects.get_or_create(

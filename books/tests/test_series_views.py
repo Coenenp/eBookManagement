@@ -17,9 +17,10 @@ from unittest.mock import patch
 
 from books.models import (
     Book, Series, BookSeries, FinalMetadata,
-    ScanFolder, DataSource
+    DataSource
 )
 from books.views.sections import get_book_metadata_dict
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class SeriesViewsTestCase(TestCase):
@@ -35,10 +36,7 @@ class SeriesViewsTestCase(TestCase):
         )
 
         # Create a scan folder
-        self.scan_folder = ScanFolder.objects.create(
-            name="Test Folder",
-            path="/test/path"
-        )
+        self.scan_folder = create_test_scan_folder()
 
         # Create a data source
         self.data_source = DataSource.objects.create(
@@ -52,28 +50,28 @@ class SeriesViewsTestCase(TestCase):
         self.series3 = Series.objects.create(name="Discworld")
 
         # Create books with different series configurations
-        self.book1 = Book.objects.create(
+        self.book1 = create_test_book_with_file(
             file_path="/test/book1.epub",
             file_size=1000000,
             file_format="epub",
             scan_folder=self.scan_folder
         )
 
-        self.book2 = Book.objects.create(
+        self.book2 = create_test_book_with_file(
             file_path="/test/book2.pdf",
             file_size=2000000,
             file_format="pdf",
             scan_folder=self.scan_folder
         )
 
-        self.book3 = Book.objects.create(
+        self.book3 = create_test_book_with_file(
             file_path="/test/book3.mobi",
             file_size=1500000,
             file_format="mobi",
             scan_folder=self.scan_folder
         )
 
-        self.book4 = Book.objects.create(
+        self.book4 = create_test_book_with_file(
             file_path="/test/book4.epub",
             file_size=800000,
             file_format="epub",
@@ -159,7 +157,7 @@ class GetBookMetadataDictTests(SeriesViewsTestCase):
     def test_get_metadata_without_final_metadata(self):
         """Test metadata extraction fallback when no final metadata"""
         # Create book without final metadata
-        book_no_meta = Book.objects.create(
+        book_no_meta = create_test_book_with_file(
             file_path="/test/no_meta.epub",
             file_size=1000000,
             file_format="epub",
@@ -221,7 +219,7 @@ class SeriesMainViewTests(SeriesViewsTestCase):
     def test_series_count_excludes_empty_series(self):
         """Test that empty series names are excluded from count"""
         # Add a book with empty series
-        book_empty_series = Book.objects.create(
+        book_empty_series = create_test_book_with_file(
             file_path="/test/empty_series.epub",
             file_size=1000000,
             file_format="epub",
@@ -245,7 +243,7 @@ class SeriesMainViewTests(SeriesViewsTestCase):
     def test_series_count_excludes_null_series(self):
         """Test that null series are excluded from count"""
         # Add a book with null series
-        book_null_series = Book.objects.create(
+        book_null_series = create_test_book_with_file(
             file_path="/test/null_series.epub",
             file_size=1000000,
             file_format="epub",
@@ -351,7 +349,7 @@ class SeriesAjaxListTests(SeriesViewsTestCase):
     def test_series_ajax_list_book_sorting(self):
         """Test that books within series are sorted by position"""
         # Add another book to Harry Potter series
-        book_hp2 = Book.objects.create(
+        book_hp2 = create_test_book_with_file(
             file_path="/test/hp2.epub",
             file_size=1100000,
             file_format="epub",
@@ -368,7 +366,7 @@ class SeriesAjaxListTests(SeriesViewsTestCase):
         )
 
         # Add a book without position
-        book_hp_no_pos = Book.objects.create(
+        book_hp_no_pos = create_test_book_with_file(
             file_path="/test/hp_no_pos.epub",
             file_size=1050000,
             file_format="epub",
@@ -400,7 +398,7 @@ class SeriesAjaxListTests(SeriesViewsTestCase):
     def test_series_ajax_list_excludes_placeholder_books(self):
         """Test that placeholder books are excluded"""
         # Create a placeholder book
-        placeholder_book = Book.objects.create(
+        placeholder_book = create_test_book_with_file(
             file_path="/test/placeholder.epub",
             file_size=1000000,
             file_format="epub",
@@ -446,7 +444,7 @@ class SeriesAjaxListTests(SeriesViewsTestCase):
     def test_series_ajax_list_aggregates_data_correctly(self):
         """Test that series data is aggregated correctly"""
         # Add another book to Discworld series
-        book_discworld2 = Book.objects.create(
+        book_discworld2 = create_test_book_with_file(
             file_path="/test/discworld2.epub",
             file_size=1200000,
             file_format="mobi",  # Different format

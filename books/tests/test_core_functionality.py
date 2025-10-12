@@ -8,9 +8,10 @@ from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.urls import reverse
 from books.models import (
-    Book, FinalMetadata, ScanFolder, DataSource,
+    FinalMetadata, ScanFolder, DataSource,
     BookMetadata, BookTitle, BookAuthor, Author
 )
+from books.tests.test_helpers import create_test_scan_folder, create_test_book_with_file
 
 
 class BookModelTests(TestCase):
@@ -18,52 +19,55 @@ class BookModelTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
     def test_book_creation_minimal(self):
         """Test book creation with minimal required fields"""
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path="/test/path/book.epub",
             file_format="epub",
             file_size=1024000,
             scan_folder=self.scan_folder
         )
 
-        self.assertEqual(book.file_path, "/test/path/book.epub")
-        self.assertEqual(book.file_format, "epub")
-        self.assertEqual(book.file_size, 1024000)
+        # Access properties through the new Book/BookFile relationship
+        book_file = book.files.first()
+        self.assertEqual(book_file.file_path, "/test/path/book.epub")
+        self.assertEqual(book_file.file_format, "epub")
+        self.assertEqual(book_file.file_size, 1024000)
         self.assertEqual(book.scan_folder, self.scan_folder)
 
     def test_book_creation_with_optional_fields(self):
         """Test book creation with optional fields"""
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path="/test/path/book.epub",
             file_format="epub",
             file_size=1024000,
             scan_folder=self.scan_folder
         )
 
-        self.assertTrue(len(book.file_path_hash) > 0)  # Hash is auto-generated
-        self.assertEqual(book.file_path, "/test/path/book.epub")
-        self.assertEqual(book.file_size, 1024000)
-        self.assertEqual(book.file_format, "epub")
+        # Access properties through the new Book/BookFile relationship
+        book_file = book.files.first()
+        self.assertTrue(len(book_file.file_path_hash) > 0)  # Hash is auto-generated
+        self.assertEqual(book_file.file_path, "/test/path/book.epub")
+        self.assertEqual(book_file.file_size, 1024000)
+        self.assertEqual(book_file.file_format, "epub")
 
     def test_book_filename_property(self):
         """Test book filename property"""
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path="/test/path/book.epub",
             file_format="epub",
             scan_folder=self.scan_folder
         )
 
-        self.assertEqual(book.filename, "book.epub")
+        # Access filename through the BookFile relationship
+        book_file = book.files.first()
+        self.assertEqual(book_file.filename, "book.epub")
 
     def test_book_str_representation(self):
         """Test book string representation"""
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path="/test/path/test_book.epub",
             file_format="epub",
             scan_folder=self.scan_folder
@@ -74,12 +78,14 @@ class BookModelTests(TestCase):
 
     def test_placeholder_book(self):
         """Test placeholder book behavior"""
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path="/test/path/placeholder.epub",
-            file_format="placeholder",
-            is_placeholder=True,
+            file_format="epub",
             scan_folder=self.scan_folder
         )
+        # Set placeholder after creation
+        book.is_placeholder = True
+        book.save()
 
         self.assertTrue(book.is_placeholder)
 
@@ -89,12 +95,9 @@ class FinalMetadataModelTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/path/book.epub",
             file_format="epub",
             file_size=1024000,
@@ -163,12 +166,15 @@ class ScanFolderModelTests(TestCase):
 
     def test_scan_folder_creation(self):
         """Test scan folder creation"""
+        import tempfile
+        temp_dir = tempfile.mkdtemp()
+
         folder = ScanFolder.objects.create(
-            path="/test/scan/path",
+            path=temp_dir,
             name="Test Scan Folder"
         )
 
-        self.assertEqual(folder.path, "/test/scan/path")
+        self.assertEqual(folder.path, temp_dir)
         self.assertEqual(folder.name, "Test Scan Folder")
 
 
@@ -177,12 +183,9 @@ class BookMetadataModelTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/path/book.epub",
             file_format="epub",
             scan_folder=self.scan_folder
@@ -249,12 +252,9 @@ class BookTitleModelTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/path/book.epub",
             scan_folder=self.scan_folder
         )
@@ -284,12 +284,9 @@ class BookAuthorModelTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/path/book.epub",
             scan_folder=self.scan_folder
         )
@@ -331,12 +328,9 @@ class BasicViewTests(TestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/path/book.epub",
             file_format="epub",
             file_size=1024000,
@@ -381,12 +375,9 @@ class BookExtrasTemplateTagTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/path/book.epub",
             file_format="epub",
             file_size=1024000,

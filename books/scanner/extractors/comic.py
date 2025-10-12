@@ -758,7 +758,7 @@ def get_comic_series_list():
     # Get all series from comics
     comic_series = BookMetadata.objects.filter(
         field_name='series',
-        book__file_path__iregex=r'\.(cbr|cbz)$'
+        book__files__file_path__iregex=r'\.(cbr|cbz)$'
     ).values(
         'field_value'
     ).annotate(

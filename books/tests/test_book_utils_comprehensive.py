@@ -3,24 +3,44 @@ Comprehensive test suite for book_utils.py metadata processing functionality.
 Tests MetadataProcessor and related utility functions.
 """
 
+import os
+import tempfile
+import shutil
 from unittest.mock import patch, MagicMock
 from django.test import TestCase, RequestFactory
 from django.contrib.auth.models import User
 from django.db import IntegrityError
 
 from books.models import (
-    Book, Author, Series, Publisher, Genre, DataSource, ScanFolder,
+    Author, Series, Publisher, Genre, DataSource, ScanFolder,
     FinalMetadata, BookSeries, BookTitle, BookAuthor, BookPublisher,
     BookMetadata
 )
 from books.book_utils import MetadataProcessor
+from books.tests.test_helpers import create_test_book_with_file
 
 
-class MetadataProcessorTests(TestCase):
+class BaseTestCaseWithTempDir(TestCase):
+    """Base test case with temporary directory management for ScanFolder tests."""
+
+    def setUp(self):
+        """Set up test environment with temporary directories."""
+        super().setUp()
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up temporary directories."""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
+        super().tearDown()
+
+
+class MetadataProcessorTests(BaseTestCaseWithTempDir):
     """Test suite for MetadataProcessor class"""
 
     def setUp(self):
         """Set up test data for metadata processor tests"""
+        super().setUp()
         self.factory = RequestFactory()
         self.user = User.objects.create_user(
             username='testuser',
@@ -37,9 +57,9 @@ class MetadataProcessorTests(TestCase):
             defaults={'trust_level': 0.7}
         )
 
-        # Create test scan folder
+        # Create test scan folder using temporary directory
         self.scan_folder = ScanFolder.objects.create(
-            path='/test/books',
+            path=self.temp_dir,
             is_active=True
         )
 
@@ -49,9 +69,14 @@ class MetadataProcessorTests(TestCase):
         self.publisher = Publisher.objects.create(name='Test Publisher')
         self.genre = Genre.objects.create(name='Science Fiction')
 
-        # Create test book
-        self.book = Book.objects.create(
-            file_path='/test/book1.epub',
+        # Create test book using helper
+        # Create test file in temp directory
+        test_file_path = os.path.join(self.temp_dir, 'book1.epub')
+        with open(test_file_path, 'w') as f:
+            f.write('test content')
+
+        self.book = create_test_book_with_file(
+            file_path=test_file_path,
             file_format='epub',
             file_size=1000000,
             scan_folder=self.scan_folder
@@ -269,11 +294,11 @@ class MetadataProcessorTests(TestCase):
                 mock_author_handler.assert_not_called()
 
     def test_handle_manual_entries_manual_flag_precedence(self):
-        """Test manual flag precedence logic"""
-        # Test case: has value, no existing data, manual_flag not explicitly false
+        """Test manual flag precedence logic - explicit manual flag takes precedence"""
+        # Test case: explicit manual_entry flag set to true
         request = self.factory.post('/', {
-            'final_title': 'New Title'
-            # No manual_entry_final_title field
+            'final_title': 'New Title',
+            'manual_entry_final_title': 'true'  # Explicit manual flag
         })
         request.user = self.user
         request.POST = request.POST.copy()
@@ -288,7 +313,7 @@ class MetadataProcessorTests(TestCase):
 
             MetadataProcessor.handle_manual_entries(request, self.book, form_data)
 
-            # Should call handler even without explicit manual flag when no existing data
+            # Should call handler when manual flag is explicitly set
             mock_handler.assert_called_once()
 
     def test_handle_manual_entries_bulk_operations(self):
@@ -373,11 +398,12 @@ class MetadataProcessorTests(TestCase):
                         mock_metadata.assert_called_once()
 
 
-class MetadataProcessorHelperMethodTests(TestCase):
+class MetadataProcessorHelperMethodTests(BaseTestCaseWithTempDir):
     """Test helper methods of MetadataProcessor"""
 
     def setUp(self):
         """Set up test data for helper method tests"""
+        super().setUp()
         self.factory = RequestFactory()
         self.user = User.objects.create_user(username='testuser', password='testpass123')
 
@@ -387,12 +413,17 @@ class MetadataProcessorHelperMethodTests(TestCase):
         )
 
         self.scan_folder = ScanFolder.objects.create(
-            path='/test/books',
+            path=self.temp_dir,
             is_active=True
         )
 
-        self.book = Book.objects.create(
-            file_path='/test/book1.epub',
+        # Create test file in temp directory
+        test_file_path = os.path.join(self.temp_dir, 'book1.epub')
+        with open(test_file_path, 'w') as f:
+            f.write('test content')
+
+        self.book = create_test_book_with_file(
+            file_path=test_file_path,
             file_format='epub',
             file_size=1000000,
             scan_folder=self.scan_folder
@@ -528,11 +559,12 @@ class MetadataProcessorHelperMethodTests(TestCase):
                 self.assertEqual(entry.field_value, field_value)
 
 
-class MetadataProcessorErrorHandlingTests(TestCase):
+class MetadataProcessorErrorHandlingTests(BaseTestCaseWithTempDir):
     """Test error handling in MetadataProcessor"""
 
     def setUp(self):
         """Set up test data for error handling tests"""
+        super().setUp()
         self.factory = RequestFactory()
         self.user = User.objects.create_user(username='testuser', password='testpass123')
 
@@ -542,12 +574,17 @@ class MetadataProcessorErrorHandlingTests(TestCase):
         )
 
         self.scan_folder = ScanFolder.objects.create(
-            path='/test/books',
+            path=self.temp_dir,
             is_active=True
         )
 
-        self.book = Book.objects.create(
-            file_path='/test/book1.epub',
+        # Create test file in temp directory
+        test_file_path = os.path.join(self.temp_dir, 'book1.epub')
+        with open(test_file_path, 'w') as f:
+            f.write('test content')
+
+        self.book = create_test_book_with_file(
+            file_path=test_file_path,
             file_format='epub',
             file_size=1000000,
             scan_folder=self.scan_folder
@@ -666,21 +703,27 @@ class MetadataProcessorErrorHandlingTests(TestCase):
             MetadataProcessor.handle_manual_entries(request, self.book, form_data)
 
 
-class MetadataProcessorIntegrationTests(TestCase):
+class MetadataProcessorIntegrationTests(BaseTestCaseWithTempDir):
     """Integration tests for MetadataProcessor with real database operations"""
 
     def setUp(self):
         """Set up test data for integration tests"""
+        super().setUp()
         self.factory = RequestFactory()
         self.user = User.objects.create_user(username='testuser', password='testpass123')
 
         self.scan_folder = ScanFolder.objects.create(
-            path='/test/books',
+            path=self.temp_dir,
             is_active=True
         )
 
-        self.book = Book.objects.create(
-            file_path='/test/book1.epub',
+        # Create test file in temp directory
+        test_file_path = os.path.join(self.temp_dir, 'book1.epub')
+        with open(test_file_path, 'w') as f:
+            f.write('test content')
+
+        self.book = create_test_book_with_file(
+            file_path=test_file_path,
             file_format='epub',
             file_size=1000000,
             scan_folder=self.scan_folder

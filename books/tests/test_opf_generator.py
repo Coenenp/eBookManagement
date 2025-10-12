@@ -5,6 +5,7 @@ import os
 import tempfile
 from django.test import TestCase
 from books.models import ScanFolder, Book, FinalMetadata
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 from books.utils.opf_generator import (
     generate_opf_from_final_metadata,
     save_opf_file,
@@ -17,12 +18,9 @@ class OPFGenerationTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/path/book.epub",
             file_format="epub",
             file_size=1024000,
@@ -93,12 +91,12 @@ class OPFGenerationTests(TestCase):
     def test_opf_generation_with_minimal_metadata(self):
         """Test OPF generation with minimal required metadata"""
         minimal_metadata = FinalMetadata.objects.create(
-            book=Book.objects.create(
-                file_path="/test/minimal.epub",
+            book=create_test_book_with_file(
+            file_path="/test/minimal.epub",
                 file_format="epub",
                 file_size=1000,
                 scan_folder=self.scan_folder
-            ),
+        ),
             final_title="Minimal Book",
             is_reviewed=True,  # Prevent auto-update from overriding our test values
             overall_confidence=0.5

@@ -7,9 +7,10 @@ from unittest.mock import patch, Mock
 from django.test import TestCase, override_settings
 
 from books.models import (
-    Book, DataSource, BookTitle, BookCover, BookPublisher, Publisher,
+    DataSource, BookTitle, BookCover, BookPublisher, Publisher,
     BookMetadata, BookAuthor, Author, Series, BookSeries
 )
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 from books.scanner.extractors.comicvine import (
     ComicVineAPI,
     query_comicvine_metadata,
@@ -238,10 +239,12 @@ class ComicVineMetadataExtractionTests(TestCase):
             defaults={'trust_level': 0.8}
         )
 
-        self.book = Book.objects.create(
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
+        self.book = create_test_book_with_file(
             file_path='/test/spider-man.cbz',
             file_format='cbz',
-            file_size=50000000
+            file_size=50000000,
+            scan_folder=self.scan_folder
         )
 
     def test_save_volume_metadata_basic(self):
@@ -463,10 +466,12 @@ class ComicVineIntegrationTests(TestCase):
             defaults={'trust_level': 0.8}
         )
 
-        self.book = Book.objects.create(
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
+        self.book = create_test_book_with_file(
             file_path='/test/spider-man-001.cbz',
             file_format='cbz',
-            file_size=50000000
+            file_size=50000000,
+            scan_folder=self.scan_folder
         )
 
     @patch('books.scanner.extractors.comicvine.ComicVineAPI')
@@ -607,10 +612,13 @@ class ComicVineErrorHandlingTests(TestCase):
             defaults={'trust_level': 0.8}
         )
 
-        self.book = Book.objects.create(
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
+        self.book = create_test_book_with_file(
             file_path='/test/test.cbz',
             file_format='cbz',
-            file_size=1000000
+            file_size=1000000,
+            scan_folder=self.scan_folder,
+            title=None  # Don't create a default title for ComicVine tests
         )
 
     def test_save_volume_metadata_with_missing_fields(self):
@@ -709,10 +717,12 @@ class ComicVinePerformanceTests(TestCase):
 
     def test_large_creator_list_handling(self):
         """Test handling of large creator lists"""
-        book = Book.objects.create(
+        scan_folder = create_test_scan_folder(name="Test Scan Folder")
+        book = create_test_book_with_file(
             file_path='/test/test.cbz',
             file_format='cbz',
-            file_size=1000000
+            file_size=1000000,
+            scan_folder=scan_folder
         )
 
         # Create a large list of creators
@@ -729,10 +739,12 @@ class ComicVinePerformanceTests(TestCase):
 
     def test_metadata_deduplication(self):
         """Test that duplicate metadata isn't created"""
-        book = Book.objects.create(
+        scan_folder = create_test_scan_folder(name="Test Scan Folder")
+        book = create_test_book_with_file(
             file_path='/test/test.cbz',
             file_format='cbz',
-            file_size=1000000
+            file_size=1000000,
+            scan_folder=scan_folder
         )
 
         volume_data = {

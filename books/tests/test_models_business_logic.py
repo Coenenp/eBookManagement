@@ -5,15 +5,19 @@ Focuses on edge cases, error recovery, metadata synchronization scenarios,
 and complex validation patterns that require comprehensive coverage.
 """
 
+import os
+import tempfile
+import shutil
 from django.test import TestCase
 from django.db import IntegrityError, transaction
 from unittest.mock import patch
 
 from books.models import (
-    Book, FinalMetadata, DataSource, BookTitle, BookAuthor,
+    FinalMetadata, DataSource, BookTitle, BookAuthor,
     BookSeries, BookPublisher, BookMetadata, Author, Publisher, Series,
     ScanFolder, ScanLog, ScanStatus
 )
+from books.tests.test_helpers import create_test_book_with_file
 
 
 class FinalMetadataBusinessLogicTests(TestCase):
@@ -21,13 +25,16 @@ class FinalMetadataBusinessLogicTests(TestCase):
 
     def setUp(self):
         """Set up test data for business logic tests."""
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+
         self.scan_folder = ScanFolder.objects.create(
-            path='/test/scan/folder',
+            path=self.temp_dir,
             name='Test Scan Folder'
         )
 
-        self.book = Book.objects.create(
-            file_path='/test/path/book.epub',
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, 'book.epub'),
             file_format='epub',
             file_size=1024000,
             scan_folder=self.scan_folder
@@ -48,6 +55,11 @@ class FinalMetadataBusinessLogicTests(TestCase):
             name=DataSource.INITIAL_SCAN,
             defaults={'trust_level': 0.2}
         )
+
+    def tearDown(self):
+        """Clean up temporary directories"""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
     def test_metadata_sync_priority_resolution(self):
         """Test metadata synchronization with conflicting sources."""
@@ -78,6 +90,9 @@ class FinalMetadataBusinessLogicTests(TestCase):
 
     def test_metadata_sync_with_inactive_sources(self):
         """Test that inactive metadata sources are properly ignored."""
+        # First, remove any existing titles to start with a clean slate
+        self.book.titles.all().delete()
+
         final_metadata = FinalMetadata.objects.create(book=self.book)
 
         # Create active and inactive titles
@@ -234,7 +249,7 @@ class FinalMetadataBusinessLogicTests(TestCase):
             source=self.openlibrary_source, confidence=0.85, is_active=True
         )
 
-        final_metadata.update_final_values()
+        final_metadata.sync_from_sources()
 
         # Overall confidence should be weighted average based on actual weights:
         # title(0.9) * 0.3 + author(0.8) * 0.3 + series(0.3) * 0.15 + cover(0.0) * 0.25
@@ -269,27 +284,14 @@ class FinalMetadataBusinessLogicTests(TestCase):
     @patch('books.models.logger')
     def test_save_error_recovery(self, mock_logger):
         """Test FinalMetadata save error recovery mechanisms."""
-        # Create FinalMetadata with conditions that trigger auto-update
-        final_metadata = FinalMetadata(
-            book=self.book,
-            overall_confidence=0.0,  # Trigger auto-update conditions
-            completeness_score=0.0,
-            is_reviewed=False
-        )
+        # Test that FinalMetadata creation triggers auto-sync
+        # Create a new FinalMetadata to trigger auto-sync on creation
+        new_final = FinalMetadata(book=self.book)
 
-        # Mock update_final_values to raise an exception
-        with patch.object(final_metadata, 'update_final_values') as mock_update:
-            mock_update.side_effect = Exception('Database error')
-
-            # Save should complete even if update fails due to our error handling
-            try:
-                final_metadata.save()
-                # If we get here, our error handling worked - the exception was caught
-                mock_update.assert_called_once()
-            except Exception:
-                # If save() still raises the exception, our error handling isn't working yet
-                # Let's just test that update_final_values was called
-                mock_update.assert_called_once()
+        with patch.object(new_final, 'sync_from_sources') as mock_update:
+            # Should trigger auto-sync on creation
+            new_final.save()
+            mock_update.assert_called_once_with(save_after=False)
 
     def test_metadata_hash_generation_and_deduplication(self):
         """Test metadata hash generation prevents duplicates."""
@@ -358,7 +360,7 @@ class FinalMetadataBusinessLogicTests(TestCase):
 
         # Now trigger full update
         final_metadata._manual_update = False
-        final_metadata.update_final_values()
+        final_metadata.sync_from_sources()
 
         self.assertEqual(final_metadata.final_title, 'Concurrent Title')
         self.assertEqual(final_metadata.final_author, 'Concurrent Author')
@@ -368,17 +370,25 @@ class BookModelBusinessLogicTests(TestCase):
     """Test complex business logic in Book model."""
 
     def setUp(self):
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+
         self.scan_folder = ScanFolder.objects.create(
-            path='/test/scan/folder',
+            path=self.temp_dir,
             name='Test Scan Folder'
         )
+
+    def tearDown(self):
+        """Clean up temporary directories"""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
     def test_book_creation_with_validation_edge_cases(self):
         """Test book creation with edge case validations."""
         # Test with very long file path
         long_path = '/test/' + 'a' * 500 + '/book.epub'
 
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path=long_path,
             file_format='epub',
             file_size=1024,
@@ -390,32 +400,32 @@ class BookModelBusinessLogicTests(TestCase):
     def test_book_file_size_validation(self):
         """Test book file size validation and edge cases."""
         # Test with zero file size
-        book = Book.objects.create(
-            file_path='/test/empty.epub',
+        book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, 'empty.epub'),
             file_format='epub',
             file_size=0,
             scan_folder=self.scan_folder
         )
 
-        self.assertEqual(book.file_size, 0)
+        self.assertEqual(book.primary_file.file_size, 0)
 
         # Test with very large file size
         large_size = 10 * 1024 * 1024 * 1024  # 10GB
-        book = Book.objects.create(
-            file_path='/test/large.epub',
+        book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, 'large.epub'),
             file_format='epub',
             file_size=large_size,
             scan_folder=self.scan_folder
         )
 
-        self.assertEqual(book.file_size, large_size)
+        self.assertEqual(book.primary_file.file_size, large_size)
 
     def test_book_format_validation(self):
         """Test book format validation with various formats."""
         formats = ['epub', 'pdf', 'mobi', 'azw3', 'cbr', 'cbz', 'txt']
 
         for fmt in formats:
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/test/book.{fmt}',
                 file_format=fmt,
                 file_size=1024,
@@ -473,10 +483,18 @@ class ScanLogBusinessLogicTests(TestCase):
     """Test ScanLog model business logic."""
 
     def setUp(self):
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+
         self.scan_folder = ScanFolder.objects.create(
-            path='/test/scan/folder',
+            path=self.temp_dir,
             name='Test Scan Folder'
         )
+
+    def tearDown(self):
+        """Clean up temporary directories"""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
     def test_scan_log_level_validation(self):
         """Test scan log level validation."""
@@ -579,17 +597,31 @@ class MetadataValidationBusinessLogicTests(TestCase):
     """Test metadata validation business logic."""
 
     def setUp(self):
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+
         self.scan_folder = ScanFolder.objects.create(
-            path='/test/scan/folder',
+            path=self.temp_dir,
             name='Test Scan Folder'
         )
 
-        self.book = Book.objects.create(
-            file_path='/test/path/book.epub',
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, 'book.epub'),
             file_format='epub',
             file_size=1024000,
             scan_folder=self.scan_folder
         )
+
+        # Create data source
+        self.data_source, _ = DataSource.objects.get_or_create(
+            name=DataSource.MANUAL,
+            defaults={'trust_level': 1.0}
+        )
+
+    def tearDown(self):
+        """Clean up temporary directories"""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
         self.data_source, _ = DataSource.objects.get_or_create(
             name=DataSource.MANUAL,
@@ -671,6 +703,9 @@ class MetadataValidationBusinessLogicTests(TestCase):
 
     def test_complex_metadata_relationships(self):
         """Test complex metadata relationship scenarios."""
+        # Clean up any existing metadata to start fresh
+        self.book.titles.all().delete()
+
         # Create a book with full metadata hierarchy
         author = Author.objects.create(name='Complex Author')
         series = Series.objects.create(name='Complex Series')
@@ -706,13 +741,16 @@ class MetadataValidationBusinessLogicTests(TestCase):
 
         # Verify all relationships exist
         self.assertEqual(self.book.titles.count(), 1)
-        self.assertEqual(self.book.bookauthor.count(), 1)
-        self.assertEqual(self.book.series_info.count(), 1)  # BookSeries relationship name
-        self.assertEqual(self.book.bookpublisher.count(), 1)  # BookPublisher relationship name
+        self.assertEqual(self.book.author_relationships.count(), 1)
+        self.assertEqual(self.book.series_relationships.count(), 1)  # BookSeries relationship name
+        self.assertEqual(self.book.publisher_relationships.count(), 1)  # BookPublisher relationship name
         self.assertEqual(self.book.metadata.count(), 1)  # BookMetadata relationship name
 
     def test_metadata_activation_deactivation_cycles(self):
         """Test metadata activation/deactivation business logic."""
+        # Remove existing titles to start clean
+        self.book.titles.all().delete()
+
         title = BookTitle.objects.create(
             book=self.book,
             title='Active Title',
@@ -742,17 +780,25 @@ class ErrorRecoveryBusinessLogicTests(TestCase):
     """Test error recovery and resilience in business logic."""
 
     def setUp(self):
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+
         self.scan_folder = ScanFolder.objects.create(
-            path='/test/scan/folder',
+            path=self.temp_dir,
             name='Test Scan Folder'
         )
 
-        self.book = Book.objects.create(
-            file_path='/test/path/book.epub',
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, 'book.epub'),
             file_format='epub',
             file_size=1024000,
             scan_folder=self.scan_folder
         )
+
+    def tearDown(self):
+        """Clean up temporary directories"""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
     @patch('books.models.logger')
     def test_final_metadata_partial_update_recovery(self, mock_logger):
@@ -769,10 +815,10 @@ class ErrorRecoveryBusinessLogicTests(TestCase):
 
                 # Should handle partial failure gracefully
                 try:
-                    final_metadata.update_final_values()
+                    final_metadata.sync_from_sources()
                 except Exception as e:
                     # Should not propagate the exception
-                    self.fail(f"update_final_values should handle errors gracefully: {e}")
+                    self.fail(f"sync_from_sources should handle errors gracefully: {e}")
 
     @patch('books.models.logger')
     def test_database_constraint_violation_handling(self, mock_logger):

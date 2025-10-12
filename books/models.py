@@ -359,8 +359,6 @@ class Book(HashFieldMixin, models.Model):
             )
             return book
 
-
-
     def soft_delete(self):
         """Soft delete this book"""
         self.deleted_at = timezone.now()
@@ -1288,14 +1286,20 @@ class FinalMetadata(models.Model):
         ]
         constraints = [
             models.CheckConstraint(
-                check=models.Q(final_title_confidence__gte=0) &
-                      models.Q(final_title_confidence__lte=1),
+                check=(
+                    models.Q(final_title_confidence__gte=0) &
+                    models.Q(final_title_confidence__lte=1)
+                ),
                 name='valid_title_confidence'
             ),
             models.CheckConstraint(
-                check=models.Q(publication_year__isnull=True) |
-                      (models.Q(publication_year__gte=1000) &
-                       models.Q(publication_year__lte=2100)),
+                check=(
+                    models.Q(publication_year__isnull=True) |
+                    (
+                        models.Q(publication_year__gte=1000) &
+                        models.Q(publication_year__lte=2100)
+                    )
+                ),
                 name='valid_publication_year'
             ),
         ]

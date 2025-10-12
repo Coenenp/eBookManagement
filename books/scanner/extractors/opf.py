@@ -28,12 +28,14 @@ def _get_opf_file_source():
 
 def extract(book):
     try:
-        if not book.opf_path:
+        # Get the opf_path from the first BookFile
+        book_file = book.files.first()
+        if not book_file or not book_file.opf_path:
             return
 
         source = _get_opf_file_source()
 
-        with open(book.opf_path, 'r', encoding='utf-8') as f:
+        with open(book_file.opf_path, 'r', encoding='utf-8') as f:
             root = ET.parse(f).getroot()
 
         ns = {
@@ -143,4 +145,6 @@ def extract(book):
                     )
 
     except Exception as e:
-        logger.warning(f"OPF metadata extraction failed for {book.opf_path}: {e}")
+        book_file = book.files.first()
+        opf_path = book_file.opf_path if book_file else "unknown"
+        logger.warning(f"OPF metadata extraction failed for {opf_path}: {e}")

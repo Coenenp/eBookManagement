@@ -316,14 +316,14 @@ class BookDetailView(LoginRequiredMixin, DetailView, BookNavigationMixin, Metada
             # Full prefetch only for edit mode
             book = Book.objects.prefetch_related(
                 'titles__source',
-                'bookauthor__author',
-                'bookauthor__source',
-                'bookgenre__genre',
-                'bookgenre__source',
-                'series_info__series',
-                'series_info__source',
-                'bookpublisher__publisher',
-                'bookpublisher__source',
+                'author_relationships__author',
+                'author_relationships__source',
+                'genre_relationships__genre',
+                'genre_relationships__source',
+                'series_relationships__series',
+                'series_relationships__source',
+                'publisher_relationships__publisher',
+                'publisher_relationships__source',
                 'metadata__source',
                 'covers__source'
             ).get(pk=book.pk)

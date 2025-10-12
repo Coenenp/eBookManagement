@@ -341,9 +341,14 @@ class BatchRenamer:
             main_op = main_ops[0]  # Should only be one main operation per book
             try:
                 book = Book.objects.get(id=book_id)
-                book.file_path = str(main_op.target_path)
-                book.save(update_fields=['file_path'])
-                logger.info(f"Updated book {book_id} path to: {book.file_path}")
+                # Update the primary BookFile instead of Book.file_path
+                primary_file = book.primary_file
+                if primary_file:
+                    primary_file.file_path = str(main_op.target_path)
+                    primary_file.save(update_fields=['file_path'])
+                    logger.info(f"Updated book {book_id} primary file path to: {primary_file.file_path}")
+                else:
+                    logger.error(f"Book {book_id} has no primary file to update")
             except Book.DoesNotExist:
                 logger.error(f"Book {book_id} not found for path update")
 

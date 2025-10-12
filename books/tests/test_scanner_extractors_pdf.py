@@ -1,11 +1,15 @@
 """
 Test cases for PDF Scanner Extractor
 """
+import os
+import tempfile
+import shutil
 from django.test import TestCase
 from unittest.mock import patch, MagicMock
 from books.models import (
-    Book, ScanFolder, DataSource, BookTitle, BookAuthor, BookMetadata
+    ScanFolder, DataSource, BookTitle, BookAuthor, BookMetadata
 )
+from books.tests.test_helpers import create_test_book_with_file
 from books.scanner.extractors.pdf import extract
 
 
@@ -14,16 +18,20 @@ class PDFExtractorTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+
         self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
+            path=self.temp_dir,
             name="Test Scan Folder"
         )
 
-        self.book = Book.objects.create(
-            file_path="/test/scan/folder/test.pdf",
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, "test.pdf"),
             file_format="pdf",
             file_size=1024000,
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            title=None  # Don't auto-create title
         )
 
         # Ensure PDF_INTERNAL data source exists
@@ -31,6 +39,11 @@ class PDFExtractorTests(TestCase):
             name=DataSource.PDF_INTERNAL,
             defaults={'trust_level': 0.8}
         )
+
+    def tearDown(self):
+        """Clean up temporary directories"""
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
     @patch('books.scanner.extractors.pdf.PdfReader')
     def test_extract_complete_metadata(self, mock_pdf_reader):

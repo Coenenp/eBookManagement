@@ -8,7 +8,6 @@ import django
 from django.test import TestCase
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth.models import User
-from unittest.mock import patch
 import tempfile
 
 from books.forms import (
@@ -16,9 +15,11 @@ from books.forms import (
     BookStatusForm, BookEditForm, BookCoverForm, BulkUpdateForm,
     AdvancedSearchForm, UserProfileForm
 )
+from books.mixins import StandardFormMixin
 from books.models import (
-    ScanFolder, Book, FinalMetadata, UserProfile
+    ScanFolder, FinalMetadata, UserProfile
 )
+from books.tests.test_helpers import create_test_book_with_file
 
 # Must set Django settings before importing Django models
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ebook_manager.settings')
@@ -78,16 +79,11 @@ class ScanFolderFormTests(TestCase):
         # Create a temporary directory for testing
         self.temp_dir = tempfile.mkdtemp()
 
-    @patch('os.path.exists')
-    @patch('os.path.isdir')
-    def test_scan_folder_form_valid(self, mock_isdir, mock_exists):
+    def test_scan_folder_form_valid(self):
         """Test ScanFolderForm with valid data"""
-        mock_exists.return_value = True
-        mock_isdir.return_value = True
-
         form_data = {
             'name': 'Test Folder',
-            'path': '/test/path',
+            'path': self.temp_dir,
             'content_type': 'ebooks',
             'language': 'en',
             'is_active': True
@@ -125,7 +121,7 @@ class ScanFolderFormTests(TestCase):
         """Test ScanFolderForm accepts any path string (no path validation in current form)"""
         form_data = {
             'name': 'Test Folder',
-            'path': '/any/path/string',
+            'path': self.temp_dir,  # Use actual existing path
             'content_type': 'ebooks',
             'language': 'en',
             'is_active': True
@@ -134,34 +130,36 @@ class ScanFolderFormTests(TestCase):
         self.assertTrue(form.is_valid())
 
     def test_scan_folder_form_accepts_file_paths(self):
-        """Test ScanFolderForm accepts file paths (no directory validation in current form)"""
+        """Test ScanFolderForm rejects file paths (requires directory paths)"""
+        # Create a test file in the temp directory
+        test_file = os.path.join(self.temp_dir, 'file.txt')
+        with open(test_file, 'w') as f:
+            f.write('test')
+
         form_data = {
             'name': 'Test Folder',
-            'path': '/test/file.txt',
+            'path': test_file,
             'content_type': 'ebooks',
             'language': 'en',
             'is_active': True
         }
         form = ScanFolderForm(data=form_data)
-        self.assertTrue(form.is_valid())
+        # Form should be invalid because file paths are not allowed
+        self.assertFalse(form.is_valid())
+        self.assertIn('path', form.errors)
 
-    @patch('os.path.exists')
-    @patch('os.path.isdir')
-    def test_scan_folder_form_path_cleaning(self, mock_isdir, mock_exists):
+    def test_scan_folder_form_path_cleaning(self):
         """Test ScanFolderForm path cleaning (whitespace removal)"""
-        mock_exists.return_value = True
-        mock_isdir.return_value = True
-
         form_data = {
             'name': 'Test Folder',
-            'path': '  /test/path  ',
+            'path': f'  {self.temp_dir}  ',  # Add whitespace around temp_dir
             'content_type': 'ebooks',
             'language': 'en',
             'is_active': True
         }
         form = ScanFolderForm(data=form_data)
         self.assertTrue(form.is_valid())
-        self.assertEqual(form.cleaned_data['path'], '/test/path')
+        self.assertEqual(form.cleaned_data['path'], self.temp_dir)
 
 
 class BookSearchFormTests(TestCase):
@@ -211,9 +209,10 @@ class MetadataReviewFormTests(TestCase):
     """Test MetadataReviewForm functionality"""
 
     def setUp(self):
-        self.scan_folder = ScanFolder.objects.create(path='/test/path')
-        self.book = Book.objects.create(
-            file_path='/test/path/test_book.epub',
+        self.temp_dir = tempfile.mkdtemp()
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir)
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, 'test_book.epub'),
             file_size=1000,
             file_format='epub',
             scan_folder=self.scan_folder
@@ -344,9 +343,10 @@ class BookStatusFormTests(TestCase):
     """Test BookStatusForm functionality"""
 
     def setUp(self):
-        self.scan_folder = ScanFolder.objects.create(path='/test/path')
-        self.book = Book.objects.create(
-            file_path='/test/path/test_book.epub',
+        self.temp_dir = tempfile.mkdtemp()
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir)
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, 'test_book.epub'),
             file_size=1000,
             file_format='epub',
             scan_folder=self.scan_folder
@@ -369,9 +369,10 @@ class BookEditFormTests(TestCase):
     """Test BookEditForm functionality"""
 
     def setUp(self):
-        self.scan_folder = ScanFolder.objects.create(path='/test/path')
-        self.book = Book.objects.create(
-            file_path='/test/path/test_book.epub',
+        self.temp_dir = tempfile.mkdtemp()
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir)
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, 'test_book.epub'),
             file_size=1000,
             file_format='epub',
             scan_folder=self.scan_folder
@@ -393,11 +394,12 @@ class BookEditFormTests(TestCase):
         """Test BookEditForm widget placeholders"""
         form = BookEditForm(instance=self.book)
 
-        cover_widget = form.fields['cover_path'].widget
-        opf_widget = form.fields['opf_path'].widget
+        # BookEditForm only has is_placeholder and is_duplicate fields
+        self.assertIn('is_placeholder', form.fields)
+        self.assertIn('is_duplicate', form.fields)
 
-        self.assertEqual(cover_widget.attrs['placeholder'], 'Path to cover image')
-        self.assertEqual(opf_widget.attrs['placeholder'], 'Path to .opf metadata file')
+        # Check that the form inherits from StandardFormMixin
+        self.assertIsInstance(form, StandardFormMixin)
 
 
 class BookCoverFormTests(TestCase):
@@ -662,9 +664,10 @@ class FormIntegrationTests(TestCase):
     """Test form integration and edge cases"""
 
     def setUp(self):
-        self.scan_folder = ScanFolder.objects.create(path='/test/path')
-        self.book = Book.objects.create(
-            file_path='/test/path/test_book.epub',
+        self.temp_dir = tempfile.mkdtemp()
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir)
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, 'test_book.epub'),
             file_size=1000,
             file_format='epub',
             scan_folder=self.scan_folder

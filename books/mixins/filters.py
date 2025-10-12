@@ -23,7 +23,7 @@ class BookFilterMixin:
 
         file_format = search_params.get('file_format')
         if file_format:
-            queryset = queryset.filter(file_format=file_format)
+            queryset = queryset.filter(files__file_format=file_format)
 
         confidence_level = search_params.get('confidence_level')
         if confidence_level == 'high':

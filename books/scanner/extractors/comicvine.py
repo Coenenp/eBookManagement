@@ -152,37 +152,42 @@ def query_comicvine_metadata(book: Book, series_name: str, issue_number: Optiona
     """Query Comic Vine API for comic book metadata."""
     logger.info(f"[COMICVINE QUERY] Searching for series: {series_name}, issue: {issue_number}")
 
-    api = ComicVineAPI()
-    source = DataSource.objects.get(name=DataSource.COMICVINE)
+    try:
+        api = ComicVineAPI()
+        source = DataSource.objects.get(name=DataSource.COMICVINE)
 
-    # Search for volumes/series
-    volumes = api.search_volumes(series_name)
-    if not volumes:
-        logger.info(f"[COMICVINE] No volumes found for: {series_name}")
+        # Search for volumes/series
+        volumes = api.search_volumes(series_name)
+        if not volumes:
+            logger.info(f"[COMICVINE] No volumes found for: {series_name}")
+            return False
+
+        # Use the first (best match) volume
+        volume = volumes[0]
+        volume_id = volume['id']
+
+        logger.info(f"[COMICVINE] Found volume: {volume['name']} (ID: {volume_id})")
+
+        # Save series/volume information
+        _save_volume_metadata(book, volume, source)
+
+        # Search for specific issue if we have an issue number
+        if issue_number:
+            issues = api.search_issues(volume_id, issue_number, limit=1)
+            if issues:
+                issue = issues[0]
+                logger.info(f"[COMICVINE] Found issue: {issue.get('name', 'Untitled')} #{issue.get('issue_number')}")
+                _save_issue_metadata(book, issue, source)
+                return True
+            else:
+                logger.info(f"[COMICVINE] No specific issue #{issue_number} found in volume {volume_id}")
+
+        # If no specific issue found, use volume-level metadata
+        return True
+
+    except Exception as e:
+        logger.error(f"[COMICVINE] Error querying Comic Vine API: {e}")
         return False
-
-    # Use the first (best match) volume
-    volume = volumes[0]
-    volume_id = volume['id']
-
-    logger.info(f"[COMICVINE] Found volume: {volume['name']} (ID: {volume_id})")
-
-    # Save series/volume information
-    _save_volume_metadata(book, volume, source)
-
-    # Search for specific issue if we have an issue number
-    if issue_number:
-        issues = api.search_issues(volume_id, issue_number, limit=1)
-        if issues:
-            issue = issues[0]
-            logger.info(f"[COMICVINE] Found issue: {issue.get('name', 'Untitled')} #{issue.get('issue_number')}")
-            _save_issue_metadata(book, issue, source)
-            return True
-        else:
-            logger.info(f"[COMICVINE] No specific issue #{issue_number} found in volume {volume_id}")
-
-    # If no specific issue found, use volume-level metadata
-    return True
 
 
 def _save_volume_metadata(book: Book, volume: Dict, source: DataSource):
@@ -282,15 +287,17 @@ def _save_issue_metadata(book: Book, issue: Dict, source: DataSource):
             # Extract year from date (format: YYYY-MM-DD)
             try:
                 year = cover_date.split('-')[0]
-                BookMetadata.objects.get_or_create(
-                    book=book,
-                    field_name='publication_year',
-                    source=source,
-                    defaults={
-                        'field_value': year,
-                        'confidence': source.trust_level
-                    }
-                )
+                # Validate that the year is actually a 4-digit number
+                if len(year) == 4 and year.isdigit():
+                    BookMetadata.objects.get_or_create(
+                        book=book,
+                        field_name='publication_year',
+                        source=source,
+                        defaults={
+                            'field_value': year,
+                            'confidence': source.trust_level
+                        }
+                    )
             except (IndexError, ValueError):
                 pass
 

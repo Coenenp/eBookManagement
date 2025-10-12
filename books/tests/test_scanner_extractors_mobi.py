@@ -1,12 +1,16 @@
 """
 Test cases for MOBI Scanner Extractor
 """
+import os
+import tempfile
+import shutil
 from django.test import TestCase
 from unittest.mock import patch, mock_open
 from books.models import (
-    Book, ScanFolder, DataSource, BookTitle, BookAuthor,
+    ScanFolder, DataSource, BookTitle, BookAuthor,
     BookPublisher, BookMetadata, Publisher
 )
+from books.tests.test_helpers import create_test_book_with_file
 from books.scanner.extractors.mobi import extract
 import json
 
@@ -16,16 +20,20 @@ class MOBIExtractorTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+
         self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
+            path=self.temp_dir,
             name="Test Scan Folder"
         )
 
-        self.book = Book.objects.create(
-            file_path="/test/scan/folder/test.mobi",
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, "test.mobi"),
             file_format="mobi",
             file_size=1024000,
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            title=None  # Don't auto-create title
         )
 
         # Ensure MOBI_INTERNAL data source exists
@@ -33,6 +41,11 @@ class MOBIExtractorTests(TestCase):
             name=DataSource.MOBI_INTERNAL,
             defaults={'trust_level': 0.9}
         )
+
+    def tearDown(self):
+        """Clean up temporary directories"""
+        if os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
     @patch('books.scanner.extractors.mobi.mobi.extract')
     @patch('builtins.open', new_callable=mock_open)
