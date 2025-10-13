@@ -33,7 +33,8 @@ except ImportError:
 
 # Core views - COMPLETED
 from .core import (  # noqa: F401
-    signup, DashboardView, BookListView, BookDetailView
+    signup, DashboardView, BookListView, BookDetailView, UploadFileView,
+    clear_cache_view, debug_view, system_status_view
 )
 
 # Metadata views - COMPLETED

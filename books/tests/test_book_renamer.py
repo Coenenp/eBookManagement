@@ -11,12 +11,13 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 
 from books.models import (
-    Book, FinalMetadata, ScanFolder, FileOperation
+    FinalMetadata, FileOperation
 )
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class BookRenamerViewTests(TestCase):
-    """Test cases for BookRenamerView"""
+    """Test cases for Book Renamer View"""
 
     def setUp(self):
         """Set up test data"""
@@ -28,17 +29,17 @@ class BookRenamerViewTests(TestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        # Create temporary directory for scan folder
+        self.temp_dir = tempfile.mkdtemp()
+        self.scan_folder = create_test_scan_folder(self.temp_dir, "Test Scan Folder")
 
-        # Create test book
-        self.book = Book.objects.create(
-            file_path="/test/scan/folder/book.epub",
+        # Create test book with new architecture
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, "book.epub"),
             file_format="epub",
             file_size=1024000,
             scan_folder=self.scan_folder,
+            title="Test Book"
         )
 
         # Create final metadata with series information
@@ -50,6 +51,11 @@ class BookRenamerViewTests(TestCase):
             final_series_number="1",  # Test string series number
             is_reviewed=True
         )
+
+    def tearDown(self):
+        """Clean up temporary directory"""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
     def test_book_renamer_view_loads(self):
         """Test that book renamer view loads successfully"""
@@ -69,11 +75,12 @@ class BookRenamerViewTests(TestCase):
     def test_series_analysis_with_null_series_number(self):
         """Test series analysis handles null series numbers correctly"""
         # Create book with null series number
-        book_null = Book.objects.create(
-            file_path="/test/scan/folder/book_null.epub",
+        book_null = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, "book_null.epub"),
             file_format="epub",
             file_size=1024000,
             scan_folder=self.scan_folder,
+            title="Test Book Null"
         )
 
         FinalMetadata.objects.create(
@@ -91,11 +98,12 @@ class BookRenamerViewTests(TestCase):
     def test_series_analysis_with_empty_series_number(self):
         """Test series analysis handles empty string series numbers correctly"""
         # Create book with empty series number
-        book_empty = Book.objects.create(
-            file_path="/test/scan/folder/book_empty.epub",
+        book_empty = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, "book_empty.epub"),
             file_format="epub",
             file_size=1024000,
             scan_folder=self.scan_folder,
+            title="Test Book Empty"
         )
 
         FinalMetadata.objects.create(
@@ -126,11 +134,12 @@ class BookRenamerViewTests(TestCase):
     def test_warnings_generation(self):
         """Test that warnings are generated for problematic books"""
         # Create book with missing author
-        book_missing_author = Book.objects.create(
-            file_path="/test/scan/folder/missing_author.epub",
+        book_missing_author = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, "missing_author.epub"),
             file_format="epub",
             file_size=1024000,
             scan_folder=self.scan_folder,
+            title="Test Book Missing Author"
         )
 
         FinalMetadata.objects.create(
@@ -169,13 +178,9 @@ class BookRenamerFileDetailsViewTests(TestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
-
         # Create temporary directory for testing
         self.temp_dir = tempfile.mkdtemp()
+        self.scan_folder = create_test_scan_folder(self.temp_dir, "Test Scan Folder")
 
         # Create test files
         self.test_book_path = os.path.join(self.temp_dir, "test_book.epub")
@@ -188,11 +193,13 @@ class BookRenamerFileDetailsViewTests(TestCase):
             with open(path, 'w') as f:
                 f.write("test content")
 
-        self.book = Book.objects.create(
+        from books.tests.test_helpers import create_test_book_with_file
+        self.book = create_test_book_with_file(
             file_path=self.test_book_path,
             file_format="epub",
             file_size=1024000,
             scan_folder=self.scan_folder,
+            content_type='ebook'
         )
 
         self.final_metadata = FinalMetadata.objects.create(
@@ -298,11 +305,12 @@ class BookRenamerFileDetailsViewTests(TestCase):
     def test_file_details_missing_file(self):
         """Test file details view when original file doesn't exist"""
         # Create book with non-existent file
-        missing_book = Book.objects.create(
+        missing_book = create_test_book_with_file(
             file_path="/nonexistent/path/book.epub",
             file_format="epub",
             file_size=1024000,
             scan_folder=self.scan_folder,
+            title="Missing Book"
         )
 
         FinalMetadata.objects.create(
@@ -334,13 +342,9 @@ class BookRenamerExecuteViewTests(TestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
-
         # Create temporary directory for testing
         self.temp_dir = tempfile.mkdtemp()
+        self.scan_folder = create_test_scan_folder(self.temp_dir, "Test Scan Folder")
 
         # Create test files
         self.test_book_path = os.path.join(self.temp_dir, "test_book.epub")
@@ -353,11 +357,12 @@ class BookRenamerExecuteViewTests(TestCase):
             with open(path, 'w') as f:
                 f.write("test content")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path=self.test_book_path,
             file_format="epub",
             file_size=1024000,
             scan_folder=self.scan_folder,
+            title="Test Book"
         )
 
         self.final_metadata = FinalMetadata.objects.create(
@@ -496,17 +501,22 @@ class FinalMetadataSeriesNumberTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+        self.scan_folder = create_test_scan_folder(self.temp_dir, "Test Scan Folder")
 
-        self.book = Book.objects.create(
-            file_path="/test/path/book.epub",
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, "book.epub"),
             file_format="epub",
             file_size=1024000,
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            title="Test Book"
         )
+
+    def tearDown(self):
+        """Clean up temporary directory"""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
     def test_final_series_number_can_be_null(self):
         """Test that final_series_number field can be null"""
@@ -612,10 +622,14 @@ class FileHandlingEdgeCaseTests(TestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        # Create temporary directory for testing
+        self.temp_dir = tempfile.mkdtemp()
+        self.scan_folder = create_test_scan_folder(self.temp_dir, "Test Scan Folder")
+
+    def tearDown(self):
+        """Clean up temporary directory"""
+        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir)
 
     def test_file_description_method(self):
         """Test _get_file_description method returns appropriate descriptions"""
@@ -644,11 +658,12 @@ class FileHandlingEdgeCaseTests(TestCase):
 
     def test_file_actions_json_parsing(self):
         """Test that malformed JSON in file_actions is handled gracefully"""
-        book = Book.objects.create(
-            file_path="/test/path/book.epub",
+        book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, "book.epub"),
             file_format="epub",
             file_size=1024000,
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            title="Test Book"
         )
 
         FinalMetadata.objects.create(
@@ -674,11 +689,13 @@ class FileHandlingEdgeCaseTests(TestCase):
 
     def test_book_with_no_final_metadata(self):
         """Test handling of books without final metadata"""
-        book_no_metadata = Book.objects.create(
+        from books.tests.test_helpers import create_test_book_with_file
+        book_no_metadata = create_test_book_with_file(
             file_path="/test/path/book.epub",
             file_format="epub",
             file_size=1024000,
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type='ebook'
         )
 
         # Book renamer should filter out books without reviewed metadata

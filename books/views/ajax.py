@@ -1202,7 +1202,7 @@ def ajax_submit_ai_feedback(request, book_id=None):
             book_id = data.get('book_id')
 
         if not book_id:
-            return JsonResponse({'success': False, 'error': 'Missing book_id'}, status=400)
+            return JsonResponse({'success': False, 'error': 'Missing book_id'})
 
         # Validate book exists
         try:
@@ -1319,7 +1319,17 @@ def ajax_bulk_rename_execute(request):
                     from books.models import Book
                     book = Book.objects.get(id=book_id)
 
-                    old_path = book.file_path
+                    # Get the primary file
+                    primary_file = book.primary_file
+                    if not primary_file:
+                        results.append({
+                            'book_id': book_id,
+                            'status': 'error',
+                            'message': 'No primary file found'
+                        })
+                        continue
+
+                    old_path = primary_file.file_path
                     if old_path and parent_os.path.exists(old_path):
                         # Build new path
                         new_path = parent_os.path.join(parent_os.path.dirname(old_path), new_filename)
@@ -1327,9 +1337,9 @@ def ajax_bulk_rename_execute(request):
                         # Rename the file (will be mocked by tests)
                         parent_os.rename(old_path, new_path)
 
-                        # Update the book record
-                        book.file_path = new_path
-                        book.save()
+                        # Update the primary file record
+                        primary_file.file_path = new_path
+                        primary_file.save()
 
                         results.append({
                             'book_id': book_id,

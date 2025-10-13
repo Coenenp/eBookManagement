@@ -14,7 +14,10 @@ def download_and_store_cover(candidate):
     response = requests.get(candidate.image_url, timeout=10)
     response.raise_for_status()
 
-    filename = f"{slugify(candidate.book.filename)}_cover.jpg"
+    # Get filename from the primary file
+    primary_file = candidate.book.primary_file
+    book_filename = primary_file.filename if primary_file else f"book_{candidate.book.id}"
+    filename = f"{slugify(book_filename)}_cover.jpg"
     relative_path = os.path.join('covers', filename)
     absolute_path = os.path.join(settings.MEDIA_ROOT, relative_path)
 

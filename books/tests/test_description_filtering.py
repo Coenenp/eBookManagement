@@ -53,8 +53,8 @@ class DescriptionFilterTests(TestCase):
         # Should return the text as-is
         self.assertEqual(result, input_text)
 
-    def test_mixed_content(self):
-        """Test mixed content with good and unwanted elements"""
+    def test_complex_content(self):
+        """Test complex content with good and unwanted elements"""
         input_html = '<p>Good content</p><div class="unwanted">Bad div</div><p>More good content</p>'
 
         result = sanitize_description(input_html)

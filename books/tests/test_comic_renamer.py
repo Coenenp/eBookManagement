@@ -2,7 +2,9 @@
 from django.test import TestCase
 from django.contrib.auth.models import User
 from unittest.mock import patch, MagicMock
-from books.models import Book, DataSource, BookMetadata, FinalMetadata, ScanFolder
+import tempfile
+import shutil
+from books.models import Book, BookFile, DataSource, BookMetadata, FinalMetadata, ScanFolder
 from books.views import BookRenamerView
 
 
@@ -21,22 +23,35 @@ class ComicRenamerTests(TestCase):
             defaults={'trust_level': 0.85}
         )
 
+        # Create temporary directory for scan folder
+        self.test_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test data"""
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
     def create_comic_book(self, filename, series_name, issue_type='main_series', issue_number=None, publisher=None):
         """Helper to create a comic book with metadata"""
         # Create scan folder if it doesn't exist
         scan_folder, _ = ScanFolder.objects.get_or_create(
-            path="/test/comics/",
+            path=self.test_dir,
             defaults={
                 'name': 'Test Comics',
-                'is_active': True
+                'is_active': True,
+                'content_type': 'comics'
             }
         )
 
         book = Book.objects.create(
-            file_path=f"/test/{filename}",
+            scan_folder=scan_folder,
+            content_type='comic'
+        )
+
+        BookFile.objects.create(
+            book=book,
+            file_path=f"{self.test_dir}/{filename}",
             file_size=1000000,
-            file_format="cbz",
-            scan_folder=scan_folder  # Add required scan_folder
+            file_format="cbz"
         )
 
         # Add final metadata

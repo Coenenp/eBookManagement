@@ -11,7 +11,8 @@ from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.core.cache import cache
-from books.models import Book, UserProfile
+from books.models import UserProfile
+from books.tests.test_helpers import create_test_scan_folder, create_test_book_with_file
 
 
 class UserProfileTests(TestCase):
@@ -232,16 +233,11 @@ class DisplayOptionsTests(TestCase):
         self.client.login(username='testuser', password='testpass123')
 
         # Create scan folder for books
-        from books.models import ScanFolder
-        self.scan_folder = ScanFolder.objects.create(
-            name="Test Scan Folder",
-            path="/library/test",
-            content_type="ebooks"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
         # Create test books
         for i in range(30):
-            Book.objects.create(
+            create_test_book_with_file(
                 file_path=f"/library/display_test_{i+1}.epub",
                 file_format="epub",
                 scan_folder=self.scan_folder
@@ -695,7 +691,7 @@ class ConfigurationIntegrationTests(TestCase):
 
         for page in pages:
             with self.subTest(page=page):
-                response = self.client.get(page)
+                response = self.client.get(page, follow=True)
                 self.assertEqual(response.status_code, 200)
                 # Theme application would be checked in template context
 
@@ -704,23 +700,18 @@ class ConfigurationIntegrationTests(TestCase):
         # Create basic profile for testing
         UserProfile.objects.get_or_create(user=self.user)
 
-        response = self.client.get(reverse('books:book_list'))
+        response = self.client.get(reverse('books:book_list'), follow=True)
         self.assertEqual(response.status_code, 200)
         # Language setting would affect template rendering
 
     def test_pagination_settings_consistency(self):
         """Test pagination settings work consistently."""
         # Create scan folder for books
-        from books.models import ScanFolder
-        scan_folder = ScanFolder.objects.create(
-            name="Test Scan Folder",
-            path="/library/test",
-            content_type="ebooks"
-        )
+        scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
         # Create test books
         for i in range(15):
-            Book.objects.create(
+            create_test_book_with_file(
                 file_path=f"/library/pagination_{i}.epub",
                 file_format="epub",
                 scan_folder=scan_folder

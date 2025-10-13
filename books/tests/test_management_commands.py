@@ -7,14 +7,14 @@ from unittest.mock import patch
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
-from books.models import Book, ScanFolder
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class ScanBooksCommandTest(TestCase):
     """Tests for the scan_books management command."""
 
     def setUp(self):
-        self.scan_folder = ScanFolder.objects.create(path="/fake/dir", name="Test Folder")
+        self.scan_folder = create_test_scan_folder(name="Test Folder")
 
     @patch('books.scanner.background.BackgroundScanner')
     @patch('books.management.commands.scan_books.check_api_health')
@@ -45,7 +45,9 @@ class ScanBooksCommandTest(TestCase):
         mock_scanner = mock_scanner_class.return_value
         mock_scanner.rescan_existing_books.return_value = {'success': True, 'message': 'Test completed'}
 
-        book = Book.objects.create(file_path="/fake/dir/book1.epub", scan_folder=self.scan_folder)
+        book = create_test_book_with_file(
+            file_path="/fake/dir/book1.epub", scan_folder=self.scan_folder
+        )
         call_command('scan_books', 'rescan', '--all')
 
         mock_scanner_class.assert_called_once()
@@ -59,8 +61,12 @@ class ScanBooksCommandTest(TestCase):
         mock_scanner = mock_scanner_class.return_value
         mock_scanner.rescan_existing_books.return_value = {'success': True, 'message': 'Test completed'}
 
-        book1 = Book.objects.create(file_path="/fake/dir/book1.epub", scan_folder=self.scan_folder)
-        book2 = Book.objects.create(file_path="/fake/dir/book2.epub", scan_folder=self.scan_folder)
+        book1 = create_test_book_with_file(
+            file_path="/fake/dir/book1.epub", scan_folder=self.scan_folder
+        )
+        book2 = create_test_book_with_file(
+            file_path="/fake/dir/book2.epub", scan_folder=self.scan_folder
+        )
         call_command('scan_books', 'rescan', '--book-ids', str(book1.id), str(book2.id))
 
         mock_scanner_class.assert_called_once()
@@ -137,7 +143,9 @@ class ScanContentIsbnCommandTest(TestCase):
             'total_isbns_found': 0,
             'errors': 0
         }
-        Book.objects.create(file_path="/fake/book.epub", file_format="epub")
+        create_test_book_with_file(
+            file_path="/fake/book.epub", file_format="epub"
+        )
         call_command('scan_content_isbn')
         mock_bulk_scan.assert_called_once()
 
@@ -150,9 +158,10 @@ class CompleteMetadataCommandTest(TestCase):
     def test_complete_metadata_command(self, mock_resolve, mock_query):
         """Test the basic execution of the command."""
         # Create a book without final metadata
-        from books.models import ScanFolder
-        scan_folder = ScanFolder.objects.create(path="/fake/dir", name="Test Folder")
-        Book.objects.create(file_path="/fake/book.epub", scan_folder=scan_folder)
+        scan_folder = create_test_scan_folder(name="Test Folder")
+        create_test_book_with_file(
+            file_path="/fake/book.epub", scan_folder=scan_folder
+        )
 
         call_command('complete_metadata')
 

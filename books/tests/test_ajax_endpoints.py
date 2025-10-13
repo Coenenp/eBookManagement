@@ -7,19 +7,56 @@ asynchronous operations.
 """
 
 import json
+import tempfile
+import shutil
 from unittest.mock import patch, MagicMock
 from django.test import TestCase, Client, RequestFactory, override_settings
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.http import JsonResponse
 from django.core.cache import cache
-from books.models import Book, FinalMetadata, DataSource, AIFeedback, UserProfile, ScanFolder
+from books.models import Book, BookFile, FinalMetadata, DataSource, AIFeedback, UserProfile, ScanFolder
 
 
-class AJAXMetadataEndpointTests(TestCase):
+class BaseAjaxTestCaseWithTempDir(TestCase):
+    """Base test case that creates a temporary directory for ScanFolder path validation."""
+
+    def setUp(self):
+        """Create temporary directory for tests."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.temp_dir, ignore_errors=True)
+
+
+def create_test_book_with_file(file_path, file_size=1000, file_format='epub',
+                               scan_folder=None, content_type=None, title=None):
+    """Helper function to create a test book with associated file"""
+    if scan_folder is None:
+        temp_dir = tempfile.mkdtemp()
+        scan_folder = ScanFolder.objects.create(path=temp_dir)
+
+    # Create book instance
+    book = Book.objects.create(
+        scan_folder=scan_folder,
+        content_type=content_type or 'ebook',
+        is_available=True
+    )
+
+    # Create associated file
+    BookFile.objects.create(
+        book=book,
+        file_path=file_path,
+        file_format=file_format,
+        file_size=file_size
+    )
+
+    return book
+
+
+class AJAXMetadataEndpointTests(BaseAjaxTestCaseWithTempDir):
     """Tests for AJAX metadata-related endpoints."""
 
     def setUp(self):
+        super().setUp()
         self.client = Client()
         self.factory = RequestFactory()
         self.user = User.objects.create_user(
@@ -30,15 +67,16 @@ class AJAXMetadataEndpointTests(TestCase):
 
         # Create a ScanFolder for all books in this test class
         self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
+            path=self.temp_dir,
             name="Test Scan Folder"
         )
 
         # Create test book
-        self.book = Book.objects.create(
-            file_path="/library/test.epub",
+        self.book = create_test_book_with_file(
+            file_path=f"{self.temp_dir}/test.epub",
             file_format="epub",
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type='ebook'
         )
 
         FinalMetadata.objects.create(
@@ -310,10 +348,11 @@ class ISBNLookupEndpointTests(TestCase):
         self.assertIn('error', response_data['sources']['google_books'])
 
 
-class AIFeedbackEndpointTests(TestCase):
+class AIFeedbackEndpointTests(BaseAjaxTestCaseWithTempDir):
     """Tests for AI feedback-related endpoints."""
 
     def setUp(self):
+        super().setUp()
         self.client = Client()
         self.user = User.objects.create_user(
             username='testuser',
@@ -322,14 +361,15 @@ class AIFeedbackEndpointTests(TestCase):
         self.client.login(username='testuser', password='testpass123')
 
         self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
+            path=self.temp_dir,
             name="Test Scan Folder"
         )
 
-        self.book = Book.objects.create(
-            file_path="/library/test.epub",
+        self.book = create_test_book_with_file(
+            file_path=f"{self.temp_dir}/test.epub",
             file_format="epub",
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type='ebook'
         )
 
     def test_ajax_submit_ai_feedback_success(self):
@@ -536,10 +576,11 @@ class ThemePreviewEndpointTests(TestCase):
         self.assertEqual(response_data['theme'], 'light')
 
 
-class AJAXEndpointSecurityTests(TestCase):
+class AJAXEndpointSecurityTests(BaseAjaxTestCaseWithTempDir):
     """Security tests for AJAX endpoints."""
 
     def setUp(self):
+        super().setUp()
         self.client = Client()
         self.user = User.objects.create_user(
             username='testuser',
@@ -547,14 +588,15 @@ class AJAXEndpointSecurityTests(TestCase):
         )
 
         self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
+            path=self.temp_dir,
             name="Test Scan Folder"
         )
 
-        self.book = Book.objects.create(
-            file_path="/library/test.epub",
+        self.book = create_test_book_with_file(
+            file_path=f"{self.temp_dir}/test.epub",
             file_format="epub",
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type='ebook'
         )
 
     def test_ajax_endpoints_require_login(self):
@@ -611,10 +653,11 @@ class AJAXEndpointSecurityTests(TestCase):
         self.assertIn(response.status_code, [200, 403])
 
 
-class AJAXEndpointPerformanceTests(TestCase):
+class AJAXEndpointPerformanceTests(BaseAjaxTestCaseWithTempDir):
     """Performance tests for AJAX endpoints."""
 
     def setUp(self):
+        super().setUp()
         self.client = Client()
         self.user = User.objects.create_user(
             username='testuser',
@@ -623,14 +666,15 @@ class AJAXEndpointPerformanceTests(TestCase):
         self.client.login(username='testuser', password='testpass123')
 
         self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
+            path=self.temp_dir,
             name="Test Scan Folder"
         )
 
-        self.book = Book.objects.create(
-            file_path="/library/test.epub",
+        self.book = create_test_book_with_file(
+            file_path=f"{self.temp_dir}/test.epub",
             file_format="epub",
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type='ebook'
         )
 
     def test_isbn_lookup_timeout_handling(self):
@@ -673,10 +717,11 @@ class AJAXEndpointPerformanceTests(TestCase):
                 self.assertEqual(response.status_code, 200)
 
 
-class AJAXEndpointIntegrationTests(TestCase):
+class AJAXEndpointIntegrationTests(BaseAjaxTestCaseWithTempDir):
     """Integration tests for AJAX endpoints working together."""
 
     def setUp(self):
+        super().setUp()
         self.client = Client()
         self.user = User.objects.create_user(
             username='testuser',
@@ -685,17 +730,18 @@ class AJAXEndpointIntegrationTests(TestCase):
         self.client.login(username='testuser', password='testpass123')
 
         self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
+            path=self.temp_dir,
             name="Test Scan Folder"
         )
 
     def test_metadata_workflow(self):
         """Test complete metadata workflow through AJAX endpoints."""
         # Create book
-        book = Book.objects.create(
-            file_path="/library/test.epub",
+        book = create_test_book_with_file(
+            file_path=f"{self.temp_dir}/test.epub",
             file_format="epub",
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type='ebook'
         )
 
         # Create data source

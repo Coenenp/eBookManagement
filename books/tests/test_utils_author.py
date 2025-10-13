@@ -2,7 +2,8 @@
 Test cases for Author utilities
 """
 from django.test import TestCase
-from books.models import Book, ScanFolder, Author, BookAuthor, DataSource
+from books.models import Author, BookAuthor, DataSource
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 from books.utils.author import split_author_parts, attach_authors
 
 
@@ -11,12 +12,9 @@ class AuthorUtilsTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/scan/folder/book.epub",
             file_format="epub",
             file_size=1024000,
@@ -186,7 +184,7 @@ class AuthorUtilsTests(TestCase):
         attach_authors(self.book, raw_names, self.source, confidence=0.8)
 
         # Check authors were created with stripped names via BookAuthor relationships
-        authors = Author.objects.filter(bookauthor__book=self.book)
+        authors = Author.objects.filter(book_relationships__book=self.book)
         author_names = [author.name for author in authors]
         self.assertIn("John Doe", author_names)
         self.assertIn("Jane Smith", author_names)
@@ -198,5 +196,5 @@ class AuthorUtilsTests(TestCase):
 
         # Should have created relationships for all entries (even duplicates)
         # but with unique authors
-        authors = Author.objects.filter(bookauthor__book=self.book)
+        authors = Author.objects.filter(book_relationships__book=self.book)
         self.assertEqual(authors.count(), 2)  # John Doe and Jane Smith

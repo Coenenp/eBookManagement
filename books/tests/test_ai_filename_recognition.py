@@ -18,7 +18,8 @@ from django.test import TestCase, RequestFactory
 from django.contrib.auth.models import User
 from django.http import JsonResponse
 
-from books.models import Book, FinalMetadata, DataSource, AIFeedback, ScanFolder
+from books.models import FinalMetadata, DataSource, AIFeedback, ScanFolder
+from books.tests.test_helpers import create_test_book_with_file
 from books.scanner.ai.filename_recognizer import FilenamePatternRecognizer
 from books.management.commands.train_ai_models import Command as TrainCommand
 from books.views import (
@@ -94,32 +95,44 @@ class FilenamePatternRecognizerTests(TestCase):
         # Create test data
         User.objects.create_user('testuser', 'test@example.com', 'password')
         DataSource.objects.create(name='test_source')
-        scan_folder = ScanFolder.objects.create(path='/test', is_active=True)
 
-        book = Book.objects.create(
-            file_path='/test/path/Brandon Sanderson - Mistborn 01 - The Final Empire.epub',
-            file_format='epub',
-            scan_folder=scan_folder
-        )
+        # Create a temporary directory for scan folder
+        import tempfile
+        test_dir = tempfile.mkdtemp()
+        try:
+            scan_folder = ScanFolder.objects.create(path=test_dir, is_active=True)
 
-        FinalMetadata.objects.create(
-            book=book,
-            final_title='The Final Empire',
-            final_author='Brandon Sanderson',
-            final_series='Mistborn',
-            final_series_number='1',
-            is_reviewed=True
-        )
+            book = create_test_book_with_file(
+                file_path='/test/path/Brandon Sanderson - Mistborn 01 - The Final Empire.epub',
+                title='The Final Empire',
+                content_type='ebook',
+                scan_folder=scan_folder,
+                file_format='epub',
+                file_size=1024000
+            )
 
-        # Test data collection
-        training_data = self.recognizer.collect_training_data()
+            FinalMetadata.objects.create(
+                book=book,
+                final_title='The Final Empire',
+                final_author='Brandon Sanderson',
+                final_series='Mistborn',
+                final_series_number='1',
+                is_reviewed=True
+            )
 
-        self.assertEqual(len(training_data), 1)
-        sample = training_data.iloc[0]  # Use iloc for DataFrame indexing
-        self.assertEqual(sample['title'], 'The Final Empire')
-        self.assertEqual(sample['author'], 'Brandon Sanderson')
-        self.assertEqual(sample['series'], 'Mistborn')
-        self.assertEqual(sample['volume'], '1')
+            # Test data collection
+            training_data = self.recognizer.collect_training_data()
+
+            self.assertEqual(len(training_data), 1)
+            sample = training_data.iloc[0]  # Use iloc for DataFrame indexing
+            self.assertEqual(sample['title'], 'The Final Empire')
+            self.assertEqual(sample['author'], 'Brandon Sanderson')
+            self.assertEqual(sample['series'], 'Mistborn')
+            self.assertEqual(sample['volume'], '1')
+        finally:
+            # Clean up temporary directory
+            import shutil
+            shutil.rmtree(test_dir, ignore_errors=True)
 
     def test_model_persistence(self):
         """Test model saving and loading."""
@@ -251,10 +264,23 @@ class AIFeedbackModelTests(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user('testuser', 'test@example.com', 'password')
-        self.scan_folder = ScanFolder.objects.create(path='/test', is_active=True)
-        self.book = Book.objects.create(
-            file_path='/test/test_book.epub',
+        # Create a temporary directory for scan folder
+        import tempfile
+        self.test_dir = tempfile.mkdtemp()
+        self.scan_folder = ScanFolder.objects.create(path=self.test_dir, is_active=True)
+        self.book = create_test_book_with_file(
+            file_path=f'{self.test_dir}/test_book.epub',
+            title='Test Book',
+            content_type='ebook',
             scan_folder=self.scan_folder
+        )
+        # Create a BookFile to represent the actual file
+        from books.models import BookFile
+        self.book_file = BookFile.objects.create(
+            book=self.book,
+            file_path='/test/test_book.epub',
+            file_format='epub',
+            file_size=1024000
         )
 
     def test_feedback_creation(self):
@@ -306,8 +332,8 @@ class AIFeedbackModelTests(TestCase):
         for rating, expected_score in test_cases:
             with self.subTest(rating=rating):
                 # Create a unique book for each test case due to unique constraint
-                book = Book.objects.create(
-                    file_path=f'/test/test_book_{rating}.epub',
+                book = create_test_book_with_file(
+                    file_path=f'{self.test_dir}/test_book_{rating}.epub',
                     scan_folder=self.scan_folder
                 )
                 feedback = AIFeedback.objects.create(
@@ -327,12 +353,25 @@ class AIViewsTests(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
         self.user = User.objects.create_user('testuser', 'test@example.com', 'password')
-        self.scan_folder = ScanFolder.objects.create(path='/test', is_active=True)
+        # Create a temporary directory for scan folder
+        import tempfile
+        self.test_dir = tempfile.mkdtemp()
+        self.scan_folder = ScanFolder.objects.create(path=self.test_dir, is_active=True)
 
         # Create test book with AI metadata
-        self.book = Book.objects.create(
-            file_path='/test/test_book.epub',
+        self.book = create_test_book_with_file(
+            file_path=f'{self.test_dir}/test_book.epub',
+            title='Test Book',
+            content_type='ebook',
             scan_folder=self.scan_folder
+        )
+        # Create a BookFile to represent the actual file
+        from books.models import BookFile
+        self.book_file = BookFile.objects.create(
+            book=self.book,
+            file_path='/test/test_book.epub',
+            file_format='epub',
+            file_size=1024000
         )
 
         self.final_meta = FinalMetadata.objects.create(
@@ -431,8 +470,8 @@ class AIViewsTests(TestCase):
         # Create sufficient feedback for retraining
         for i in range(6):
             # Create a unique book for each feedback due to unique constraint
-            book = Book.objects.create(
-                file_path=f'/test/test_book_{i}.epub',
+            book = create_test_book_with_file(
+                file_path=f'{self.test_dir}/test_book_{i}.epub',
                 scan_folder=self.scan_folder
             )
             AIFeedback.objects.create(

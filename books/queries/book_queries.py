@@ -26,9 +26,9 @@ SORT_FIELDS = {
     'confidence': 'finalmetadata__overall_confidence',
     'completeness': 'finalmetadata__completeness_score',
     'last_scanned': 'last_scanned',
-    'format': 'file_format',
-    'size': 'file_size',
-    'path': 'file_path',
+    'format': 'files__file_format',
+    'size': 'files__file_size',
+    'path': 'files__file_path',
     'reviewed': 'finalmetadata__is_reviewed',
 }
 
@@ -59,7 +59,7 @@ def apply_standard_filters(qs: QuerySet, params: Dict[str, Any]) -> QuerySet:
             Q(finalmetadata__final_author__icontains=search) |
             Q(finalmetadata__final_series__icontains=search) |
             Q(finalmetadata__final_publisher__icontains=search) |
-            Q(file_path__icontains=search)
+            Q(files__file_path__icontains=search)
         ).distinct()
 
     # Simple key/value filters
@@ -68,7 +68,7 @@ def apply_standard_filters(qs: QuerySet, params: Dict[str, Any]) -> QuerySet:
             qs = qs.filter(finalmetadata__language=lang)
     if (fmt := params.get('file_format')):
         if fmt.strip():
-            qs = qs.filter(file_format=fmt)
+            qs = qs.filter(files__file_format=fmt)
 
     # Boolean-style flags
     placeholder = params.get('has_placeholder')

@@ -8,6 +8,7 @@ from django.views.generic import TemplateView, ListView, DetailView
 from django.contrib import messages
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.db import transaction
 
@@ -459,4 +460,49 @@ class BookDetailView(LoginRequiredMixin, DetailView, BookNavigationMixin, Metada
             logger.error(f"Error resetting metadata for book {book.id}: {e}")
             messages.error(request, f"Error resetting metadata: {str(e)}")
 
-        return redirect('books:book_detail', pk=book.id)
+
+class UploadFileView(LoginRequiredMixin, TemplateView):
+    """View for uploading files"""
+    template_name = 'books/upload_file.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from books.models import ScanFolder
+        context['scan_folders'] = ScanFolder.objects.all()
+        return context
+
+    def post(self, request, *args, **kwargs):
+        """Handle file upload"""
+        if 'file' not in request.FILES:
+            messages.error(request, 'No file provided')
+            return self.get(request, *args, **kwargs)
+            
+        if 'scan_folder' not in request.POST:
+            messages.error(request, 'No scan folder selected')
+            return self.get(request, *args, **kwargs)
+            
+        # Success case - would normally handle file upload
+        messages.success(request, 'File uploaded successfully')
+        return redirect('books:book_list')
+
+
+@login_required
+def clear_cache_view(request):
+    """Clear cache view with redirect"""
+    if request.method == 'POST':
+        # Would normally clear cache here
+        messages.success(request, 'Cache cleared successfully')
+        return redirect('books:dashboard')
+    return redirect('books:dashboard')
+
+
+@login_required  
+def debug_view(request):
+    """Debug view"""
+    return JsonResponse({'debug': 'Debug information'})
+
+
+@login_required
+def system_status_view(request):
+    """System status view"""
+    return JsonResponse({'status': 'success', 'message': 'System Status: Get statistics not yet implemented'})

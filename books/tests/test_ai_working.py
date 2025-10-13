@@ -6,7 +6,8 @@ import unittest
 from django.test import TestCase
 from django.contrib.auth.models import User
 
-from books.models import Book, AIFeedback, ScanFolder
+from books.models import AIFeedback
+from books.tests.test_helpers import create_test_scan_folder, create_test_book_with_file
 from books.scanner.ai.filename_recognizer import FilenamePatternRecognizer
 
 
@@ -69,8 +70,8 @@ class AIFeedbackTests(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user('testuser', 'test@example.com', 'password')
-        scan_folder = ScanFolder.objects.create(path='/test', is_active=True)
-        self.book = Book.objects.create(
+        scan_folder = create_test_scan_folder()
+        self.book = create_test_book_with_file(
             file_path='/test/test_book.epub',
             scan_folder=scan_folder
         )

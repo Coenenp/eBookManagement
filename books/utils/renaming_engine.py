@@ -36,19 +36,25 @@ class RenamingEngine:
             'titleSortable': self._get_title_sortable,
             'originalFilename': self._get_original_filename,
             'publicationyear': self._get_publication_year,
+            'year': self._get_publication_year,  # Common alias
             'decadeLong': self._get_decade_long,
             'decadeShort': self._get_decade_short,
             'bookseries.title': self._get_series_title,
-            'bookseries.number': self._get_series_number,
+            'series_name': self._get_series_title,  # Common alias
+            'bookseries.number': self._get_series_number_padded,
+            'series_number': self._get_series_number,  # Common alias
+            'series_number_padded': self._get_series_number_padded,  # Two-digit format
             'bookseries.titleSortable': self._get_series_title_sortable,
             'author.lastname': self._get_author_lastname,
             'author.firstname': self._get_author_firstname,
             'author.fullname': self._get_author_fullname,
             'author.sortname': self._get_author_sortname,
+            'author_sort': self._get_author_sortname,  # Common alias
             'language': self._get_language,
             'format': self._get_format,
             'category': self._get_category,
             'genre': self._get_genre,
+            'publisher': self._get_publisher,
             'ext': self._get_extension,
         })
 
@@ -254,9 +260,26 @@ class RenamingEngine:
     # Token processor methods
     def _get_title(self) -> Optional[str]:
         """Get book title."""
+        # Try FinalMetadata first
         if hasattr(self.current_book, 'finalmetadata') and self.current_book.finalmetadata:
-            return self.current_book.finalmetadata.final_title
-        return getattr(self.current_book, 'title', None)
+            title = self.current_book.finalmetadata.final_title
+            if title:
+                return title
+
+        # Fallback to direct book attribute
+        title = getattr(self.current_book, 'title', None)
+        if title:
+            return title
+
+        # Final fallback - try to extract from file name if available
+        if hasattr(self.current_book, 'bookfile') and self.current_book.bookfile:
+            file_name = self.current_book.bookfile.file_name
+            if file_name:
+                # Remove extension and return as title
+                import os
+                return os.path.splitext(file_name)[0]
+
+        return None
 
     def _get_original_title(self) -> Optional[str]:
         """Get original title (if different from current title)."""
@@ -320,7 +343,19 @@ class RenamingEngine:
         return getattr(self.current_book, 'series_name', None)
 
     def _get_series_number(self) -> Optional[str]:
-        """Get series number."""
+        """Get series number as simple integer."""
+        if hasattr(self.current_book, 'finalmetadata') and self.current_book.finalmetadata:
+            series_num = self.current_book.finalmetadata.final_series_number
+            if series_num:
+                return str(int(series_num))  # Format as simple integer (1, 2, etc.)
+        # Fallback to direct book field
+        series_num = getattr(self.current_book, 'series_number', None)
+        if series_num:
+            return str(int(series_num))  # Format as simple integer (1, 2, etc.)
+        return None
+
+    def _get_series_number_padded(self) -> Optional[str]:
+        """Get series number with zero padding (01, 02, etc.)."""
         if hasattr(self.current_book, 'finalmetadata') and self.current_book.finalmetadata:
             series_num = self.current_book.finalmetadata.final_series_number
             if series_num:
@@ -371,12 +406,28 @@ class RenamingEngine:
 
     def _get_author_fullname(self) -> Optional[str]:
         """Get full author name."""
+        # Try FinalMetadata first
         if hasattr(self.current_book, 'finalmetadata') and self.current_book.finalmetadata:
-            return self.current_book.finalmetadata.final_author
-        return getattr(self.current_book, 'author', None)
+            author = self.current_book.finalmetadata.final_author
+            if author:
+                return author
+
+        # Fallback to direct book attribute
+        if hasattr(self.current_book, 'author'):
+            author = getattr(self.current_book, 'author', None)
+            if author:
+                return author
+
+        # No fallback - return None so the token gets omitted
+        return None
 
     def _get_author_sortname(self) -> Optional[str]:
         """Get author name in sortable format (Last, First)."""
+        # First try to get from FinalMetadata final_author_sort if available
+        if hasattr(self.current_book, 'finalmetadata') and self.current_book.finalmetadata:
+            if hasattr(self.current_book.finalmetadata, 'final_author_sort') and self.current_book.finalmetadata.final_author_sort:
+                return self.current_book.finalmetadata.final_author_sort
+
         author = self._get_author_fullname()
         if not author:
             return None
@@ -428,6 +479,16 @@ class RenamingEngine:
             if genre_relation and genre_relation.genre:
                 return genre_relation.genre.name
         return None
+
+    def _get_publisher(self) -> Optional[str]:
+        """Get book publisher."""
+        if hasattr(self.current_book, 'publisher_relationships') and self.current_book.publisher_relationships.exists():
+            # Get the first active publisher with highest confidence
+            publisher_relation = self.current_book.publisher_relationships.filter(is_active=True).order_by('-confidence').first()
+            if publisher_relation and publisher_relation.publisher:
+                return publisher_relation.publisher.name
+        # Fallback to direct field
+        return getattr(self.current_book, 'publisher', None)
 
     def _get_extension(self) -> Optional[str]:
         """Get file extension."""

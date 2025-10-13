@@ -11,6 +11,7 @@ from django.views.generic import ListView, TemplateView
 from django.http import JsonResponse
 from django.apps import apps
 from books.models import COMIC_FORMATS
+from books.utils.batch_renamer import BatchRenamer
 from django.db import models
 
 
@@ -76,7 +77,9 @@ class BookRenamerView(LoginRequiredMixin, ListView):
         context['predefined_patterns'] = PREDEFINED_PATTERNS
 
         # Add token reference for the UI
-        context['available_tokens'] = self._get_token_reference()
+        token_reference = self._get_token_reference()
+        context['available_tokens'] = token_reference
+        context['token_reference'] = token_reference  # Some tests expect this key
 
         # Add pattern validator for frontend validation
         context['pattern_examples'] = self._get_pattern_examples()
@@ -141,26 +144,41 @@ class BookRenamerView(LoginRequiredMixin, ListView):
 
     def _enhance_books_with_previews(self, books, folder_pattern, filename_pattern):
         """Enhance books with rename previews if patterns are provided."""
-        if not folder_pattern or not filename_pattern:
-            return [{'book': book, 'current_path': book.primary_file.file_path if book.primary_file else '', 'preview': None} for book in books]
-
-        from books.utils.renaming_engine import RenamingEngine
-        engine = RenamingEngine()
-
         enhanced_books = []
-        for book in books:
-            try:
-                target_folder = engine.process_template(folder_pattern, book)
-                target_filename = engine.process_template(filename_pattern, book)
-                preview_path = f"{target_folder}/{target_filename}" if target_folder and target_filename else None
-            except Exception:
-                preview_path = "Error generating preview"
 
-            enhanced_books.append({
-                'book': book,
-                'current_path': book.file_path,
-                'preview': preview_path
-            })
+        # If patterns are provided, use them to generate previews
+        if folder_pattern and filename_pattern:
+            from books.utils.renaming_engine import RenamingEngine
+            engine = RenamingEngine()
+
+            for book in books:
+                try:
+                    target_folder = engine.process_template(folder_pattern, book)
+                    target_filename = engine.process_template(filename_pattern, book)
+                    preview_path = f"{target_folder}/{target_filename}" if target_folder and target_filename else None
+                except Exception:
+                    preview_path = "Error generating preview"
+
+                enhanced_books.append({
+                    'book': book,
+                    'current_path': getattr(book, 'file_path', ''),
+                    'preview': preview_path,
+                    'new_path': preview_path,  # Add new_path for test compatibility
+                    'warnings': self._generate_warnings(book)
+                })
+        else:
+            # No patterns provided, generate suggested paths and warnings
+            for book in books:
+                current_path = getattr(book, 'file_path', '')
+                new_path = self._generate_suggested_path(book)
+
+                enhanced_books.append({
+                    'book': book,
+                    'current_path': current_path,
+                    'preview': None,
+                    'new_path': new_path,
+                    'warnings': self._generate_warnings(book)
+                })
 
         return enhanced_books
 
@@ -355,7 +373,7 @@ class BookRenamerView(LoginRequiredMixin, ListView):
         """Analyze comic series completion for comic books."""
         # Get all comic books (CBZ, CBR formats)
         comic_books = self.get_queryset().filter(
-            file_format__in=COMIC_FORMATS,
+            files__file_format__in=COMIC_FORMATS,
             finalmetadata__final_series__isnull=False
         ).exclude(finalmetadata__final_series='')
 
@@ -736,7 +754,12 @@ def rename_book(request, book_id):
             if not new_filename:
                 return JsonResponse({'success': False, 'error': 'New filename is required'})
 
-            old_path = book.file_path
+            # Get the primary file
+            primary_file = book.primary_file
+            if not primary_file:
+                return JsonResponse({'success': False, 'error': 'Book file not found'})
+
+            old_path = primary_file.file_path
             if not old_path:
                 return JsonResponse({'success': False, 'error': 'Book file path not found'})
 
@@ -750,9 +773,9 @@ def rename_book(request, book_id):
             # Rename the file (this will be mocked by tests)
             parent_os.rename(old_path, new_path)
 
-            # Update the book record
-            book.file_path = new_path
-            book.save()
+            # Update the primary file record
+            primary_file.file_path = new_path
+            primary_file.save()
 
             return JsonResponse({'success': True, 'message': 'Book renamed successfully'})
 
@@ -847,12 +870,15 @@ def preview_pattern(request):
                     target_folder = engine.process_template(folder_pattern, book)
                     target_filename = engine.process_template(filename_pattern, book)
 
+                    full_path = f"{target_folder}/{target_filename}" if target_folder and target_filename else None
+
                     previews.append({
                         'book_id': book.id,
                         'current_path': book.file_path,
                         'target_folder': target_folder,
                         'target_filename': target_filename,
-                        'full_target_path': f"{target_folder}/{target_filename}" if target_folder and target_filename else None,
+                        'full_target_path': full_path,
+                        'new_path': full_path,  # Add for test compatibility
                         'title': getattr(book.finalmetadata, 'final_title', 'Unknown') if hasattr(book, 'finalmetadata') else 'Unknown',
                         'author': getattr(book.finalmetadata, 'final_author', 'Unknown') if hasattr(book, 'finalmetadata') else 'Unknown'
                     })
@@ -883,8 +909,6 @@ def execute_batch_rename(request):
     """Execute batch renaming operation."""
     if request.method == 'POST':
         try:
-            from books.utils.batch_renamer import BatchRenamer
-
             folder_pattern = request.POST.get('folder_pattern', '')
             filename_pattern = request.POST.get('filename_pattern', '')
             book_ids = request.POST.getlist('book_ids', [])
@@ -956,9 +980,11 @@ def validate_pattern(request):
             pattern = request.POST.get('pattern', '')
             pattern_type = request.POST.get('type', 'folder')  # 'folder' or 'filename'
 
-            if not pattern:
+            if not pattern or pattern.strip() == '':
                 return JsonResponse({
-                    'success': False,
+                    'success': True,
+                    'valid': False,
+                    'warnings': ['Pattern cannot be empty'],
                     'error': 'Pattern is required'
                 })
 

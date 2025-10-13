@@ -18,6 +18,38 @@ from books.models import Book
 logger = logging.getLogger(__name__)
 
 
+class ExecutionResult:
+    """Hybrid result class that supports both dictionary access and tuple unpacking."""
+
+    def __init__(self, successful: int, failed: int, errors: List[str], success: bool = None, **kwargs):
+        self.successful = successful
+        self.failed = failed
+        self.errors = errors
+        self.success = success if success is not None else (failed == 0)
+
+        # Store any additional dictionary keys
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    def __iter__(self):
+        """Support tuple unpacking: successful, failed, errors = result"""
+        return iter([self.successful, self.failed, self.errors])
+
+    def __getitem__(self, key):
+        """Support dictionary access: result['success']"""
+        if hasattr(self, key):
+            return getattr(self, key)
+        raise KeyError(f"Key '{key}' not found")
+
+    def get(self, key, default=None):
+        """Support dictionary .get() method"""
+        return getattr(self, key, default)
+
+    def __contains__(self, key):
+        """Support 'in' operator: 'success' in result"""
+        return hasattr(self, key)
+
+
 class FileOperation:
     """Represents a single file operation (rename/move)."""
 
@@ -133,6 +165,23 @@ class BatchRenamer:
         self.operations: List[FileOperation] = []
         self.rollback_log: List[Dict] = []
 
+    def add_book(self, book: Book, folder_pattern: str,
+                 filename_pattern: str, include_companions: bool = True) -> None:
+        """
+        Add a single book to the batch renaming queue.
+
+        Args:
+            book: Book model instance
+            folder_pattern: Template for folder structure
+            filename_pattern: Template for filename
+            include_companions: Whether to include companion files
+        """
+        try:
+            self._add_single_book(book, folder_pattern, filename_pattern,
+                                  include_companions)
+        except Exception as e:
+            logger.error(f"Error adding book {book.id} to batch: {e}")
+
     def add_books(self, books: List[Book], folder_pattern: str,
                   filename_pattern: str, include_companions: bool = True) -> None:
         """
@@ -197,6 +246,10 @@ class BatchRenamer:
         previews = []
 
         for op in self.operations:
+            # For dry run previews, assume success unless there are blocking warnings
+            warnings = self._check_operation_warnings(op)
+            has_blocking_warnings = any('permission denied' in w.lower() or 'not found' in w.lower() for w in warnings)
+
             preview = {
                 'operation_type': op.operation_type,
                 'book_id': op.book_id,
@@ -206,7 +259,8 @@ class BatchRenamer:
                 'target_exists': op.target_path.exists(),
                 'will_create_dirs': not op.target_path.parent.exists(),
                 'path_length': len(str(op.target_path)),
-                'warnings': self._check_operation_warnings(op)
+                'warnings': warnings,
+                'status': 'failed' if has_blocking_warnings else 'success'
             }
             previews.append(preview)
 
@@ -238,16 +292,31 @@ class BatchRenamer:
         return warnings
 
     @transaction.atomic
-    def execute_operations(self) -> Tuple[int, int, List[str]]:
+    def execute_operations(self, dry_run: Optional[bool] = None):
         """
         Execute all queued operations.
 
+        Args:
+            dry_run: Override the instance dry_run setting if provided
+
         Returns:
-            Tuple of (successful_operations, failed_operations, error_messages)
+            For dry runs: Dictionary with 'success', 'dry_run', 'operations' keys
+            For actual execution: Tuple of (successful_operations, failed_operations, error_messages)
         """
-        if self.dry_run:
+        # Use parameter override if provided, else instance setting
+        is_dry_run = dry_run if dry_run is not None else self.dry_run
+
+        if is_dry_run:
             logger.info("Dry run mode - no files will be moved")
-            return len(self.operations), 0, []
+            return ExecutionResult(
+                successful=len(self.operations),
+                failed=0,
+                errors=[],
+                success=True,
+                dry_run=True,
+                operations=self.preview_operations(),
+                summary=self.get_operation_summary()
+            )
 
         successful = 0
         failed = 0
@@ -273,7 +342,7 @@ class BatchRenamer:
                 # Rollback this book's operations
                 self._rollback_book_operations(book_id, ops)
 
-        return successful, failed, errors
+        return ExecutionResult(successful, failed, errors, success=(failed == 0), dry_run=False)
 
     def _group_operations_by_book(self) -> Dict[int, List[FileOperation]]:
         """Group operations by book ID for atomic processing."""
@@ -286,6 +355,10 @@ class BatchRenamer:
 
         return grouped
 
+    def _move_file(self, source_path: str, target_path: str) -> None:
+        """Move a file from source to target path. This method exists to enable mocking in tests."""
+        shutil.move(source_path, target_path)
+
     def _execute_book_operations(self, book_id: int, operations: List[FileOperation]) -> None:
         """Execute all operations for a single book atomically."""
         executed_ops = []
@@ -297,7 +370,7 @@ class BatchRenamer:
 
                 # Perform the file operation
                 if op.operation_type in ['main_rename', 'companion_rename']:
-                    shutil.move(str(op.source_path), str(op.target_path))
+                    self._move_file(str(op.source_path), str(op.target_path))
 
                 op.executed = True
                 executed_ops.append(op)
@@ -315,7 +388,7 @@ class BatchRenamer:
             # Rollback already executed operations for this book
             for executed_op in executed_ops:
                 try:
-                    shutil.move(str(executed_op.target_path), str(executed_op.source_path))
+                    self._move_file(str(executed_op.target_path), str(executed_op.source_path))
                     executed_op.executed = False
                 except Exception as rollback_error:
                     logger.error(f"Failed to rollback operation: {rollback_error}")
@@ -327,7 +400,7 @@ class BatchRenamer:
         for op in reversed(operations):  # Reverse order for rollback
             if op.executed:
                 try:
-                    shutil.move(str(op.target_path), str(op.source_path))
+                    self._move_file(str(op.target_path), str(op.source_path))
                     op.executed = False
                     logger.info(f"Rolled back: {op}")
                 except Exception as e:

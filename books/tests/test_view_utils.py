@@ -1,16 +1,17 @@
 """
-Tests for view utilities and mixins
+Tests for ajax, pagination, and filter mixins
 """
 from django.test import TestCase, RequestFactory
 from django.http import JsonResponse
 from django.contrib.auth.models import User
 from books.models import Book, ScanFolder, FinalMetadata
-from books.view_utils import (
-    StandardAjaxResponseMixin, StandardPaginationMixin,
-    BookFilterMixin, standard_ajax_handler
+from books.mixins import (
+    StandardAjaxResponseMixin, StandardPaginationMixin, BookFilterMixin,
+    standard_ajax_handler, BookAjaxViewMixin, ajax_book_operation
 )
-from books.mixins import BookAjaxViewMixin, ajax_book_operation
+from books.tests.test_helpers import create_test_book_with_file
 import json
+import tempfile
 
 
 class StandardAjaxResponseMixinTests(TestCase):
@@ -88,17 +89,25 @@ class BookAjaxViewMixinTests(TestCase):
 
     def setUp(self):
         self.mixin = BookAjaxViewMixin()
+        # Use temporary directory for valid path
+        self.temp_dir = tempfile.mkdtemp()
         self.scan_folder = ScanFolder.objects.create(
             name='Test Folder',
-            path='/test/folder',
+            path=self.temp_dir,
             language='en'
         )
-        self.book = Book.objects.create(
-            file_path='/test/folder/book.epub',
+        self.book = create_test_book_with_file(
+            file_path=f'{self.temp_dir}/book.epub',
             file_format='epub',
             file_size=1024,
             scan_folder=self.scan_folder
         )
+
+    def tearDown(self):
+        """Clean up temporary directory"""
+        import shutil
+        if hasattr(self, 'temp_dir'):
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_get_book_or_404_success(self):
         """Test successful book retrieval"""
@@ -167,21 +176,29 @@ class StandardPaginationMixinTests(TestCase):
 
     def setUp(self):
         self.mixin = StandardPaginationMixin()
+        # Use temporary directory for valid path
+        self.temp_dir = tempfile.mkdtemp()
         # Create test scan folder and books for pagination
         self.scan_folder = ScanFolder.objects.create(
             name='Test Folder',
-            path='/test/folder',
+            path=self.temp_dir,
             language='en'
         )
 
         # Create more books than the default page size
         for i in range(50):
-            Book.objects.create(
-                file_path=f'/test/folder/book{i}.epub',
+            create_test_book_with_file(
+                file_path=f'{self.temp_dir}/book{i}.epub',
                 file_format='epub',
                 file_size=1024,
                 scan_folder=self.scan_folder
             )
+
+    def tearDown(self):
+        """Clean up temporary directory"""
+        import shutil
+        if hasattr(self, 'temp_dir'):
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_get_paginated_context_first_page(self):
         """Test pagination context for first page"""
@@ -240,22 +257,24 @@ class BookFilterMixinTests(TestCase):
 
     def setUp(self):
         self.mixin = BookFilterMixin()
+        # Use temporary directory for valid path
+        self.temp_dir = tempfile.mkdtemp()
         self.scan_folder = ScanFolder.objects.create(
             name='Test Folder',
-            path='/test/folder',
+            path=self.temp_dir,
             language='en'
         )
 
         # Create test books with different attributes
-        self.book1 = Book.objects.create(
-            file_path='/test/folder/book1.epub',
+        self.book1 = create_test_book_with_file(
+            file_path=f'{self.temp_dir}/book1.epub',
             file_format='epub',
             file_size=1024,
             scan_folder=self.scan_folder
         )
 
-        self.book2 = Book.objects.create(
-            file_path='/test/folder/book2.pdf',
+        self.book2 = create_test_book_with_file(
+            file_path=f'{self.temp_dir}/book2.pdf',
             file_format='pdf',
             file_size=2048,
             scan_folder=self.scan_folder
@@ -290,6 +309,12 @@ class BookFilterMixinTests(TestCase):
         # Refresh the objects
         self.metadata1.refresh_from_db()
         self.metadata2.refresh_from_db()
+
+    def tearDown(self):
+        """Clean up temporary directory"""
+        import shutil
+        if hasattr(self, 'temp_dir'):
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_apply_search_filters_no_filters(self):
         """Test applying filters with no filter parameters"""
@@ -393,17 +418,25 @@ class AjaxDecoratorTests(TestCase):
             username='testuser',
             password='testpass123'
         )
+        # Use temporary directory for valid path
+        self.temp_dir = tempfile.mkdtemp()
         self.scan_folder = ScanFolder.objects.create(
             name='Test Folder',
-            path='/test/folder',
+            path=self.temp_dir,
             language='en'
         )
-        self.book = Book.objects.create(
-            file_path='/test/folder/book.epub',
+        self.book = create_test_book_with_file(
+            file_path=f'{self.temp_dir}/book.epub',
             file_format='epub',
             file_size=1024,
             scan_folder=self.scan_folder
         )
+
+    def tearDown(self):
+        """Clean up temporary directory"""
+        import shutil
+        if hasattr(self, 'temp_dir'):
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_ajax_book_operation_decorator_success(self):
         """Test ajax_book_operation decorator with successful operation"""

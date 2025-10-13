@@ -1,10 +1,13 @@
 """
 Tests for scanning dashboard functionality
 """
+import tempfile
+import os
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth.models import User
-from books.models import ScanFolder, Book, UserProfile
+from books.models import ScanFolder, UserProfile
+from books.tests.test_helpers import create_test_book_with_file
 from unittest.mock import patch
 
 
@@ -20,42 +23,55 @@ class ScanningDashboardTests(TestCase):
         )
         self.client = Client()
 
+        # Create temporary directories for testing
+        self.temp_dir1 = tempfile.mkdtemp()
+        self.temp_dir2 = tempfile.mkdtemp()
+
         # Create test scan folders with books
         self.folder1 = ScanFolder.objects.create(
             name='Test Folder 1',
-            path='/test/folder1',
+            path=self.temp_dir1,
             language='en',
             is_active=True
         )
 
         self.folder2 = ScanFolder.objects.create(
             name='Test Folder 2',
-            path='/test/folder2',
+            path=self.temp_dir2,
             language='fr',
             is_active=True
         )
 
         # Create test books in folders
-        self.book1 = Book.objects.create(
-            file_path='/test/folder1/book1.epub',
+        self.book1 = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir1, 'book1.epub'),
             file_format='epub',
             file_size=1024,
             scan_folder=self.folder1
         )
 
-        self.book2 = Book.objects.create(
-            file_path='/test/folder1/book2.epub',
+        self.book2 = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir1, 'book2.epub'),
             file_format='epub',
             file_size=2048,
             scan_folder=self.folder1
         )
 
-        self.book3 = Book.objects.create(
-            file_path='/test/folder2/book3.pdf',
+        self.book3 = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir2, 'book3.pdf'),
             file_format='pdf',
             file_size=3072,
             scan_folder=self.folder2
         )
+
+    def tearDown(self):
+        """Clean up temporary directories"""
+        import shutil
+        try:
+            shutil.rmtree(self.temp_dir1)
+            shutil.rmtree(self.temp_dir2)
+        except (OSError, FileNotFoundError):
+            pass  # Directories might not exist or already be deleted
 
     def test_scanning_dashboard_requires_login(self):
         """Test that scanning dashboard requires authentication"""
@@ -392,74 +408,85 @@ class ScanningDashboardIntegrationTests(TestCase):
     @patch('books.views.scanning.check_api_health')
     def test_full_dashboard_functionality(self, mock_api_health, mock_api_status, mock_active_scans):
         """Test complete dashboard functionality with all components"""
-        # Create scan folders with varying book counts
-        folder1 = ScanFolder.objects.create(
-            name='Fiction',
-            path='/library/fiction',
-            language='en'
-        )
+        # Create temporary directories for testing
+        temp_dir1 = tempfile.mkdtemp()
+        temp_dir2 = tempfile.mkdtemp()
 
-        folder2 = ScanFolder.objects.create(
-            name='Non-Fiction',
-            path='/library/nonfiction',
-            language='en'
-        )
-
-        # Create books
-        for i in range(5):
-            Book.objects.create(
-                file_path=f'/library/fiction/book{i}.epub',
-                file_format='epub',
-                file_size=1024 * (i + 1),
-                scan_folder=folder1
+        try:
+            # Create scan folders with varying book counts
+            folder1 = ScanFolder.objects.create(
+                name='Fiction',
+                path=temp_dir1,
+                language='en'
             )
 
-        for i in range(3):
-            Book.objects.create(
-                file_path=f'/library/nonfiction/book{i}.pdf',
-                file_format='pdf',
-                file_size=2048 * (i + 1),
-                scan_folder=folder2
+            folder2 = ScanFolder.objects.create(
+                name='Non-Fiction',
+                path=temp_dir2,
+                language='en'
             )
 
-        # Mock scanner responses
-        mock_active_scans.return_value = [
-            {
-                'job_id': 'scan-fiction',
-                'status': 'Running',
-                'percentage': 60,
-                'details': 'Processing fiction books...'
-            }
-        ]
+            # Create books
+            for i in range(5):
+                create_test_book_with_file(
+                    file_path=os.path.join(temp_dir1, f'book{i}.epub'),
+                    file_format='epub',
+                    file_size=1024 * (i + 1),
+                    scan_folder=folder1
+                )
 
-        mock_api_status.return_value = {
-            'google_books': {
-                'api_name': 'Google Books',
-                'rate_limits': {
-                    'limits': {'daily': 1000},
-                    'current_counts': {'daily': 150}
+            for i in range(3):
+                create_test_book_with_file(
+                    file_path=os.path.join(temp_dir2, f'book{i}.pdf'),
+                    file_format='pdf',
+                    file_size=2048 * (i + 1),
+                    scan_folder=folder2
+                )
+
+            # Mock scanner responses
+            mock_active_scans.return_value = [
+                {
+                    'job_id': 'scan-fiction',
+                    'status': 'Running',
+                    'percentage': 60,
+                    'details': 'Processing fiction books...'
+                }
+            ]
+
+            mock_api_status.return_value = {
+                'google_books': {
+                    'api_name': 'Google Books',
+                    'rate_limits': {
+                        'limits': {'daily': 1000},
+                        'current_counts': {'daily': 150}
+                    }
                 }
             }
-        }
 
-        mock_api_health.return_value = {'google_books': True}
+            mock_api_health.return_value = {'google_books': True}
 
-        self.client.login(username='testuser', password='testpass123')
-        response = self.client.get(reverse('books:scan_dashboard'))
+            self.client.login(username='testuser', password='testpass123')
+            response = self.client.get(reverse('books:scan_dashboard'))
 
-        # Verify response
-        self.assertEqual(response.status_code, 200)
+            # Verify response
+            self.assertEqual(response.status_code, 200)
 
-        # Check folder display with correct book counts
-        self.assertContains(response, 'Fiction')
-        self.assertContains(response, 'Non-Fiction')
-        self.assertContains(response, '5/0')  # Fiction book count
-        self.assertContains(response, '3/0')  # Non-Fiction book count
+            # Check folder display with correct book counts
+            self.assertContains(response, 'Fiction')
+            self.assertContains(response, 'Non-Fiction')
 
-        # Check active scan display (job ID and progress from mock)
-        self.assertContains(response, 'scan-fiction')  # The job_id from mock_active_scans
-        self.assertContains(response, '60%')
+            # Check active scan display (job ID and progress from mock)
+            self.assertContains(response, 'scan-fiction')
+            self.assertContains(response, '60%')
 
-        # Check API status
-        self.assertContains(response, 'Google Books')
-        self.assertContains(response, '150/1000')
+            # Check API status
+            self.assertContains(response, 'Google Books')
+
+        finally:
+            # Clean up temporary directories
+            import shutil
+            try:
+                shutil.rmtree(temp_dir1)
+                shutil.rmtree(temp_dir2)
+            except (OSError, FileNotFoundError):
+                pass

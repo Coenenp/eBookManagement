@@ -9,6 +9,7 @@ from books.utils.isbn import (
     normalize_isbn, is_valid_isbn13, is_valid_isbn10, convert_to_isbn13
 )
 from books.views import isbn_lookup
+from books.tests.test_helpers import create_test_scan_folder, create_test_book_with_file
 
 
 class ISBNUtilsTests(TestCase):
@@ -326,15 +327,12 @@ class ISBNLookupIntegrationTests(TestCase):
             password='testpass123'
         )
 
-        from books.models import ScanFolder, Book, FinalMetadata
+        from books.models import FinalMetadata
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
         # Create a test book
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/path/book.epub",
             file_format="epub",
             scan_folder=self.scan_folder,

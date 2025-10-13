@@ -1,0 +1,36 @@
+{% extends "books/base.html" %}
+{% load static %}
+
+{% block title %}Upload File{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h2>Upload File</h2>
+            
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label for="file" class="form-label">Select File</label>
+                    <input type="file" class="form-control" id="file" name="file" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="scan_folder" class="form-label">Scan Folder</label>
+                    <select class="form-control" id="scan_folder" name="scan_folder" required>
+                        <option value="">Select a folder...</option>
+                        {% for folder in scan_folders %}
+                            <option value="{{ folder.id }}">{{ folder.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Upload</button>
+                <a href="{% url 'books:book_list' %}" class="btn btn-secondary">Cancel</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

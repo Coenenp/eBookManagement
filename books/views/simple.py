@@ -341,7 +341,7 @@ def rescan_external_metadata(request, book_id):
             'genres': 0,   # Mock data - book has no direct genre field
             'series': 0,   # Mock data - book has no direct series field
             'publishers': 0,  # Mock data
-            'covers': 1 if book.cover_path else 0,
+            'covers': book.covers.filter(is_active=True).count(),
             'metadata': 1 if hasattr(book, 'finalmetadata') else 0,
         }
 
