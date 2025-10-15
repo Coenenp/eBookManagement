@@ -25,23 +25,46 @@ class ContentTypeFilteringTests(TestCase):
 
     def setUp(self):
         """Set up test scan folders"""
+        import tempfile
+
+        # Create temporary directories for scan folders
+        self.temp_dirs = []
+
+        # Create ebook temp directory
+        ebook_temp = tempfile.mkdtemp(prefix="test_ebooks_")
+        self.temp_dirs.append(ebook_temp)
         self.ebooks_folder = ScanFolder.objects.create(
             name="Ebooks Test Folder",
-            path="/test/ebooks",
+            path=ebook_temp,
             content_type="ebooks"
         )
 
+        # Create comic temp directory
+        comic_temp = tempfile.mkdtemp(prefix="test_comics_")
+        self.temp_dirs.append(comic_temp)
         self.comics_folder = ScanFolder.objects.create(
             name="Comics Test Folder",
-            path="/test/comics",
+            path=comic_temp,
             content_type="comics"
         )
 
+        # Create audiobook temp directory
+        audiobook_temp = tempfile.mkdtemp(prefix="test_audiobooks_")
+        self.temp_dirs.append(audiobook_temp)
         self.audiobooks_folder = ScanFolder.objects.create(
             name="Audiobooks Test Folder",
-            path="/test/audiobooks",
+            path=audiobook_temp,
             content_type="audiobooks"
         )
+
+    def tearDown(self):
+        """Clean up temporary directories"""
+        import shutil
+        for temp_dir in getattr(self, 'temp_dirs', []):
+            try:
+                shutil.rmtree(temp_dir)
+            except (OSError, FileNotFoundError):
+                pass  # Directory already cleaned up
 
     def test_ebooks_folder_filters_file_formats(self):
         """TC1.1: Ebooks folder should only count ebook formats"""
@@ -66,6 +89,10 @@ class ContentTypeFilteringTests(TestCase):
             # Update folder path to temp directory
             self.ebooks_folder.path = temp_dir
             self.ebooks_folder.save()
+
+            # Clear any cached file counts before testing
+            from django.core.cache import cache
+            cache.clear()
 
             # Count files - should only include ebook formats
             file_count = self.ebooks_folder.count_files_on_disk()
@@ -161,6 +188,10 @@ class ContentTypeFilteringTests(TestCase):
             self.ebooks_folder.path = temp_dir
             self.ebooks_folder.save()
 
+            # Clear any cached file counts before testing
+            from django.core.cache import cache
+            cache.clear()
+
             file_count = self.ebooks_folder.count_files_on_disk()
 
             # Should count: book1.epub, book2.mobi = 2 files (recursive)
@@ -183,7 +214,7 @@ class ContentTypeFilteringTests(TestCase):
         mock_get_format.side_effect = mock_format_detector
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Create mixed content files
+            # Create ebook files of different formats
             test_files = ['book.epub', 'comic.cbz', 'audio.mp3']
             for filename in test_files:
                 filepath = os.path.join(temp_dir, filename)
@@ -212,15 +243,15 @@ class ContentTypeFilteringTests(TestCase):
                     self.assertTrue(len(epub_files) > 0, "Should process EPUB files")
                     self.assertEqual(len(non_epub_files), 0, "Should not process non-EPUB files in ebooks folder")
 
-    def test_mixed_content_folder_processes_all_formats(self):
-        """Test that mixed content folders process all supported formats"""
-        mixed_folder = ScanFolder.objects.create(
-            name="Mixed Content Folder",
-            path="/test/mixed",
-            content_type="ebooks"  # Default behavior processes all ebook formats
-        )
-
+    def test_ebooks_folder_processes_all_ebook_formats(self):
+        """Test that ebooks folders process all supported ebook formats"""
         with tempfile.TemporaryDirectory() as temp_dir:
+            ebooks_folder = ScanFolder.objects.create(
+                name="Ebooks Folder",
+                path=temp_dir,
+                content_type="ebooks"  # Processes all ebook formats
+            )
+
             # Create files of different ebook formats
             ebook_files = ['book.epub', 'book.pdf', 'book.mobi', 'book.azw3']
             for filename in ebook_files:
@@ -228,13 +259,10 @@ class ContentTypeFilteringTests(TestCase):
                 with open(filepath, 'w') as f:
                     f.write('test content')
 
-            mixed_folder.path = temp_dir
-            mixed_folder.save()
-
-            file_count = mixed_folder.count_files_on_disk()
+            file_count = ebooks_folder.count_files_on_disk()
 
             # Should count all ebook format files
-            self.assertEqual(file_count, 4, "Mixed ebook folder should process all ebook formats")
+            self.assertEqual(file_count, 4, "Ebooks folder should process all ebook formats")
 
     def test_case_insensitive_file_extension_filtering(self):
         """Test that file extension filtering is case insensitive"""

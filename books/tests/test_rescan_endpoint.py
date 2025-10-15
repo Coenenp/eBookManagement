@@ -1,11 +1,11 @@
 """
 Unit tests for the rescan external metadata functionality.
 """
-
 from django.test import TestCase
 from django.urls import reverse
 from django.contrib.auth.models import User
-from books.models import Book, ScanFolder
+# No direct model imports needed - using helper functions
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class RescanEndpointTestCase(TestCase):
@@ -22,13 +22,10 @@ class RescanEndpointTestCase(TestCase):
         self.client.login(username='testuser', password='testpass123')
 
         # Create a scan folder
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/path",
-            name="Test Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Folder")
 
         # Create a test book
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/path/book.epub",
             scan_folder=self.scan_folder
         )

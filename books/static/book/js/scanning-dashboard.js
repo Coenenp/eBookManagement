@@ -104,13 +104,13 @@ class ScanningDashboard {
                 }
             }
             
-            // Handle dropdown scan options
+            // Handle scan options
             if (e.target.classList.contains('scan-with-api-btn')) {
                 e.preventDefault();
                 const folderId = e.target.getAttribute('data-folder-id');
                 const folderName = e.target.getAttribute('data-folder-name');
                 
-                if (confirm(`Start scanning folder "${folderName}" with external APIs?`)) {
+                if (confirm(`Start Full Scan of "${folderName}"?\n\nThis will search for comprehensive metadata using external sources (recommended for best results).`)) {
                     this.startFolderScanById(folderId, true);
                 }
             }
@@ -120,7 +120,7 @@ class ScanningDashboard {
                 const folderId = e.target.getAttribute('data-folder-id');
                 const folderName = e.target.getAttribute('data-folder-name');
                 
-                if (confirm(`Start scanning folder "${folderName}" without external APIs?`)) {
+                if (confirm(`Start Quick Scan of "${folderName}"?\n\nThis will only use file metadata (faster but limited information).`)) {
                     this.startFolderScanById(folderId, false);
                 }
             }
@@ -130,7 +130,7 @@ class ScanningDashboard {
                 const folderId = e.target.getAttribute('data-folder-id');
                 const folderName = e.target.getAttribute('data-folder-name');
                 
-                if (confirm(`Start rescanning folder "${folderName}" with external APIs? This will update existing books.`)) {
+                if (confirm(`Start Full Rescan of "${folderName}"?\n\nThis will update existing books with comprehensive metadata from external sources.`)) {
                     this.startFolderRescanById(folderId, true);
                 }
             }
@@ -140,7 +140,7 @@ class ScanningDashboard {
                 const folderId = e.target.getAttribute('data-folder-id');
                 const folderName = e.target.getAttribute('data-folder-name');
                 
-                if (confirm(`Start rescanning folder "${folderName}" without external APIs? This will update existing books.`)) {
+                if (confirm(`Start Quick Rescan of "${folderName}"?\n\nThis will update existing books using only file metadata (faster but limited).`)) {
                     this.startFolderRescanById(folderId, false);
                 }
             }

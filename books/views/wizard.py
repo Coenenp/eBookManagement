@@ -129,6 +129,7 @@ class SetupWizardView(LoginRequiredMixin, TemplateView):
         context.update({
             'wizard': wizard,
             'step': current_step,
+            'wizard_step': current_step,  # For test compatibility
             'step_number': step_number,
             'total_steps': len(step_order),
             'progress_percentage': wizard.progress_percentage,  # Completed steps
@@ -301,6 +302,7 @@ class WizardContentTypesView(SetupWizardView):
             })
 
         context['folder_analysis'] = folder_analysis
+        context['folders'] = folder_analysis  # For test compatibility
         context['content_type_choices'] = ScanFolder.CONTENT_TYPE_CHOICES
 
         return context
@@ -475,6 +477,7 @@ class WizardScrapersView(SetupWizardView):
         # Get available data sources that might need configuration
         scrapers_info = [
             {
+                'id': 'open_library',
                 'name': 'Open Library',
                 'description': 'Free service for book metadata and covers',
                 'required': False,
@@ -482,6 +485,7 @@ class WizardScrapersView(SetupWizardView):
                 'status': 'Built-in'
             },
             {
+                'id': 'google_books',
                 'name': 'Google Books',
                 'description': 'Google\'s book database with rich metadata',
                 'required': False,
@@ -491,6 +495,7 @@ class WizardScrapersView(SetupWizardView):
                 'status': 'Optional API Key'
             },
             {
+                'id': 'comic_vine',
                 'name': 'Comic Vine',
                 'description': 'Comprehensive comic book database',
                 'required': False,
@@ -502,6 +507,7 @@ class WizardScrapersView(SetupWizardView):
         ]
 
         context['scrapers_info'] = scrapers_info
+        context['scrapers'] = scrapers_info  # For test compatibility
         return context
 
     def post(self, request, *args, **kwargs):

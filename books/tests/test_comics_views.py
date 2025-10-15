@@ -7,9 +7,10 @@ from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.urls import reverse
 from books.models import (
-    Book, FinalMetadata, ScanFolder, DataSource,
+    FinalMetadata, DataSource,
     Series, BookSeries
 )
+from books.tests.test_helpers import create_test_scan_folder, create_test_book_with_file
 
 
 class ComicsViewsTestCase(TestCase):
@@ -25,11 +26,7 @@ class ComicsViewsTestCase(TestCase):
         )
 
         # Create a scan folder
-        self.scan_folder = ScanFolder.objects.create(
-            name="Test Comics Folder",
-            path="/test/comics/path",
-            content_type="comics"
-        )
+        self.scan_folder = create_test_scan_folder()
 
         # Create a data source
         self.data_source, _ = DataSource.objects.get_or_create(
@@ -38,33 +35,37 @@ class ComicsViewsTestCase(TestCase):
         )
 
         # Create test books with comic formats
-        self.comic_book1 = Book.objects.create(
+        self.comic_book1 = create_test_book_with_file(
             file_path="/test/comic1.cbr",
             file_size=5000000,
             file_format="cbr",
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type="comic"
         )
 
-        self.comic_book2 = Book.objects.create(
+        self.comic_book2 = create_test_book_with_file(
             file_path="/test/comic2.cbz",
             file_size=7000000,
             file_format="cbz",
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type="comic"
         )
 
-        self.comic_book3 = Book.objects.create(
+        self.comic_book3 = create_test_book_with_file(
             file_path="/test/comic3.cbr",
             file_size=6000000,
             file_format="cbr",
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type="comic"
         )
 
         # Create a non-comic book
-        self.regular_book = Book.objects.create(
+        self.regular_book = create_test_book_with_file(
             file_path="/test/book.epub",
             file_size=1000000,
             file_format="epub",
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type="ebook"
         )
 
         # Create FinalMetadata for comics
@@ -141,11 +142,12 @@ class ComicsMainViewTests(ComicsViewsTestCase):
     def test_comics_count_excludes_empty_formats(self):
         """Test that books with empty comic formats are excluded"""
         # Create a book with non-comic format but with FinalMetadata
-        empty_comic = Book.objects.create(
+        empty_comic = create_test_book_with_file(
             file_path="/test/empty.epub",
             file_size=1000000,
             file_format="epub",  # Not a comic format (ebook format)
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type="ebook"
         )
         FinalMetadata.objects.create(
             book=empty_comic,
@@ -243,11 +245,12 @@ class ComicsAjaxListTests(ComicsViewsTestCase):
     def test_comics_ajax_list_book_sorting(self):
         """Test that books within series are sorted by position"""
         # Create more books in the series to test sorting
-        comic_book4 = Book.objects.create(
+        comic_book4 = create_test_book_with_file(
             file_path="/test/comic4.cbr",
             file_size=8000000,
             file_format="cbr",
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type="comic"
         )
 
         FinalMetadata.objects.create(
@@ -272,11 +275,12 @@ class ComicsAjaxListTests(ComicsViewsTestCase):
     def test_comics_ajax_list_series_sorting(self):
         """Test that series are sorted alphabetically"""
         # Create another series
-        comic_book5 = Book.objects.create(
+        comic_book5 = create_test_book_with_file(
             file_path="/test/comic5.cbz",
             file_size=5500000,
             file_format="cbz",
-            scan_folder=self.scan_folder
+            scan_folder=self.scan_folder,
+            content_type="comic"
         )
 
         FinalMetadata.objects.create(

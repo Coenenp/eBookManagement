@@ -14,7 +14,7 @@ def test_simple_scan_history():
         name="Test Folder",
         path="/test/path",
         language="en",
-        content_type="mixed"
+        content_type="ebooks"
     )
 
     # Verify scan folder was created
@@ -30,7 +30,7 @@ def test_scan_history_model():
         name='Test Folder',
         path='/test/path',
         language='en',
-        content_type='mixed'
+        content_type='comics'
     )
 
     # Create a scan history entry
@@ -74,10 +74,9 @@ class TestScanHistory(TestCase):
 
         # Create a test scan folder
         scan_folder = ScanFolder.objects.create(
-            name='Test History Folder',
-            path='/test/scan/history',
-            language='en',
-            content_type='mixed'
+            name="Comics Folder",
+            path="/path/to/comics",
+            content_type="comics"
         )
 
         sample_scans = [

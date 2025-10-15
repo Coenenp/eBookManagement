@@ -11,10 +11,11 @@ from django.contrib.messages import get_messages
 
 
 from books.models import (
-    Book, Author, Series, Publisher, Genre, DataSource, ScanFolder,
+    Author, Series, Publisher, Genre, DataSource,
     FinalMetadata, BookSeries, BookTitle, BookAuthor, BookPublisher,
     BookGenre, BookCover, BookMetadata
 )
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class BookMetadataViewTests(TestCase):
@@ -40,10 +41,7 @@ class BookMetadataViewTests(TestCase):
         )
 
         # Create test scan folder
-        self.scan_folder = ScanFolder.objects.create(
-            path='/test/books',
-            is_active=True
-        )
+        self.scan_folder = create_test_scan_folder()
 
         # Create test entities
         self.author = Author.objects.create(name='Test Author')
@@ -52,7 +50,7 @@ class BookMetadataViewTests(TestCase):
         self.genre = Genre.objects.create(name='Science Fiction')
 
         # Create test book
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path='/test/book1.epub',
             file_format='epub',
             file_size=1000000,
@@ -195,7 +193,8 @@ class BookMetadataViewTests(TestCase):
             self.assertIn(key, context, f"Missing context key: {key}")
 
         # Test that querysets contain expected data
-        self.assertEqual(len(context['all_titles']), 2)
+        # Expect 3 titles: 1 auto-created from filename + 2 manually created
+        self.assertEqual(len(context['all_titles']), 3)
         self.assertEqual(len(context['all_authors']), 1)
         self.assertEqual(len(context['all_series']), 1)
         self.assertEqual(len(context['all_publishers']), 1)
@@ -205,13 +204,13 @@ class BookMetadataViewTests(TestCase):
     def test_navigation_context(self):
         """Test navigation context for prev/next books"""
         # Create additional books for navigation testing
-        book2 = Book.objects.create(
+        book2 = create_test_book_with_file(
             file_path='/test/book2.epub',
             file_format='epub',
             file_size=1000000,
             scan_folder=self.scan_folder
         )
-        book3 = Book.objects.create(
+        book3 = create_test_book_with_file(
             file_path='/test/book3.epub',
             file_format='epub',
             file_size=1000000,
@@ -265,13 +264,10 @@ class BookMetadataUpdateViewTests(TestCase):
         )
 
         # Create test scan folder
-        self.scan_folder = ScanFolder.objects.create(
-            path='/test/books',
-            is_active=True
-        )
+        self.scan_folder = create_test_scan_folder()
 
         # Create test book
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path='/test/book1.epub',
             file_format='epub',
             file_size=1000000,
@@ -283,7 +279,7 @@ class BookMetadataUpdateViewTests(TestCase):
             book=self.book,
             final_title='Original Title',
             final_author='Original Author',
-            is_reviewed=False
+            is_reviewed=True  # Set to True to prevent auto-sync during manual updates
         )
 
     def test_metadata_update_requires_login(self):
@@ -631,16 +627,21 @@ class MetadataProcessingEdgeCaseTests(TestCase):
         )
         self.client.login(username='testuser', password='testpass123')
 
-        self.scan_folder = ScanFolder.objects.create(
-            path='/test/books',
-            is_active=True
-        )
+        self.scan_folder = create_test_scan_folder()
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path='/test/book1.epub',
             file_format='epub',
             file_size=1000000,
             scan_folder=self.scan_folder
+        )
+
+        # Create final metadata to prevent auto-sync on creation
+        self.final_metadata = FinalMetadata.objects.create(
+            book=self.book,
+            final_title='Original Title',
+            final_author='Original Author',
+            is_reviewed=True  # Prevent auto-sync during manual updates
         )
 
     def test_empty_form_submission(self):

@@ -6,7 +6,8 @@ import json
 from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.contrib.auth.models import User
-from books.models import Book, FinalMetadata, ScanFolder
+from books.models import FinalMetadata, ScanFolder
+from books.tests.test_helpers import create_test_book_with_file
 
 
 @override_settings(USE_SQLITE_TEMPORARILY=True)
@@ -38,9 +39,13 @@ class ComicsMainViewTests(TestCase):
             name="Test", path="/test", content_type="comics")
 
         for i, fmt in enumerate(['cbr', 'cbz'], 1):
-            book = Book.objects.create(
-                file_path=f'/test/comic{i}.{fmt}', file_format=fmt,
-                file_size=1000000, scan_folder=scan_folder)
+            book = create_test_book_with_file(
+                file_path=f'/test/comic{i}.{fmt}',
+                file_format=fmt,
+                file_size=1000000,
+                scan_folder=scan_folder
+            )
+
             FinalMetadata.objects.create(
                 book=book, final_title=f'Comic {i}', final_author='Author',
                 is_reviewed=True)
@@ -58,12 +63,14 @@ class ComicsMainViewTests(TestCase):
             name="Test", path="/test", content_type="comics")
 
         # Create comic and pdf comic
-        comic = Book.objects.create(
+        comic = create_test_book_with_file(
             file_path='/test/comic.cbr', file_format='cbr',
-            file_size=1000000, scan_folder=scan_folder)
-        pdf_comic = Book.objects.create(
+            file_size=1000000, scan_folder=scan_folder
+        )
+        pdf_comic = create_test_book_with_file(
             file_path='/test/comic.pdf', file_format='pdf',
-            file_size=1000000, scan_folder=scan_folder)
+            file_size=1000000, scan_folder=scan_folder
+        )
 
         for book in [comic, pdf_comic]:
             FinalMetadata.objects.create(
@@ -83,17 +90,19 @@ class ComicsMainViewTests(TestCase):
             name="Test", path="/test", content_type="comics")
 
         # Create a comic with valid format
-        comic = Book.objects.create(
+        comic = create_test_book_with_file(
             file_path='/test/comic.cbr', file_format='cbr',
-            file_size=1000000, scan_folder=scan_folder)
+            file_size=1000000, scan_folder=scan_folder
+        )
         FinalMetadata.objects.create(
             book=comic, final_title='Valid Comic', final_author='Author',
             is_reviewed=True)
 
         # Create a book with empty format (should be excluded)
-        Book.objects.create(
+        create_test_book_with_file(
             file_path='/test/noformat', file_format='', file_size=1000000,
-            scan_folder=scan_folder)
+            scan_folder=scan_folder
+        )
 
         response = client.get(reverse('books:comics_main'))
         self.assertEqual(response.context['comics_count'], 1)  # Only the valid comic
@@ -106,9 +115,10 @@ class ComicsMainViewTests(TestCase):
 
         scan_folder = ScanFolder.objects.create(
             name="Test", path="/test", content_type="comics")
-        Book.objects.create(
+        create_test_book_with_file(
             file_path='/test/comic.cbr', file_format='cbr', file_size=1000000,
-            scan_folder=scan_folder)
+            scan_folder=scan_folder
+        )
         response = client.get(reverse('books:comics_main'))
         self.assertEqual(response.context['comics_count'], 1)
 
@@ -145,9 +155,10 @@ class ComicsAjaxListTests(TestCase):
         # Create test comic
         scan_folder = ScanFolder.objects.create(
             name="Test", path="/test", content_type="comics")
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path='/test/comic.cbr', file_format='cbr',
-            file_size=1000000, scan_folder=scan_folder)
+            file_size=1000000, scan_folder=scan_folder
+        )
         FinalMetadata.objects.create(
             book=book, final_title='Test Comic', final_author='Author',
             final_series='Test Series', is_reviewed=True)
@@ -167,9 +178,10 @@ class ComicsAjaxListTests(TestCase):
         # Create comic without series
         scan_folder = ScanFolder.objects.create(
             name="Test", path="/test", content_type="comics")
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path='/test/comic.cbr', file_format='cbr',
-            file_size=1000000, scan_folder=scan_folder)
+            file_size=1000000, scan_folder=scan_folder
+        )
         FinalMetadata.objects.create(
             book=book, final_title='No Series Comic', final_author='Author',
             is_reviewed=True)
@@ -188,9 +200,10 @@ class ComicsAjaxListTests(TestCase):
 
         scan_folder = ScanFolder.objects.create(
             name="Test", path="/test", content_type="comics")
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path='/test/spiderman.cbr', file_format='cbr',
-            file_size=15000000, scan_folder=scan_folder)
+            file_size=15000000, scan_folder=scan_folder
+        )
         FinalMetadata.objects.create(
             book=book, final_title='Spider-Man #1', final_author='Stan Lee',
             is_reviewed=True)
@@ -214,12 +227,19 @@ class ComicsAjaxListTests(TestCase):
         series_names = ['X-Men', 'Amazing Spider-Man', 'Fantastic Four']
 
         for series_name in series_names:
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/test/{series_name.lower()}.cbr',
-                file_format='cbr', file_size=1000000, scan_folder=scan_folder)
+                file_format='cbr',
+                file_size=1000000,
+                scan_folder=scan_folder
+            )
             FinalMetadata.objects.create(
-                book=book, final_title=f'{series_name} #1', final_author='Author',
-                final_series=series_name, is_reviewed=True)
+                book=book,
+                final_title=f'{series_name} #1',
+                final_author='Author',
+                final_series=series_name,
+                is_reviewed=True
+            )
 
         response = client.get(reverse('books:comics_ajax_list'))
         data = json.loads(response.content)
@@ -238,12 +258,18 @@ class ComicsAjaxListTests(TestCase):
         titles = ['Z Comic', 'A Comic', 'M Comic']
 
         for title in titles:
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/test/{title.lower()}.cbr',
-                file_format='cbr', file_size=1000000, scan_folder=scan_folder)
+                file_format='cbr',
+                file_size=1000000,
+                scan_folder=scan_folder
+            )
             FinalMetadata.objects.create(
-                book=book, final_title=title, final_author='Author',
-                is_reviewed=True)
+                book=book,
+                final_title=title,
+                final_author='Author',
+                is_reviewed=True
+            )
 
         response = client.get(reverse('books:comics_ajax_list'))
         data = json.loads(response.content)
@@ -259,9 +285,10 @@ class ComicsAjaxListTests(TestCase):
 
         scan_folder = ScanFolder.objects.create(
             name="Test", path="/test", content_type="comics")
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path='/test/comic.cbr', file_format='cbr',
-            file_size=1000000, scan_folder=scan_folder)
+            file_size=1000000, scan_folder=scan_folder
+        )
         FinalMetadata.objects.create(
             book=book, final_title='Test Comic', final_author='Author',
             final_series='Test Series', is_reviewed=True)
@@ -306,9 +333,10 @@ class ComicsIntegrationTests(TestCase):
         scan_folder = ScanFolder.objects.create(
             name="Test", path="/test", content_type="comics")
         for i in range(3):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/test/comic{i}.cbr', file_format='cbr',
-                file_size=1000000, scan_folder=scan_folder)
+                file_size=1000000, scan_folder=scan_folder
+            )
             FinalMetadata.objects.create(
                 book=book, final_title=f'Comic {i}', final_author='Author',
                 is_reviewed=True)
@@ -330,12 +358,18 @@ class ComicsIntegrationTests(TestCase):
 
         # Create comics
         for i, source_name in enumerate(['Source 1', 'Source 2']):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/test/{source_name.lower()}.cbr',
-                file_format='cbr', file_size=1000000, scan_folder=scan_folder)
+                file_format='cbr',
+                file_size=1000000,
+                scan_folder=scan_folder
+            )
             FinalMetadata.objects.create(
-                book=book, final_title=f'{source_name} Comic', final_author='Author',
-                is_reviewed=True)
+                book=book,
+                final_title=f'{source_name} Comic',
+                final_author='Author',
+                is_reviewed=True
+            )
 
         response = client.get(reverse('books:comics_ajax_list'))
         data = json.loads(response.content)
@@ -350,9 +384,10 @@ class ComicsIntegrationTests(TestCase):
         # Create test data
         scan_folder = ScanFolder.objects.create(
             name="Test", path="/test", content_type="comics")
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path='/test/comic.cbr', file_format='cbr',
-            file_size=1000000, scan_folder=scan_folder)
+            file_size=1000000, scan_folder=scan_folder
+        )
         FinalMetadata.objects.create(
             book=book, final_title='Test Comic', final_author='Author',
             final_series='Test Series', is_reviewed=True)

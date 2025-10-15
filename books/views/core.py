@@ -476,11 +476,11 @@ class UploadFileView(LoginRequiredMixin, TemplateView):
         if 'file' not in request.FILES:
             messages.error(request, 'No file provided')
             return self.get(request, *args, **kwargs)
-            
+
         if 'scan_folder' not in request.POST:
             messages.error(request, 'No scan folder selected')
             return self.get(request, *args, **kwargs)
-            
+
         # Success case - would normally handle file upload
         messages.success(request, 'File uploaded successfully')
         return redirect('books:book_list')
@@ -496,7 +496,7 @@ def clear_cache_view(request):
     return redirect('books:dashboard')
 
 
-@login_required  
+@login_required
 def debug_view(request):
     """Debug view"""
     return JsonResponse({'debug': 'Debug information'})

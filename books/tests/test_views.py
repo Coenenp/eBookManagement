@@ -5,12 +5,12 @@ from unittest.mock import patch, Mock, MagicMock
 from django.test import TestCase, Client, override_settings
 from django.contrib.auth.models import User
 from django.urls import reverse
-from django.utils import timezone
 
 from books.models import (
     Book, FinalMetadata, ScanFolder, DataSource,
     ScanLog, BookMetadata, BookTitle, BookAuthor, Author
 )
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class BaseViewTestCase(TestCase):
@@ -58,14 +58,12 @@ class BookListViewTests(BaseViewTestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
+        # Cleanup will be handled by Django's test framework database rollback
 
         # Create test books
         for i in range(5):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f"/test/path/book_{i+1}.epub",
                 file_format="epub",
                 file_size=1024000 + (i * 100000),
@@ -145,19 +143,13 @@ class BookDetailViewTests(BaseViewTestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
-        self.book = Book.objects.create(
-
+        self.book = create_test_book_with_file(
             file_path="/test/path/book_detail.epub",
             file_format="epub",
             file_size=1024000,
-
-            scan_folder=self.scan_folder,
-            last_scanned=timezone.now()
+            scan_folder=self.scan_folder
         )
 
         self.final_metadata = FinalMetadata.objects.create(
@@ -194,12 +186,10 @@ class BookDetailViewTests(BaseViewTestCase):
     def test_book_detail_navigation_context(self):
         """Test navigation context in book detail view"""
         # Create additional books for navigation testing
-        Book.objects.create(
-
+        create_test_book_with_file(
             file_path="/test/path/book2.epub",
             file_format="epub",
             file_size=1024000,
-
             scan_folder=self.scan_folder
         )
 
@@ -242,13 +232,10 @@ class BookSearchViewTests(BaseViewTestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
         # Create books with different titles
-        book1 = Book.objects.create(
+        book1 = create_test_book_with_file(
 
             file_path="/test/path/python.epub",
             file_format="epub",
@@ -257,7 +244,7 @@ class BookSearchViewTests(BaseViewTestCase):
             scan_folder=self.scan_folder
         )
 
-        book2 = Book.objects.create(
+        book2 = create_test_book_with_file(
 
             file_path="/test/path/django.epub",
             file_format="epub",
@@ -317,11 +304,7 @@ class TriggerScanViewTests(BaseViewTestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-        from books.models import ScanFolder
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/folder",
-            is_active=True
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Folder")
 
     def test_trigger_scan_view_requires_login(self):
         """Test that trigger scan view requires authentication."""
@@ -373,15 +356,12 @@ class ViewFilteringTests(BaseViewTestCase):
             defaults={'trust_level': 0.2}
         )
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/folder",
-            is_active=True
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Folder")
 
     def test_book_list_confidence_filtering(self):
         """Test filtering by confidence level."""
         # Create book with high confidence
-        book_high = Book.objects.create(
+        book_high = create_test_book_with_file(
             file_path="/test/folder/high.epub",
             file_format="epub",
             file_size=1000,
@@ -401,7 +381,7 @@ class ViewFilteringTests(BaseViewTestCase):
         )
 
         # Create book with low confidence
-        book_low = Book.objects.create(
+        book_low = create_test_book_with_file(
             file_path="/test/folder/low.epub",
             file_format="epub",
             file_size=1000,
@@ -432,7 +412,7 @@ class ViewFilteringTests(BaseViewTestCase):
     def test_book_list_format_filtering(self):
         """Test filtering by file format."""
         # Create EPUB book
-        book_epub = Book.objects.create(
+        book_epub = create_test_book_with_file(
             file_path="/test/folder/book.epub",
             file_format="epub",
             file_size=1000,
@@ -440,7 +420,7 @@ class ViewFilteringTests(BaseViewTestCase):
         )
 
         # Create PDF book
-        book_pdf = Book.objects.create(
+        book_pdf = create_test_book_with_file(
             file_path="/test/folder/book.pdf",
             file_format="pdf",
             file_size=2000,
@@ -470,7 +450,7 @@ class ViewFilteringTests(BaseViewTestCase):
     def test_book_list_missing_metadata_filter(self):
         """Test filtering by missing metadata."""
         # Create book without FinalMetadata
-        book_missing = Book.objects.create(
+        book_missing = create_test_book_with_file(
             file_path="/test/folder/missing.epub",
             file_format="epub",
             file_size=1000,
@@ -478,7 +458,7 @@ class ViewFilteringTests(BaseViewTestCase):
         )
 
         # Create book with FinalMetadata
-        book_complete = Book.objects.create(
+        book_complete = create_test_book_with_file(
             file_path="/test/folder/complete.epub",
             file_format="epub",
             file_size=1000,
@@ -504,7 +484,7 @@ class ViewFilteringTests(BaseViewTestCase):
     def test_book_list_corrupted_filter(self):
         """Test filtering by corrupted status."""
         # Create corrupted book
-        book_corrupted = Book.objects.create(
+        book_corrupted = create_test_book_with_file(
             file_path="/test/folder/corrupted.epub",
             file_format="epub",
             file_size=1000,
@@ -540,14 +520,14 @@ class ViewFilteringTests(BaseViewTestCase):
         filename_author = Author.objects.create(name="Filename Author")
 
         # Create books
-        book1 = Book.objects.create(
+        book1 = create_test_book_with_file(
             file_path="/test/folder/book1.epub",
             file_format="epub",
             file_size=1000,
             scan_folder=self.scan_folder
         )
 
-        book2 = Book.objects.create(
+        book2 = create_test_book_with_file(
             file_path="/test/folder/book2.epub",
             file_format="epub",
             file_size=1000,
@@ -604,21 +584,17 @@ class ViewFilteringTests(BaseViewTestCase):
     def test_book_list_scan_folder_filter(self):
         """Test filtering by scan folder."""
         # Create additional scan folder
-        scan_folder2 = ScanFolder.objects.create(
-            path="/test/folder2",
-            name="Test Folder 2",
-            is_active=True
-        )
+        scan_folder2 = create_test_scan_folder(name="Test Folder 2")
 
         # Create books in different scan folders
-        book1 = Book.objects.create(
+        book1 = create_test_book_with_file(
             file_path="/test/folder/book1.epub",
             file_format="epub",
             file_size=1000,
             scan_folder=self.scan_folder
         )
 
-        book2 = Book.objects.create(
+        book2 = create_test_book_with_file(
             file_path="/test/folder2/book2.epub",
             file_format="epub",
             file_size=1000,
@@ -648,11 +624,7 @@ class ViewFilteringTests(BaseViewTestCase):
         from books.models import DataSource, BookTitle
 
         # Create second scan folder
-        scan_folder2 = ScanFolder.objects.create(
-            path="/test/folder2",
-            name="Test Folder 2",
-            is_active=True
-        )
+        scan_folder2 = create_test_scan_folder(name="Test Folder 2")
 
         # Create data source
         epub_source, _ = DataSource.objects.get_or_create(
@@ -661,14 +633,14 @@ class ViewFilteringTests(BaseViewTestCase):
         )
 
         # Create books
-        book1 = Book.objects.create(
+        book1 = create_test_book_with_file(
             file_path="/test/folder/book1.epub",
             file_format="epub",
             file_size=1000,
             scan_folder=self.scan_folder
         )
 
-        book2 = Book.objects.create(
+        book2 = create_test_book_with_file(
             file_path="/test/folder2/book2.epub",
             file_format="epub",
             file_size=1000,
@@ -788,12 +760,9 @@ class BookRenamerIntegrationTests(BaseViewTestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/scan/folder/book.epub",
             file_format="epub",
             file_size=1024000,
@@ -818,7 +787,7 @@ class BookRenamerIntegrationTests(BaseViewTestCase):
     def test_book_renamer_with_null_series_number(self):
         """Test book renamer handles books with null series numbers"""
         # Create book with null series number
-        book_null = Book.objects.create(
+        book_null = create_test_book_with_file(
             file_path="/test/scan/folder/book_null.epub",
             file_format="epub",
             file_size=1024000,
@@ -856,27 +825,23 @@ class BookDetailNavigationTestCase(BaseViewTestCase):
             self.user.save()
 
         # Create a scan folder
-        self.scan_folder = ScanFolder.objects.create(
-            name='Test Folder',
-            path='/test/path',
-            language='en'
-        )
+        self.scan_folder = create_test_scan_folder(name='Test Folder')
 
         # Create test books with proper Book model fields
         # Create books first
-        self.book1 = Book.objects.create(
+        self.book1 = create_test_book_with_file(
             file_path='/test/book1.epub',
             file_format='epub',
             scan_folder=self.scan_folder
         )
 
-        self.book2 = Book.objects.create(
+        self.book2 = create_test_book_with_file(
             file_path='/test/book2.epub',
             file_format='epub',
             scan_folder=self.scan_folder
         )
 
-        self.book3 = Book.objects.create(
+        self.book3 = create_test_book_with_file(
             file_path='/test/book3.epub',
             file_format='epub',
             scan_folder=self.scan_folder
@@ -1070,7 +1035,7 @@ class BookDetailNavigationTestCase(BaseViewTestCase):
     def test_navigation_with_placeholder_books(self):
         """Test that placeholder books are excluded from navigation."""
         # Create a placeholder book
-        Book.objects.create(
+        create_test_book_with_file(
             file_path='/test/placeholder.epub',
             file_format='placeholder',
             scan_folder=self.scan_folder,
@@ -1104,7 +1069,7 @@ class BookDetailNavigationTestCase(BaseViewTestCase):
     def test_navigation_with_missing_final_metadata(self):
         """Test navigation works even when final metadata is missing."""
         # Create a book without final metadata
-        Book.objects.create(
+        create_test_book_with_file(
             file_path='/test/book4.epub',
             file_format='epub',
             scan_folder=self.scan_folder
@@ -1148,21 +1113,17 @@ class DashboardViewTests(BaseViewTestCase):
         self.client.force_login(self.user)
 
         # Create scan folder
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/dashboard/folder",
-            name="Dashboard Test Folder",
-            content_type='ebooks'
-        )
+        self.scan_folder = create_test_scan_folder(name="Dashboard Test Folder")
 
         # Create test books with various states
-        self.epub_book = Book.objects.create(
+        self.epub_book = create_test_book_with_file(
             file_path="/test/dashboard/book1.epub",
             file_format="epub",
             file_size=1024000,
             scan_folder=self.scan_folder
         )
 
-        self.pdf_book = Book.objects.create(
+        self.pdf_book = create_test_book_with_file(
             file_path="/test/dashboard/book2.pdf",
             file_format="pdf",
             file_size=2048000,
@@ -1232,7 +1193,7 @@ class DashboardViewTests(BaseViewTestCase):
         context = self.get_context_from_response(response)
 
         format_stats = context['format_stats']
-        format_counts = {item['file_format']: item['count'] for item in format_stats}
+        format_counts = {item['files__file_format']: item['count'] for item in format_stats}
 
         self.assertEqual(format_counts.get('epub', 0), 1)
         self.assertEqual(format_counts.get('pdf', 0), 1)
@@ -1250,7 +1211,7 @@ class DashboardViewTests(BaseViewTestCase):
     def test_dashboard_issue_detection(self):
         """Test issue detection functionality"""
         # Create a corrupted book
-        Book.objects.create(
+        create_test_book_with_file(
             file_path="/test/dashboard/corrupted.epub",
             file_format="epub",
             file_size=100,
@@ -1367,12 +1328,9 @@ class BookMetadataViewTests(BaseViewTestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/metadata/folder",
-            name="Metadata Test Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Metadata Test Folder")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/metadata/book.epub",
             file_format="epub",
             file_size=1024000,
@@ -1472,12 +1430,9 @@ class AjaxViewTests(BaseViewTestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/ajax/folder",
-            name="AJAX Test Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="AJAX Test Folder")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/ajax/book.epub",
             file_format="epub",
             file_size=1024000,
@@ -1730,12 +1685,9 @@ class BookRenamerViewTests(BaseViewTestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/renamer/folder",
-            name="Renamer Test Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Renamer Test Folder")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/renamer/original.epub",
             file_format="epub",
             file_size=1024000,
@@ -1902,12 +1854,9 @@ class AIFeedbackViewTests(BaseViewTestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/ai/folder",
-            name="AI Test Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="AI Test Folder")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/ai/book.epub",
             file_format="epub",
             file_size=1024000,
@@ -2025,10 +1974,7 @@ class UploadFileViewTests(BaseViewTestCase):
         self.client = Client()
         self.client.force_login(self.user)
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/upload/folder",
-            name="Upload Test Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Upload Test Folder")
 
     def test_upload_file_view_loads(self):
         """Test that upload file view loads successfully"""
@@ -2197,14 +2143,11 @@ class UtilityFunctionTests(BaseViewTestCase):
         from django.http import HttpRequest
 
         # Create test books
-        scan_folder = ScanFolder.objects.create(
-            path="/test/pagination",
-            name="Pagination Test"
-        )
+        scan_folder = create_test_scan_folder(name="Pagination Test")
 
         books = []
         for i in range(25):
-            books.append(Book.objects.create(
+            books.append(create_test_book_with_file(
                 file_path=f"/test/pagination/book{i}.epub",
                 file_format="epub",
                 scan_folder=scan_folder
@@ -2262,11 +2205,8 @@ class UtilityFunctionTests(BaseViewTestCase):
         from books.views.utilities import generate_filename_from_metadata
 
         # Create a book to test filename generation
-        scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
-        book = Book.objects.create(
+        scan_folder = create_test_scan_folder(name="Test Scan Folder")
+        book = create_test_book_with_file(
             file_path="/test/path/test_book.epub",
             file_format="epub",
             scan_folder=scan_folder
@@ -2332,15 +2272,12 @@ class BookDetailNavigationIntegrationTestCase(BaseViewTestCase):
             self.user.save()
 
         # Create scan folder
-        self.scan_folder = ScanFolder.objects.create(
-            path='/test/path',
-            language='en'
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Folder")
 
         # Create multiple books for comprehensive testing
         self.books = []
         for i in range(1, 6):  # Create books 1-5
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/test/book{i}.epub',
                 file_format='epub',
                 scan_folder=self.scan_folder
@@ -2441,11 +2378,7 @@ class ScanningDashboardViewTests(BaseViewTestCase):
             self.user.set_password('testpass123')
             self.user.save()
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder",
-            is_active=True
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
     def test_scan_dashboard_view_anonymous_user(self):
         """Test that anonymous users are redirected to login"""
@@ -2576,13 +2509,9 @@ class BookRescanViewTests(BaseViewTestCase):
             self.user.set_password('testpass123')
             self.user.save()
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/rescan/folder",
-            name="Test Rescan Folder",
-            is_active=True
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Rescan Folder")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/rescan/book.epub",
             file_format="epub",
             file_size=1024,
@@ -2855,11 +2784,7 @@ class TriggerScanViewEnhancedTests(BaseViewTestCase):
         self.client.login(username='testuser_scan', password='testpass123')
 
         # Create test scan folder
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/library",
-            name="Test Library",
-            is_active=True
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Library")
 
     def test_trigger_scan_view_get(self):
         """Test GET request to trigger scan view."""
@@ -3007,10 +2932,9 @@ class ScanStatusViewTests(BaseViewTestCase):
         """Test scan status when scan is running."""
         # Create running scan
         running_scan = ScanLog.objects.create(
-            status='running',
+            level='INFO',
             message='Processing files...',
-            progress=75,
-            started_at=timezone.now()
+            books_processed=75
         )
 
         response = self.client.get(reverse('books:scan_status'))
@@ -3024,9 +2948,9 @@ class ScanStatusViewTests(BaseViewTestCase):
         # Create many scan logs
         for i in range(25):
             ScanLog.objects.create(
-                status='completed',
+                level='INFO',
                 message=f'Scan {i} completed',
-                progress=100
+                books_processed=100
             )
 
         response = self.client.get(reverse('books:scan_status'))
@@ -3054,15 +2978,14 @@ class ScanStatusViewTests(BaseViewTestCase):
         """Test scan statistics calculation."""
         # Create test data
         ScanLog.objects.create(
-            status='completed',
+            level='INFO',
             message='Success',
             books_found=10,
-            books_processed=10,
-            metadata_found=8
+            books_processed=10
         )
 
         ScanLog.objects.create(
-            status='failed',
+            level='ERROR',
             message='Failed',
             books_found=5,
             books_processed=3
@@ -3107,7 +3030,7 @@ class DataSourceListViewTests(BaseViewTestCase):
     def test_data_source_list_context(self):
         """Test data source list context data."""
         # Create some metadata entries
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             title="Test Book",
             file_path="/test/book.epub",
             file_format="epub"
@@ -3130,7 +3053,7 @@ class DataSourceListViewTests(BaseViewTestCase):
     def test_data_source_statistics(self):
         """Test data source statistics calculation."""
         # Create test book and metadata
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             title="Test Book",
             file_path="/test/book.epub",
             file_format="epub"
@@ -3186,17 +3109,11 @@ class ScanFolderManagementTests(BaseViewTestCase):
     def test_scan_folder_list_view(self):
         """Test scan folder list view."""
         # Create test folders
-        ScanFolder.objects.create(
-            name="Library 1",
-            path="/library1",
-            is_active=True
-        )
+        folder1 = create_test_scan_folder(name="Library 1")
 
-        ScanFolder.objects.create(
-            name="Library 2",
-            path="/library2",
-            is_active=False
-        )
+        folder2 = create_test_scan_folder(name="Library 2")
+        folder2.is_active = False
+        folder2.save()
 
         response = self.client.get(reverse('books:scan_folder_list'))
         self.assertEqual(response.status_code, 200)
@@ -3241,11 +3158,7 @@ class ScanFolderManagementTests(BaseViewTestCase):
 
     def test_delete_scan_folder(self):
         """Test scan folder deletion."""
-        folder = ScanFolder.objects.create(
-            name="Test Library",
-            path="/test/library",
-            is_active=True
-        )
+        folder = create_test_scan_folder(name="Test Library")
 
         response = self.client.post(
             reverse('books:delete_scan_folder', kwargs={'pk': folder.pk})
@@ -3291,9 +3204,8 @@ class ScanErrorHandlingTests(BaseViewTestCase):
         """Test scan status view with corrupted log data."""
         # Create log with None values
         ScanLog.objects.create(
-            status='failed',
-            message=None,
-            progress=None
+            level='ERROR',
+            message='Failed scan'
         )
 
         response = self.client.get(reverse('books:scan_status'))
@@ -3305,10 +3217,7 @@ class ScanErrorHandlingTests(BaseViewTestCase):
         """Test scan trigger with permission error."""
         mock_popen.side_effect = PermissionError("Permission denied")
 
-        folder = ScanFolder.objects.create(
-            name="Test Library",
-            path="/test/library"
-        )
+        folder = create_test_scan_folder(name="Test Library")
 
         response = self.client.post(reverse('books:trigger_scan'), {
             'scan_folders': [folder.id],
@@ -3356,9 +3265,9 @@ class ScanPerformanceTests(BaseViewTestCase):
         scan_logs = []
         for i in range(100):
             scan_logs.append(ScanLog(
-                status='completed',
+                level='INFO',
                 message=f'Scan {i}',
-                progress=100
+                books_processed=100
             ))
         ScanLog.objects.bulk_create(scan_logs)
 

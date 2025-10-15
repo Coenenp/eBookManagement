@@ -12,6 +12,7 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 from django.db import transaction
 from books.models import Book, FinalMetadata, BookMetadata, DataSource, ScanFolder
+from books.tests.test_helpers import create_test_book_with_file
 
 
 class CompleteUserWorkflowTests(TransactionTestCase):
@@ -107,7 +108,7 @@ class CompleteUserWorkflowTests(TransactionTestCase):
         self.client.login(username='testuser', password='testpass123')
 
         # Create test book and data source
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path='/library/metadata_test.epub',
             file_format='epub',
             scan_folder=self.scan_folder
@@ -208,7 +209,7 @@ class CrossViewInteractionTests(TestCase):
         # Create test data
         books = []
         for i in range(10):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/library/flow_{i}.epub',
                 file_format='epub',
                 scan_folder=self.scan_folder
@@ -242,7 +243,7 @@ class CrossViewInteractionTests(TestCase):
         """Test search functionality consistency across views."""
         # Create searchable books
         for i in range(20):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/library/searchable_{i}.epub',
                 file_format='epub',
                 scan_folder=self.scan_folder
@@ -269,7 +270,7 @@ class CrossViewInteractionTests(TestCase):
 
     def test_ajax_updates_reflect_in_views(self):
         """Test that AJAX updates are reflected in subsequent view loads."""
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path='/library/ajax_update.epub',
             file_format='epub',
             scan_folder=self.scan_folder
@@ -310,7 +311,7 @@ class CrossViewInteractionTests(TestCase):
         # Create books for batch testing
         books = []
         for i in range(15):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/library/batch_{i}.epub',
                 file_format='epub',
                 scan_folder=self.scan_folder
@@ -366,7 +367,7 @@ class DataConsistencyTests(TransactionTestCase):
             name='Library'
         )
 
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path='/library/consistency.epub',
             file_format='epub',
             scan_folder=scan_folder
@@ -423,7 +424,7 @@ class DataConsistencyTests(TransactionTestCase):
         # Create books
         books = []
         for i in range(5):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/library/transaction_{i}.epub',
                 file_format='epub',
                 scan_folder=scan_folder
@@ -460,7 +461,7 @@ class DataConsistencyTests(TransactionTestCase):
             name='Library'
         )
 
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path='/library/cache_test.epub',
             file_format='epub',
             scan_folder=scan_folder
@@ -498,7 +499,7 @@ class DataConsistencyTests(TransactionTestCase):
             name='Library'
         )
 
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path='/library/concurrent.epub',
             file_format='epub',
             scan_folder=scan_folder
@@ -653,7 +654,7 @@ class ComplexBusinessProcessTests(TransactionTestCase):
 
         old_books = []
         for i in range(10):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/old/library/book_{i}.epub',
                 file_format='epub',
                 scan_folder=scan_folder
@@ -718,7 +719,7 @@ class ComplexBusinessProcessTests(TransactionTestCase):
         # Add books
         book_ids = []
         for dup in duplicates_data:
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=dup['file_path'],
                 file_format='epub',
                 file_size=dup['file_size'],
@@ -766,7 +767,7 @@ class ComplexBusinessProcessTests(TransactionTestCase):
 
         books = []
         for i, data in enumerate(books_data):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/library/quality_{i}.epub',
                 file_format='epub',
                 scan_folder=scan_folder
@@ -812,7 +813,7 @@ class ComplexBusinessProcessTests(TransactionTestCase):
         )
 
         for i in range(5):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/library/backup_{i}.epub',
                 file_format='epub',
                 scan_folder=scan_folder
@@ -869,7 +870,7 @@ class ComplexBusinessProcessTests(TransactionTestCase):
         )
 
         for i in range(20):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/library/stats_{i}.{formats[i % 3]}',
                 file_format=formats[i % 3],
                 file_size=(i + 1) * 1024 * 1024,  # Varying sizes
@@ -940,7 +941,7 @@ class EndToEndPerformanceTests(TransactionTestCase):
 
         books = []
         for i in range(1000):  # 1000 books
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/library/perf_{i:04d}.epub',
                 file_format='epub',
                 file_size=(i + 1) * 1024 * 100,  # Varying sizes
@@ -983,7 +984,7 @@ class EndToEndPerformanceTests(TransactionTestCase):
         )
 
         for i in range(100):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/library/concurrent_{i}.epub',
                 file_format='epub',
                 scan_folder=scan_folder

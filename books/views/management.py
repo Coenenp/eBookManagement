@@ -9,11 +9,11 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
+from django.db import models
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView, View
 from django.urls import reverse_lazy
 from django.apps import apps
 from django.http import JsonResponse
-from django.db import models
 
 # Import mixins and utilities
 from ..mixins.navigation import BookNavigationMixin
@@ -713,17 +713,52 @@ class TriggerScanView(LoginRequiredMixin, BookNavigationMixin, View):
 class ScanStatusView(LoginRequiredMixin, BookNavigationMixin, ListView):
     """Display current scan status."""
     template_name = 'books/scanning/status.html'
-    context_object_name = 'scan_folders'
+    context_object_name = 'scan_logs'
+    paginate_by = 20
 
     def get_model(self):
-        return get_model('ScanFolder')
+        return get_model('ScanLog')
 
     def get_queryset(self):
+        ScanLog = self.get_model()
+        return ScanLog.objects.all().order_by('-timestamp')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        ScanFolder = get_model('ScanFolder')
+
+        # Get scan logs (already provided by ListView)
+        scan_logs = self.get_queryset()
+
+        # Get current scan (most recent INFO level log)
+        current_scan = scan_logs.filter(level='INFO').first()
+        context['current_scan'] = current_scan
+
+        # Get recent scans (last 10)
+        context['recent_scans'] = scan_logs[:10]
+
+        # Calculate scan statistics
+        total_scans = scan_logs.count()
+        successful_scans = scan_logs.filter(level='INFO').count()
+        failed_scans = scan_logs.filter(level='ERROR').count()
+
+        context['scan_statistics'] = {
+            'total_scans': total_scans,
+            'successful_scans': successful_scans,
+            'failed_scans': failed_scans,
+            'total_books_found': scan_logs.aggregate(
+                total=models.Sum('books_found')
+            )['total'] or 0,
+            'has_active_scan': bool(current_scan)
+        }
+
+        # Add scan folders for template use
         from django.db.models import Count
-        ScanFolder = self.get_model()
-        return ScanFolder.objects.annotate(
+        context['scan_folders'] = ScanFolder.objects.annotate(
             book_count=Count('book')
         ).order_by('name')
+
+        return context
 
 
 @login_required

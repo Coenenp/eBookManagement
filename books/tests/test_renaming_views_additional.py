@@ -8,7 +8,8 @@ from unittest.mock import patch
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
-from books.models import Book, FinalMetadata, ScanFolder
+from books.models import FinalMetadata
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class RenamingViewsAdditionalTests(TestCase):
@@ -24,13 +25,10 @@ class RenamingViewsAdditionalTests(TestCase):
             password='testpass123'
         )
 
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/additional/folder",
-            name="Additional Test Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Additional Test Folder")
 
         # Create books with edge case scenarios
-        self.book_with_special_chars = Book.objects.create(
+        self.book_with_special_chars = create_test_book_with_file(
             file_path="/test/books/Special & Characters! @#$.epub",
             file_format="epub",
             file_size=1000000,
@@ -47,7 +45,7 @@ class RenamingViewsAdditionalTests(TestCase):
             is_reviewed=True
         )
 
-        self.book_long_title = Book.objects.create(
+        self.book_long_title = create_test_book_with_file(
             file_path="/test/books/very_long_filename.epub",
             file_format="epub",
             file_size=2000000,
@@ -187,7 +185,7 @@ class RenamingViewsAdditionalTests(TestCase):
         # Create many books for batch testing
         books = []
         for i in range(20):  # Reduced for CI
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f"/test/batch/book_{i}.epub",
                 file_format="epub",
                 file_size=1000000,
@@ -253,7 +251,7 @@ class RenamingViewsAdditionalTests(TestCase):
     def test_unicode_filename_handling(self):
         """Test handling of Unicode characters in filenames"""
         # Create book with Unicode metadata
-        unicode_book = Book.objects.create(
+        unicode_book = create_test_book_with_file(
             file_path="/test/unicode/café.epub",
             file_format="epub",
             file_size=1000000,
@@ -289,7 +287,7 @@ class RenamingViewsAdditionalTests(TestCase):
     def test_network_path_handling(self):
         """Test handling of network paths and UNC paths"""
         # Create book with network path
-        network_book = Book.objects.create(
+        network_book = create_test_book_with_file(
             file_path="//server/share/books/network_book.epub",
             file_format="epub",
             file_size=1000000,
@@ -428,7 +426,7 @@ class RenamingViewsAdditionalTests(TestCase):
     def test_metadata_edge_cases_handling(self):
         """Test handling of edge cases in book metadata"""
         # Create book with minimal/problematic metadata
-        edge_case_book = Book.objects.create(
+        edge_case_book = create_test_book_with_file(
             file_path="/test/edge/edge_case.epub",
             file_format="epub",
             file_size=1000000,
@@ -473,7 +471,7 @@ class RenamingViewsAdditionalTests(TestCase):
         # Create performance test data
         perf_books = []
         for i in range(50):  # Moderate size for CI
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f"/test/perf/performance_book_{i:03d}.epub",
                 file_format="epub",
                 file_size=1000000,

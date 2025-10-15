@@ -9,9 +9,10 @@ from django.urls import reverse
 from django.contrib.messages import get_messages
 
 from books.models import (
-    Book, Author, Series, Genre, DataSource, ScanFolder,
+    Author, Series, Genre, DataSource,
     FinalMetadata, BookSeries, BookAuthor, BookGenre
 )
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class AuthorManagementViewTests(TestCase):
@@ -37,10 +38,7 @@ class AuthorManagementViewTests(TestCase):
         )
 
         # Create test scan folder
-        self.scan_folder = ScanFolder.objects.create(
-            path='/test/books',
-            is_active=True
-        )
+        self.scan_folder = create_test_scan_folder()
 
         # Create test authors
         self.reviewed_author = Author.objects.create(
@@ -63,7 +61,7 @@ class AuthorManagementViewTests(TestCase):
         )
 
         # Create test books with author relationships
-        self.book1 = Book.objects.create(
+        self.book1 = create_test_book_with_file(
             file_path='/test/book1.epub',
             file_format='epub',
             file_size=1000000,
@@ -335,10 +333,7 @@ class GenreManagementViewTests(TestCase):
         )
 
         # Create test scan folder
-        self.scan_folder = ScanFolder.objects.create(
-            path='/test/books',
-            is_active=True
-        )
+        self.scan_folder = create_test_scan_folder()
 
         # Create test genres
         self.reviewed_genre = Genre.objects.create(
@@ -355,7 +350,7 @@ class GenreManagementViewTests(TestCase):
         )
 
         # Create test book with genre relationships
-        self.book1 = Book.objects.create(
+        self.book1 = create_test_book_with_file(
             file_path='/test/book1.epub',
             file_format='epub',
             file_size=1000000,
@@ -550,10 +545,7 @@ class SeriesManagementViewTests(TestCase):
         )
 
         # Create test scan folder
-        self.scan_folder = ScanFolder.objects.create(
-            path='/test/books',
-            is_active=True
-        )
+        self.scan_folder = create_test_scan_folder()
 
         # Create test series
         self.series1 = Series.objects.create(name='Test Series 1')
@@ -561,13 +553,13 @@ class SeriesManagementViewTests(TestCase):
         self.series3 = Series.objects.create(name='Empty Series')
 
         # Create test books with series relationships
-        self.book1 = Book.objects.create(
+        self.book1 = create_test_book_with_file(
             file_path='/test/book1.epub',
             file_format='epub',
             file_size=1000000,
             scan_folder=self.scan_folder
         )
-        self.book2 = Book.objects.create(
+        self.book2 = create_test_book_with_file(
             file_path='/test/book2.epub',
             file_format='epub',
             file_size=1000000,
@@ -798,7 +790,7 @@ class BookRenamerViewTests(TestCase):
     def test_book_renamer_view_context(self):
         """Test that book renamer view provides necessary context."""
         # Create test books
-        book1 = Book.objects.create(
+        book1 = create_test_book_with_file(
             file_path="/library/test1.epub",
             file_format="epub",
             file_size=1000000

@@ -3,10 +3,14 @@ Tests for the external metadata rescan functionality.
 """
 
 import json
+import tempfile
+import shutil
+import os
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth.models import User
-from books.models import Book, FinalMetadata, BookTitle, BookAuthor, Author, DataSource, ScanFolder
+from books.models import FinalMetadata, BookTitle, BookAuthor, Author, DataSource, ScanFolder
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class RescanFunctionalityTestCase(TestCase):
@@ -23,16 +27,17 @@ class RescanFunctionalityTestCase(TestCase):
         )
         self.client.login(username='testuser', password='testpass123')
 
-        # Create required scan folder
+        # Create required scan folder with temporary directory
+        self.temp_dir = tempfile.mkdtemp()
         self.scan_folder = ScanFolder.objects.create(
             name="Test Scan Folder",
-            path="/test/scan/folder",
-            content_type="books"
+            path=self.temp_dir,
+            content_type="ebooks"
         )
 
         # Create a test book
-        self.book = Book.objects.create(
-            file_path="/test/path/book.epub",
+        self.book = create_test_book_with_file(
+            file_path=os.path.join(self.temp_dir, "book.epub"),
             file_format="epub",
             file_size=1024,
             scan_folder=self.scan_folder
@@ -68,6 +73,13 @@ class RescanFunctionalityTestCase(TestCase):
             isbn="9780062498557",
             is_reviewed=True
         )
+
+    def tearDown(self):
+        """Clean up test data."""
+        try:
+            shutil.rmtree(self.temp_dir)
+        except (OSError, FileNotFoundError):
+            pass
 
     def test_rescan_endpoint_exists(self):
         """Test that the rescan endpoint is accessible."""
@@ -195,12 +207,9 @@ class ExternalQueryFunctionTestCase(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/path/book.epub",
             file_format="epub",
             file_size=1024000,

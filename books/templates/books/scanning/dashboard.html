@@ -192,7 +192,7 @@
                                 <th>Language</th>
                                 <th>Progress <small class="text-muted">(scanned/total)</small></th>
                                 <th>Last Scanned</th>
-                                <th>Actions</th>
+                                <th>Scan Options <small class="text-muted">(Quick: metadata only | Full: with external APIs)</small></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -280,59 +280,37 @@
                                 <td>
                                     <div class="btn-group" role="group">
                                         {% if folder.last_scanned %}
-                                            <button class="btn btn-outline-primary btn-sm rescan-folder-btn btn-min-width" 
+                                            <!-- Two clear rescan options -->
+                                            <button class="btn btn-outline-secondary btn-sm rescan-without-api-btn me-1" 
                                                     data-folder-id="{{ folder.id }}" 
                                                     data-folder-name="{{ folder.name }}"
-                                                    id="folder-{{ folder.id }}-rescan-btn">
-                                                <i class="fas fa-redo me-1"></i>Rescan
+                                                    data-external-apis="false"
+                                                    title="Fast rescan using only file metadata">
+                                                <i class="fas fa-database me-1"></i>Quick Rescan
                                             </button>
-                                            <div class="btn-group" role="group">
-                                                <button class="btn btn-outline-primary btn-sm dropdown-toggle dropdown-toggle-split" 
-                                                        data-bs-toggle="dropdown" aria-expanded="false">
-                                                    <span class="visually-hidden">Toggle Dropdown</span>
-                                                </button>
-                                                <ul class="dropdown-menu">
-                                                    <li><a class="dropdown-item rescan-with-api-btn" href="#" 
-                                                           data-folder-id="{{ folder.id }}" 
-                                                           data-folder-name="{{ folder.name }}"
-                                                           data-external-apis="true">
-                                                        <i class="fas fa-cloud me-2"></i>Rescan with External APIs
-                                                    </a></li>
-                                                    <li><a class="dropdown-item rescan-without-api-btn" href="#" 
-                                                           data-folder-id="{{ folder.id }}" 
-                                                           data-folder-name="{{ folder.name }}"
-                                                           data-external-apis="false">
-                                                        <i class="fas fa-database me-2"></i>Rescan without External APIs
-                                                    </a></li>
-                                                </ul>
-                                            </div>
+                                            <button class="btn btn-outline-primary btn-sm rescan-with-api-btn" 
+                                                    data-folder-id="{{ folder.id }}" 
+                                                    data-folder-name="{{ folder.name }}"
+                                                    data-external-apis="true"
+                                                    title="Comprehensive rescan with external metadata sources">
+                                                <i class="fas fa-cloud me-1"></i>Full Rescan
+                                            </button>
                                         {% else %}
-                                            <button class="btn btn-primary btn-sm scan-folder-btn btn-min-width" 
+                                            <!-- Two clear scan options -->
+                                            <button class="btn btn-outline-primary btn-sm scan-without-api-btn me-1" 
                                                     data-folder-id="{{ folder.id }}" 
                                                     data-folder-name="{{ folder.name }}"
-                                                    id="folder-{{ folder.id }}-scan-btn">
-                                                <i class="fas fa-play me-1"></i>Scan
+                                                    data-external-apis="false"
+                                                    title="Fast scan using only file metadata">
+                                                <i class="fas fa-database me-1"></i>Quick Scan
                                             </button>
-                                            <div class="btn-group" role="group">
-                                                <button class="btn btn-primary btn-sm dropdown-toggle dropdown-toggle-split" 
-                                                        data-bs-toggle="dropdown" aria-expanded="false">
-                                                    <span class="visually-hidden">Toggle Dropdown</span>
-                                                </button>
-                                                <ul class="dropdown-menu">
-                                                    <li><a class="dropdown-item scan-with-api-btn" href="#" 
-                                                           data-folder-id="{{ folder.id }}" 
-                                                           data-folder-name="{{ folder.name }}"
-                                                           data-external-apis="true">
-                                                        <i class="fas fa-cloud me-2"></i>Scan with External APIs
-                                                    </a></li>
-                                                    <li><a class="dropdown-item scan-without-api-btn" href="#" 
-                                                           data-folder-id="{{ folder.id }}" 
-                                                           data-folder-name="{{ folder.name }}"
-                                                           data-external-apis="false">
-                                                        <i class="fas fa-database me-2"></i>Scan without External APIs
-                                                    </a></li>
-                                                </ul>
-                                            </div>
+                                            <button class="btn btn-primary btn-sm scan-with-api-btn" 
+                                                    data-folder-id="{{ folder.id }}" 
+                                                    data-folder-name="{{ folder.name }}"
+                                                    data-external-apis="true"
+                                                    title="Comprehensive scan with external metadata sources">
+                                                <i class="fas fa-cloud me-1"></i>Full Scan
+                                            </button>
                                         {% endif %}
                                     </div>
                                 </td>

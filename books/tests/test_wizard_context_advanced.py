@@ -34,6 +34,7 @@ class WizardContextDataTests(TestCase):
             folders_completed=True,
             content_types_completed=True,
             scrapers_completed=True,
+            selected_folders=['Audio', '___{ KT }___', '___epub_____'],
             scraper_config={
                 'google_books': 'test_google_api_key_12345678901234567890123',
                 'comic_vine': 'test_comic_vine_api_key_1234567890123456789012345',
@@ -199,6 +200,10 @@ class WizardContextDataTests(TestCase):
                         current_value == scraper.get('masked_value', current_value)
                     )
 
+    @patch.dict(os.environ, {
+        'GOOGLE_BOOKS_API_KEY': '',
+        'COMICVINE_API_KEY': ''
+    }, clear=False)
     def test_wizard_no_existing_data(self):
         """Test wizard context when no existing data is available"""
         # Create user without wizard data
@@ -284,11 +289,9 @@ class WizardContextDataTests(TestCase):
 
     def test_wizard_context_error_handling(self):
         """Test wizard context loading with database errors"""
-        # Test with invalid wizard data
-        invalid_wizard = SetupWizard.objects.create(
-            user=self.user,
-            scraper_config={'invalid': 'data', 'malformed': None}
-        )
+        # Test with invalid wizard data - update existing wizard
+        self.wizard.scraper_config = {'invalid': 'data', 'malformed': None}
+        self.wizard.save()
 
         request = self.factory.get('/wizard/scrapers/')
         request.user = self.user

@@ -10,8 +10,9 @@ import tempfile
 from unittest.mock import patch
 from django.test import TestCase
 
-from books.models import ScanStatus, ScanFolder, Book, FinalMetadata, DataSource
+from books.models import ScanStatus, ScanFolder, FinalMetadata, DataSource
 from books.scanner.scanner_engine import EbookScanner
+from books.tests.test_helpers import create_test_book_with_file
 
 
 class EbookScannerTests(TestCase):
@@ -206,11 +207,12 @@ class EbookScannerTests(TestCase):
         # Create a scan folder and book without FinalMetadata
         with tempfile.TemporaryDirectory() as temp_dir:
             scan_folder = ScanFolder.objects.create(path=temp_dir, is_active=True)
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=os.path.join(temp_dir, "test.epub"),
                 file_format="epub",
                 file_size=1000,
-                scan_folder=scan_folder
+                scan_folder=scan_folder,
+                content_type='ebook'
             )
 
             status = ScanStatus.objects.create(status="Running")
@@ -226,11 +228,12 @@ class EbookScannerTests(TestCase):
         """Test that books with FinalMetadata are excluded from completion."""
         with tempfile.TemporaryDirectory() as temp_dir:
             scan_folder = ScanFolder.objects.create(path=temp_dir, is_active=True)
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=os.path.join(temp_dir, "test.epub"),
                 file_format="epub",
                 file_size=1000,
-                scan_folder=scan_folder
+                scan_folder=scan_folder,
+                content_type='ebook'
             )
             # Create FinalMetadata for the book
             FinalMetadata.objects.create(book=book)
@@ -248,11 +251,12 @@ class EbookScannerTests(TestCase):
         """Test that corrupted books are excluded from completion."""
         with tempfile.TemporaryDirectory() as temp_dir:
             scan_folder = ScanFolder.objects.create(path=temp_dir, is_active=True)
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=os.path.join(temp_dir, "test.epub"),
                 file_format="epub",
                 file_size=1000,
                 scan_folder=scan_folder,
+                content_type='ebook',
                 is_corrupted=True
             )
 
@@ -275,11 +279,12 @@ class EbookScannerTests(TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             scan_folder = ScanFolder.objects.create(path=temp_dir, is_active=True)
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=os.path.join(temp_dir, "test.epub"),
                 file_format="epub",
                 file_size=1000,
-                scan_folder=scan_folder
+                scan_folder=scan_folder,
+                content_type='ebook'
             )
 
             status = ScanStatus.objects.create(status="Running")

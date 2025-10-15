@@ -5,7 +5,8 @@ Tests TC9.5: Verify that books with identical titles but different authors
 are stored as separate entries and not merged incorrectly.
 """
 from django.test import TestCase
-from books.models import ScanFolder, Book, DataSource, FinalMetadata, Author, BookAuthor
+from books.models import Book, DataSource, FinalMetadata, Author, BookAuthor
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 from unittest.mock import patch
 
 
@@ -14,10 +15,7 @@ class DuplicateHandlingTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
         # Create data sources
         self.initial_source, _ = DataSource.objects.get_or_create(
@@ -37,14 +35,14 @@ class DuplicateHandlingTests(TestCase):
         author2 = Author.objects.create(name='Jane Doe')
 
         # Create two books with same title, different authors
-        book1 = Book.objects.create(
+        book1 = create_test_book_with_file(
             file_path="/test/path/common_title1.epub",
             file_format="epub",
             file_size=1024000,
             scan_folder=self.scan_folder
         )
 
-        book2 = Book.objects.create(
+        book2 = create_test_book_with_file(
             file_path="/test/path/common_title2.epub",
             file_format="epub",
             file_size=1048576,
@@ -98,7 +96,7 @@ class DuplicateHandlingTests(TestCase):
         file_path = "/test/path/duplicate.epub"
 
         # Try to create book with same path twice
-        book1 = Book.objects.create(
+        book1 = create_test_book_with_file(
             file_path=file_path,
             file_format="epub",
             file_size=1024000,
@@ -128,14 +126,14 @@ class DuplicateHandlingTests(TestCase):
         Author.objects.create(name='Stephen King')
 
         # Create two books - different editions of same work
-        book1 = Book.objects.create(
+        book1 = create_test_book_with_file(
             file_path="/test/path/the_shining_first_edition.epub",
             file_format="epub",
             file_size=1024000,
             scan_folder=self.scan_folder
         )
 
-        book2 = Book.objects.create(
+        book2 = create_test_book_with_file(
             file_path="/test/path/the_shining_revised_edition.epub",
             file_format="epub",
             file_size=1048576,
@@ -172,13 +170,13 @@ class DuplicateHandlingTests(TestCase):
         Author.objects.create(name='Test Author')
 
         # Create books with same title in different cases
-        book1 = Book.objects.create(
+        book1 = create_test_book_with_file(
             file_path="/test/path/book1.epub",
             file_format="epub",
             scan_folder=self.scan_folder
         )
 
-        book2 = Book.objects.create(
+        book2 = create_test_book_with_file(
             file_path="/test/path/book2.epub",
             file_format="epub",
             scan_folder=self.scan_folder
@@ -208,14 +206,14 @@ class DuplicateHandlingTests(TestCase):
     def test_file_hash_duplicate_detection(self):
         """Test duplicate detection using file path hashes"""
         # Create two books with different paths but same content hash (if implemented)
-        book1 = Book.objects.create(
+        book1 = create_test_book_with_file(
             file_path="/test/path/original.epub",
             file_format="epub",
             file_size=1024000,
             scan_folder=self.scan_folder
         )
 
-        book2 = Book.objects.create(
+        book2 = create_test_book_with_file(
             file_path="/test/path/copy.epub",  # Different path
             file_format="epub",
             file_size=1024000,  # Same size
@@ -232,13 +230,13 @@ class DuplicateHandlingTests(TestCase):
     def test_author_name_normalization_for_duplicates(self):
         """Test that author name variations are handled consistently"""
         # Create books with author name variations
-        book1 = Book.objects.create(
+        book1 = create_test_book_with_file(
             file_path="/test/path/book1.epub",
             file_format="epub",
             scan_folder=self.scan_folder
         )
 
-        book2 = Book.objects.create(
+        book2 = create_test_book_with_file(
             file_path="/test/path/book2.epub",
             file_format="epub",
             scan_folder=self.scan_folder
@@ -270,13 +268,13 @@ class DuplicateHandlingTests(TestCase):
         isbn = '978-0123456789'
 
         # Create two books with same ISBN
-        book1 = Book.objects.create(
+        book1 = create_test_book_with_file(
             file_path="/test/path/book1.epub",
             file_format="epub",
             scan_folder=self.scan_folder
         )
 
-        book2 = Book.objects.create(
+        book2 = create_test_book_with_file(
             file_path="/test/path/book2.epub",
             file_format="epub",
             scan_folder=self.scan_folder
@@ -306,13 +304,13 @@ class DuplicateHandlingTests(TestCase):
         Author.objects.create(name='Fantasy Author')
 
         # Create books with same title but different series
-        book1 = Book.objects.create(
+        book1 = create_test_book_with_file(
             file_path="/test/path/dragons1.epub",
             file_format="epub",
             scan_folder=self.scan_folder
         )
 
-        book2 = Book.objects.create(
+        book2 = create_test_book_with_file(
             file_path="/test/path/dragons2.epub",
             file_format="epub",
             scan_folder=self.scan_folder

@@ -13,10 +13,11 @@ from django.urls import reverse
 from django.utils import timezone
 
 from books.models import (
-    Book, Author, Series, Publisher, Genre, DataSource, ScanFolder, ScanLog,
+    Book, Author, Series, Publisher, Genre, DataSource, ScanLog,
     FinalMetadata, BookSeries
 )
 from books.views import DashboardView
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class DashboardViewTests(TestCase):
@@ -43,11 +44,7 @@ class DashboardViewTests(TestCase):
         )
 
         # Create test scan folder
-        self.scan_folder = ScanFolder.objects.create(
-            path='/test/books',
-            is_active=True,
-            last_scanned=timezone.now() - timedelta(days=2)
-        )
+        self.scan_folder = create_test_scan_folder()
 
         # Create test authors, series, publishers
         self.author1 = Author.objects.create(name='Test Author 1', is_reviewed=True)
@@ -64,7 +61,7 @@ class DashboardViewTests(TestCase):
     def create_test_books(self):
         """Create a variety of test books with different metadata levels"""
         # Book 1: Complete metadata, high confidence
-        self.book1 = Book.objects.create(
+        self.book1 = create_test_book_with_file(
             file_path='/test/book1.epub',
             file_format='epub',
             file_size=1000000,
@@ -90,7 +87,7 @@ class DashboardViewTests(TestCase):
         )
 
         # Book 2: Partial metadata, medium confidence
-        self.book2 = Book.objects.create(
+        self.book2 = create_test_book_with_file(
             file_path='/test/book2.epub',
             file_format='epub',
             file_size=800000,
@@ -116,7 +113,7 @@ class DashboardViewTests(TestCase):
         )
 
         # Book 3: Minimal metadata, low confidence
-        self.book3 = Book.objects.create(
+        self.book3 = create_test_book_with_file(
             file_path='/test/book3.pdf',
             file_format='pdf',
             file_size=500000,
@@ -142,7 +139,7 @@ class DashboardViewTests(TestCase):
         )
 
         # Book 4: Comic book format
-        self.book4 = Book.objects.create(
+        self.book4 = create_test_book_with_file(
             file_path='/test/comic1.cbr',
             file_format='cbr',
             file_size=50000000,
@@ -161,7 +158,7 @@ class DashboardViewTests(TestCase):
         )
 
         # Book 5: Placeholder book
-        self.book5 = Book.objects.create(
+        self.book5 = create_test_book_with_file(
             file_path='/test/placeholder.epub',
             file_format='epub',
             file_size=0,
@@ -170,7 +167,7 @@ class DashboardViewTests(TestCase):
         )
 
         # Book 6: Corrupted book
-        self.book6 = Book.objects.create(
+        self.book6 = create_test_book_with_file(
             file_path='/test/corrupted.epub',
             file_format='epub',
             file_size=1000,
@@ -179,7 +176,7 @@ class DashboardViewTests(TestCase):
         )
 
         # Book 7: Duplicate book
-        self.book7 = Book.objects.create(
+        self.book7 = create_test_book_with_file(
             file_path='/test/duplicate.epub',
             file_format='epub',
             file_size=1000000,
@@ -321,7 +318,7 @@ class DashboardViewTests(TestCase):
 
         # Create books 1, 3, 5 (missing 2, 4)
         for i, num in enumerate(['1', '3', '5'], 1):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/test/series{i}.epub',
                 file_format='epub',
                 file_size=1000000,
@@ -381,9 +378,9 @@ class DashboardViewTests(TestCase):
         """Test chart data preparation for visualizations"""
         # Mock format stats
         format_stats = [
-            {'file_format': 'epub', 'count': 2},
-            {'file_format': 'pdf', 'count': 1},
-            {'file_format': 'cbr', 'count': 1}
+            {'files__file_format': 'epub', 'count': 2},
+            {'files__file_format': 'pdf', 'count': 1},
+            {'files__file_format': 'cbr', 'count': 1}
         ]
 
         # Mock metadata stats
@@ -476,7 +473,7 @@ class DashboardViewTests(TestCase):
     def test_dashboard_with_extreme_values(self):
         """Test dashboard with extreme confidence/completeness values"""
         # Create book with extreme values
-        extreme_book = Book.objects.create(
+        extreme_book = create_test_book_with_file(
             file_path='/test/extreme.epub',
             file_format='epub',
             file_size=999999999,
@@ -507,7 +504,7 @@ class DashboardViewTests(TestCase):
         mock_now.return_value = fixed_now
 
         # Create a book exactly 7 days ago (should be included)
-        Book.objects.create(
+        create_test_book_with_file(
             file_path='/test/week_ago.epub',
             file_format='epub',
             file_size=1000000,
@@ -516,7 +513,7 @@ class DashboardViewTests(TestCase):
         )
 
         # Create a book 8 days ago (should be excluded)
-        Book.objects.create(
+        create_test_book_with_file(
             file_path='/test/old.epub',
             file_format='epub',
             file_size=1000000,
@@ -550,15 +547,13 @@ class DashboardViewEdgeCaseTests(TestCase):
 
     def test_dashboard_with_malformed_series_numbers(self):
         """Test dashboard handles malformed series numbers gracefully"""
-        scan_folder = ScanFolder.objects.create(
-            path='/test', is_active=True
-        )
+        scan_folder = create_test_scan_folder()
 
         series = Series.objects.create(name='Malformed Series')
 
         # Create books with invalid series numbers
         for i, invalid_number in enumerate(['abc', 'N/A', '', None]):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/test/book{i}.epub',
                 file_format='epub',
                 file_size=1000000,
@@ -586,14 +581,12 @@ class DashboardViewEdgeCaseTests(TestCase):
 
     def test_dashboard_performance_with_large_dataset(self):
         """Test dashboard performance considerations with larger dataset"""
-        scan_folder = ScanFolder.objects.create(
-            path='/test', is_active=True
-        )
+        scan_folder = create_test_scan_folder()
 
         # Create a moderate number of books to test query efficiency
         books = []
         for i in range(100):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f'/test/book{i}.epub',
                 file_format='epub',
                 file_size=1000000,
@@ -619,11 +612,9 @@ class DashboardViewEdgeCaseTests(TestCase):
 
     def test_dashboard_with_null_values(self):
         """Test dashboard handles null values in database"""
-        scan_folder = ScanFolder.objects.create(
-            path='/test', is_active=True
-        )
+        scan_folder = create_test_scan_folder()
 
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path='/test/null_book.epub',
             file_format='epub',
             file_size=1000000,

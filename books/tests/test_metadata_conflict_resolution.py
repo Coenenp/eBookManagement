@@ -6,9 +6,10 @@ is resolved correctly based on confidence scores and source trust levels.
 """
 from django.test import TestCase
 from books.models import (
-    ScanFolder, Book, DataSource, BookMetadata, BookTitle, BookAuthor,
+    DataSource, BookMetadata, BookTitle, BookAuthor,
     Author, FinalMetadata, Publisher, BookPublisher
 )
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 from books.scanner.resolver import resolve_final_metadata
 
 
@@ -17,12 +18,9 @@ class MetadataConflictResolutionTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/scan/folder",
-            name="Test Scan Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
-        self.book = Book.objects.create(
+        self.book = create_test_book_with_file(
             file_path="/test/path/book.epub",
             file_format="epub",
             file_size=1024000,

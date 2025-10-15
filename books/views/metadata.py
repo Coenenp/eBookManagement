@@ -2,7 +2,7 @@
 Metadata management views.
 """
 import logging
-from django.shortcuts import get_object_or_404, redirect, render, reverse
+from django.shortcuts import get_object_or_404, redirect, reverse
 from django.views.generic import DetailView, View, ListView
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -62,15 +62,6 @@ class BookMetadataUpdateView(LoginRequiredMixin, View):
         try:
             book = get_object_or_404(Book, pk=pk)
             final_metadata, created = FinalMetadata.objects.get_or_create(book=book)
-
-            # Basic validation - check if title is empty when explicitly provided
-            final_title = request.POST.get('final_title', '').strip()
-            if 'final_title' in request.POST and not final_title:
-                messages.error(request, "Title cannot be empty when provided.")
-                # Return to metadata view with error
-                context = self._get_metadata_view_context(book)
-                context['errors'] = True
-                return render(request, 'books/book_metadata.html', context)
 
             updated_fields = []
 
@@ -189,6 +180,16 @@ class BookMetadataUpdateView(LoginRequiredMixin, View):
                 }
             )
 
+            # Update any existing BookSeries relationship to include the series number
+            book_series = BookSeries.objects.filter(
+                book=final_metadata.book,
+                is_active=True
+            ).order_by('-confidence').first()
+
+            if book_series:
+                book_series.series_number = series_number_value
+                book_series.save()
+
             return 'series number'
 
         elif not series_number_value:
@@ -223,6 +224,9 @@ class BookMetadataUpdateView(LoginRequiredMixin, View):
                 self._create_manual_metadata_entry(final_metadata.book, field_name, value_to_save)
                 return f'{display_name} (manual)'
             else:
+                # For certain fields, always create relationships even for non-manual entries
+                if field_name in ['final_series', 'final_author', 'final_publisher']:
+                    self._create_manual_metadata_entry(final_metadata.book, field_name, value_to_save)
                 return display_name
 
         return None

@@ -6,6 +6,7 @@ Provides test discovery, configuration, and utility functions for the renaming t
 import os
 import sys
 from pathlib import Path
+from books.tests.test_helpers import create_test_book_with_file
 
 # Add the project root to Python path for imports
 project_root = Path(__file__).parent.parent.parent
@@ -150,7 +151,7 @@ class TestDataGenerator:
     @staticmethod
     def generate_test_books(count=10):
         """Generate a collection of test books with various metadata combinations"""
-        from books.models import Book, Author, Series, Format, Language, Category
+        from books.models import Author, Series, Format, Language, Category
 
         # Ensure required objects exist
         format_obj, _ = Format.objects.get_or_create(
@@ -182,7 +183,7 @@ class TestDataGenerator:
 
         books = []
         for i in range(count):
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 title=f"Test Book {i}",
                 file_path=f"/test/book_{i}.epub",
                 file_size=1024000 + (i * 1000),

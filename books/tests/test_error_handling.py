@@ -12,7 +12,8 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 from django.db import DatabaseError, IntegrityError
 from django.core.exceptions import ValidationError
-from books.models import Book, ScanFolder
+from books.models import Book
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class DatabaseErrorHandlingTests(TestCase):
@@ -27,10 +28,7 @@ class DatabaseErrorHandlingTests(TestCase):
         self.client.login(username='testuser', password='testpass123')
 
         # Create a scan folder for book creation tests
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/folder",
-            name="Test Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Folder")
 
     @patch('books.models.Book.objects.all')
     def test_database_connection_error_handling(self, mock_all):
@@ -223,10 +221,7 @@ class FileSystemErrorTests(TestCase):
         self.client.login(username='testuser', password='testpass123')
 
         # Create a scan folder for book creation tests
-        self.scan_folder = ScanFolder.objects.create(
-            path="/test/folder",
-            name="Test Folder"
-        )
+        self.scan_folder = create_test_scan_folder(name="Test Folder")
 
     @patch('os.path.exists')
     def test_missing_file_handling(self, mock_exists):
@@ -234,7 +229,7 @@ class FileSystemErrorTests(TestCase):
         # Simulate missing file
         mock_exists.return_value = False
 
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path="/nonexistent/file.epub",
             file_format="epub",
             scan_folder=self.scan_folder
@@ -254,7 +249,7 @@ class FileSystemErrorTests(TestCase):
         # Simulate permission denied
         mock_open.side_effect = PermissionError("Permission denied")
 
-        book = Book.objects.create(
+        book = create_test_book_with_file(
             file_path="/restricted/file.epub",
             file_format="epub",
             scan_folder=self.scan_folder
@@ -458,11 +453,8 @@ class ConcurrencyErrorTests(TestCase):
 
     def test_concurrent_book_updates(self):
         """Test handling of concurrent book updates with sequential fallback."""
-        scan_folder = ScanFolder.objects.create(
-            path="/test/folder",
-            name="Test Folder"
-        )
-        book = Book.objects.create(
+        scan_folder = create_test_scan_folder(name="Test Folder")
+        book = create_test_book_with_file(
             file_path="/library/concurrency_test.epub",
             file_format="epub",
             scan_folder=scan_folder
@@ -490,11 +482,8 @@ class ConcurrencyErrorTests(TestCase):
 
     def test_race_condition_in_file_processing(self):
         """Test handling of race conditions in file processing."""
-        scan_folder = ScanFolder.objects.create(
-            path="/test/folder",
-            name="Test Folder"
-        )
-        book = Book.objects.create(
+        scan_folder = create_test_scan_folder(name="Test Folder")
+        book = create_test_book_with_file(
             file_path="/library/race_test.epub",
             file_format="epub",
             scan_folder=scan_folder
@@ -582,15 +571,12 @@ class MemoryAndResourceErrorTests(TestCase):
     def test_large_dataset_pagination(self):
         """Test handling of very large datasets."""
         # Create scan folder
-        scan_folder = ScanFolder.objects.create(
-            path="/test/folder",
-            name="Test Folder"
-        )
+        scan_folder = create_test_scan_folder(name="Test Folder")
 
         # Create many books
         books = []
         for i in range(50):  # Reduced number for faster testing
-            book = Book.objects.create(
+            book = create_test_book_with_file(
                 file_path=f"/library/large_{i}.epub",
                 file_format="epub",
                 scan_folder=scan_folder
@@ -663,13 +649,10 @@ class ErrorRecoveryTests(TestCase):
     def test_partial_failure_handling(self):
         """Test handling of partial failures in batch operations."""
         # Create scan folder
-        scan_folder = ScanFolder.objects.create(
-            path="/test/folder",
-            name="Test Folder"
-        )
+        scan_folder = create_test_scan_folder(name="Test Folder")
 
         # Create some valid and some invalid books
-        valid_book = Book.objects.create(
+        valid_book = create_test_book_with_file(
             file_path="/library/valid.epub",
             file_format="epub",
             scan_folder=scan_folder
