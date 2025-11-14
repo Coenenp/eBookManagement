@@ -93,9 +93,9 @@ def get_display_title(book):
             if first_title and hasattr(first_title, 'title'):
                 return first_title.title
 
-        # Fallback to filename without extension
-        if hasattr(book, 'filename'):
-            return os.path.splitext(book.filename)[0]
+        # Fallback to filename without extension from primary file
+        if hasattr(book, 'primary_file') and book.primary_file and hasattr(book.primary_file, 'filename'):
+            return os.path.splitext(book.primary_file.filename)[0]
 
         return 'Unknown Title'
     except Exception as e:

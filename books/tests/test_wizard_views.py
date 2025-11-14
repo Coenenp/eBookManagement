@@ -565,6 +565,9 @@ class WizardCompleteViewTests(TestCase):
             'action': 'dashboard'
         })
 
+        # Should successfully complete the wizard
+        self.assertEqual(response.status_code, 302)  # Should redirect after completion
+
         # Should mark wizard as complete
         wizard.refresh_from_db()
         self.assertTrue(wizard.is_completed)

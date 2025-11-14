@@ -2,7 +2,7 @@
 Metadata management views.
 """
 import logging
-from django.shortcuts import get_object_or_404, redirect, reverse
+from django.shortcuts import get_object_or_404, redirect, reverse, render
 from django.views.generic import DetailView, View, ListView
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -54,7 +54,7 @@ class BookMetadataView(LoginRequiredMixin, DetailView, SimpleNavigationMixin, Me
         return context
 
 
-class BookMetadataUpdateView(LoginRequiredMixin, View):
+class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, MetadataContextMixin):
     """
     FIXED metadata update view - addresses all reported bugs
     """
@@ -62,6 +62,15 @@ class BookMetadataUpdateView(LoginRequiredMixin, View):
         try:
             book = get_object_or_404(Book, pk=pk)
             final_metadata, created = FinalMetadata.objects.get_or_create(book=book)
+
+            # Validate required fields
+            final_title = request.POST.get('final_title', '').strip()
+            if not final_title:
+                messages.error(request, "Title is required and cannot be empty.")
+                # Create the same context as the main metadata view
+                context = self._get_metadata_view_context(book)
+                context['error'] = 'Title is required and cannot be empty.'
+                return render(request, 'books/book_metadata.html', context)
 
             updated_fields = []
 
@@ -85,7 +94,8 @@ class BookMetadataUpdateView(LoginRequiredMixin, View):
             final_metadata.save()
 
             if updated_fields:
-                book_title = final_metadata.final_title or book.filename
+                # Get title from final metadata or from primary file filename
+                book_title = (final_metadata.final_title or (book.primary_file.filename if book.primary_file else f"Book {book.id}"))
                 messages.success(
                     request,
                     f"Successfully updated {', '.join(updated_fields)} for '{book_title}'"

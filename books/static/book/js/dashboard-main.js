@@ -49,6 +49,15 @@ function initializeDashboardProgressBars() {
             bar.style.setProperty('--format-width', width + '%');
         }
     });
+
+    // Set dynamic progress bars (used for quality metrics and other dynamic content)
+    const dynamicBars = document.querySelectorAll('.progress-bar-dynamic');
+    dynamicBars.forEach(bar => {
+        const width = bar.getAttribute('data-width');
+        if (width) {
+            bar.style.setProperty('--progress-width', width);
+        }
+    });
 }
 
 // Dashboard navigation functions - will be populated with URLs via data attributes

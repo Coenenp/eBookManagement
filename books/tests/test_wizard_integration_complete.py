@@ -95,7 +95,7 @@ class WizardCompleteIntegrationTests(TestCase):
     def test_wizard_prepopulation_on_second_run(self):
         """Test that wizard pre-populates data on second run"""
         # Create initial wizard data
-        wizard = SetupWizard.objects.create(
+        SetupWizard.objects.create(
             user=self.user,
             scraper_config={'google_books': 'existing_key_123'},
             folder_content_types={'TestFolder': 'ebooks'}
@@ -379,7 +379,7 @@ class WizardErrorRecoveryTests(TestCase):
         """Test wizard recovery from database errors"""
         # Create malformed wizard data
         try:
-            wizard = SetupWizard.objects.create(
+            SetupWizard.objects.create(
                 user=self.user,
                 scraper_config={'malformed': None, 'invalid': [1, 2, 3]}
             )

@@ -122,6 +122,8 @@ class RateLimitedAPIClientTests(TestCase):
         with patch('books.scanner.rate_limiting.time.sleep') as mock_sleep:
             result = self.client.make_request('http://example.com')
             self.assertIsNone(result)  # Should return None if it has to wait too long
+            # Verify that sleep was called due to rate limiting
+            mock_sleep.assert_called()
 
     def test_make_request_circuit_breaker_open(self):
         """Test that the client stops requests when the circuit is open."""

@@ -197,7 +197,7 @@ class WizardPrePopulationTests(TestCase):
     def test_pre_population_data_validation(self):
         """Test that pre-populated data is validated"""
         # Create wizard with potentially invalid data
-        invalid_wizard = SetupWizard.objects.create(
+        SetupWizard.objects.create(
             user=self.user,
             scraper_config={
                 'google_books': 'x' * 1000,  # Very long key

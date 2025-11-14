@@ -2039,7 +2039,7 @@ class UploadFileViewTests(BaseViewTestCase):
         )
 
         self.assertEqual(response.status_code, 302)
-        self.assertIn('success', response.url)
+        self.assertEqual(response.url, '/books/')
 
     def test_delete_file_anonymous(self):
         """Test file deletion requires authentication"""
@@ -3109,7 +3109,7 @@ class ScanFolderManagementTests(BaseViewTestCase):
     def test_scan_folder_list_view(self):
         """Test scan folder list view."""
         # Create test folders
-        folder1 = create_test_scan_folder(name="Library 1")
+        create_test_scan_folder(name="Library 1")
 
         folder2 = create_test_scan_folder(name="Library 2")
         folder2.is_active = False

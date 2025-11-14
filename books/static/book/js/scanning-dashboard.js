@@ -51,6 +51,15 @@ class ScanningDashboard {
                 bar.classList.add('progress-bar-animated');
             }, 100);
         });
+
+        // Initialize dynamic progress bars (used for CSS custom properties)
+        const dynamicBars = document.querySelectorAll('.progress-bar-dynamic');
+        dynamicBars.forEach(bar => {
+            const width = bar.getAttribute('data-width');
+            if (width) {
+                bar.style.setProperty('--progress-width', width + '%');
+            }
+        });
     }
 
     bindEvents() {

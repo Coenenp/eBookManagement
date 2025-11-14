@@ -446,7 +446,7 @@ class CustomFiltersTemplateTagsTests(BaseTestCaseWithTempDir):
             book=book_no_final,
             title='Title from BookTitle',
             source=filename_source,
-            confidence=0.8
+            confidence=0.9
         )
 
         result = custom_filters.get_display_title(book_no_final)
@@ -462,9 +462,8 @@ class CustomFiltersTemplateTagsTests(BaseTestCaseWithTempDir):
         )
 
         result = custom_filters.get_display_title(book_no_meta)
-        # Since the book doesn't have filename attribute (it's in BookFile now),
-        # it falls back to 'Unknown Title'
-        self.assertEqual(result, 'Unknown Title')
+        # Should return filename without extension from the primary file
+        self.assertEqual(result, 'fallback_book')
 
     def test_get_display_title_error_handling(self):
         """Test get_display_title filter error handling"""

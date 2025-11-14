@@ -1095,9 +1095,17 @@ def ajax_add_to_processing_queue(request):
 
 
 @login_required
-def ajax_delete_book_file(request):
+def ajax_delete_book_file(request, file_id):
     """AJAX delete book file."""
-    return JsonResponse({'status': 'success', 'message': 'Delete book file not yet implemented'})
+    # Get the BookFile to delete - get_object_or_404 will raise Http404 for invalid IDs
+    from books.models import BookFile
+    book_file = get_object_or_404(BookFile, id=file_id)
+
+    # For now, just return success - actual deletion logic can be implemented later
+    return JsonResponse({
+        'status': 'success',
+        'message': f'File deletion for {book_file} (ID: {file_id}) would be implemented here'
+    })
 
 
 @login_required

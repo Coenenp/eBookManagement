@@ -573,19 +573,29 @@ def comics_ajax_list(request):
                 except AttributeError:
                     metadata = None
 
-            # Get title from BookTitle
-            book_title = book.titles.first()
-            title = book_title.title if book_title else f"Book {book.id}"
+            # Get title - prefer FinalMetadata over BookTitle
+            if metadata and hasattr(metadata, 'final_title') and metadata.final_title:
+                title = metadata.final_title
+            else:
+                book_title = book.titles.first()
+                title = book_title.title if book_title else f"Book {book.id}"
 
-            # Get author from BookAuthor
-            book_author = book.author_relationships.first()
-            author = book_author.author.name if book_author else ''
+            # Get author - prefer FinalMetadata over BookAuthor
+            if metadata and hasattr(metadata, 'final_author') and metadata.final_author:
+                author = metadata.final_author
+            else:
+                book_author = book.author_relationships.first()
+                author = book_author.author.name if book_author else ''
 
             # Get series info from BookSeries first, then fallback to FinalMetadata
             book_series = book.series_relationships.first()
             if book_series:
                 series_name = book_series.series.name
-                position = book_series.position or 0
+                # Convert series_number to integer for position, default to 0
+                try:
+                    position = int(book_series.series_number) if book_series.series_number else 0
+                except (ValueError, TypeError):
+                    position = 0
             else:
                 # Fallback to FinalMetadata
                 series_name = metadata.final_series if metadata and hasattr(metadata, 'final_series') and metadata.final_series else None
@@ -622,10 +632,17 @@ def comics_ajax_list(request):
                         'name': series_name,
                         'books': [],
                         'total_books': 0,
-                        'read_books': 0
+                        'read_books': 0,
+                        'total_size': 0,
+                        'authors': set(),
+                        'formats': set()
                     }
                 series_dict[series_name]['books'].append(comic_data)
                 series_dict[series_name]['total_books'] += 1
+                series_dict[series_name]['total_size'] += comic_data['file_size']
+                if comic_data['author']:
+                    series_dict[series_name]['authors'].add(comic_data['author'])
+                series_dict[series_name]['formats'].add(comic_data['file_format'])
                 if comic_data['is_read']:
                     series_dict[series_name]['read_books'] += 1
             else:
@@ -637,6 +654,9 @@ def comics_ajax_list(request):
         for series_data in series_dict.values():
             # Sort books by position
             series_data['books'].sort(key=lambda x: x['position'])
+            # Convert sets to lists for JSON serialization
+            series_data['authors'] = sorted(list(series_data['authors']))
+            series_data['formats'] = sorted(list(series_data['formats']))
             series_list.append(series_data)
 
         # Sort series by name

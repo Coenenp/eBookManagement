@@ -199,7 +199,7 @@ Wizard.Folders = {
     },
 
     /**
-     * Validate a custom folder path via AJAX
+     * Validate a custom folder path via AJAX with improved UI feedback
      */
     async validateCustomFolderPath(input) {
         const feedback = input.closest('.card-body').querySelector('.custom-folder-feedback');
@@ -210,8 +210,11 @@ Wizard.Folders = {
             return;
         }
         
-        // Show loading state
-        Wizard.Utils.showLoading(feedback, 'Checking folder...');
+        // Disable form submission during validation
+        this.setFormValidationState(false);
+        
+        // Show loading state with better message
+        Wizard.Utils.showLoading(feedback, 'Validating folder... <small class="text-muted">(checking for media files)</small>');
         
         try {
             const validationUrl = window.wizardConfig?.validateUrl || 
@@ -224,21 +227,39 @@ Wizard.Folders = {
             
             if (data.valid) {
                 Wizard.Utils.setValidationState(input, true);
-                const message = `Valid folder: <strong>${data.name}</strong> 
-                               <span class="badge bg-success ms-2">${data.file_count} files</span>`;
+                const fileMessage = data.file_count === 0 ? 'no media files found' : 
+                                  `${data.file_count} media files found`;
+                const message = `<i class="fas fa-check-circle text-success me-1"></i>Valid folder: <strong>${data.name}</strong> 
+                               <span class="badge bg-success ms-2">${fileMessage}</span>`;
                 Wizard.Utils.showSuccess(feedback, message);
             } else {
                 Wizard.Utils.setValidationState(input, false);
-                Wizard.Utils.showError(feedback, data.error);
+                Wizard.Utils.showError(feedback, `<i class="fas fa-exclamation-triangle me-1"></i>${data.error}`);
             }
             
-            // Update button state after validation
-            this.updateAddFolderButtonState();
         } catch (error) {
             console.error('Error validating folder:', error);
-            Wizard.Utils.showWarning(feedback, 'Unable to validate folder');
-            // Update button state even on error
-            this.updateAddFolderButtonState();
+            Wizard.Utils.setValidationState(input, false);
+            Wizard.Utils.showWarning(feedback, '<i class="fas fa-exclamation-circle me-1"></i>Validation timeout - folder may be too large or inaccessible');
+        }
+        
+        // Re-enable form and update button state
+        this.setFormValidationState(true);
+        this.updateAddFolderButtonState();
+    },
+
+    /**
+     * Enable/disable form submission during validation
+     */
+    setFormValidationState(enabled) {
+        const continueButton = document.querySelector('button[type="submit"]');
+        if (continueButton) {
+            continueButton.disabled = !enabled;
+            if (!enabled) {
+                continueButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Validating folders...';
+            } else {
+                continueButton.innerHTML = '<i class="fas fa-arrow-right me-2"></i>Continue to Content Types';
+            }
         }
     },
 
@@ -316,6 +337,13 @@ Wizard.Folders = {
         
         if (selectedFolders.length === 0 && !hasCustomFolders) {
             Wizard.Form.showValidationError('Please select at least one folder or enter a custom folder path.');
+            return false;
+        }
+
+        // Check if any custom folder inputs are still being validated
+        const invalidInputs = form.querySelectorAll('.custom-folder-input.is-invalid');
+        if (invalidInputs.length > 0) {
+            Wizard.Form.showValidationError('Please fix invalid folder paths before continuing.');
             return false;
         }
         

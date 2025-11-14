@@ -248,9 +248,11 @@ class WizardFoldersView(SetupWizardView):
 
         return suggestions
 
-    def _count_ebook_files(self, folder_path, max_depth=5):
-        """Count ebook files in a folder (limited depth to avoid performance issues)."""
+    def _count_ebook_files(self, folder_path, max_depth=3):
+        """Count ebook files in a folder with optimized performance."""
         count = 0
+        files_checked = 0
+        max_files_to_check = 300  # Limit total files for performance
         extensions = get_all_media_extensions()
 
         try:
@@ -261,11 +263,21 @@ class WizardFoldersView(SetupWizardView):
                     dirs[:] = []  # Don't recurse deeper
                     continue
 
-                for file in files:
+                # Limit files checked per directory
+                for file in files[:30]:  # Only check first 30 files per directory
+                    files_checked += 1
+
                     if any(file.lower().endswith(ext) for ext in extensions):
                         count += 1
-                        if count >= 1000:  # Stop counting at 1000 for performance
-                            return "1000+"
+                        if count >= 100:  # Early termination at 100 for quick response
+                            return "100+"
+
+                    # Overall limit to prevent long scans
+                    if files_checked >= max_files_to_check:
+                        break
+
+                if files_checked >= max_files_to_check:
+                    break
 
         except (PermissionError, OSError):
             pass
@@ -614,7 +626,7 @@ class WizardCompleteView(SetupWizardView):
 # AJAX endpoints for wizard
 @login_required
 def wizard_validate_folder(request):
-    """AJAX endpoint to validate a folder path."""
+    """AJAX endpoint to validate a folder path with optimized performance."""
     if request.method == 'POST':
         folder_path = request.POST.get('path', '').strip()
 
@@ -627,36 +639,64 @@ def wizard_validate_folder(request):
         if not os.path.isdir(folder_path):
             return JsonResponse({'valid': False, 'error': 'Path is not a directory'})
 
-        # Count media files (ebooks, comics, audiobooks)
+        # Fast validation with early termination for performance
         try:
             file_count = 0
+            files_checked = 0
+            max_files_to_check = 500  # Limit total files checked for performance
+            max_depth = 4  # Reduced depth for faster scanning
+            early_termination_count = 20  # Stop after finding this many media files for quick validation
+
             # Use centralized extension list
             extensions = get_all_media_extensions()
 
             for root, dirs, files in os.walk(folder_path):
                 depth = root[len(folder_path):].count(os.sep)
-                if depth >= 8:  # Match the analysis function depth
+                if depth >= max_depth:
                     dirs[:] = []
                     continue
 
-                for file in files:
+                # Limit files checked per directory for performance
+                for file in files[:50]:  # Only check first 50 files per directory
+                    files_checked += 1
+
                     if any(file.lower().endswith(ext) for ext in extensions):
                         file_count += 1
-                        if file_count >= 2000:  # Match the analysis function limit
+
+                        # Early termination for quick validation
+                        if file_count >= early_termination_count:
                             return JsonResponse({
                                 'valid': True,
-                                'file_count': "1000+",
+                                'file_count': f"{file_count}+",
                                 'name': os.path.basename(folder_path) or folder_path
                             })
 
-            return JsonResponse({
-                'valid': True,
-                'file_count': file_count,
-                'name': os.path.basename(folder_path) or folder_path
-            })
+                    # Overall limit to prevent long scans
+                    if files_checked >= max_files_to_check:
+                        break
 
+                if files_checked >= max_files_to_check:
+                    break
+
+            # Return result even with limited scan
+            if file_count > 0:
+                return JsonResponse({
+                    'valid': True,
+                    'file_count': file_count,
+                    'name': os.path.basename(folder_path) or folder_path
+                })
+            else:
+                # No media files found in limited scan - still valid folder
+                return JsonResponse({
+                    'valid': True,
+                    'file_count': 0,
+                    'name': os.path.basename(folder_path) or folder_path
+                })
+
+        except (PermissionError, OSError) as e:
+            return JsonResponse({'valid': False, 'error': f'Cannot access folder: {str(e)}'})
         except Exception as e:
-            return JsonResponse({'valid': False, 'error': f'Error accessing folder: {str(e)}'})
+            return JsonResponse({'valid': False, 'error': f'Error validating folder: {str(e)}'})
 
     return JsonResponse({'valid': False, 'error': 'Invalid request'})
 

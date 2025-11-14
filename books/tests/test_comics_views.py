@@ -26,7 +26,7 @@ class ComicsViewsTestCase(TestCase):
         )
 
         # Create a scan folder
-        self.scan_folder = create_test_scan_folder()
+        self.scan_folder = create_test_scan_folder(content_type='comics')
 
         # Create a data source
         self.data_source, _ = DataSource.objects.get_or_create(
@@ -164,7 +164,7 @@ class ComicsMainViewTests(ComicsViewsTestCase):
     def test_comics_count_fallback_to_book_format(self):
         """Test fallback to Book file format when no FinalMetadata comics exist"""
         # Remove all comic FinalMetadata
-        FinalMetadata.objects.filter(book__file_format__in=['cbr', 'cbz']).delete()
+        FinalMetadata.objects.filter(book__files__file_format__in=['cbr', 'cbz']).delete()
 
         self.client.login(username='testuser', password='testpass123')
         response = self.client.get(reverse('books:comics_main'))
@@ -209,7 +209,7 @@ class ComicsAjaxListTests(ComicsViewsTestCase):
         # Check Batman series
         batman_series = data['series'][0]
         self.assertEqual(batman_series['name'], 'Batman')
-        self.assertEqual(batman_series['book_count'], 2)
+        self.assertEqual(batman_series['total_books'], 2)
         self.assertEqual(len(batman_series['books']), 2)
 
         # Check standalone comic
@@ -227,7 +227,7 @@ class ComicsAjaxListTests(ComicsViewsTestCase):
         # Find Batman series
         batman_series = next(s for s in data['series'] if s['name'] == 'Batman')
 
-        self.assertEqual(batman_series['book_count'], 2)
+        self.assertEqual(batman_series['total_books'], 2)
         self.assertEqual(len(batman_series['books']), 2)
 
         # Check first book details
@@ -323,7 +323,7 @@ class ComicsAjaxListTests(ComicsViewsTestCase):
         batman_series = next(s for s in data['series'] if s['name'] == 'Batman')
 
         # Check aggregated data
-        self.assertEqual(batman_series['book_count'], 2)
+        self.assertEqual(batman_series['total_books'], 2)
         self.assertEqual(batman_series['total_size'], 5000000 + 7000000)  # Sum of file sizes
         self.assertEqual(batman_series['authors'], ['Frank Miller'])
         self.assertEqual(set(batman_series['formats']), {'cbr', 'cbz'})
