@@ -6,7 +6,8 @@ Addresses low coverage in views/ajax.py (24% coverage).
 from django.test import TestCase, Client
 from django.contrib.auth.models import User
 from django.urls import reverse
-from books.models import Book, Author, Series, FinalMetadata, DataSource, ScanFolder, BookFile
+from books.models import Author, Series, FinalMetadata, DataSource, ScanFolder
+from books.tests.test_helpers import create_test_book_with_file
 import json
 import tempfile
 import shutil
@@ -20,31 +21,6 @@ class BaseAjaxTestCaseWithTempDir(TestCase):
         super().setUp()
         self.temp_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.temp_dir, ignore_errors=True)
-
-
-def create_test_book_with_file(file_path, file_size=1000, file_format='epub',
-                               scan_folder=None, content_type=None, title=None):
-    """Helper function to create a test book with associated file"""
-    if scan_folder is None:
-        temp_dir = tempfile.mkdtemp()
-        scan_folder = ScanFolder.objects.create(path=temp_dir)
-
-    # Create book instance
-    book = Book.objects.create(
-        scan_folder=scan_folder,
-        content_type=content_type or 'ebook',
-        is_available=True
-    )
-
-    # Create associated file
-    BookFile.objects.create(
-        book=book,
-        file_path=file_path,
-        file_format=file_format,
-        file_size=file_size
-    )
-
-    return book
 
 
 class EbooksAjaxTests(BaseAjaxTestCaseWithTempDir):

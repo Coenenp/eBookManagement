@@ -120,11 +120,9 @@ function onItemActivate(itemId) {
     }
 }
 
-// Comics-specific legacy function
+// Shared function - delegates to EbookLibrary.Sections
 function toggleSeries(seriesId) {
-    if (window.comicsManager && window.comicsManager.toggleSeries) {
-        window.comicsManager.toggleSeries(seriesId);
-    }
+    EbookLibrary.Sections.toggleSeries(seriesId);
 }
 
 /**

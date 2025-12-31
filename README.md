@@ -293,6 +293,7 @@ CACHE_BACKEND=locmem
 ```
 
 **Cache Backend Options**:
+
 - `locmem`: Local memory cache (default, no external dependencies required)
 - `memcached`: Memcached for production (requires external Memcached service)
 

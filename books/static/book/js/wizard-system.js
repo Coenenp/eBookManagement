@@ -596,11 +596,7 @@ function validateFolder(path) {
 
 // Content type preview function (extracted from inline JavaScript)
 function updateContentTypePreview(select) {
-    const container = select.closest('.content-type-assignment');
-    const preview = container.querySelector('.content-type-preview');
-    if (preview) {
-        preview.textContent = `Will scan as: ${select.options[select.selectedIndex].text}`;
-    }
+    EbookLibrary.Sections.updateContentTypePreview(select, { prefix: 'Will scan as: ' });
 }
 
 // Export for global access

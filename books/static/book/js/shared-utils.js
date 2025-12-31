@@ -326,6 +326,82 @@ EbookLibrary.Ajax = {
 };
 
 /**
+ * Section Management Utilities
+ * Consolidated functions used across multiple sections
+ */
+EbookLibrary.Sections = {
+    /**
+     * Generic toggle series function that works with multiple manager types
+     * @param {string|number} seriesId - ID of the series to toggle
+     * @param {string} managerType - Type of manager ('comics', 'series', 'base')
+     */
+    toggleSeries(seriesId, managerType = 'auto') {
+        // Auto-detect manager if not specified
+        if (managerType === 'auto') {
+            if (window.comicsManager && window.comicsManager.toggleSeries) {
+                window.comicsManager.toggleSeries(seriesId);
+                return;
+            }
+            if (window.seriesManager && window.seriesManager.toggleSeries) {
+                window.seriesManager.toggleSeries(seriesId);
+                return;
+            }
+            console.warn('No suitable manager found for toggleSeries');
+            return;
+        }
+        
+        // Use specific manager
+        const managerName = managerType + 'Manager';
+        const manager = window[managerName];
+        if (manager && manager.toggleSeries) {
+            manager.toggleSeries(seriesId);
+        } else {
+            console.warn(`Manager ${managerName} not found or doesn't support toggleSeries`);
+        }
+    },
+
+    /**
+     * Update content type preview with suggestion badge handling
+     * Supports both simple and advanced preview modes
+     * @param {HTMLSelectElement} select - The select element that changed
+     * @param {Object} options - Configuration options
+     */
+    updateContentTypePreview(select, options = {}) {
+        const container = select.closest('.content-type-assignment');
+        if (!container) return;
+
+        const selectedText = select.options[select.selectedIndex].text;
+        
+        // Handle advanced preview with suggestion badges (content_types page)
+        const previewSpan = container.querySelector('.content-type-preview span');
+        if (previewSpan) {
+            previewSpan.textContent = selectedText;
+            
+            // Update suggestion badge if different from suggestion
+            const suggestionBadge = container.querySelector('.badge.bg-info');
+            if (suggestionBadge) {
+                const originalSuggestion = suggestionBadge.textContent.replace('Suggested: ', '');
+                if (selectedText.toLowerCase() !== originalSuggestion.toLowerCase()) {
+                    suggestionBadge.className = 'badge bg-warning';
+                    suggestionBadge.innerHTML = '<i class="fas fa-edit me-1"></i>Modified from suggestion';
+                } else {
+                    suggestionBadge.className = 'badge bg-info';
+                    suggestionBadge.innerHTML = '<i class="fas fa-lightbulb me-1"></i>Suggested: ' + originalSuggestion;
+                }
+            }
+            return;
+        }
+        
+        // Handle simple preview (other wizard pages)
+        const preview = container.querySelector('.content-type-preview');
+        if (preview) {
+            const prefix = options.prefix || 'Will scan as: ';
+            preview.textContent = prefix + selectedText;
+        }
+    }
+};
+
+/**
  * Initialize all common functionality
  */
 EbookLibrary.init = function() {

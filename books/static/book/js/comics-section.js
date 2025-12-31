@@ -518,9 +518,7 @@ function selectItem(itemId) {
 }
 
 function toggleSeries(seriesId) {
-    if (window.comicsManager) {
-        window.comicsManager.toggleSeries(seriesId);
-    }
+    EbookLibrary.Sections.toggleSeries(seriesId, 'comics');
 }
 
 function onItemActivate(comicId) {

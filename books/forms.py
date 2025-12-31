@@ -30,32 +30,8 @@ class ScanFolderForm(StandardFormMixin, forms.ModelForm):
             }),
         }
 
-
-class ScanFolderEditForm(StandardFormMixin, forms.ModelForm):
-    """Restricted form for editing scan folders - excludes path and content_type."""
-    class Meta:
-        model = ScanFolder
-        fields = ['name', 'language', 'is_active']
-        widgets = {
-            'is_active': forms.CheckboxInput(attrs={
-                'class': 'form-check-input'
-            }),
-        }
-
-
-class TriggerScanForm(forms.Form):
-    """Form for triggering scans with options."""
-    query_external_apis = forms.BooleanField(
-        required=False,
-        initial=True,
-        label='Query external APIs for metadata',
-        help_text='Enable this to fetch metadata from external sources during scanning',
-        widget=forms.CheckboxInput(attrs={
-            'class': 'form-check-input'
-        })
-    )
-
     def clean_path(self):
+
         path = self.cleaned_data.get('path', '')
         if not path or not path.strip():
             raise forms.ValidationError("Please provide a folder path.")
@@ -77,6 +53,60 @@ class TriggerScanForm(forms.Form):
             cleaned_data['content_type'] = 'ebooks'
 
         return cleaned_data
+
+
+class ScanFolderEditForm(StandardFormMixin, forms.ModelForm):
+    """Restricted form for editing scan folders - excludes path and content_type."""
+    class Meta:
+        model = ScanFolder
+        fields = ['name', 'language', 'is_active']
+        widgets = {
+            'is_active': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+        }
+
+    def _post_clean(self):
+        """Override to apply form data while skipping model validation."""
+        # Apply form data to instance (this is what _post_clean normally does)
+        opts = self._meta
+        exclude = self._get_validation_exclusions()
+
+        # Update the instance with cleaned data
+        for f in opts.model._meta.fields:
+            if f.name in self.cleaned_data and f.name not in exclude:
+                setattr(self.instance, f.name, self.cleaned_data[f.name])
+
+        # Skip model validation (model.clean() and unique validation)
+        # because the model's clean() method validates the 'path' field
+        # which is excluded from this form and might not exist
+
+    def save(self, commit=True):
+        """Override save to skip model validation since path field is not editable."""
+        instance = super().save(commit=False)
+
+        if commit:
+            # Save without calling model's full_clean() validation
+            # Generate path hash as the original model save does
+            if instance.path:
+                instance.path_hash = instance.generate_hash(instance.path)
+            # Skip instance.full_clean() and call Django's Model.save directly
+            super(ScanFolder, instance).save()
+
+        return instance
+
+
+class TriggerScanForm(forms.Form):
+    """Form for triggering scans with options."""
+    query_external_apis = forms.BooleanField(
+        required=False,
+        initial=True,
+        label='Query external APIs for metadata',
+        help_text='Enable this to fetch metadata from external sources during scanning',
+        widget=forms.CheckboxInput(attrs={
+            'class': 'form-check-input'
+        })
+    )
 
 
 class DataSourceForm(StandardFormMixin, forms.ModelForm):

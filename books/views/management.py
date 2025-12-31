@@ -730,12 +730,32 @@ class ScanStatusView(LoginRequiredMixin, BookNavigationMixin, ListView):
         # Get scan logs (already provided by ListView)
         scan_logs = self.get_queryset()
 
-        # Get current scan (most recent INFO level log)
-        current_scan = scan_logs.filter(level='INFO').first()
-        context['current_scan'] = current_scan
+        # Get active scans using the same method as scan dashboard
+        from ..scanner.background import get_all_active_scans
+        active_scans = get_all_active_scans()
+        context['active_scans'] = active_scans
+        context['current_scan'] = active_scans[0] if active_scans else None
 
-        # Get recent scans (last 10)
+        # Provide scan_status for template compatibility
+        if active_scans:
+            scan_status = active_scans[0]
+            # Transform the scan data to match template expectations
+            context['scan_status'] = {
+                'status': 'Running' if not scan_status.get('completed', False) else 'Completed',
+                'started': scan_status.get('start_time'),
+                'progress': int(scan_status.get('progress_percentage', 0)),
+                'total_files': scan_status.get('total_files'),
+                'processed_files': scan_status.get('processed_files'),
+                'last_processed_file': scan_status.get('current_file'),
+                'message': scan_status.get('status_message', scan_status.get('phase', 'Processing...')),
+                'job_id': scan_status.get('job_id')
+            }
+        else:
+            context['scan_status'] = None
+
+        # Get recent scans (last 10) and provide logs for template
         context['recent_scans'] = scan_logs[:10]
+        context['logs'] = scan_logs.filter(level__in=['ERROR', 'WARNING'])[:50]
 
         # Calculate scan statistics
         total_scans = scan_logs.count()
@@ -749,7 +769,7 @@ class ScanStatusView(LoginRequiredMixin, BookNavigationMixin, ListView):
             'total_books_found': scan_logs.aggregate(
                 total=models.Sum('books_found')
             )['total'] or 0,
-            'has_active_scan': bool(current_scan)
+            'has_active_scan': bool(active_scans)
         }
 
         # Add scan folders for template use
@@ -764,12 +784,27 @@ class ScanStatusView(LoginRequiredMixin, BookNavigationMixin, ListView):
 @login_required
 def current_scan_status(request):
     """AJAX endpoint for current scan status."""
-    # TODO: Implement actual scan status checking
-    return JsonResponse({
-        'status': 'idle',
-        'message': 'No active scans',
-        'progress': 0
-    })
+    from ..scanner.background import get_all_active_scans
+
+    active_scans = get_all_active_scans()
+
+    if active_scans:
+        scan = active_scans[0]  # Get the first active scan
+        return JsonResponse({
+            'status': 'running',
+            'message': scan.get('status_message', scan.get('phase', 'Processing...')),
+            'progress': int(scan.get('progress_percentage', 0)),
+            'job_id': scan.get('job_id'),
+            'current_file': scan.get('current_file'),
+            'total_files': scan.get('total_files'),
+            'processed_files': scan.get('processed_files')
+        })
+    else:
+        return JsonResponse({
+            'status': 'idle',
+            'message': 'No active scans',
+            'progress': 0
+        })
 
 
 @login_required

@@ -1,7 +1,11 @@
 /**
  * Scanning Dashboard - Scanning management and progress tracking
  * Extracted from scanning/dashboard.html inline JavaScript
+ * Version: 2025-11-23-fixed
  */
+
+console.log('%c🔧 SCANNING DASHBOARD FIX LOADED! 🔧', 'background: #4CAF50; color: white; padding: 2px 5px; border-radius: 3px; font-weight: bold;');
+console.log('✅ startFolderScanById issue fixed - using this.startScan() instead');
 
 class ScanningDashboard {
     constructor() {
@@ -63,6 +67,12 @@ class ScanningDashboard {
     }
 
     bindEvents() {
+        // Prevent duplicate event listeners by marking this instance
+        if (window.scanningDashboardEventsAttached) {
+            return;
+        }
+        window.scanningDashboardEventsAttached = true;
+        
         // Handle rescan type changes
         this.setupRescanFormHandling();
 
@@ -120,7 +130,8 @@ class ScanningDashboard {
                 const folderName = e.target.getAttribute('data-folder-name');
                 
                 if (confirm(`Start Full Scan of "${folderName}"?\n\nThis will search for comprehensive metadata using external sources (recommended for best results).`)) {
-                    this.startFolderScanById(folderId, true);
+                    console.log('Calling this.startScan(folderId, true) - Line 127 fixed');
+                    this.startScan(folderId, true);
                 }
             }
             
@@ -130,7 +141,7 @@ class ScanningDashboard {
                 const folderName = e.target.getAttribute('data-folder-name');
                 
                 if (confirm(`Start Quick Scan of "${folderName}"?\n\nThis will only use file metadata (faster but limited information).`)) {
-                    this.startFolderScanById(folderId, false);
+                    this.startScan(folderId, false);
                 }
             }
             
@@ -369,12 +380,12 @@ class ScanningDashboard {
             let data = {};
             
             if (rescanType === 'all') {
-                endpoint = '/books/rescan-all/';
+                endpoint = '/books/rescan-all/';  // Keep form endpoint for now - no AJAX equivalent
             } else if (rescanType === 'folder') {
-                endpoint = '/books/rescan-folder/';
+                endpoint = '/books/ajax/rescan-folder/';
                 data.folder_id = formData.get('folder_id');
             } else if (rescanType === 'specific') {
-                endpoint = '/books/rescan-specific/';
+                endpoint = '/books/rescan-specific/';  // Keep form endpoint for now - no AJAX equivalent
                 data.book_ids = formData.get('book_ids').split(',').map(id => id.trim()).filter(id => id);
             }
             
@@ -395,8 +406,8 @@ class ScanningDashboard {
 
     async startScan(folderId, useExternalAPIs = true) {
         try {
-            const response = await this.makeRequest('/books/trigger-scan/', {
-                folder_id: folderId,
+            const response = await this.makeRequest('/ajax/trigger-scan/', {
+                folder_id: parseInt(folderId),
                 use_external_apis: useExternalAPIs
             });
             
@@ -413,7 +424,7 @@ class ScanningDashboard {
 
     async startRescan(folderId) {
         try {
-            const response = await this.makeRequest('/books/rescan-folder/', {
+            const response = await this.makeRequest('/books/ajax/rescan-folder/', {
                 folder_id: folderId
             });
             
@@ -447,8 +458,13 @@ class ScanningDashboard {
 
     async updateActiveScans() {
         try {
-            const url = this.config.activeScanUrl || '/books/api/active-scans/';
-            const response = await fetch(url);
+            const url = this.config.activeScanUrl || '/scanning/active-scans/';
+            const response = await fetch(url, {
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
             const data = await response.json();
             
             const activeScanContainer = document.querySelector('#active-scans-container');
@@ -699,8 +715,13 @@ class ScanningDashboard {
 
     async updateAPIStatus() {
         try {
-            const url = this.config.apiStatusUrl || '/books/api/status/';
-            const response = await fetch(url);
+            const url = this.config.apiStatusUrl || '/scanning/api-status/';
+            const response = await fetch(url, {
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
             const data = await response.json();
             
             // Update API status indicators and progress bars
@@ -833,10 +854,14 @@ class ScanningDashboard {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': EbookLibrary.Ajax.getCSRFToken()
+                'X-CSRFToken': this.config.csrfToken
             },
             body: JSON.stringify(data)
         });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
         
         return await response.json();
     }
@@ -1331,32 +1356,28 @@ class ScanningQueue {
         });
     }
 
-    startFolderRescanById(folderId, enableExternalApis = true) {
+    async startFolderRescanById(folderId, enableExternalApis = true) {
         this.disableFolderButton(folderId);
         
-        const formData = new FormData();
-        formData.append('csrfmiddlewaretoken', this.config.csrfToken);
-        formData.append('rescan_all', 'on');
-        formData.append('folder_id', folderId);
-        if (enableExternalApis) {
-            formData.append('enable_external_apis', 'on');
+        try {
+            const response = await this.makeRequest('/books/ajax/rescan-folder/', {
+                folder_id: folderId,
+                use_external_apis: enableExternalApis
+            });
+            
+            if (response.status === 'success') {
+                EbookLibrary.UI.showAlert('Rescan started successfully!', 'success');
+                this.updateActiveScans();
+                this.startAggressivePolling();
+            } else {
+                EbookLibrary.UI.showAlert(response.message || 'Failed to start rescan', 'danger');
+            }
+        } catch (error) {
+            console.error('Rescan error:', error);
+            EbookLibrary.UI.showAlert('Failed to start rescan', 'danger');
         }
         
-        fetch(this.config.startBookRescanUrl, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.text())
-        .then(data => {
-            this.updateActiveScans();
-            this.startAggressivePolling();
-            setTimeout(() => this.enableFolderButton(folderId), 3000);
-        })
-        .catch(error => {
-            console.error('Error starting rescan:', error);
-            alert('Failed to start rescan');
-            this.enableFolderButton(folderId);
-        });
+        setTimeout(() => this.enableFolderButton(folderId), 3000);
     }
 
     disableFolderButton(folderId) {
