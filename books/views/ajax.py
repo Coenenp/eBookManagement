@@ -791,8 +791,16 @@ def ajax_add_scan_folder(request):
 @login_required
 def ajax_upload_file(request):
     """AJAX upload file."""
-    if request.method == 'POST' and 'file' in request.FILES:
-        uploaded_file = request.FILES['file']
+    if request.method == 'POST' and request.FILES:
+        # Handle both 'file' and 'files' parameter names
+        uploaded_file = request.FILES.get('file') or request.FILES.get('files')
+
+        if not uploaded_file:
+            return JsonResponse({
+                'success': False,
+                'error': 'No file provided'
+            })
+
         # Basic validation
         allowed_formats = ['.epub', '.pdf', '.mobi', '.azw', '.azw3', '.txt', '.docx', '.rtf']
         file_ext = os.path.splitext(uploaded_file.name)[1].lower()

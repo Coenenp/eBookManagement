@@ -29,6 +29,7 @@ urlpatterns = [
 
     # Dashboard
     path('dashboard/', views.DashboardView.as_view(), name='dashboard'),
+    path('deleted-books/', views.DeletedBooksView.as_view(), name='deleted_books'),
 
     # Setup Wizard
     path('wizard/', wizard_views.WizardWelcomeView.as_view(), name='wizard'),
@@ -60,7 +61,7 @@ urlpatterns = [
 
     path('series/', views.SeriesMainView.as_view(), name='series_main'),
     path('series/ajax/list/', views.series_ajax_list, name='series_ajax_list'),
-    path('series/ajax/detail/<int:series_id>/', sections_views.series_ajax_detail, name='series_ajax_detail'),
+    path('series/ajax/detail/<str:series_name>/', sections_views.series_ajax_detail, name='series_ajax_detail'),
     path('series/ajax/toggle_read/', sections_views.series_ajax_toggle_read, name='series_ajax_toggle_read'),
     path('series/ajax/mark_read/', sections_views.series_ajax_mark_read, name='series_ajax_mark_read'),
     path('series/ajax/download/<int:series_id>/', sections_views.series_ajax_download, name='series_ajax_download'),
@@ -110,6 +111,17 @@ urlpatterns = [
     path('rename-books/file-details/', views.BookRenamerFileDetailsView.as_view(), name='book_renamer_file_details'),
     path('rename-books/revert/', views.BookRenamerRevertView.as_view(), name='book_renamer_revert'),
     path('rename-books/history/', views.BookRenamerHistoryView.as_view(), name='book_renamer_history'),
+
+    # Quick book-by-book processing
+    path('quick-process/', views.QuickProcessView.as_view(), name='quick_process'),
+    path('quick-process/preview/', views.quick_process_ajax_preview, name='quick_process_preview'),
+
+    # API Status and Intelligent Scanning
+    path('api-status/', views.APIStatusView.as_view(), name='api_status'),
+    path('api-status/retry/<int:book_id>/', views.retry_book_api, name='retry_book_api'),
+    path('api-status/retry-all/<str:priority>/', views.retry_all_priority, name='retry_all_priority'),
+    path('api-status/health/', views.api_health_status, name='api_health_status'),
+    path('scanning/resume/<str:session_id>/', views.resume_failed_api_calls, name='resume_failed_api_calls'),
 
     # Background scanning
     path('scanning/', views.scan_dashboard, name='scan_dashboard'),

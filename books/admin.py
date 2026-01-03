@@ -157,10 +157,11 @@ class ScanFolderAdmin(admin.ModelAdmin):
 
 @admin.register(Book)
 class BookAdmin(admin.ModelAdmin):
-    list_display = ('title', 'content_type', 'file_format', 'file_size_mb', 'is_placeholder', 'is_duplicate', 'is_corrupted', 'last_scanned')
-    list_filter = ('content_type', 'is_placeholder', 'is_duplicate', 'is_corrupted', 'last_scanned', 'files__file_format')
+    list_display = ('title', 'content_type', 'file_format', 'file_size_mb', 'is_placeholder', 'is_duplicate', 'is_corrupted', 'deleted_status', 'last_scanned')
+    list_filter = ('content_type', 'is_placeholder', 'is_duplicate', 'is_corrupted', 'last_scanned', 'files__file_format', 'deleted_at')
     search_fields = ('titles__title', 'author_relationships__author__name', 'files__file_path')
-    readonly_fields = ('first_scanned', 'last_scanned', 'file_format', 'file_size_mb', 'file_path_display')
+    readonly_fields = ('first_scanned', 'last_scanned', 'file_format', 'file_size_mb', 'file_path_display', 'deleted_at')
+    actions = ['permanently_delete_books', 'restore_deleted_books']
 
     inlines = [
         BookFileInline,
@@ -172,6 +173,34 @@ class BookAdmin(admin.ModelAdmin):
         BookGenreInline,
         BookMetadataInline,
     ]
+
+    def deleted_status(self, obj):
+        """Show if book is soft-deleted"""
+        if obj.deleted_at:
+            return f"🗑️ Deleted ({obj.deleted_at.strftime('%Y-%m-%d')})"
+        return "✅ Active"
+    deleted_status.short_description = 'Status'
+
+    def permanently_delete_books(self, request, queryset):
+        """Permanently delete selected books from database (hard delete)"""
+        count = queryset.count()
+        if count > 0:
+            queryset.delete()  # Hard delete
+            self.message_user(request, f"Permanently deleted {count} book(s) from database.")
+        else:
+            self.message_user(request, "No books selected for deletion.", level='warning')
+    permanently_delete_books.short_description = "⚠️ Permanently delete selected books (cannot be undone)"
+
+    def restore_deleted_books(self, request, queryset):
+        """Restore soft-deleted books"""
+        deleted_books = queryset.filter(deleted_at__isnull=False)
+        count = deleted_books.count()
+        if count > 0:
+            deleted_books.update(deleted_at=None, is_available=True)
+            self.message_user(request, f"Restored {count} deleted book(s).")
+        else:
+            self.message_user(request, "No deleted books selected for restoration.", level='warning')
+    restore_deleted_books.short_description = "♻️ Restore soft-deleted books"
 
     def file_format(self, obj):
         """Get file format from first BookFile"""
@@ -205,7 +234,7 @@ class BookAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('Status', {
-            'fields': ('is_placeholder', 'is_duplicate', 'is_corrupted'),
+            'fields': ('is_placeholder', 'is_duplicate', 'is_corrupted', 'is_available', 'deleted_at'),
         }),
         ('Scan Information', {
             'fields': ('scan_folder', 'first_scanned', 'last_scanned'),

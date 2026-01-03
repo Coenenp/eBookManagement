@@ -1,0 +1,336 @@
+{% extends 'books/base.html' %}
+{% load static %}
+
+{% block title %}API Status - Book by Book{% endblock %}
+
+{% block extra_css %}
+<style>
+    .completeness-bar {
+        height: 20px;
+        background: #e9ecef;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .completeness-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #dc3545 0%, #ffc107 50%, #28a745 100%);
+        transition: width 0.3s ease;
+    }
+    .api-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .book-row:hover {
+        background-color: #f8f9fa;
+    }
+    .priority-high {
+        border-left: 4px solid #dc3545;
+    }
+    .priority-medium {
+        border-left: 4px solid #ffc107;
+    }
+    .priority-low {
+        border-left: 4px solid #17a2b8;
+    }
+    .priority-complete {
+        border-left: 4px solid #28a745;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-3">
+        <div class="col-md-8">
+            <h2><i class="fas fa-chart-line"></i> API Completeness Status</h2>
+            <p class="text-muted">Track which books need external metadata from APIs</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <button class="btn btn-primary" onclick="retryAllHigh()">
+                <i class="fas fa-redo"></i> Retry High Priority
+            </button>
+            <button class="btn btn-success" onclick="refreshStatus()">
+                <i class="fas fa-sync"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-danger">
+                <div class="card-body">
+                    <h5 class="card-title">High Priority</h5>
+                    <h2>{{ stats.high_priority }}</h2>
+                    <small>Need critical metadata</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-warning">
+                <div class="card-body">
+                    <h5 class="card-title">Medium Priority</h5>
+                    <h2>{{ stats.medium_priority }}</h2>
+                    <small>Some data missing</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-info">
+                <div class="card-body">
+                    <h5 class="card-title">Low Priority</h5>
+                    <h2>{{ stats.low_priority }}</h2>
+                    <small>Mostly complete</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <h5 class="card-title">Complete</h5>
+                    <h2>{{ stats.complete }}</h2>
+                    <small>All sources checked</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Priority</label>
+                    <select name="priority" class="form-select" onchange="this.form.submit()">
+                        <option value="">All Priorities</option>
+                        <option value="high" {% if request.GET.priority == 'high' %}selected{% endif %}>High</option>
+                        <option value="medium" {% if request.GET.priority == 'medium' %}selected{% endif %}>Medium</option>
+                        <option value="low" {% if request.GET.priority == 'low' %}selected{% endif %}>Low</option>
+                        <option value="complete" {% if request.GET.priority == 'complete' %}selected{% endif %}>Complete</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Missing Source</label>
+                    <select name="missing_source" class="form-select" onchange="this.form.submit()">
+                        <option value="">Any Source</option>
+                        <option value="Google Books" {% if request.GET.missing_source == 'Google Books' %}selected{% endif %}>Google Books</option>
+                        <option value="Open Library" {% if request.GET.missing_source == 'Open Library' %}selected{% endif %}>Open Library</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Completeness</label>
+                    <select name="completeness" class="form-select" onchange="this.form.submit()">
+                        <option value="">Any</option>
+                        <option value="0-25" {% if request.GET.completeness == '0-25' %}selected{% endif %}>0-25%</option>
+                        <option value="25-50" {% if request.GET.completeness == '25-50' %}selected{% endif %}>25-50%</option>
+                        <option value="50-75" {% if request.GET.completeness == '50-75' %}selected{% endif %}>50-75%</option>
+                        <option value="75-100" {% if request.GET.completeness == '75-100' %}selected{% endif %}>75-100%</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-filter"></i> Filter
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Books List -->
+    <div class="card">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">Books ({{ page_obj.paginator.count }})</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width: 35%;">Book</th>
+                            <th style="width: 15%;">Completeness</th>
+                            <th style="width: 10%;">Priority</th>
+                            <th style="width: 25%;">Missing Sources</th>
+                            <th style="width: 15%;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for book in page_obj %}
+                        <tr class="book-row priority-{{ book.api_completeness.scan_priority }}" data-book-id="{{ book.id }}">
+                            <td>
+                                <strong>{{ book.finalmetadata.final_title|default:"Unknown Title" }}</strong><br>
+                                <small class="text-muted">{{ book.finalmetadata.final_author|default:"Unknown Author" }}</small>
+                            </td>
+                            <td>
+                                <div class="completeness-bar">
+                                    <div class="completeness-fill" 
+                                         style="width: {{ book.api_completeness.metadata_completeness|floatformat:0 }}%"
+                                         title="{{ book.api_completeness.metadata_completeness|floatformat:0 }}%">
+                                    </div>
+                                </div>
+                                <small class="text-muted">{{ book.api_completeness.metadata_completeness|floatformat:0 }}%</small>
+                            </td>
+                            <td>
+                                {% if book.api_completeness.scan_priority == 'high' %}
+                                    <span class="badge bg-danger">High</span>
+                                {% elif book.api_completeness.scan_priority == 'medium' %}
+                                    <span class="badge bg-warning text-dark">Medium</span>
+                                {% elif book.api_completeness.scan_priority == 'low' %}
+                                    <span class="badge bg-info">Low</span>
+                                {% else %}
+                                    <span class="badge bg-success">Complete</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% for source in book.api_completeness.missing_sources %}
+                                    <span class="badge bg-secondary api-badge">{{ source }}</span>
+                                {% empty %}
+                                    <span class="text-muted">None</span>
+                                {% endfor %}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" onclick="retryBook({{ book.id }})">
+                                    <i class="fas fa-redo"></i> Retry
+                                </button>
+                                <a href="{% url 'books:book_detail' book.id %}" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">
+                                <i class="fas fa-check-circle fa-3x mb-2"></i>
+                                <p>No books match the selected filters</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="card-footer">
+            <nav>
+                <ul class="pagination mb-0 justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">First</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a>
+                        </li>
+                    {% endif %}
+                    
+                    <li class="page-item active">
+                        <span class="page-link">
+                            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                        </span>
+                    </li>
+                    
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Last</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Retry Modal -->
+<div class="modal fade" id="retryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Retry API Calls</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Retrying API calls for selected books...</p>
+                <div class="progress">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                         role="progressbar" style="width: 0%" id="retryProgress"></div>
+                </div>
+                <p class="mt-2" id="retryStatus">Initializing...</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function retryBook(bookId) {
+    const modal = new bootstrap.Modal(document.getElementById('retryModal'));
+    modal.show();
+    
+    fetch(`/books/api-status/retry/${bookId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('retryStatus').textContent = data.message;
+        document.getElementById('retryProgress').style.width = '100%';
+        
+        setTimeout(() => {
+            modal.hide();
+            location.reload();
+        }, 1500);
+    })
+    .catch(error => {
+        document.getElementById('retryStatus').textContent = 'Error: ' + error;
+        document.getElementById('retryProgress').classList.add('bg-danger');
+    });
+}
+
+function retryAllHigh() {
+    if (!confirm('Retry all high priority books? This may take a while.')) {
+        return;
+    }
+    
+    const modal = new bootstrap.Modal(document.getElementById('retryModal'));
+    modal.show();
+    
+    fetch('/books/api-status/retry-all/high/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('retryStatus').textContent = data.message;
+        document.getElementById('retryProgress').style.width = '100%';
+        
+        setTimeout(() => {
+            modal.hide();
+            location.reload();
+        }, 2000);
+    })
+    .catch(error => {
+        document.getElementById('retryStatus').textContent = 'Error: ' + error;
+        document.getElementById('retryProgress').classList.add('bg-danger');
+    });
+}
+
+function refreshStatus() {
+    location.reload();
+}
+</script>
+{% endblock %}

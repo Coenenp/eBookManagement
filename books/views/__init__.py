@@ -34,12 +34,23 @@ except ImportError:
 # Core views - COMPLETED
 from .core import (  # noqa: F401
     signup, DashboardView, BookListView, BookDetailView, UploadFileView,
-    clear_cache_view, debug_view, system_status_view
+    clear_cache_view, debug_view, system_status_view, DeletedBooksView
 )
 
 # Metadata views - COMPLETED
 from .metadata import (  # noqa: F401
     BookMetadataView, BookMetadataUpdateView
+)
+
+# Quick Process views - NEW
+from .quick_process import (  # noqa: F401
+    QuickProcessView, quick_process_ajax_preview
+)
+
+# API Status views - NEW
+from .api_status import (  # noqa: F401
+    APIStatusView, retry_book_api, retry_all_priority,
+    resume_failed_api_calls, api_health_status
 )
 
 # Management views - COMPLETED

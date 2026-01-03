@@ -1,6 +1,7 @@
 """Views for media type sections (Ebooks, Series, Comics, Audiobooks)"""
 
 import os
+import logging
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse
 from django.views.generic import TemplateView
@@ -11,12 +12,15 @@ from django.apps import apps
 from books.models import Book, COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
 
 
+logger = logging.getLogger("books.scanner")
+
+
 def get_book_metadata_dict(book):
     """Get metadata as dictionary from book, preferring final metadata"""
     try:
         final_meta = book.finalmetadata
         if final_meta:
-            return {
+            metadata = {
                 'title': final_meta.final_title or 'Unknown Title',
                 'author': final_meta.final_author or 'Unknown Author',
                 'publisher': final_meta.final_publisher or '',
@@ -24,7 +28,12 @@ def get_book_metadata_dict(book):
                 'isbn': final_meta.isbn or '',
                 'language': final_meta.language or '',
                 'publication_date': final_meta.publication_year,
+                # Add reading status fields
+                'is_read': getattr(final_meta, 'is_read', False),
+                'read_date': getattr(final_meta, 'read_date', None),
+                'reading_progress': getattr(final_meta, 'reading_progress', 0),
             }
+            return metadata
     except Exception:
         pass
 
@@ -193,7 +202,7 @@ def ebooks_ajax_list(request):
                 'id': book.id,
                 'title': metadata.get('title', 'Unknown Title'),
                 'author': metadata.get('author', 'Unknown Author'),
-                'author_display': metadata.get('author', 'Unknown Author'),  # For compatibility
+                'author_display': metadata.get('author', 'Unknown Author'),
                 'publisher': metadata.get('publisher', ''),
                 'file_format': file_format,
                 'file_size': file_size,
@@ -202,6 +211,9 @@ def ebooks_ajax_list(request):
                 'series_name': series_info.series.name if series_info and series_info.series else '',
                 'series_position': series_info.series_number if series_info else None,
                 'cover_url': cover_path,
+                # Add reading status from metadata
+                'is_read': metadata.get('is_read', False),
+                'reading_progress': metadata.get('reading_progress', 0),
             })
 
         return JsonResponse({
@@ -249,7 +261,19 @@ def ebooks_ajax_detail(request, book_id):
                 'isbn': '',
                 'language': '',
                 'publication_date': None,
+                'is_read': False,
+                'reading_progress': 0,
             }
+
+        # Get reading status from FinalMetadata
+        is_read = False
+        reading_progress = 0
+        try:
+            final_meta = book.finalmetadata
+            is_read = getattr(final_meta, 'is_read', False)
+            reading_progress = getattr(final_meta, 'reading_progress', 0)
+        except Exception:
+            pass
 
         # Get series information safely
         try:
@@ -363,6 +387,14 @@ def ebooks_ajax_detail(request, book_id):
             'series_position': series_position,
             'genres': genres,
             'cover_url': cover_url,
+
+            # Reading status and progress - use values from FinalMetadata
+            'is_read': is_read,
+            'reading_progress': reading_progress,
+
+            # File information for download and display
+            'filename': os.path.basename(first_file.file_path) if first_file and first_file.file_path else f'book_{book.id}',
+            'file_path': first_file.file_path if first_file else '',
 
             # Tab data for right panel
             'files': files_list,
@@ -807,7 +839,7 @@ def comics_ajax_detail(request, comic_id):
 
 @login_required
 def comics_ajax_toggle_read(request):
-    """Endpoint to toggle read status for comic books"""
+    """AJAX endpoint to toggle read status for comic books"""
     from django.views.decorators.http import require_http_methods
 
     @require_http_methods(["POST"])
@@ -1130,9 +1162,9 @@ def audiobooks_ajax_detail(request, book_id):
 
         return JsonResponse({
             'success': True,
-            'id': book.id,  # Test expects this at top level
+            'id': book.id,
             'audiobook': audiobook_data,
-            **audiobook_data  # Include all audiobook data at top level for compatibility
+            **audiobook_data  # Include all data at top level for compatibility
         })
 
     except Exception as e:
@@ -1174,55 +1206,6 @@ def audiobooks_ajax_toggle_read(request):
 
 
 @login_required
-def audiobooks_ajax_update_progress(request):
-    """Endpoint to update listening progress for audiobooks"""
-    from django.views.decorators.http import require_http_methods
-
-    @require_http_methods(["POST"])
-    def update_progress_handler(request):
-        try:
-            from books.models import Audiobook
-
-            audiobook_id = request.POST.get('audiobook_id')
-            position_seconds = request.POST.get('position_seconds')
-
-            if not audiobook_id or position_seconds is None:
-                return JsonResponse({'success': False, 'error': 'Missing required parameters'})
-
-            audiobook = get_object_or_404(Audiobook, id=audiobook_id)
-
-            # Update position
-            audiobook.current_position_seconds = int(position_seconds)
-
-            # Update last played time
-            from django.utils import timezone
-            audiobook.last_played = timezone.now()
-
-            # Check if finished (within 30 seconds of end)
-            if audiobook.total_duration_seconds:
-                remaining = audiobook.total_duration_seconds - audiobook.current_position_seconds
-                audiobook.is_finished = remaining <= 30
-
-            audiobook.save()
-
-            return JsonResponse({
-                'success': True,
-                'current_position_seconds': audiobook.current_position_seconds,
-                'progress_percentage': audiobook.progress_percentage,
-                'is_finished': audiobook.is_finished,
-                'last_played': audiobook.last_played.isoformat()
-            })
-
-        except Exception as e:
-            import logging
-            logger = logging.getLogger('books.scanner')
-            logger.error(f"Error in audiobooks_ajax_update_progress: {e}")
-            return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
-    return update_progress_handler(request)
-
-
-@login_required
 def audiobooks_ajax_download(request, book_id):
     """AJAX endpoint for audiobook download"""
     try:
@@ -1253,25 +1236,73 @@ def ebooks_ajax_toggle_read(request):
     """AJAX endpoint to toggle read status for ebooks"""
     if request.method == 'POST':
         try:
-            book_id = request.POST.get('book_id')
+            import json
+            from django.utils import timezone
+
+            # Handle both JSON and form data
+            if request.content_type == 'application/json':
+                try:
+                    data = json.loads(request.body)
+                    book_id = data.get('ebook_id') or data.get('book_id')
+                except (json.JSONDecodeError, ValueError):
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Invalid JSON data'
+                    }, status=400)
+            else:
+                book_id = request.POST.get('ebook_id') or request.POST.get('book_id')
+
             if not book_id:
                 return JsonResponse({
                     'success': False,
                     'error': 'Book ID is required'
                 }, status=400)
 
-            # Validate book exists
+            # Get the book
             Book = apps.get_model('books', 'Book')
-            get_object_or_404(Book, id=book_id)
+            try:
+                book = Book.objects.get(id=book_id)
+            except Book.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Book not found'
+                }, status=404)
 
-            # Toggle the read status (assuming there's a read field or we use metadata)
-            # This is a placeholder implementation
+            # Toggle read status using FinalMetadata
+            try:
+                final_meta = book.finalmetadata
+                # Toggle the is_reviewed field (or add is_read field to FinalMetadata)
+                current_read_status = getattr(final_meta, 'is_read', False)
+                final_meta.is_read = not current_read_status
+
+                # Update read_date if marking as read
+                if final_meta.is_read:
+                    final_meta.read_date = timezone.now()
+                else:
+                    final_meta.read_date = None
+
+                final_meta.save()
+                is_read = final_meta.is_read
+
+            except AttributeError:
+                # FinalMetadata doesn't exist, create it
+                FinalMetadata = apps.get_model('books', 'FinalMetadata')
+                final_meta = FinalMetadata.objects.create(
+                    book=book,
+                    is_read=True,
+                    read_date=timezone.now()
+                )
+                is_read = True
+
             return JsonResponse({
                 'success': True,
-                'message': 'Read status toggled successfully'
+                'is_read': is_read,
+                'message': f'Book marked as {"read" if is_read else "unread"}'
             })
 
         except Exception as e:
+            import traceback
+            logger.error(f"Error toggling read status: {e}\n{traceback.format_exc()}")
             return JsonResponse({
                 'success': False,
                 'error': str(e)
@@ -1286,20 +1317,41 @@ def ebooks_ajax_toggle_read(request):
 @login_required
 def ebooks_ajax_download(request, book_id):
     """AJAX endpoint to handle ebook downloads"""
+    from django.http import FileResponse, Http404
+    from django.utils.encoding import escape_uri_path
+    import mimetypes
+
     try:
         Book = apps.get_model('books', 'Book')
         book = get_object_or_404(Book, id=book_id)
 
-        # Placeholder implementation for download
+        # Get the file path
         first_file = book.files.first()
-        file_path = first_file.file_path if first_file else ''
-        filename = os.path.basename(file_path) if file_path else f'book_{book.id}'
-        return JsonResponse({
-            'success': True,
-            'download_url': f'/media/books/{file_path}',
-            'filename': filename
-        })
+        if not first_file or not first_file.file_path:
+            raise Http404("No file found for this ebook")
 
+        file_path = first_file.file_path
+
+        # Check if file exists
+        if not os.path.exists(file_path):
+            raise Http404("File not found on disk")
+
+        # Get filename and content type
+        filename = os.path.basename(file_path)
+        content_type, _ = mimetypes.guess_type(file_path)
+        if not content_type:
+            content_type = 'application/octet-stream'
+
+        # Open and serve the file
+        file_handle = open(file_path, 'rb')
+        response = FileResponse(file_handle, content_type=content_type)
+        response['Content-Disposition'] = f'attachment; filename="{escape_uri_path(filename)}"'
+        response['Content-Length'] = os.path.getsize(file_path)
+
+        return response
+
+    except Http404:
+        raise
     except Exception as e:
         return JsonResponse({
             'success': False,
@@ -1331,36 +1383,58 @@ def ebooks_ajax_companion_files(request, book_id):
 
 
 @login_required
-def series_ajax_detail(request, series_id):
+def series_ajax_detail(request, series_name):
     """AJAX endpoint for series detail"""
     try:
-        Series = apps.get_model('books', 'Series')
-        series = get_object_or_404(Series, id=series_id)
+        from urllib.parse import unquote
+        # URL decode the series name
+        series_name = unquote(series_name)
 
-        # Get books in this series
-        books_in_series = Book.objects.filter(finalmetadata__final_series=series.name)
+        # Get books in this series from FinalMetadata
+        books_in_series = Book.objects.filter(
+            finalmetadata__final_series=series_name,
+            is_placeholder=False,
+            scan_folder__content_type='ebooks',
+            scan_folder__is_active=True
+        ).select_related('finalmetadata', 'scan_folder').prefetch_related('files')
         books_data = []
         for book in books_in_series:
+            title = 'Unknown Title'
+            author = 'Unknown Author'
+
+            if hasattr(book, 'finalmetadata'):
+                title = book.finalmetadata.final_title or title
+                author = book.finalmetadata.final_author or author
+
             books_data.append({
                 'id': book.id,
-                'title': book.finalmetadata.final_title if hasattr(book, 'finalmetadata') else 'Unknown Title'
+                'title': title,
+                'author': author,
+                'cover_url': getattr(book, 'cover_url', None),
+                'file_format': book.file_format or '',
+                'file_size': book.file_size or 0,
+                'is_read': getattr(book, 'is_read', False),
+                'reading_progress': getattr(book, 'reading_progress', 0)
             })
 
         return JsonResponse({
             'success': True,
-            'name': series.name,  # Test expects this at top level
+            'name': series_name,  # Test expects this at top level
             'books': books_data,
             'book_count': len(books_data),
             'series': {
-                'id': series.id,
-                'name': series.name,
+                'name': series_name,
             }
         })
 
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error in series_ajax_detail: {error_details}")  # Log to console
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'details': error_details if request.user.is_staff else None  # Only show details to staff
         }, status=500)
 
 
@@ -1586,3 +1660,92 @@ def _get_audiobook_detail_from_audiobook_model(audiobook):
         'audiobook': audiobook_data,
         **audiobook_data  # Include all data at top level for compatibility
     })
+
+
+@login_required
+def audiobooks_ajax_update_progress(request):
+    """Endpoint to update listening progress for audiobooks"""
+    if request.method == 'POST':
+        try:
+            import json
+            from django.utils import timezone
+
+            # Handle both JSON and form data
+            if request.content_type == 'application/json':
+                try:
+                    data = json.loads(request.body)
+                except (json.JSONDecodeError, ValueError):
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Invalid JSON data'
+                    }, status=400)
+            else:
+                data = request.POST
+
+            audiobook_id = data.get('audiobook_id') or data.get('book_id')
+            position_seconds = data.get('position_seconds')
+
+            if not audiobook_id or position_seconds is None:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Missing required parameters'
+                }, status=400)
+
+            # Get the book
+            Book = apps.get_model('books', 'Book')
+            try:
+                book = Book.objects.get(id=audiobook_id)
+            except Book.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Audiobook not found'
+                }, status=404)
+
+            # Update position in FinalMetadata
+            try:
+                final_meta = book.finalmetadata
+                position_seconds = int(position_seconds)
+
+                # Calculate progress percentage (if we have duration info)
+                # For now, just store the position
+                final_meta.current_position_seconds = position_seconds
+                final_meta.last_played = timezone.now()
+
+                # Check if finished (you may need to add total_duration field)
+                if hasattr(final_meta, 'total_duration_seconds') and final_meta.total_duration_seconds:
+                    remaining = final_meta.total_duration_seconds - position_seconds
+                    final_meta.is_finished = remaining <= 30
+                    progress_percentage = int((position_seconds / final_meta.total_duration_seconds) * 100)
+                else:
+                    progress_percentage = 0
+
+                final_meta.save()
+
+                return JsonResponse({
+                    'success': True,
+                    'current_position_seconds': position_seconds,
+                    'progress_percentage': progress_percentage,
+                    'is_finished': getattr(final_meta, 'is_finished', False),
+                    'last_played': final_meta.last_played.isoformat() if hasattr(final_meta, 'last_played') else None
+                })
+
+            except AttributeError:
+                # FinalMetadata doesn't exist
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Metadata not found for this audiobook'
+                }, status=404)
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger('books.scanner')
+            logger.error(f"Error in audiobooks_ajax_update_progress: {e}")
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
+
+    return JsonResponse({
+        'success': False,
+        'error': 'Only POST method allowed'
+    }, status=405)

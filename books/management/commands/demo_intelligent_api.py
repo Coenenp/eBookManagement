@@ -68,8 +68,7 @@ class Command(BaseCommand):
                             'confidence_score': 0.8
                         }
                     )
-                    log.record_attempt(success=True, items_found=5, confidence=0.8,
-                                     metadata_retrieved=True)
+                    log.record_attempt(success=True, items_found=5, confidence=0.8, metadata_retrieved=True)
                 elif book.pk % 3 == 1:
                     # Rate limited Open Library
                     log, created = APIAccessLog.objects.get_or_create(
@@ -180,12 +179,12 @@ class Command(BaseCommand):
         self.stdout.write("="*60)
 
         # System components
-        self.stdout.write("\n SYSTEM COMPONENTS:")
+        self.stdout.write("\n📦 SYSTEM COMPONENTS:")
         self.stdout.write("  • APIAccessLog: Tracks per-book API success/failure")
         self.stdout.write("  • ScanSession: Manages scan sessions and resumption")
         self.stdout.write("  • BookAPICompleteness: Optimizes future scans")
         self.stdout.write("  • IntelligentAPIScanner: Graceful degradation logic")
-        self.stdout.write("  • EnhancedBackgroundScanner: Integration layer")
+        self.stdout.write("  • BackgroundScanner: Integrated intelligent API management")
 
         # Current state
         total_books = Book.objects.count()

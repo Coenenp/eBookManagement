@@ -1,10 +1,11 @@
+import os
+
 from django import forms
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
 from .models import ScanFolder, Book, FinalMetadata, BookCover, DataSource, COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
 from .mixins import StandardFormMixin, MetadataFormMixin, BaseMetadataValidator
 from .utils.language_manager import LanguageManager
-import os
 
 
 class UserRegisterForm(UserCreationForm):
@@ -86,6 +87,10 @@ class ScanFolderEditForm(StandardFormMixin, forms.ModelForm):
         instance = super().save(commit=False)
 
         if commit:
+            # Explicitly validate the fields that ARE in this form before saving
+            # This ensures data integrity while bypassing validation for excluded 'path' field
+            self._validate_form_fields(instance)
+
             # Save without calling model's full_clean() validation
             # Generate path hash as the original model save does
             if instance.path:
@@ -94,6 +99,32 @@ class ScanFolderEditForm(StandardFormMixin, forms.ModelForm):
             super(ScanFolder, instance).save()
 
         return instance
+
+    def _validate_form_fields(self, instance):
+        """Validate only the fields included in this form to ensure data integrity."""
+        from django.core.exceptions import ValidationError
+
+        errors = {}
+
+        # Validate name field
+        if not instance.name or not instance.name.strip():
+            errors['name'] = 'Name cannot be empty.'
+        elif len(instance.name) > 255:
+            errors['name'] = 'Name cannot exceed 255 characters.'
+
+        # Validate language field (should be a valid language code)
+        if instance.language:
+            valid_languages = [code for code, _ in LanguageManager.get_language_choices()]
+            if instance.language not in valid_languages:
+                errors['language'] = f'Invalid language code: {instance.language}'
+
+        # is_active is a boolean field, Django handles basic validation automatically
+        # but we can ensure it's not None
+        if instance.is_active is None:
+            errors['is_active'] = 'Active status must be specified.'
+
+        if errors:
+            raise ValidationError(errors)
 
 
 class TriggerScanForm(forms.Form):

@@ -416,6 +416,15 @@ EbookLibrary.init = function() {
     this.ProgressBars.initializeAll();
     
     console.log('Ebook Library shared utilities initialized');
+    
+    // Expose as both names for compatibility
+    window.MediaLibraryUtils = window.EbookLibrary;
+
+    // Dispatch custom event to signal utilities are ready
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('MediaLibraryUtilsReady'));
+        console.log('MediaLibraryUtilsReady event dispatched');
+    }
 };
 
 // Auto-initialize when DOM is ready

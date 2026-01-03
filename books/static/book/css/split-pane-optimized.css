@@ -5,10 +5,19 @@
 
 /* Core layout container */
 .container-fluid.h-100 {
-    max-height: calc(100vh - 140px);
+    height: calc(100vh - 100px); /* Adjusted for navbar + margins */
+    min-height: 500px; /* Ensure minimum usable height */
     overflow: hidden;
     /* Use theme background instead of custom gradient */
     background-color: var(--bs-body-bg);
+    display: flex;
+    flex-direction: column;
+}
+
+/* Ensure the row takes full height */
+.container-fluid.h-100 > .row {
+    flex: 1;
+    min-height: 0; /* Important for flexbox scrolling */
 }
 
 /* List & detail panels - let Bootstrap classes handle backgrounds */
@@ -23,6 +32,7 @@
     box-shadow: 0 2px 8px rgba(var(--bs-body-color-rgb), 0.08);
     display: flex;
     flex-direction: column;
+    height: 100%;
 }
 
 #detail-panel {
@@ -32,6 +42,7 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    height: 100%;
 }
 
 /* Scrollable areas configuration */
@@ -42,12 +53,13 @@
     padding: 0; 
     /* Use theme background color */
     background-color: var(--bs-body-bg);
+    min-height: 0; /* Critical for flexbox scrolling */
 }
 #detail-panel > .flex-grow-1 { 
     flex: 1; 
     overflow-y: auto; 
     overflow-x: hidden; 
-    min-height: 0; 
+    min-height: 0; /* Critical for flexbox scrolling */
 }
 .detail-content, .tab-content { 
     overflow-y: auto; 
@@ -74,10 +86,10 @@
     border: none;
     border-bottom: 1px solid var(--bs-border-color-translucent);
     position: relative;
-    overflow: hidden;
+    overflow: visible; /* Changed from hidden to allow chevron to show */
     display: flex;
     align-items: center;
-    height: 36px;
+    min-height: 36px; /* Changed from height to min-height */
     font-size: 0.85rem;
     gap: 10px;
     will-change: background-color;
@@ -94,6 +106,14 @@
     font-weight: 500; 
 }
 .list-item.selected::before { opacity: 1; }
+
+/* Grid items should not have fixed height */
+.grid-item.list-item {
+    height: auto;
+    min-height: auto;
+    display: block;
+    padding: 1rem;
+}
 
 /* Alternating row styling */
 .list-item:nth-child(even) { 
@@ -113,13 +133,35 @@
     font-weight: 600;
     color: var(--bs-body-color);
     margin: 0;
+    line-height: 1.2;
+    flex: 1 1 auto; /* Allow to grow and shrink */
+    min-width: 150px; /* Set minimum to prevent crushing */
+    display: flex;
+    align-items: center;
+    overflow: hidden; /* Contain overflow */
+}
+
+/* Text inside item-title should truncate if needed */
+.item-title > span,
+.item-title > :not(.expand-icon) {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.2;
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
 }
+
+/* Expand icon within item-title */
+.item-title .expand-icon {
+    flex-shrink: 0;
+    margin-right: 0.5rem;
+    transition: transform 0.2s ease;
+}
+
+.expanded .item-title .expand-icon {
+    transform: rotate(90deg);
+}
+
 .item-subtitle {
     font-size: 0.75rem;
     color: var(--bs-secondary);
@@ -129,7 +171,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     width: 120px;
-    flex-shrink: 0;
+    min-width: 80px; /* Prevent crushing too small */
+    flex-shrink: 1; /* Allow some shrinking if needed */
 }
 .item-info {
     display: flex;
@@ -138,7 +181,8 @@
     gap: 2px;
     margin: 0;
     width: 100px;
-    flex-shrink: 0;
+    min-width: 100px; /* Keep full width - don't allow shrinking */
+    flex-shrink: 0; /* Don't shrink - always maintain width */
     font-size: 0.75rem;
     color: var(--bs-light);
     white-space: nowrap;
@@ -192,12 +236,14 @@
     position: sticky;
     top: 0;
     z-index: 10;
-    gap: 12px;
+    gap: 10px; /* Match list-item gap */
     min-height: 32px;
 }
-.list-header-title { flex: 1; min-width: 0; margin-left: 38px; }
-.list-header-author { width: 120px; flex-shrink: 0; }
-.list-header-info { width: 100px; flex-shrink: 0; text-align: right; }
+/* Header columns - spacer accounts for cover + chevron, columns flex naturally with gap */
+.list-header-spacer { width: 56px; flex-shrink: 0; } /* cover(24px) + gap(10px) + chevron(14px) + margin(8px) */
+.list-header-title { flex: 1 1 auto; min-width: 150px; } /* Match item-title flex properties */
+.list-header-author { width: 120px; min-width: 80px; flex-shrink: 1; } /* Match item-subtitle */
+.list-header-info { width: 100px; min-width: 100px; flex-shrink: 0; text-align: right; } /* Match item-info - keep full width */
 
 /* Optimized scrollbar styling */
 #items-list::-webkit-scrollbar { width: 6px; }

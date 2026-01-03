@@ -185,8 +185,8 @@ class IntelligentAPIScanner:
             ])
 
             logger.info(f"[INTELLIGENT SCAN] Book {book.id} completed: "
-                       f"APIs succeeded: {results['apis_succeeded']}, "
-                       f"APIs failed: {results['apis_failed']}")
+                        f"APIs succeeded: {results['apis_succeeded']}, "
+                        f"APIs failed: {results['apis_failed']}")
 
         except Exception as e:
             logger.error(f"[INTELLIGENT SCAN] Error scanning book {book.id}: {e}")
@@ -195,7 +195,7 @@ class IntelligentAPIScanner:
         return results
 
     def _determine_apis_to_attempt(self, book: Book, completeness: BookAPICompleteness,
-                                  api_availability: Dict[str, bool], force_all: bool) -> List[str]:
+                                   api_availability: Dict[str, bool], force_all: bool) -> List[str]:
         """Determine which APIs should be attempted for this book"""
         apis_to_attempt = []
 
@@ -301,7 +301,7 @@ class IntelligentAPIScanner:
                 })
 
                 logger.info(f"[API SUCCESS] {api_name} for book {book.id}: "
-                          f"{metadata_added} metadata, {covers_added} covers")
+                            f"{metadata_added} metadata, {covers_added} covers")
 
             else:
                 # API call didn't return data (but didn't error)
@@ -344,61 +344,42 @@ class IntelligentAPIScanner:
 
     def _call_specific_api(self, book: Book, api_name: str) -> bool:
         """Call a specific API for the book"""
+        from books.scanner.external import (
+            _query_open_library_combined,
+            _query_google_books_combined,
+            _query_goodreads_combined,
+            _get_best_title,
+            _get_best_author
+        )
+
         try:
             # Get the best title and author for the API call
-            title = book.finalmetadata.final_title or ""
-            authors = book.author_relationships.filter(is_active=True).first()
-            author = authors.author.name if authors else ""
+            title = _get_best_title(book)
+            author = _get_best_author(book)
 
-            # Call the appropriate API based on name
-            if api_name == "Google Books":
-                return self._call_google_books_api(book, title, author)
-            elif api_name == "Open Library":
-                return self._call_open_library_api(book, title, author)
-            elif api_name == "Goodreads":
-                return self._call_goodreads_api(book, title, author)
+            # Get ISBN if available
+            isbn = None
+            if hasattr(book, 'finalmetadata') and book.finalmetadata:
+                isbn = book.finalmetadata.isbn
+
+            logger.info(f"[API CALL] {api_name} for book {book.id} - Title: {title}, Author: {author}, ISBN: {isbn}")
+
+            # Call the appropriate API based on the name
+            if api_name == DataSource.GOOGLE_BOOKS or api_name == 'Google Books':
+                _query_google_books_combined(book, title, author, isbn)
+                return True
+            elif api_name == DataSource.OPEN_LIBRARY or api_name == 'Open Library':
+                _query_open_library_combined(book, title, author, isbn)
+                return True
+            elif api_name == 'Goodreads':
+                _query_goodreads_combined(book, title, author)
+                return True
             else:
-                logger.warning(f"[API CALL] Unknown API: {api_name}")
+                logger.warning(f"[API CALL] Unknown API name: {api_name}")
                 return False
 
         except Exception as e:
-            logger.error(f"[API CALL] Error calling {api_name}: {e}")
-            return False
-
-    def _call_google_books_api(self, book: Book, title: str, author: str) -> bool:
-        """Call Google Books API specifically"""
-        from books.scanner.external import _query_google_books_combined
-        try:
-            _query_google_books_combined(book, title, author)
-            return True
-        except Exception as e:
-            if "rate limit" in str(e).lower() or "quota" in str(e).lower():
-                raise  # Re-raise rate limit errors
-            logger.warning(f"[GOOGLE BOOKS] API call failed: {e}")
-            return False
-
-    def _call_open_library_api(self, book: Book, title: str, author: str) -> bool:
-        """Call Open Library API specifically"""
-        from books.scanner.external import _query_open_library_combined
-        try:
-            _query_open_library_combined(book, title, author)
-            return True
-        except Exception as e:
-            if "rate limit" in str(e).lower():
-                raise  # Re-raise rate limit errors
-            logger.warning(f"[OPEN LIBRARY] API call failed: {e}")
-            return False
-
-    def _call_goodreads_api(self, book: Book, title: str, author: str) -> bool:
-        """Call Goodreads API specifically"""
-        from books.scanner.external import _query_goodreads_combined
-        try:
-            _query_goodreads_combined(book, title, author)
-            return True
-        except Exception as e:
-            if "rate limit" in str(e).lower():
-                raise  # Re-raise rate limit errors
-            logger.warning(f"[GOODREADS] API call failed: {e}")
+            logger.error(f"[API CALL ERROR] {api_name} for book {book.id}: {e}")
             return False
 
     def _count_book_metadata(self, book: Book, source: DataSource) -> int:
@@ -420,8 +401,8 @@ class IntelligentAPIScanner:
 
         # Get confidence from all metadata types
         for relation_name in ['title_relationships', 'author_relationships',
-                             'genre_relationships', 'series_relationships',
-                             'publisher_relationships', 'metadata']:
+                              'genre_relationships', 'series_relationships',
+                              'publisher_relationships', 'metadata']:
             if hasattr(book, relation_name):
                 queryset = getattr(book, relation_name).filter(
                     source=source, is_active=True

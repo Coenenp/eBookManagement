@@ -113,7 +113,7 @@
 
                 <!-- Management Tab (Dropdown) -->
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle {% if request.resolver_match.url_name in 'author_list,genre_list,data_source_list,book_renamer,scan_folder_list' %}active{% endif %}" 
+                    <a class="nav-link dropdown-toggle {% if request.resolver_match.url_name in 'author_list,genre_list,data_source_list,book_renamer,quick_process,api_status,scan_folder_list' %}active{% endif %}" 
                        href="#" id="managementDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Management menu">
                         <i class="fas fa-cogs me-2"></i>
                         <span class="d-none d-md-inline">Management</span>
@@ -131,8 +131,12 @@
                         <li><a class="dropdown-item" href="{% url 'books:add_scan_folder' %}">
                             <i class="fas fa-plus me-2"></i>Add Scan Folder</a></li>
                         <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{% url 'books:api_status' %}">
+                            <i class="fas fa-chart-line me-2"></i>API Status</a></li>
                         <li><a class="dropdown-item" href="{% url 'books:book_renamer' %}">
                             <i class="fas fa-edit me-2"></i>Rename Books</a></li>
+                        <li><a class="dropdown-item" href="{% url 'books:quick_process' %}">
+                            <i class="fas fa-fast-forward me-2"></i>Quick Process</a></li>
                         <li><a class="dropdown-item" href="{% url 'books:ai_feedback_list' %}">
                             <i class="fas fa-robot me-2"></i>AI Feedback</a></li>
                     </ul>

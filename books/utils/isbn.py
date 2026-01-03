@@ -4,6 +4,7 @@ This module provides functions for processing ISBN numbers including
 validation, normalization, and format conversion operations.
 """
 import re
+from datetime import datetime
 
 
 def normalize_isbn(raw):
@@ -59,3 +60,37 @@ def convert_to_isbn13(isbn10):
     total = sum((int(num) if i % 2 == 0 else int(num) * 3) for i, num in enumerate(core))
     check = (10 - (total % 10)) % 10
     return core + str(check)
+
+
+def normalize_publication_year(raw):
+    """
+    Validate and normalize publication year.
+
+    Args:
+        raw: Raw year input (string or int)
+
+    Returns:
+        int: Validated year between 1450 and current_year + 5, or None if invalid
+    """
+    if not raw:
+        return None
+
+    try:
+        # Convert to string and extract first 4 digits
+        year_str = str(raw).strip()
+        year_match = re.search(r'\d{4}', year_str)
+
+        if not year_match:
+            return None
+
+        year_int = int(year_match.group())
+
+        # Validate range (1450 = printing press invention to current year + 5 for upcoming books)
+        current_year = datetime.now().year
+        if 1450 <= year_int <= current_year + 5:
+            return year_int
+
+        return None
+
+    except (ValueError, AttributeError):
+        return None

@@ -2,17 +2,18 @@
 
 This module provides background job processing for long-running scanning operations:
 - Book discovery and metadata extraction
-- External API querying with rate limiting
+- External API querying with rate limiting and intelligent degradation
 - Progress tracking and status updates
 - Error handling and retry logic
+- Resumable scan sessions
 """
 import logging
 import time
-from typing import Dict, List
+from typing import Dict, List, Optional
 from django.core.cache import cache
-from books.models import Book, ScanFolder
+from books.models import Book, ScanFolder, ScanSession
 from books.scanner import folder as folder_scanner
-from books.scanner.rate_limiting import get_api_status, check_api_health
+from books.scanner.intelligent import IntelligentAPIScanner
 
 logger = logging.getLogger("books.scanner")
 
@@ -77,21 +78,47 @@ class ScanProgress:
 
 
 class BackgroundScanner:
-    """Background scanner for processing books with rate limiting."""
+    """Background scanner for processing books with intelligent API management."""
 
     def __init__(self, job_id: str):
         self.job_id = job_id
         self.progress = ScanProgress(job_id)
+        self.intelligent_scanner: Optional[IntelligentAPIScanner] = None
+        self.scan_session: Optional[ScanSession] = None
+        self.api_mode = 'adaptive'  # 'full', 'partial', 'internal_only', 'adaptive'
 
     def report_progress(self, current: int, total: int, message: str = ""):
         """Report progress during scanning."""
         self.progress.update(current, total, "Processing", message)
 
     def scan_folder(self, folder_path: str, language: str = None, enable_external_apis: bool = True, content_type: str = None) -> Dict:
-        """Scan a folder for books in the background."""
+        """Scan a folder for books with intelligent API management."""
         try:
-            logger.info(f"[BACKGROUND SCAN] Starting scan of {folder_path}")
-            self.progress.update(0, 100, "Initializing", f"Scanning folder: {folder_path}")
+            logger.info(f"[BACKGROUND SCAN] Starting intelligent scan of {folder_path}")
+
+            # Initialize intelligent scanner if APIs are enabled
+            if enable_external_apis:
+                self.intelligent_scanner = IntelligentAPIScanner()
+                self.scan_session = self.intelligent_scanner.session
+
+                # Get API availability recommendations
+                recommendations = self.intelligent_scanner.get_scanning_recommendations()
+                logger.info(f"[BACKGROUND SCAN] API recommendations: {recommendations}")
+
+                # Adjust scanning mode based on API availability
+                if not recommendations['available_apis']:
+                    logger.warning("[BACKGROUND SCAN] No APIs available, switching to internal-only mode")
+                    self.api_mode = 'internal_only'
+                    enable_external_apis = False
+                elif len(recommendations['available_apis']) < len(recommendations['api_status']):
+                    logger.info(f"[BACKGROUND SCAN] Partial API availability: {recommendations['available_apis']}")
+                    self.api_mode = 'partial'
+                else:
+                    self.api_mode = 'full'
+            else:
+                self.api_mode = 'internal_only'
+
+            self.progress.update(0, 100, "Initializing", f"Scanning folder: {folder_path} (Mode: {self.api_mode})")
 
             # Get or create scan folder
             scan_folder = ScanFolder.objects.filter(path=folder_path).first()
@@ -140,6 +167,10 @@ class BackgroundScanner:
                 processed_count = 0
                 error_count = 1
 
+            # Complete the intelligent scan session
+            if self.intelligent_scanner:
+                self.intelligent_scanner.complete_session()
+
             # Finalize
             self.progress.update(95, 100, "Finalizing", "Cleaning up...")
 
@@ -153,28 +184,35 @@ class BackgroundScanner:
                 f"{error_count} errors occurred" if error_count > 0 else ""
             )
 
-            return {
+            result = {
                 'success': True,
                 'books_processed': processed_count,
                 'errors': error_count,
                 'message': success_message
             }
 
+            # Add intelligent API information to result
+            if self.intelligent_scanner:
+                recommendations = self.intelligent_scanner.get_scanning_recommendations()
+                result.update({
+                    'api_mode': self.api_mode,
+                    'available_apis': recommendations['available_apis'],
+                    'session_id': self.intelligent_scanner.session_id,
+                    'books_needing_retry': len(self.scan_session.resume_queue) if self.scan_session else 0
+                })
+
+            return result
+
         except Exception as e:
             logger.error(f"[BACKGROUND SCAN] Fatal error: {e}")
+            if self.intelligent_scanner:
+                self.intelligent_scanner.complete_session()
             self.progress.complete(False, "", str(e))
             return {'success': False, 'error': str(e)}
 
     def _process_single_book(self, book_path: str, scan_folder: ScanFolder, enable_external_apis: bool) -> bool:
-        """Process a single book file."""
+        """Process a single book file with intelligent API management."""
         try:
-            # Check API health before processing
-            if enable_external_apis:
-                api_health = check_api_health()
-                if not any(api_health.values()):
-                    logger.warning("[BACKGROUND SCAN] All APIs are down, disabling external API calls")
-                    enable_external_apis = False
-
             # Create book record
             book = folder_scanner.create_book_from_file(book_path, scan_folder)
             if not book:
@@ -183,24 +221,28 @@ class BackgroundScanner:
             # Extract internal metadata
             folder_scanner.extract_internal_metadata(book)
 
-            # Query external APIs if enabled and APIs are healthy
-            if enable_external_apis:
+            # Use intelligent API scanner if enabled
+            if enable_external_apis and self.intelligent_scanner and self.api_mode != 'internal_only':
                 try:
-                    # Add delay based on API status
-                    api_status = get_api_status()
-                    max_delay = max([
-                        status.get('rate_limits', {}).get('current_counts', {}).get('minute', 0)
-                        for status in api_status.values()
-                    ])
+                    # Use intelligent scanner for graceful degradation
+                    api_result = self.intelligent_scanner.scan_book_with_intelligence(
+                        book, force_all_apis=(self.api_mode == 'full')
+                    )
 
-                    # Add extra delay if APIs are being hit hard
-                    if max_delay > 30:  # If any API has made 30+ requests this minute
-                        time.sleep(2)
+                    # Log API usage details
+                    if api_result['apis_succeeded']:
+                        logger.info(f"[INTELLIGENT API] Book {book.id}: Success with {api_result['apis_succeeded']}")
+                    if api_result['apis_failed']:
+                        logger.warning(f"[INTELLIGENT API] Book {book.id}: Failed with {api_result['apis_failed']}")
 
-                    folder_scanner.query_external_metadata(book)
+                except Exception as api_error:
+                    logger.warning(f"[INTELLIGENT API] API error for book {book.id}: {api_error}")
+                    # Continue without failing - graceful degradation
+                    logger.info(f"[BACKGROUND SCAN] Continuing without APIs for book {book.id}")
 
-                except Exception as e:
-                    logger.warning(f"[BACKGROUND SCAN] External API error for {book_path}: {e}")
+            # Sync final metadata if available
+            if hasattr(book, 'finalmetadata'):
+                book.finalmetadata.sync_from_sources()
 
             return True
 

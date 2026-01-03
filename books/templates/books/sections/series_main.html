@@ -12,10 +12,13 @@
 
 {% block format_options %}
 <option value="epub">EPUB</option>
-<option value="mobi">MOBI</option>
 <option value="pdf">PDF</option>
-<option value="cbr">CBR</option>
-<option value="cbz">CBZ</option>
+<option value="mobi">MOBI</option>
+<option value="azw">AZW</option>
+<option value="azw3">AZW3</option>
+<option value="fb2">FB2</option>
+<option value="lit">LIT</option>
+<option value="prc">PRC</option>
 {% endblock %}
 
 {% block items_list %}
@@ -44,9 +47,11 @@
 window.seriesConfig = {
     ajax_urls: {
         list: '{% url "books:series_ajax_list" %}',
-        detail: '{% url "books:series_ajax_detail" 0 %}'.replace('0', '{id}'),
+        detail: '/series/ajax/detail/{id}/',
         mark_read: '{% url "books:series_ajax_mark_read" %}',
-        book_detail: '{% url "books:book_detail" 0 %}'.replace('0', '{id}'),
+        toggle_read: '{% url "books:ebooks_ajax_toggle_read" %}',
+        book_detail: '/ebooks/ajax/detail/{id}/',
+        download_book: '/ebooks/ajax/download/{id}/',
         book_list: '{% url "books:book_list" %}'
     }
 };

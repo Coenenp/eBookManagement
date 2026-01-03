@@ -39,12 +39,12 @@
     window.comicsConfig = {
         ajax_urls: {
             list: '{% url "books:comics_ajax_list" %}',
-            detail: '{% url "books:comics_ajax_detail" 0 %}',
+            detail: '{% url "books:comics_ajax_detail" 0 %}'.replace('0', '{id}'),
             toggle_read: '{% url "books:comics_ajax_toggle_read" %}',
-            download: '{% url "books:comics_ajax_download" 0 %}'
+            download: '{% url "books:comics_ajax_download" 0 %}'.replace('0', '{id}')
         },
         urls: {
-            detail: '{% url "books:book_detail" 0 %}'
+            detail: '{% url "books:book_detail" 0 %}'.replace('0', '{id}')
         }
     };
 

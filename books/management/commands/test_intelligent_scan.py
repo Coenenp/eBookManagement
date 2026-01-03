@@ -8,7 +8,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from books.models import ScanFolder, DataSource, APIAccessLog, ScanSession, BookAPICompleteness
 from books.scanner.intelligent import IntelligentAPIScanner
-from books.scanner.enhanced_background import EnhancedBackgroundScanner
+from books.scanner.background import BackgroundScanner
 
 
 logger = logging.getLogger('books.scanner')
@@ -65,21 +65,33 @@ class Command(BaseCommand):
             scan_folder = ScanFolder.objects.get(id=folder_id)
             self.stdout.write(f"Testing intelligent scanning on: {scan_folder.name}")
 
-            # Create enhanced background scanner
-            scanner = EnhancedBackgroundScanner()
+            # Create background scanner with intelligent API features
+            import uuid
+            job_id = str(uuid.uuid4())
+            scanner = BackgroundScanner(job_id)
 
-            # Test with simulated API limitations
+            # Test with intelligent API tracking
             self.stdout.write("Starting intelligent scan with API tracking...")
 
-            # This would normally be called from the scan interface
-            job_id = f"test_scan_{folder_id}"
-            scanner.scan_folders_enhanced([scan_folder.path], job_id=job_id,
-                                        external_apis_enabled=True)
+            # Scan the folder
+            result = scanner.scan_folder(
+                scan_folder.path,
+                language=scan_folder.language,
+                enable_external_apis=True,
+                content_type=scan_folder.content_type
+            )
 
             self.stdout.write(self.style.SUCCESS("Intelligent scan completed!"))
 
             # Show results
-            self.show_scan_results(job_id)
+            self.stdout.write("\nScan Results:")
+            self.stdout.write(f"  Books Processed: {result.get('books_processed', 0)}")
+            self.stdout.write(f"  Errors: {result.get('errors', 0)}")
+            self.stdout.write(f"  API Mode: {result.get('api_mode', 'unknown')}")
+            self.stdout.write(f"  Available APIs: {result.get('available_apis', [])}")
+            self.stdout.write(f"  Books Needing Retry: {result.get('books_needing_retry', 0)}")
+            if result.get('session_id'):
+                self.stdout.write(f"  Session ID: {result['session_id']}")
 
         except ScanFolder.DoesNotExist:
             self.stdout.write(self.style.ERROR(f"Scan folder with ID {folder_id} not found"))

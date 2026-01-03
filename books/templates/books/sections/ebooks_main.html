@@ -1,6 +1,5 @@
 {% extends "books/base_split_pane.html" %}
 {% load static %}
-{% load book_extras %}
 
 {% block title %}Ebooks - {{ block.super }}{% endblock %}
 
@@ -12,52 +11,49 @@
 
 {% block format_options %}
 <option value="epub">EPUB</option>
-<option value="mobi">MOBI</option>
 <option value="pdf">PDF</option>
+<option value="mobi">MOBI</option>
+<option value="azw">AZW</option>
+<option value="azw3">AZW3</option>
+<option value="fb2">FB2</option>
+<option value="lit">LIT</option>
+<option value="prc">PRC</option>
 {% endblock %}
 
 {% block items_list %}
 <div id="ebooks-list-container">
-    {% include 'books/ebook_list.html' with ebooks=ebooks %}
+    <!-- Ebooks will be loaded via AJAX -->
 </div>
 {% endblock %}
 
 {% block detail_content %}
 <div id="ebook-detail-container" class="h-100 d-flex align-items-center justify-content-center">
     <div class="text-center text-muted">
-        <i class="fas fa-book fa-3x mb-3"></i>
+        <i class="fas fa-book-open fa-3x mb-3"></i>
         <h5>Select an ebook to view details</h5>
-        <p class="mb-0">Choose an ebook from the list to see detailed information.</p>
+        <p class="mb-0">Choose an ebook from the list to see its detailed information.</p>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 {{ block.super }}
-<script>
-    // Configuration for the ebooks section
-    window.ebooksConfig = {
-        ajax_urls: {
-            list: '{% url "books:ebooks_ajax_list" %}',
-            detail: '{% url "books:ebooks_ajax_detail" 0 %}',
-            toggle_read: '{% url "books:ebooks_ajax_toggle_read" %}',
-            download: '{% url "books:ebooks_ajax_download" 0 %}',
-            companion_files: '{% url "books:ebooks_ajax_companion_files" 0 %}'
-        },
-        urls: {
-            detail: '{% url "books:book_detail" 0 %}'
-        }
-    };
-
-// Initialize ebooks section manager
-document.addEventListener('DOMContentLoaded', function() {
-    if (typeof EbooksSectionManager !== 'undefined') {
-        window.sectionManager = new EbooksSectionManager();
-    }
-});
-</script>
 <script src="{% static 'book/js/media-library-utils.js' %}"></script>
-<script src="{% static 'book/js/base-section.js' %}"></script>
 <script src="{% static 'book/js/base-section-manager.js' %}"></script>
 <script src="{% static 'book/js/ebooks-section.js' %}"></script>
+<script>
+// Configuration for ebooks section
+window.ebooksConfig = {
+    ajax_urls: {
+        list: '{% url "books:ebooks_ajax_list" %}',
+        detail: '/ebooks/ajax/detail/{id}/',
+        toggle_read: '{% url "books:ebooks_ajax_toggle_read" %}',
+        download: '/ebooks/ajax/download/{id}/',
+        companion_files: '/ebooks/ajax/companion_files/{id}/'
+    },
+    urls: {
+        detail: '/book/{id}/'
+    }
+};
+</script>
 {% endblock %}

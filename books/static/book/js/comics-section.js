@@ -234,7 +234,7 @@ class ComicsSectionManager extends BaseSectionManager {
             const container = document.querySelector(this.config.detailContainer);
             MediaLibraryUtils.showLoadingState(container, 'Loading comic details...');
             
-            const url = this.config.detailEndpoint.replace('0', itemId);
+            const url = this.config.detailEndpoint.replace('{id}', itemId);
             const data = await MediaLibraryUtils.makeRequest(url, {
                 credentials: 'same-origin',
                 headers: {
@@ -453,7 +453,7 @@ class ComicsSectionManager extends BaseSectionManager {
 
     downloadComic(comicId, filename) {
         try {
-            const downloadUrl = window.comicsConfig?.ajax_urls?.download?.replace('0', comicId) || `/books/comics/${comicId}/download/`;
+            const downloadUrl = window.comicsConfig?.ajax_urls?.download?.replace('{id}', comicId) || `/books/comics/${comicId}/download/`;
             MediaLibraryUtils.downloadFile(downloadUrl, filename);
             MediaLibraryUtils.showToast('Download started', 'success');
         } catch (error) {
@@ -504,7 +504,7 @@ class ComicsSectionManager extends BaseSectionManager {
 
     // Handle item activation (double-click or Enter)
     onItemActivate(comicId) {
-        const detailUrl = window.comicsConfig?.urls?.detail?.replace('0', comicId) || `/books/book/${comicId}/`;
+        const detailUrl = window.comicsConfig?.urls?.detail?.replace('{id}', comicId) || `/books/book/${comicId}/`;
         window.location.href = detailUrl;
     }
 }

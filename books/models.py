@@ -544,7 +544,13 @@ class Author(models.Model):
         if not (self.first_name and self.last_name):
             self.first_name, self.last_name = parse_author_name(self.name)
 
-        self.name_normalized = normalize_author_name(f"{self.first_name} {self.last_name}")
+        # Truncate fields to prevent database errors
+        # This can happen with very long filenames or incorrectly parsed metadata
+        self.name = (self.name or '')[:200]
+        self.first_name = (self.first_name or '')[:100]
+        self.last_name = (self.last_name or '')[:100]
+
+        self.name_normalized = normalize_author_name(f"{self.first_name} {self.last_name}")[:200]
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -889,8 +895,11 @@ class BookMetadata(FinalMetadataSyncMixin, SourceConfidenceMixin, HashFieldMixin
 
 
 class FinalMetadata(models.Model):
-    """Final suggested metadata per book"""
-    book = models.OneToOneField(Book, on_delete=models.CASCADE)
+    """
+    Final, consolidated metadata for a book after review.
+    This represents the user's chosen metadata from various sources.
+    """
+    book = models.OneToOneField('Book', on_delete=models.CASCADE, related_name='finalmetadata')
 
     # Core fields
     final_title = models.CharField(max_length=500, blank=True)
@@ -915,6 +924,17 @@ class FinalMetadata(models.Model):
     isbn = models.CharField(max_length=20, blank=True)
     publication_year = models.IntegerField(null=True, blank=True)
     description = models.TextField(blank=True)
+
+    # Reading tracking fields
+    is_read = models.BooleanField(default=False, help_text="Whether this book has been read")
+    read_date = models.DateTimeField(null=True, blank=True, help_text="When the book was marked as read")
+    reading_progress = models.IntegerField(default=0, help_text="Reading progress percentage (0-100)")
+
+    # Audiobook-specific tracking fields
+    current_position_seconds = models.IntegerField(default=0, help_text='Current playback position in seconds')
+    total_duration_seconds = models.IntegerField(null=True, blank=True, help_text='Total duration in seconds')
+    last_played = models.DateTimeField(null=True, blank=True, help_text='When the audiobook was last played')
+    is_finished = models.BooleanField(default=False, help_text='Whether the audiobook has been finished')
 
     # Overall metrics
     overall_confidence = models.FloatField(default=0.0)
@@ -2077,6 +2097,7 @@ class APIAccessLog(HashFieldMixin, models.Model):
     @property
     def success_rate(self):
         """Calculate success rate percentage"""
+
         if self.total_attempts == 0:
             return 0.0
         return (self.successful_attempts / self.total_attempts) * 100
@@ -2163,8 +2184,7 @@ class ScanSession(HashFieldMixin, models.Model):
     """Tracks scanning sessions and their API usage patterns"""
 
     session_id = models.CharField(max_length=100, unique=True)
-    scan_folder = models.ForeignKey(ScanFolder, on_delete=models.CASCADE,
-                                  related_name='scan_sessions', null=True, blank=True)
+    scan_folder = models.ForeignKey(ScanFolder, on_delete=models.CASCADE, related_name='scan_sessions', null=True, blank=True)
 
     # Session configuration
     external_apis_enabled = models.BooleanField(default=True)
@@ -2264,8 +2284,7 @@ class ScanSession(HashFieldMixin, models.Model):
 class BookAPICompleteness(models.Model):
     """Tracks API completeness for each book to optimize future scans"""
 
-    book = models.OneToOneField(Book, on_delete=models.CASCADE,
-                               related_name='api_completeness', primary_key=True)
+    book = models.OneToOneField(Book, on_delete=models.CASCADE, related_name='api_completeness', primary_key=True)
 
     # Source completion tracking
     google_books_complete = models.BooleanField(default=False)

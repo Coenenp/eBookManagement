@@ -41,15 +41,28 @@ def _get_or_create_book_by_path(file_path, scan_folder, file_format=None, file_s
     """
     Get or create a Book and BookFile by file path.
 
+    If the book was previously soft-deleted, it will be reactivated.
+
     This replaces the old Book.get_or_create_by_path method.
     Returns (book, created) tuple like the old method.
     """
     from django.db import transaction
+    from django.utils import timezone
 
     # Check if a BookFile with this path already exists
-    existing_file = BookFile.objects.filter(file_path=file_path).first()
+    existing_file = BookFile.objects.filter(file_path=file_path).select_related('book').first()
     if existing_file:
-        return existing_file.book, False
+        book = existing_file.book
+
+        # Reactivate the book if it was soft-deleted
+        if book.deleted_at is not None:
+            logger.info(f"[REACTIVATE] Reactivating previously deleted book: {file_path}")
+            book.deleted_at = None
+            book.is_available = True
+            book.last_scanned = timezone.now()
+            book.save(update_fields=['deleted_at', 'is_available', 'last_scanned'])
+
+        return book, False
 
     # Create new Book and BookFile
     with transaction.atomic():
@@ -150,6 +163,10 @@ def scan_directory(directory, scan_folder, rescan=False, ebook_extensions=None, 
 
     # Handle orphaned files at the end
     _handle_orphans(directory, cover_files, opf_files, ebook_files, scan_folder)
+
+    # Mark books as deleted if their files no longer exist (rescan only)
+    if rescan:
+        _cleanup_missing_books(directory, scan_folder, ebook_files)
 
 
 def _should_use_content_type_processing(ebook_files):
@@ -449,6 +466,58 @@ def _extract_internal_metadata(book):
         logger.warning(f"[CORRUPT FILE DETECTED] {fmt.upper()} extract failed for {book.file_path}: {e}")
         book.is_corrupted = True
         book.save()
+
+
+def _cleanup_missing_books(directory, scan_folder, found_files):
+    """
+    Mark books as deleted if their files no longer exist during a rescan.
+    Reactivate books if their files are found again.
+
+    Args:
+        directory: The directory being scanned
+        scan_folder: The ScanFolder being scanned
+        found_files: List of file paths actually found during this scan
+    """
+    from django.utils import timezone
+
+    # Get all files that were found in this scan
+    found_file_paths = set(found_files)
+
+    # Get all BookFiles in this scan_folder that are in this directory
+    existing_files = BookFile.objects.filter(
+        book__scan_folder=scan_folder,
+        file_path__startswith=directory
+    ).select_related('book')
+
+    marked_as_deleted = 0
+    reactivated = 0
+
+    for book_file in existing_files:
+        book = book_file.book
+        file_exists = os.path.exists(book_file.file_path)
+        file_was_found = book_file.file_path in found_file_paths
+
+        # Check if file exists on disk
+        if not file_exists and not file_was_found:
+            # File is missing - mark book as deleted if not already deleted
+            if book.deleted_at is None:
+                logger.info(f"[CLEANUP] Marking book as deleted (file not found): {book_file.file_path}")
+                book.soft_delete()
+                marked_as_deleted += 1
+        else:
+            # File exists - reactivate book if it was previously deleted
+            if book.deleted_at is not None:
+                logger.info(f"[CLEANUP] Reactivating book (file found again): {book_file.file_path}")
+                book.deleted_at = None
+                book.is_available = True
+                book.last_scanned = timezone.now()
+                book.save(update_fields=['deleted_at', 'is_available', 'last_scanned'])
+                reactivated += 1
+
+    if marked_as_deleted > 0:
+        logger.info(f"[CLEANUP] Marked {marked_as_deleted} books as deleted (files not found)")
+    if reactivated > 0:
+        logger.info(f"[CLEANUP] Reactivated {reactivated} books (files found again)")
 
 
 def _handle_orphans(directory, cover_files, opf_files, ebook_files, scan_folder):

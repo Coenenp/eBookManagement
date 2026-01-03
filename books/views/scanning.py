@@ -115,6 +115,13 @@ def scan_dashboard(request):
         status__in=['pending', 'scheduled']
     ).select_related().order_by('-priority', 'created_at')[:5]
 
+    # Get recent scan sessions with resumable books - NEW
+    from books.models import ScanSession
+    recent_sessions = ScanSession.objects.filter(
+        can_resume=True,
+        is_active=False
+    ).order_by('-updated_at')[:5]
+
     context = {
         'active_scans': active_scans,
         'api_status': api_info,
@@ -123,6 +130,7 @@ def scan_dashboard(request):
         'interrupted_scans_with_progress': interrupted_scans_with_progress,
         'scan_queue': scan_queue,
         'recent_scan_history': recent_scan_history,
+        'recent_sessions': recent_sessions,  # NEW
         'language_choices': LanguageManager.get_language_choices(),
         'page_title': 'Scanning Dashboard'
     }

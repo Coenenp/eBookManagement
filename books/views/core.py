@@ -156,9 +156,17 @@ class DashboardView(WizardRequiredMixin, LoginRequiredMixin, TemplateView):
         needs_review_count = FinalMetadata.objects.filter(is_reviewed=False).count()
         books_with_original_cover = Book.objects.filter(files__cover_path__isnull=False).exclude(files__cover_path='').distinct().count()
 
+        # Get deleted books data
+        deleted_count = Book.objects.filter(deleted_at__isnull=False).count()
+        recently_deleted = Book.objects.filter(deleted_at__isnull=False).order_by('-deleted_at')[:10]
+        deleted_this_week = Book.objects.filter(
+            deleted_at__gte=timezone.now() - timedelta(days=7)
+        ).count()
+
         # Calculate percentages
         missing_cover_percentage = ((total_books - metadata_stats.get('books_with_cover', 0)) / total_books * 100)
         corrupted_percentage = (corrupted_count / total_books * 100)
+        deleted_percentage = (deleted_count / (total_books + deleted_count) * 100) if (total_books + deleted_count) > 0 else 0
 
         # Get books needing attention
         low_confidence_books = FinalMetadata.objects.filter(
@@ -215,6 +223,9 @@ class DashboardView(WizardRequiredMixin, LoginRequiredMixin, TemplateView):
             'corrupted_count': corrupted_count,
             'needs_review_count': needs_review_count,
             'books_with_original_cover': books_with_original_cover,
+            'deleted_count': deleted_count,
+            'deleted_this_week': deleted_this_week,
+            'deleted_percentage': deleted_percentage,
 
             # Lists for templates
             'low_confidence_books': low_confidence_books,
@@ -223,10 +234,51 @@ class DashboardView(WizardRequiredMixin, LoginRequiredMixin, TemplateView):
             'recent_logs': recent_logs,
             'recent_books': recent_books,
             'scan_folders': scan_folders,
+            'recently_deleted': recently_deleted,
 
             # Library health metrics
             'health_score': locals().get('health_score', 85),
             'quality_issues': locals().get('quality_issues', []),
+        })
+        return context
+
+
+class DeletedBooksView(LoginRequiredMixin, ListView):
+    """View for managing deleted books - restore or permanently delete."""
+    model = Book
+    template_name = 'books/deleted_books.html'
+    context_object_name = 'deleted_books'
+    paginate_by = 50
+
+    def get_queryset(self):
+        """Get all soft-deleted books."""
+        return Book.objects.filter(
+            deleted_at__isnull=False
+        ).select_related(
+            'finalmetadata', 'scan_folder'
+        ).prefetch_related(
+            'files'
+        ).order_by('-deleted_at')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        from django.utils import timezone
+        from datetime import timedelta
+
+        # Statistics
+        total_deleted = self.get_queryset().count()
+        deleted_this_week = self.get_queryset().filter(
+            deleted_at__gte=timezone.now() - timedelta(days=7)
+        ).count()
+        deleted_this_month = self.get_queryset().filter(
+            deleted_at__gte=timezone.now() - timedelta(days=30)
+        ).count()
+
+        context.update({
+            'total_deleted': total_deleted,
+            'deleted_this_week': deleted_this_week,
+            'deleted_this_month': deleted_this_month,
         })
         return context
 

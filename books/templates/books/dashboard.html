@@ -268,6 +268,91 @@
 
     </div>
 
+    <!-- Deleted Books Section -->
+    {% if deleted_count > 0 %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-secondary">
+                <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-trash-restore me-2"></i>Recently Deleted Books
+                    </h5>
+                    <div>
+                        <span class="badge bg-light text-dark me-2">
+                            Total Deleted: {{ deleted_count }}
+                        </span>
+                        {% if deleted_this_week > 0 %}
+                        <span class="badge bg-warning text-dark">
+                            This Week: {{ deleted_this_week }}
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if recently_deleted %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Author</th>
+                                    <th>File Path</th>
+                                    <th>Deleted Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for book in recently_deleted %}
+                                <tr class="text-muted">
+                                    <td>
+                                        {% if book.finalmetadata %}
+                                            {{ book.finalmetadata.final_title|default:"Unknown Title" }}
+                                        {% else %}
+                                            {{ book.title|default:"Unknown Title" }}
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if book.finalmetadata %}
+                                            {{ book.finalmetadata.final_author|default:"Unknown" }}
+                                        {% else %}
+                                            Unknown
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="font-monospace">
+                                            {{ book.primary_file.file_path|truncatechars:60|default:"No file" }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <small>{{ book.deleted_at|date:"Y-m-d H:i" }}</small>
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'admin:books_book_change' book.id %}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                            <i class="fas fa-external-link-alt"></i> View in Admin
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-end mt-3">
+                        <a href="{% url 'books:deleted_books' %}" class="btn btn-secondary">
+                            <i class="fas fa-list"></i> View All Deleted Books
+                        </a>
+                        <a href="{% url 'admin:books_book_changelist' %}?deleted_at__isnull=False" class="btn btn-outline-secondary" target="_blank">
+                            <i class="fas fa-cog"></i> Manage in Admin
+                        </a>
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">No recently deleted books.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Quality Metrics Row -->
     <div class="row mb-4">
         <div class="col-md-4 mb-3">
@@ -494,6 +579,19 @@
                                     {% for format in format_stats %}
                                     <tr>
                                         <td>
+                                            {% if format.file_format|lower == 'epub' %}
+                                                <i class="fas fa-book text-primary me-1"></i>
+                                            {% elif format.file_format|lower == 'pdf' %}
+                                                <i class="fas fa-file-pdf text-danger me-1"></i>
+                                            {% elif format.file_format|lower == 'mobi' or format.file_format|lower == 'azw' or format.file_format|lower == 'azw3' %}
+                                                <i class="fab fa-amazon text-warning me-1"></i>
+                                            {% elif format.file_format|lower == 'cbz' or format.file_format|lower == 'cbr' %}
+                                                <i class="fas fa-mask text-info me-1"></i>
+                                            {% elif format.file_format|lower == 'mp3' or format.file_format|lower == 'm4a' or format.file_format|lower == 'm4b' %}
+                                                <i class="fas fa-headphones text-success me-1"></i>
+                                            {% else %}
+                                                <i class="fas fa-file text-secondary me-1"></i>
+                                            {% endif %}
                                             <span class="badge bg-secondary">{{ format.file_format|upper }}</span>
                                         </td>
                                         <td>{{ format.count }}</td>
@@ -716,6 +814,9 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Chart.js for graphs -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
 <script src="{% static 'book/js/dashboard-main.js' %}"></script>
 <script>
 // Initialize dashboard URLs for navigation
@@ -730,6 +831,126 @@ document.addEventListener('DOMContentLoaded', function() {
         series_main: '{% url "books:series_main" %}',
         author_list: '{% url "books:author_list" %}'
     }));
+
+    // Initialize Charts
+    const chartData = {{ chart_data|safe }};
+    
+    // Bootstrap-themed color palette (vibrant and varied)
+    const bootstrapColors = [
+        'rgba(13, 110, 253, 0.8)',    // Primary Blue
+        'rgba(25, 135, 84, 0.8)',     // Success Green
+        'rgba(220, 53, 69, 0.8)',     // Danger Red
+        'rgba(255, 193, 7, 0.8)',     // Warning Yellow
+        'rgba(13, 202, 240, 0.8)',    // Info Cyan
+        'rgba(111, 66, 193, 0.8)',    // Purple
+        'rgba(214, 51, 132, 0.8)',    // Pink
+        'rgba(253, 126, 20, 0.8)',    // Orange
+        'rgba(32, 201, 151, 0.8)',    // Teal
+        'rgba(102, 16, 242, 0.8)',    // Indigo
+    ];
+    
+    // Format Distribution Pie Chart
+    if (chartData && chartData.format_labels && document.getElementById('formatChart')) {
+        const formatCtx = document.getElementById('formatChart').getContext('2d');
+        
+        // Generate vibrant colors for each format
+        const colors = chartData.format_labels.map((_, index) => 
+            bootstrapColors[index % bootstrapColors.length]
+        );
+        
+        new Chart(formatCtx, {
+            type: 'pie',
+            data: {
+                labels: chartData.format_labels,
+                datasets: [{
+                    data: chartData.format_data,
+                    backgroundColor: colors,
+                    borderWidth: 2,
+                    borderColor: '#fff',
+                    hoverOffset: 10
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 15,
+                            font: { size: 12 },
+                            usePointStyle: true,
+                            pointStyle: 'circle'
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return label + ': ' + value + ' (' + percentage + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Metadata Completeness Bar Chart
+    if (chartData && chartData.completeness_labels && document.getElementById('metadataChart')) {
+        const metadataCtx = document.getElementById('metadataChart').getContext('2d');
+        new Chart(metadataCtx, {
+            type: 'bar',
+            data: {
+                labels: chartData.completeness_labels,
+                datasets: [{
+                    label: 'Books',
+                    data: chartData.completeness_data,
+                    backgroundColor: [
+                        'rgba(40, 167, 69, 0.8)',   // Complete - green
+                        'rgba(255, 193, 7, 0.8)',   // Partial - yellow
+                        'rgba(220, 53, 69, 0.8)'    // Missing - red
+                    ],
+                    borderColor: [
+                        'rgba(40, 167, 69, 1)',
+                        'rgba(255, 193, 7, 1)',
+                        'rgba(220, 53, 69, 1)'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                return 'Books: ' + value + ' (' + percentage + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
 });
 </script>
 {% endblock %}

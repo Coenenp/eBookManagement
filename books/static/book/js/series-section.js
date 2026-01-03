@@ -86,8 +86,7 @@ class SeriesSectionManager extends BaseSectionManager {
 
     renderGridView() {
         return this.filteredData.map(series => `
-            <div class="list-item grid-item series-grid-item" data-series-id="${series.id}" onclick="window.seriesManager.toggleSeries(${series.id})">
-                <div class="grid-cover mb-3 position-relative">
+            <div class="list-item grid-item series-grid-item" data-series-name="${MediaLibraryUtils.escapeHtml(series.name)}" onclick="window.seriesManager.toggleSeries('${MediaLibraryUtils.escapeHtml(series.name).replace(/'/g, "\\'")}')">                <div class="grid-cover mb-3 position-relative">
                     ${series.cover_url ? `
                         <img src="${series.cover_url}" alt="Series Cover" class="img-fluid rounded shadow">
                     ` : `
@@ -117,6 +116,7 @@ class SeriesSectionManager extends BaseSectionManager {
     renderListView() {
         const headerHtml = `
             <div class="list-header">
+                <div class="list-header-spacer"></div>
                 <div class="list-header-title">Series</div>
                 <div class="list-header-author">Authors</div>
                 <div class="list-header-info">Books • Size</div>
@@ -124,9 +124,8 @@ class SeriesSectionManager extends BaseSectionManager {
         `;
         
         const itemsHtml = this.filteredData.map(series => `
-            <div class="list-item series-item ${this.expandedSeries.has(series.id) ? 'expanded' : ''}" 
-                 data-series-id="${series.id}" onclick="window.seriesManager.toggleSeries(${series.id})">
-                <div class="item-cover-tiny">
+            <div class="list-item series-item ${this.expandedSeries.has(series.name) ? 'expanded' : ''}" 
+                 data-series-name="${MediaLibraryUtils.escapeHtml(series.name)}" onclick="window.seriesManager.toggleSeries('${MediaLibraryUtils.escapeHtml(series.name).replace(/'/g, "\\'")}')">                <div class="item-cover-tiny">
                     ${series.cover_url ? `
                         <img src="${series.cover_url}" alt="Series Cover">
                     ` : `
@@ -150,7 +149,7 @@ class SeriesSectionManager extends BaseSectionManager {
                     </div>
                 </div>
             </div>
-            ${this.expandedSeries.has(series.id) ? this.renderSeriesBooks(series) : ''}
+            ${this.expandedSeries.has(series.name) ? this.renderSeriesBooks(series) : ''}
         `).join('');
         
         return headerHtml + itemsHtml;
@@ -205,21 +204,56 @@ class SeriesSectionManager extends BaseSectionManager {
         });
     }
 
-    toggleSeries(seriesId) {
-        if (this.expandedSeries.has(seriesId)) {
-            this.expandedSeries.delete(seriesId);
+    toggleSeries(seriesName) {
+        // Use series name as the identifier (backend doesn't return IDs)
+        if (this.expandedSeries.has(seriesName)) {
+            this.expandedSeries.delete(seriesName);
         } else {
-            this.expandedSeries.add(seriesId);
+            this.expandedSeries.add(seriesName);
         }
         this.renderList();
     }
 
     async loadDetail(itemId) {
         try {
+            console.log('loadDetail called with itemId:', itemId, 'type:', typeof itemId);
+            
             const container = document.querySelector(this.config.detailContainer);
             MediaLibraryUtils.showLoadingState(container, 'Loading series details...');
             
-            const url = this.config.detailEndpoint.replace('0', itemId);
+            // itemId might be a series name (string) or book ID (number)
+            // If it's a number, it's a book - load book detail instead
+            if (typeof itemId === 'number' || !isNaN(itemId)) {
+                console.log('Detected as book ID, loading book detail');
+                // It's a book ID - use book detail endpoint
+                const bookUrl = this.config.bookDetailEndpoint?.replace('{id}', itemId) || 
+                               window.seriesConfig?.ajax_urls?.book_detail?.replace('{id}', itemId) ||
+                               `/books/book/ajax/detail/${itemId}/`;
+                console.log('Book URL:', bookUrl);
+                const data = await MediaLibraryUtils.makeRequest(bookUrl, {
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
+                console.log('Book data received:', data);
+                
+                if (data.success && (data.book || data.ebook)) {
+                    console.log('Rendering book detail');
+                    const bookData = data.book || data.ebook;
+                    this.renderBookDetail(bookData);
+                } else {
+                    console.error('Book data missing or unsuccessful:', data);
+                }
+                return;
+            }
+            
+            // It's a series name - URL encode it
+            console.log('Detected as series name, loading series detail');
+            const encodedSeriesName = encodeURIComponent(itemId);
+            const url = this.config.detailEndpoint.replace('{id}', encodedSeriesName);
+            console.log('Series URL:', url);
             const data = await MediaLibraryUtils.makeRequest(url, {
                 credentials: 'same-origin',
                 headers: {
@@ -509,7 +543,7 @@ class SeriesSectionManager extends BaseSectionManager {
 
     downloadBook(bookId) {
         try {
-            const downloadUrl = window.seriesConfig?.ajax_urls?.download_book?.replace('0', bookId) || `/books/book/${bookId}/download/`;
+            const downloadUrl = window.seriesConfig?.ajax_urls?.download_book?.replace('{id}', bookId) || `/ebooks/ajax/download/${bookId}/`;
             MediaLibraryUtils.downloadFile(downloadUrl);
             MediaLibraryUtils.showToast('Download started', 'success');
         } catch (error) {
@@ -551,7 +585,7 @@ class SeriesSectionManager extends BaseSectionManager {
 
     async toggleBookReadStatus(bookId) {
         try {
-            const url = window.seriesConfig?.ajax_urls?.toggle_read || '/books/series/ajax/toggle-read/';
+            const url = window.seriesConfig?.ajax_urls?.toggle_read || '/ebooks/ajax/toggle_read/';
             const data = await MediaLibraryUtils.makeRequest(url, {
                 method: 'POST',
                 body: JSON.stringify({ book_id: bookId })
