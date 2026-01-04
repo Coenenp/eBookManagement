@@ -1,18 +1,17 @@
 """
 Test cases for Book Renamer functionality
 """
-import os
 import json
-import tempfile
+import os
 import shutil
+import tempfile
 from unittest.mock import patch
-from django.test import TestCase, Client
+
 from django.contrib.auth.models import User
+from django.test import Client, TestCase
 from django.urls import reverse
 
-from books.models import (
-    FinalMetadata, FileOperation
-)
+from books.models import FileOperation, FinalMetadata
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 

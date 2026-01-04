@@ -1,9 +1,10 @@
 """
 Unit tests for the rescan external metadata functionality.
 """
+from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
-from django.contrib.auth.models import User
+
 # No direct model imports needed - using helper functions
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 

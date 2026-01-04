@@ -5,17 +5,19 @@ This module contains tests for file uploads, file validation, file processing,
 batch operations, file format handling, error recovery, and security validation.
 """
 
-import os
-import tempfile
-import shutil
 import json
+import os
+import shutil
+import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-from django.test import TestCase, Client
+from unittest.mock import MagicMock, patch
+
 from django.contrib.auth.models import User
-from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
-from books.models import ScanLog, ScanFolder
+from django.test import Client, TestCase
+from django.urls import reverse
+
+from books.models import ScanFolder, ScanLog
 from books.tests.test_helpers import create_test_book_with_file
 
 

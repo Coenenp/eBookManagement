@@ -2,6 +2,7 @@
 Test cases for Cache Key utilities
 """
 from django.test import TestCase
+
 from books.utils.cache_key import make_cache_key
 
 

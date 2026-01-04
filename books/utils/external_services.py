@@ -5,7 +5,7 @@ This module provides utilities for connecting to external book metadata services
 with fallback mechanisms and error handling.
 """
 
-from typing import Dict, Any
+from typing import Any, Dict
 
 
 class ISBNService:

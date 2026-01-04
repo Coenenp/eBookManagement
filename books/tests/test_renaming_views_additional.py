@@ -5,9 +5,11 @@ Supplements the existing comprehensive test suite with additional edge cases.
 
 import json
 from unittest.mock import patch
-from django.test import TestCase, Client
-from django.urls import reverse
+
 from django.contrib.auth import get_user_model
+from django.test import Client, TestCase
+from django.urls import reverse
+
 from books.models import FinalMetadata
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 

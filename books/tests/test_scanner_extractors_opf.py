@@ -2,16 +2,15 @@
 Test cases for OPF Scanner Extractor
 """
 import os
-import tempfile
 import shutil
+import tempfile
+from unittest.mock import MagicMock, mock_open, patch
+
 from django.test import TestCase
-from unittest.mock import patch, mock_open, MagicMock
-from books.models import (
-    DataSource, BookTitle, BookAuthor,
-    BookPublisher, BookMetadata, BookSeries, Publisher, Series
-)
-from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
+
+from books.models import BookAuthor, BookMetadata, BookPublisher, BookSeries, BookTitle, DataSource, Publisher, Series
 from books.scanner.extractors.opf import extract
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class OPFExtractorTests(TestCase):

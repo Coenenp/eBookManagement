@@ -3,19 +3,21 @@ Comprehensive test suite for scanner engine functionality.
 Addresses low coverage in scanner modules (various coverage levels).
 """
 
-import tempfile
-import shutil
 import os
-from pathlib import Path
-from unittest.mock import patch, Mock
-from django.test import TestCase
-from django.contrib.auth.models import User
-from books.models import ScanFolder, DataSource, ScanStatus, ScanLog
-from books.scanner.scanner_engine import EbookScanner
-from books.scanner.background import BackgroundScanner, background_scan_folder
-from books.scanner.folder import _collect_files
-from books.scanner.file_ops import get_file_format
+import shutil
+import tempfile
 import uuid
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+from django.contrib.auth.models import User
+from django.test import TestCase
+
+from books.models import DataSource, ScanFolder, ScanLog, ScanStatus
+from books.scanner.background import BackgroundScanner, background_scan_folder
+from books.scanner.file_ops import get_file_format
+from books.scanner.folder import _collect_files
+from books.scanner.scanner_engine import EbookScanner
 
 
 class ScannerEngineTests(TestCase):

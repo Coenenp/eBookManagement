@@ -1,46 +1,48 @@
 """
 Metadata management views.
 """
+
 import logging
-from django.shortcuts import get_object_or_404, redirect, reverse, render
-from django.views.generic import DetailView, View, ListView
+
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.shortcuts import get_object_or_404, redirect, render, reverse
+from django.views.generic import DetailView, ListView, View
 
-from books.models import (
-    Book, FinalMetadata, BookTitle, BookAuthor, Author, BookSeries, Series,
-    BookPublisher, Publisher, BookMetadata, DataSource
-)
-from books.mixins import SimpleNavigationMixin, MetadataContextMixin
 from books.book_utils import CoverManager, GenreManager
+from books.constants import PAGINATION
+from books.mixins import MetadataContextMixin, SimpleNavigationMixin
+from books.models import Author, Book, BookAuthor, BookMetadata, BookPublisher, BookSeries, BookTitle, DataSource, FinalMetadata, Publisher, Series
 
-logger = logging.getLogger('books.scanner')
+logger = logging.getLogger("books.scanner")
 
 
 class BookMetadataListView(LoginRequiredMixin, ListView):
     """
     List view for book metadata - shows all books for metadata management
     """
+
     model = Book
-    template_name = 'books/book_list.html'
-    context_object_name = 'books'
-    paginate_by = 50
+    template_name = "books/book_list.html"
+    context_object_name = "books"
+    paginate_by = PAGINATION["metadata_list"]
 
     def get_queryset(self):
-        return Book.objects.all().select_related('scan_folder').prefetch_related('finalmetadata_set')
+        return Book.objects.all().select_related("scan_folder").prefetch_related("finalmetadata_set")
 
 
 class BookMetadataView(LoginRequiredMixin, DetailView, SimpleNavigationMixin, MetadataContextMixin):
     """
     Dedicated metadata review view - cleaned and optimized
     """
+
     model = Book
-    template_name = 'books/book_metadata.html'
-    context_object_name = 'book'
+    template_name = "books/book_metadata.html"
+    context_object_name = "book"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        book = context['book']
+        book = context["book"]
 
         # Navigation logic using mixin
         context.update(self.get_simple_navigation_context(book))
@@ -58,19 +60,20 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
     """
     FIXED metadata update view - addresses all reported bugs
     """
+
     def post(self, request, pk):
         try:
             book = get_object_or_404(Book, pk=pk)
             final_metadata, created = FinalMetadata.objects.get_or_create(book=book)
 
             # Validate required fields
-            final_title = request.POST.get('final_title', '').strip()
+            final_title = request.POST.get("final_title", "").strip()
             if not final_title:
                 messages.error(request, "Title is required and cannot be empty.")
                 # Create the same context as the main metadata view
                 context = self._get_metadata_view_context(book)
-                context['error'] = 'Title is required and cannot be empty.'
-                return render(request, 'books/book_metadata.html', context)
+                context["error"] = "Title is required and cannot be empty."
+                return render(request, "books/book_metadata.html", context)
 
             updated_fields = []
 
@@ -82,10 +85,10 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
             updated_fields.extend(self._process_metadata_fields(request, final_metadata, book))
 
             # Handle review status
-            is_reviewed = 'is_reviewed' in request.POST
+            is_reviewed = "is_reviewed" in request.POST
             if is_reviewed != final_metadata.is_reviewed:
                 final_metadata.is_reviewed = is_reviewed
-                updated_fields.append('reviewed status')
+                updated_fields.append("reviewed status")
 
             # last_updated is auto-updated by Django
 
@@ -95,23 +98,20 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
 
             if updated_fields:
                 # Get title from final metadata or from primary file filename
-                book_title = (final_metadata.final_title or (book.primary_file.filename if book.primary_file else f"Book {book.id}"))
-                messages.success(
-                    request,
-                    f"Successfully updated {', '.join(updated_fields)} for '{book_title}'"
-                )
+                book_title = final_metadata.final_title or (book.primary_file.filename if book.primary_file else f"Book {book.id}")
+                messages.success(request, f"Successfully updated {', '.join(updated_fields)} for '{book_title}'")
             else:
                 messages.info(request, "No changes were made to the metadata.")
 
             # Redirect back to the edit tab
-            redirect_url = reverse('books:book_detail', kwargs={'pk': book.id}) + '?tab=edit'
+            redirect_url = reverse("books:book_detail", kwargs={"pk": book.id}) + "?tab=edit"
             return redirect(redirect_url)
 
         except Exception as e:
             logger.error(f"Error updating metadata for book {pk}: {e}")
             messages.error(request, f"An error occurred while updating metadata: {str(e)}")
             # Redirect back to the edit tab even on error
-            redirect_url = reverse('books:book_detail', kwargs={'pk': pk}) + '?tab=edit'
+            redirect_url = reverse("books:book_detail", kwargs={"pk": pk}) + "?tab=edit"
             return redirect(redirect_url)
 
     def _get_metadata_view_context(self, book):
@@ -125,10 +125,10 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
         updated_fields = []
 
         text_fields = {
-            'final_title': ('Title', 'manual_title'),
-            'final_author': ('Author', 'manual_author'),
-            'final_series': ('Series', 'manual_series'),
-            'final_publisher': ('Publisher', 'manual_publisher'),
+            "final_title": ("Title", "manual_title"),
+            "final_author": ("Author", "manual_author"),
+            "final_series": ("Series", "manual_series"),
+            "final_publisher": ("Publisher", "manual_publisher"),
         }
 
         for field_name, (display_name, manual_field) in text_fields.items():
@@ -145,26 +145,22 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
 
     def _process_series_number(self, request, final_metadata):
         """Process series number with validation that series is selected"""
-        final_series_number = request.POST.get('final_series_number', '').strip()
-        manual_series_number = request.POST.get('manual_series_number', '').strip()
+        final_series_number = request.POST.get("final_series_number", "").strip()
+        manual_series_number = request.POST.get("manual_series_number", "").strip()
 
         # Determine the series number value
         series_number_value = None
-        if final_series_number == '__manual__' and manual_series_number:
+        if final_series_number == "__manual__" and manual_series_number:
             series_number_value = manual_series_number
-        elif final_series_number and final_series_number != '__manual__':
+        elif final_series_number and final_series_number != "__manual__":
             series_number_value = final_series_number
 
         # If series number is provided, ensure a series is also selected
         if series_number_value:
-            final_series = request.POST.get('final_series', '').strip()
-            manual_series = request.POST.get('manual_series', '').strip()
+            final_series = request.POST.get("final_series", "").strip()
+            manual_series = request.POST.get("manual_series", "").strip()
 
-            has_series = (
-                (final_series and final_series != '__manual__') or
-                (final_series == '__manual__' and manual_series) or
-                final_metadata.final_series
-            )
+            has_series = (final_series and final_series != "__manual__") or (final_series == "__manual__" and manual_series) or final_metadata.final_series
 
             if not has_series:
                 messages.warning(request, "Series number was ignored because no series was selected.")
@@ -174,56 +170,43 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
             final_metadata.final_series_number = series_number_value
 
             # Also create metadata entry for tracking
-            manual_source, _ = DataSource.objects.get_or_create(
-                name=DataSource.MANUAL,
-                defaults={'trust_level': 0.9}
-            )
+            manual_source, _ = DataSource.objects.get_or_create(name=DataSource.MANUAL, defaults={"trust_level": 0.9})
 
             BookMetadata.objects.update_or_create(
-                book=final_metadata.book,
-                field_name='series_number',
-                source=manual_source,
-                defaults={
-                    'field_value': series_number_value,
-                    'confidence': 1.0,
-                    'is_active': True
-                }
+                book=final_metadata.book, field_name="series_number", source=manual_source, defaults={"field_value": series_number_value, "confidence": 1.0, "is_active": True}
             )
 
             # Update any existing BookSeries relationship to include the series number
-            book_series = BookSeries.objects.filter(
-                book=final_metadata.book,
-                is_active=True
-            ).order_by('-confidence').first()
+            book_series = BookSeries.objects.filter(book=final_metadata.book, is_active=True).order_by("-confidence").first()
 
             if book_series:
                 book_series.series_number = series_number_value
                 book_series.save()
 
-            return 'series number'
+            return "series number"
 
         elif not series_number_value:
             # Clear series number if not provided
-            final_metadata.final_series_number = ''
+            final_metadata.final_series_number = ""
 
         return None
 
     def _process_field_with_manual(self, request, final_metadata, field_name, manual_field, display_name):
         """Process individual field with manual entry support"""
-        final_value = request.POST.get(field_name, '').strip()
-        manual_value = request.POST.get(manual_field, '').strip()
+        final_value = request.POST.get(field_name, "").strip()
+        manual_value = request.POST.get(manual_field, "").strip()
 
         value_to_save = None
         is_manual = False
 
-        if final_value == '__manual__' and manual_value:
+        if final_value == "__manual__" and manual_value:
             value_to_save = manual_value
             is_manual = True
-        elif final_value and final_value != '__manual__':
+        elif final_value and final_value != "__manual__":
             value_to_save = final_value
         elif not final_value:
             # Clear the field
-            setattr(final_metadata, field_name, '')
+            setattr(final_metadata, field_name, "")
             return None
 
         if value_to_save:
@@ -232,10 +215,10 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
             if is_manual:
                 # Create metadata entries for manual inputs
                 self._create_manual_metadata_entry(final_metadata.book, field_name, value_to_save)
-                return f'{display_name} (manual)'
+                return f"{display_name} (manual)"
             else:
                 # For certain fields, always create relationships even for non-manual entries
-                if field_name in ['final_series', 'final_author', 'final_publisher']:
+                if field_name in ["final_series", "final_author", "final_publisher"]:
                     self._create_manual_metadata_entry(final_metadata.book, field_name, value_to_save)
                 return display_name
 
@@ -243,78 +226,42 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
 
     def _create_manual_metadata_entry(self, book, field_name, value):
         """Create metadata entries for manual inputs"""
-        manual_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.MANUAL,
-            defaults={'trust_level': 0.9}
-        )
+        manual_source, _ = DataSource.objects.get_or_create(name=DataSource.MANUAL, defaults={"trust_level": 0.9})
 
-        if field_name == 'final_title':
-            BookTitle.objects.update_or_create(
-                book=book,
-                source=manual_source,
-                defaults={
-                    'title': value,
-                    'confidence': 1.0,
-                    'is_active': True
-                }
-            )
-        elif field_name == 'final_author':
+        if field_name == "final_title":
+            BookTitle.objects.update_or_create(book=book, source=manual_source, defaults={"title": value, "confidence": 1.0, "is_active": True})
+        elif field_name == "final_author":
             author_obj, _ = Author.objects.get_or_create(name=value)
-            BookAuthor.objects.update_or_create(
-                book=book,
-                author=author_obj,
-                source=manual_source,
-                defaults={
-                    'confidence': 1.0,
-                    'is_main_author': True,
-                    'is_active': True
-                }
-            )
-        elif field_name == 'final_publisher':
+            BookAuthor.objects.update_or_create(book=book, author=author_obj, source=manual_source, defaults={"confidence": 1.0, "is_main_author": True, "is_active": True})
+        elif field_name == "final_publisher":
             publisher_obj, _ = Publisher.objects.get_or_create(name=value)
-            BookPublisher.objects.update_or_create(
-                book=book,
-                publisher=publisher_obj,
-                source=manual_source,
-                defaults={
-                    'confidence': 1.0,
-                    'is_active': True
-                }
-            )
-        elif field_name == 'final_series':
+            BookPublisher.objects.update_or_create(book=book, publisher=publisher_obj, source=manual_source, defaults={"confidence": 1.0, "is_active": True})
+        elif field_name == "final_series":
             series_obj, _ = Series.objects.get_or_create(name=value)
-            BookSeries.objects.update_or_create(
-                book=book,
-                source=manual_source,
-                defaults={
-                    'series': series_obj,
-                    'confidence': 1.0,
-                    'is_active': True
-                }
-            )
+            BookSeries.objects.update_or_create(book=book, source=manual_source, defaults={"series": series_obj, "confidence": 1.0, "is_active": True})
 
     def _process_cover_field(self, request, final_metadata, book):
         """Process cover selection and upload."""
         from django.conf import settings
 
         updated_fields = []
-        final_cover_path = request.POST.get('final_cover_path', '').strip()
-        cover_upload = request.FILES.get('cover_upload')
+        final_cover_path = request.POST.get("final_cover_path", "").strip()
+        cover_upload = request.FILES.get("cover_upload")
 
-        if final_cover_path == 'custom_upload' and cover_upload:
+        if final_cover_path == "custom_upload" and cover_upload:
             # Handle traditional form upload
             result = CoverManager.handle_cover_upload(request, book, cover_upload)
-            if result['success']:
-                final_metadata.final_cover_path = result['cover_path']
-                updated_fields.append('cover (uploaded)')
-        elif final_cover_path and final_cover_path != 'custom_upload':
+            if result["success"]:
+                final_metadata.final_cover_path = result["cover_path"]
+                updated_fields.append("cover (uploaded)")
+        elif final_cover_path and final_cover_path != "custom_upload":
             # Handle selection of existing cover
             final_metadata.final_cover_path = final_cover_path
-            updated_fields.append('cover')
+            updated_fields.append("cover")
         elif final_cover_path.startswith(settings.MEDIA_URL):
             # Handle AJAX uploaded cover (already processed)
             final_metadata.final_cover_path = final_cover_path
-            updated_fields.append('cover (pre-uploaded)')
+            updated_fields.append("cover (pre-uploaded)")
 
         return updated_fields
 
@@ -322,20 +269,20 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
         """Process publication year."""
         updated_fields = []
 
-        final_year = request.POST.get('publication_year', '').strip()
-        manual_year = request.POST.get('manual_publication_year', '').strip()
+        final_year = request.POST.get("publication_year", "").strip()
+        manual_year = request.POST.get("manual_publication_year", "").strip()
 
         year_value = None
         is_manual = False
 
-        if final_year == '__manual__' and manual_year:
+        if final_year == "__manual__" and manual_year:
             try:
                 year_value = int(manual_year)
                 is_manual = True
             except ValueError:
                 messages.error(request, "Invalid publication year format.")
                 return updated_fields
-        elif final_year and final_year != '__manual__':
+        elif final_year and final_year != "__manual__":
             try:
                 year_value = int(final_year)
             except ValueError:
@@ -347,24 +294,17 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
             final_metadata.publication_year = year_value
 
             # Also create/update BookMetadata entry for consistency
-            manual_source, _ = DataSource.objects.get_or_create(
-                name=DataSource.MANUAL if is_manual else DataSource.GOOGLE_BOOKS,
-                defaults={'trust_level': 0.9}
-            )
+            manual_source, _ = DataSource.objects.get_or_create(name=DataSource.MANUAL if is_manual else DataSource.GOOGLE_BOOKS, defaults={"trust_level": 0.9})
 
             BookMetadata.objects.update_or_create(
                 book=final_metadata.book,
-                field_name='publication_year',
+                field_name="publication_year",
                 source=manual_source,
-                defaults={
-                    'field_value': str(year_value),
-                    'confidence': 1.0 if is_manual else 0.8,
-                    'is_active': True
-                }
+                defaults={"field_value": str(year_value), "confidence": 1.0 if is_manual else 0.8, "is_active": True},
             )
 
-            updated_fields.append('publication year (manual)' if is_manual else 'publication year')
-        elif final_year == '' or not final_year:
+            updated_fields.append("publication year (manual)" if is_manual else "publication year")
+        elif final_year == "" or not final_year:
             # Clear the field
             final_metadata.publication_year = None
 
@@ -375,22 +315,22 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
         updated_fields = []
 
         metadata_fields = {
-            'isbn': ('ISBN', 'manual_isbn'),
-            'language': ('Language', 'manual_language'),
-            'description': ('Description', 'manual_description'),
+            "isbn": ("ISBN", "manual_isbn"),
+            "language": ("Language", "manual_language"),
+            "description": ("Description", "manual_description"),
         }
 
         for field_name, (display_name, manual_field) in metadata_fields.items():
-            final_value = request.POST.get(field_name, '').strip()
-            manual_value = request.POST.get(manual_field, '').strip()
+            final_value = request.POST.get(field_name, "").strip()
+            manual_value = request.POST.get(manual_field, "").strip()
 
             value_to_save = None
             is_manual = False
 
-            if final_value == '__manual__' and manual_value:
+            if final_value == "__manual__" and manual_value:
                 value_to_save = manual_value
                 is_manual = True
-            elif final_value and final_value != '__manual__':
+            elif final_value and final_value != "__manual__":
                 value_to_save = final_value
 
             if value_to_save:
@@ -399,34 +339,24 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
 
                 # Also create/update BookMetadata entry
                 source_name = DataSource.MANUAL if is_manual else DataSource.GOOGLE_BOOKS
-                manual_source, _ = DataSource.objects.get_or_create(
-                    name=source_name,
-                    defaults={'trust_level': 0.9}
-                )
+                manual_source, _ = DataSource.objects.get_or_create(name=source_name, defaults={"trust_level": 0.9})
 
                 BookMetadata.objects.update_or_create(
-                    book=book,
-                    field_name=field_name,
-                    source=manual_source,
-                    defaults={
-                        'field_value': value_to_save,
-                        'confidence': 1.0 if is_manual else 0.8,
-                        'is_active': True
-                    }
+                    book=book, field_name=field_name, source=manual_source, defaults={"field_value": value_to_save, "confidence": 1.0 if is_manual else 0.8, "is_active": True}
                 )
 
-                updated_fields.append(f'{display_name} (manual)' if is_manual else display_name)
-            elif final_value == '' or not final_value:
+                updated_fields.append(f"{display_name} (manual)" if is_manual else display_name)
+            elif final_value == "" or not final_value:
                 # Clear the field
-                setattr(final_metadata, field_name, '')
+                setattr(final_metadata, field_name, "")
 
         return updated_fields
 
     def _process_genre_fields(self, request, book):
         """Process genre selection."""
         updated_fields = []
-        selected_genres = request.POST.getlist('final_genres')
-        manual_genres = request.POST.get('manual_genres', '').strip()
+        selected_genres = request.POST.getlist("final_genres")
+        manual_genres = request.POST.get("manual_genres", "").strip()
 
         try:
             # Use the fixed GenreManager
@@ -434,13 +364,13 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
 
             total_genres = len(selected_genres)
             if manual_genres:
-                manual_count = len([g.strip() for g in manual_genres.split(',') if g.strip()])
+                manual_count = len([g.strip() for g in manual_genres.split(",") if g.strip()])
                 total_genres += manual_count
 
             if total_genres > 0:
-                updated_fields.append(f'genres ({total_genres} selected)')
-            elif 'final_genres' in request.POST:
-                updated_fields.append('genres (cleared)')
+                updated_fields.append(f"genres ({total_genres} selected)")
+            elif "final_genres" in request.POST:
+                updated_fields.append("genres (cleared)")
 
         except Exception as e:
             logger.error(f"Error processing genres for book {book.id}: {e}")
@@ -450,4 +380,4 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
 
     def get(self, request, pk):
         """Redirect GET requests to the metadata view page"""
-        return redirect('books:book_metadata', pk=pk)
+        return redirect("books:book_metadata", pk=pk)

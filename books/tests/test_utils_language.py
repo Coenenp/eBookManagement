@@ -1,8 +1,10 @@
 """
 Test cases for Language utilities
 """
-from django.test import TestCase
 from unittest.mock import patch
+
+from django.test import TestCase
+
 from books.utils.language import normalize_language
 
 
@@ -403,8 +405,8 @@ class LanguageUtilsEdgeCaseTests(TestCase):
 
     def test_normalize_language_thread_safety(self):
         """Test thread safety of language normalization"""
-        import threading
         import queue
+        import threading
 
         results = queue.Queue()
 

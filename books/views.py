@@ -22,142 +22,122 @@ ORIGINAL SIZE: 4,718 lines → NEW SIZE: ~130 lines (97.2% reduction!)
 # Import common modules needed for test mocking
 from django.http import JsonResponse
 
+# AJAX endpoints (60+ functions consolidated) - imported for URL routing
+from .views.ajax import *  # noqa: F401,F403
+
 # Import all views from organized modules for backward compatibility
 # This maintains the same public API while dramatically improving maintainability
-
 # Core book functionality
-from .views.core import (  # noqa: F401
-    signup,
-    DashboardView,
-    BookListView,
-    BookDetailView
+from .views.core import BookDetailView, BookListView, DashboardView, signup  # noqa: F401
+
+# Phase 2: Media sections using new models (imported at end of file)
+# Administrative functionality
+from .views.management import (  # noqa: F401
+    AddScanFolderView,
+    AuthorBulkDeleteView,
+    AuthorCreateView,
+    AuthorDeleteView,
+    # Author Management (Class-based views)
+    AuthorListView,
+    AuthorMarkReviewedView,
+    AuthorUpdateView,
+    DataSourceCreateView,
+    DataSourceDeleteView,
+    # Data Source Management (Class-based views)
+    DataSourceListView,
+    DataSourceUpdateView,
+    DeleteScanFolderView,
+    EditScanFolderView,
+    GenreBulkDeleteView,
+    GenreCreateView,
+    # Genre Management (Class-based views)
+    GenreListView,
+    GenreMarkReviewedView,
+    GenreUpdateView,
+    # Scan Folder Management (Class-based views)
+    ScanFolderListView,
+    # Series Management (Class-based views)
+    SeriesListView,
+    TriggerSingleScanView,
+    # Function-based views
+    trigger_scan,
+    update_trust,
 )
 
 # Metadata management
-from .views.metadata import (  # noqa: F401
-    BookMetadataView,
-    BookMetadataUpdateView,
-    BookMetadataListView
-)
-
-# User settings and preferences
-from .views.user_settings import (  # noqa: F401
-    UserSettingsView,
-    preview_theme,
-    clear_theme_preview
-)
+from .views.metadata import BookMetadataListView, BookMetadataUpdateView, BookMetadataView  # noqa: F401
 
 # Background scanning operations
 from .views.scanning import (  # noqa: F401
-    scan_dashboard,
-    start_folder_scan,
-    start_book_rescan,
-    scan_progress_ajax,
-    api_status_ajax,
     active_scans_ajax,
+    api_status_ajax,
     cancel_scan_ajax,
+    scan_dashboard,
     scan_history,
+    scan_progress_ajax,
     scan_queue,
-    scanning_help
+    scanning_help,
+    start_book_rescan,
+    start_folder_scan,
 )
 
 # Media type sections
 from .views.sections import (  # noqa: F401
+    AudiobooksMainView,
+    ComicsMainView,
     EbooksMainView,
-    ebooks_ajax_list,
-    ebooks_ajax_detail,
-    ebooks_ajax_toggle_read,
-    ebooks_ajax_download,
-    ebooks_ajax_companion_files,
     SeriesMainView,
-    series_ajax_list,
+    audiobooks_ajax_detail,
+    audiobooks_ajax_download,
+    audiobooks_ajax_list,
+    audiobooks_ajax_toggle_read,
+    audiobooks_ajax_update_progress,
+    comics_ajax_detail,
+    comics_ajax_download,
+    comics_ajax_list,
+    comics_ajax_toggle_read,
+    ebooks_ajax_companion_files,
+    ebooks_ajax_detail,
+    ebooks_ajax_download,
+    ebooks_ajax_list,
+    ebooks_ajax_toggle_read,
     series_ajax_detail,
-    series_ajax_toggle_read,
-    series_ajax_mark_read,
     series_ajax_download,
     series_ajax_download_book,
-    ComicsMainView,
-    comics_ajax_list,
-    comics_ajax_detail,
-    comics_ajax_toggle_read,
-    comics_ajax_download,
-    AudiobooksMainView,
-    audiobooks_ajax_list,
-    audiobooks_ajax_detail,
-    audiobooks_ajax_toggle_read,
-    audiobooks_ajax_download,
-    audiobooks_ajax_update_progress
+    series_ajax_list,
+    series_ajax_mark_read,
+    series_ajax_toggle_read,
 )
-
-# Phase 2: Media sections using new models (imported at end of file)
-
-# Administrative functionality
-from .views.management import (  # noqa: F401
-    # Scan Folder Management (Class-based views)
-    ScanFolderListView,
-    AddScanFolderView,
-    EditScanFolderView,
-    TriggerSingleScanView,
-    DeleteScanFolderView,
-
-    # Data Source Management (Class-based views)
-    DataSourceListView,
-    DataSourceCreateView,
-    DataSourceUpdateView,
-    DataSourceDeleteView,
-
-    # Author Management (Class-based views)
-    AuthorListView,
-    AuthorCreateView,
-    AuthorUpdateView,
-    AuthorDeleteView,
-    AuthorBulkDeleteView,
-    AuthorMarkReviewedView,
-
-    # Genre Management (Class-based views)
-    GenreListView,
-    GenreCreateView,
-    GenreUpdateView,
-    GenreBulkDeleteView,
-    GenreMarkReviewedView,
-
-    # Series Management (Class-based views)
-    SeriesListView,
-
-    # Function-based views
-    trigger_scan,
-    update_trust
-)
-
-# AJAX endpoints (60+ functions consolidated) - imported for URL routing
-from .views.ajax import *  # noqa: F401,F403
 
 # Simple utility views
 from .views.simple import (  # noqa: F401
     AboutView,
-    PrivacyPolicyView,
     HelpView,
+    PrivacyPolicyView,
     StatisticsView,
-    library_statistics_json,
-    system_status,
-    get_navigation_data,
-    quick_search,
-    export_library_csv,
     debug_view_info,
-    toggle_needs_review,
-    rescan_external_metadata,
+    export_library_csv,
+    get_navigation_data,
     isbn_lookup,
-    logout_view
+    library_statistics_json,
+    logout_view,
+    quick_search,
+    rescan_external_metadata,
+    system_status,
+    toggle_needs_review,
 )
+
+# User settings and preferences
+from .views.user_settings import UserSettingsView, clear_theme_preview, preview_theme  # noqa: F401
 
 # Additional views needed by URLs that may be in other modules
 try:
     from .views.renaming import *  # noqa: F401,F403
-    from .views.renaming import rename_book, preview_rename  # noqa: F401
+    from .views.renaming import preview_rename, rename_book  # noqa: F401
 except ImportError:
     # Create placeholder views for renaming functionality
-    from django.views.generic import TemplateView
     from django.contrib.auth.mixins import LoginRequiredMixin
+    from django.views.generic import TemplateView
 
     class BookRenamerView(LoginRequiredMixin, TemplateView):
         template_name = 'books/book_renamer.html'
@@ -181,7 +161,7 @@ try:
     from .views.ai_feedback import *  # noqa: F401,F403
 except ImportError:
     # Create placeholder views for AI feedback functionality
-    from django.views.generic import ListView, DetailView
+    from django.views.generic import DetailView, ListView
 
     class AIFeedbackListView(LoginRequiredMixin, ListView):
         template_name = 'books/ai_feedback_list.html'
@@ -199,11 +179,7 @@ except ImportError:
 
 # Additional scanning views that may be needed
 try:
-    from .views.management import (  # noqa: F401
-        ScanStatusView,
-        TriggerScanView,
-        current_scan_status
-    )
+    from .views.management import ScanStatusView, TriggerScanView, current_scan_status  # noqa: F401
 except ImportError:
     # Create placeholder scanning status views
     class ScanStatusView(LoginRequiredMixin, TemplateView):
@@ -217,10 +193,17 @@ except ImportError:
 
 # Additional AJAX endpoints (these exist in ajax.py)
 from .views.ajax import (  # noqa: F401
-    ajax_fetch_external_data, ajax_fetch_cover_image, ajax_retrain_ai_models,
-    ajax_ai_model_status, ajax_search_books, ajax_test_connection,
-    ajax_create_library_folder, ajax_check_disk_space, ajax_trigger_error,
-    ajax_force_error, ajax_long_running_operation
+    ajax_ai_model_status,
+    ajax_check_disk_space,
+    ajax_create_library_folder,
+    ajax_fetch_cover_image,
+    ajax_fetch_external_data,
+    ajax_force_error,
+    ajax_long_running_operation,
+    ajax_retrain_ai_models,
+    ajax_search_books,
+    ajax_test_connection,
+    ajax_trigger_error,
 )
 
 # Series detail view needed by URLs

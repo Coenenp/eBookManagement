@@ -139,17 +139,10 @@
 
 {% block extra_js %}
 <script src="{% static 'book/js/scanning-dashboard.js' %}"></script>
+<script src="{% static 'book/js/scanning-status-init.js' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize scan status page monitor
-    const scanStatusMonitor = new ScanStatusPageMonitor("{% url 'books:live_scan_status' %}");
-    
-    // Clean up on page unload
-    window.addEventListener('beforeunload', function() {
-        if (scanStatusMonitor) {
-            scanStatusMonitor.destroy();
-        }
-    });
+    initializeScanStatus("{% url 'books:live_scan_status' %}");
 });
 </script>
 {% endblock %}

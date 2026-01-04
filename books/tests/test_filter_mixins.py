@@ -4,10 +4,11 @@ Tests filtering functionality for book queries.
 """
 
 import unittest
+
 from django.contrib.auth.models import User
 
-from books.models import Book, ScanFolder, FinalMetadata
 from books.mixins.filters import BookFilterMixin
+from books.models import Book, FinalMetadata, ScanFolder
 from books.tests.test_helpers import create_test_book_with_file
 from books.tests.test_models_comprehensive import BaseTestCaseWithTempDir
 
@@ -548,8 +549,8 @@ class BookFilterMixinEdgeCaseTests(BaseTestCaseWithTempDir):
         queryset = Book.objects.all()
 
         # Monitor database queries
-        from django.test.utils import override_settings
         from django.db import connection
+        from django.test.utils import override_settings
 
         with override_settings(DEBUG=True):
             # Reset query log

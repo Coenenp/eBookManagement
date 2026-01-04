@@ -22,22 +22,19 @@ def ensure_data_sources():
     # 0.2 = Initial Scan (Last resort - basic filename and path analysis)
 
     sources = [
-        (DataSource.MANUAL, 1.0),              # Highest - Human verification
-        (DataSource.OPEN_LIBRARY, 0.95),      # Very High - Curated database
-        (DataSource.COMICVINE, 0.9),          # Very High - Professional comic database
-        (DataSource.OPF_FILE, 0.9),           # High - Official metadata files
-        (DataSource.CONTENT_SCAN, 0.85),      # High - Direct from book content
-        (DataSource.EPUB_INTERNAL, 0.8),      # Good - Well-structured format
-        (DataSource.MOBI_INTERNAL, 0.75),     # Good - Some format limitations
-        (DataSource.GOOGLE_BOOKS, 0.7),       # Good - Less curated than Open Library
+        (DataSource.MANUAL, 1.0),  # Highest - Human verification
+        (DataSource.OPEN_LIBRARY, 0.95),  # Very High - Curated database
+        (DataSource.COMICVINE, 0.9),  # Very High - Professional comic database
+        (DataSource.OPF_FILE, 0.9),  # High - Official metadata files
+        (DataSource.CONTENT_SCAN, 0.85),  # High - Direct from book content
+        (DataSource.EPUB_INTERNAL, 0.8),  # Good - Well-structured format
+        (DataSource.MOBI_INTERNAL, 0.75),  # Good - Some format limitations
+        (DataSource.GOOGLE_BOOKS, 0.7),  # Good - Less curated than Open Library
         (DataSource.OPEN_LIBRARY_COVERS, 0.65),  # Moderate - Cover images
-        (DataSource.PDF_INTERNAL, 0.6),       # Moderate - Limited PDF metadata
+        (DataSource.PDF_INTERNAL, 0.6),  # Moderate - Limited PDF metadata
         (DataSource.GOOGLE_BOOKS_COVERS, 0.55),  # Moderate - Cover images
-        (DataSource.INITIAL_SCAN, 0.2),       # Very Low - Last resort from file analysis
+        (DataSource.INITIAL_SCAN, 0.2),  # Very Low - Last resort from file analysis
     ]
 
     for name, trust in sources:
-        DataSource.objects.get_or_create(
-            name=name,
-            defaults={"trust_level": trust}
-        )
+        DataSource.objects.get_or_create(name=name, defaults={"trust_level": trust})

@@ -4,10 +4,12 @@ Test cases for duplicate book handling and same title/different author scenarios
 Tests TC9.5: Verify that books with identical titles but different authors
 are stored as separate entries and not merged incorrectly.
 """
-from django.test import TestCase
-from books.models import Book, DataSource, FinalMetadata, Author, BookAuthor
-from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 from unittest.mock import patch
+
+from django.test import TestCase
+
+from books.models import Author, Book, BookAuthor, DataSource, FinalMetadata
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class DuplicateHandlingTests(TestCase):

@@ -117,17 +117,8 @@
 window.wizardConfig = {
     validateUrl: '{% url "books:wizard_validate_folder" %}'
 };
-
-// Set progress bar width from data attribute
-document.addEventListener('DOMContentLoaded', function() {
-    const progressBar = document.querySelector('.progress-bar');
-    if (progressBar) {
-        const progress = progressBar.getAttribute('data-progress') || '0';
-        progressBar.style.width = progress + '%';
-        progressBar.setAttribute('aria-valuenow', progress);
-    }
-});
 </script>
 <script src="{% static 'book/js/wizard-common.js' %}"></script>
 <script src="{% static 'book/js/wizard-system.js' %}"></script>
+<script src="{% static 'book/js/wizard-base-init.js' %}"></script>
 {% endblock %}

@@ -6,17 +6,14 @@ and complex validation patterns that require comprehensive coverage.
 """
 
 import os
-import tempfile
 import shutil
-from django.test import TestCase
-from django.db import IntegrityError, transaction
+import tempfile
 from unittest.mock import patch
 
-from books.models import (
-    FinalMetadata, DataSource, BookTitle, BookAuthor,
-    BookSeries, BookPublisher, BookMetadata, Author, Publisher, Series,
-    ScanFolder, ScanLog, ScanStatus
-)
+from django.db import IntegrityError, transaction
+from django.test import TestCase
+
+from books.models import Author, BookAuthor, BookMetadata, BookPublisher, BookSeries, BookTitle, DataSource, FinalMetadata, Publisher, ScanFolder, ScanLog, ScanStatus, Series
 from books.tests.test_helpers import create_test_book_with_file
 
 

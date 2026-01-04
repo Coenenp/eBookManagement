@@ -35,44 +35,22 @@
 {% block extra_js %}
 {{ block.super }}
 <script>
-    // Configuration for the comics section - SET BEFORE loading JS files
-    window.comicsConfig = {
-        ajax_urls: {
-            list: '{% url "books:comics_ajax_list" %}',
-            detail: '{% url "books:comics_ajax_detail" 0 %}'.replace('0', '{id}'),
-            toggle_read: '{% url "books:comics_ajax_toggle_read" %}',
-            download: '{% url "books:comics_ajax_download" 0 %}'.replace('0', '{id}')
-        },
-        urls: {
-            detail: '{% url "books:book_detail" 0 %}'.replace('0', '{id}')
-        }
-    };
-
-    // Base functionality integration for split-pane compatibility  
-    function selectItem(itemId) {
-        // Clear previous selection
-        document.querySelectorAll('.list-item.selected').forEach(el => {
-            el.classList.remove('selected');
-        });
-        
-        // Add selection to new item
-        const newItem = document.querySelector(`[data-item-id="${itemId}"]`);
-        if (newItem) {
-            newItem.classList.add('selected');
-        }
-        
-        // Load item detail using the comics manager
-        if (window.comicsManager) {
-            window.comicsManager.selectItem(itemId);
-        }
+// Configuration for the comics section - SET BEFORE loading JS files
+window.comicsConfig = {
+    ajax_urls: {
+        list: '{% url "books:comics_ajax_list" %}',
+        detail: '{% url "books:comics_ajax_detail" 0 %}'.replace('0', '{id}'),
+        toggle_read: '{% url "books:comics_ajax_toggle_read" %}',
+        download: '{% url "books:comics_ajax_download" 0 %}'.replace('0', '{id}')
+    },
+    urls: {
+        detail: '{% url "books:book_detail" 0 %}'.replace('0', '{id}')
     }
-
-document.addEventListener('DOMContentLoaded', function() {
-    window.comicsManager = new ComicsSectionManager();
-});
+};
 </script>
 <script src="{% static 'book/js/media-library-utils.js' %}"></script>
 <script src="{% static 'book/js/base-section.js' %}"></script>
 <script src="{% static 'book/js/base-section-manager.js' %}"></script>
 <script src="{% static 'book/js/comics-section.js' %}"></script>
+<script src="{% static 'book/js/comics-section-init.js' %}"></script>
 {% endblock %}

@@ -3,10 +3,12 @@
 This module provides functions for parsing, normalizing, and handling
 author names including split operations and database lookups.
 """
+import logging
+
+from django.db import models
+
 from books.models import Author, BookAuthor
 from books.utils.authors import normalize_author_name
-import logging
-from django.db import models
 
 logger = logging.getLogger("books.scanner")
 

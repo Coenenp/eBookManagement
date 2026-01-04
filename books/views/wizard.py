@@ -1,18 +1,19 @@
 ﻿"""
 Setup Wizard Views for guiding new users through initial configuration.
 """
-import os
 import logging
-from django.shortcuts import redirect
-from django.contrib.auth.decorators import login_required
+import os
+
 from django.contrib import messages
-from django.http import JsonResponse
-from django.views.generic import TemplateView
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import JsonResponse
+from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
+from django.views.generic import TemplateView
 
-from books.models import SetupWizard, ScanFolder, COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
+from books.models import AUDIOBOOK_FORMATS, COMIC_FORMATS, EBOOK_FORMATS, ScanFolder, SetupWizard
 
 logger = logging.getLogger('books.scanner')
 
@@ -56,7 +57,7 @@ class WizardRequiredMixin:
 
     def _should_show_wizard(self):
         """Determine if wizard should be shown based on system state."""
-        from books.models import ScanFolder, Book
+        from books.models import Book, ScanFolder
 
         # Don't show wizard if there are scan folders configured
         if ScanFolder.objects.exists():

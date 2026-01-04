@@ -4,14 +4,12 @@ Consolidated test cases for core ebook library functionality.
 This file contains essential tests for models, views, and core functionality.
 It replaces scattered test files and focuses on what actually exists in the codebase.
 """
-from django.test import TestCase, Client
 from django.contrib.auth.models import User
+from django.test import Client, TestCase
 from django.urls import reverse
-from books.models import (
-    FinalMetadata, ScanFolder, DataSource,
-    BookMetadata, BookTitle, BookAuthor, Author
-)
-from books.tests.test_helpers import create_test_scan_folder, create_test_book_with_file
+
+from books.models import Author, BookAuthor, BookMetadata, BookTitle, DataSource, FinalMetadata, ScanFolder
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class BookModelTests(TestCase):

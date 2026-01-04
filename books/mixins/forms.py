@@ -1,6 +1,7 @@
 """
 Form mixins for standardized widget styling and validation.
 """
+
 from django import forms
 from django.utils import timezone
 
@@ -9,17 +10,21 @@ class StandardWidgetMixin:
     """Mixin providing standard widget configurations"""
 
     STANDARD_WIDGETS = {
-        'text_input': forms.TextInput(attrs={'class': 'form-control'}),
-        'text_input_required': forms.TextInput(attrs={'class': 'form-control', 'required': True}),
-        'email_input': forms.EmailInput(attrs={'class': 'form-control'}),
-        'password_input': forms.PasswordInput(attrs={'class': 'form-control'}),
-        'textarea': forms.Textarea(attrs={'class': 'form-control', 'rows': 5}),
-        'select': forms.Select(attrs={'class': 'form-select'}),
-        'number_input': forms.NumberInput(attrs={'class': 'form-control'}),
-        'checkbox': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-        'file_input': forms.ClearableFileInput(attrs={'class': 'form-control'}),
-        'image_input': forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': 'image/*'}),
-        'hidden': forms.HiddenInput(),
+        "text_input": forms.TextInput(attrs={"class": "form-control"}),
+        "text_input_required": forms.TextInput(
+            attrs={"class": "form-control", "required": True}
+        ),
+        "email_input": forms.EmailInput(attrs={"class": "form-control"}),
+        "password_input": forms.PasswordInput(attrs={"class": "form-control"}),
+        "textarea": forms.Textarea(attrs={"class": "form-control", "rows": 5}),
+        "select": forms.Select(attrs={"class": "form-select"}),
+        "number_input": forms.NumberInput(attrs={"class": "form-control"}),
+        "checkbox": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+        "file_input": forms.ClearableFileInput(attrs={"class": "form-control"}),
+        "image_input": forms.ClearableFileInput(
+            attrs={"class": "form-control", "accept": "image/*"}
+        ),
+        "hidden": forms.HiddenInput(),
     }
 
     @classmethod
@@ -40,27 +45,27 @@ class StandardWidgetMixin:
     @classmethod
     def text_with_placeholder(cls, placeholder):
         """Text input with placeholder"""
-        return cls.get_widget('text_input', placeholder=placeholder)
+        return cls.get_widget("text_input", placeholder=placeholder)
 
     @classmethod
     def text_required_with_placeholder(cls, placeholder):
         """Required text input with placeholder"""
-        return cls.get_widget('text_input_required', placeholder=placeholder)
+        return cls.get_widget("text_input_required", placeholder=placeholder)
 
     @classmethod
     def number_with_range(cls, min_val=None, max_val=None, step=None, placeholder=None):
         """Number input with range constraints"""
         attrs = {}
         if min_val is not None:
-            attrs['min'] = str(min_val)
+            attrs["min"] = str(min_val)
         if max_val is not None:
-            attrs['max'] = str(max_val)
+            attrs["max"] = str(max_val)
         if step is not None:
-            attrs['step'] = str(step)
+            attrs["step"] = str(step)
         if placeholder:
-            attrs['placeholder'] = placeholder
+            attrs["placeholder"] = placeholder
 
-        return cls.get_widget('number_input', **attrs)
+        return cls.get_widget("number_input", **attrs)
 
 
 class BaseMetadataValidator:
@@ -76,20 +81,22 @@ class BaseMetadataValidator:
     @staticmethod
     def validate_series_number(value, max_length=20):
         """Validate series number (alphanumeric)"""
-        if value is None or (isinstance(value, str) and value.strip() == ''):
-            return ''
+        if value is None or (isinstance(value, str) and value.strip() == ""):
+            return ""
 
         # Allow alphanumeric series numbers (1, 1.5, 2a, etc.)
         value_str = str(value).strip()
         if len(value_str) > max_length:
-            raise forms.ValidationError(f"Series number too long (max {max_length} characters).")
+            raise forms.ValidationError(
+                f"Series number too long (max {max_length} characters)."
+            )
 
         return value_str
 
     @staticmethod
     def validate_year(value, field_name="Year"):
         """Validate year field"""
-        if value is None or (isinstance(value, str) and value.strip() == ''):
+        if value is None or (isinstance(value, str) and value.strip() == ""):
             return None
 
         try:
@@ -97,7 +104,9 @@ class BaseMetadataValidator:
             current_year = timezone.now().year
 
             if year < 1000 or year > current_year + 1:
-                raise forms.ValidationError(f"{field_name} must be between 1000 and {current_year + 1}.")
+                raise forms.ValidationError(
+                    f"{field_name} must be between 1000 and {current_year + 1}."
+                )
 
             return year
         except (ValueError, TypeError):
@@ -107,10 +116,10 @@ class BaseMetadataValidator:
     def validate_isbn(value):
         """Basic ISBN validation"""
         if not value:
-            return ''
+            return ""
 
         # Remove hyphens, spaces, and other formatting for validation
-        isbn = ''.join(c for c in str(value) if c.isalnum())
+        isbn = "".join(c for c in str(value) if c.isalnum())
 
         # Check length (ISBN-10 or ISBN-13)
         if len(isbn) not in [10, 13]:
@@ -118,7 +127,9 @@ class BaseMetadataValidator:
 
         # Check if all characters are digits (except last character of ISBN-10 can be 'X')
         if len(isbn) == 10:
-            if not (isbn[:9].isdigit() and (isbn[9].isdigit() or isbn[9].upper() == 'X')):
+            if not (
+                isbn[:9].isdigit() and (isbn[9].isdigit() or isbn[9].upper() == "X")
+            ):
                 raise forms.ValidationError("Invalid ISBN-10 format.")
         else:  # ISBN-13
             if not isbn.isdigit():
@@ -144,18 +155,18 @@ class BaseMetadataValidator:
     def validate_comma_separated_list(value, field_name="items"):
         """Validate and clean comma-separated input"""
         if not value:
-            return ''
+            return ""
 
         value_str = str(value).strip()
         if not value_str:
-            return ''
+            return ""
 
         # Split by comma and clean each item
-        item_list = [item.strip() for item in value_str.split(',') if item.strip()]
+        item_list = [item.strip() for item in value_str.split(",") if item.strip()]
         if not item_list:
-            return ''
+            return ""
 
-        return ', '.join(item_list)
+        return ", ".join(item_list)
 
     @staticmethod
     def validate_integer_list(value, field_name="items"):
@@ -168,10 +179,14 @@ class BaseMetadataValidator:
             return []
 
         try:
-            item_list = [int(item.strip()) for item in value_str.split(',') if item.strip()]
+            item_list = [
+                int(item.strip()) for item in value_str.split(",") if item.strip()
+            ]
             return item_list
         except ValueError:
-            raise forms.ValidationError(f"Invalid {field_name} - must be comma-separated integers.")
+            raise forms.ValidationError(
+                f"Invalid {field_name} - must be comma-separated integers."
+            )
 
 
 class StandardFormMixin(StandardWidgetMixin):
@@ -185,17 +200,17 @@ class StandardFormMixin(StandardWidgetMixin):
         """Apply standard Bootstrap styling to all form fields"""
         for field_name, field in self.fields.items():
             if isinstance(field.widget, forms.TextInput):
-                field.widget.attrs.update({'class': 'form-control'})
+                field.widget.attrs.update({"class": "form-control"})
             elif isinstance(field.widget, forms.Select):
-                field.widget.attrs.update({'class': 'form-select'})
+                field.widget.attrs.update({"class": "form-select"})
             elif isinstance(field.widget, forms.Textarea):
-                field.widget.attrs.update({'class': 'form-control'})
+                field.widget.attrs.update({"class": "form-control"})
             elif isinstance(field.widget, forms.NumberInput):
-                field.widget.attrs.update({'class': 'form-control'})
+                field.widget.attrs.update({"class": "form-control"})
             elif isinstance(field.widget, forms.CheckboxInput):
-                field.widget.attrs.update({'class': 'form-check-input'})
+                field.widget.attrs.update({"class": "form-check-input"})
             elif isinstance(field.widget, forms.FileInput):
-                field.widget.attrs.update({'class': 'form-control'})
+                field.widget.attrs.update({"class": "form-control"})
 
 
 class MetadataFormMixin(StandardFormMixin, BaseMetadataValidator):
@@ -204,63 +219,55 @@ class MetadataFormMixin(StandardFormMixin, BaseMetadataValidator):
     def get_standard_metadata_widgets(self):
         """Get standard widget configuration for metadata fields"""
         return {
-            'final_title': self.text_required_with_placeholder('Enter title'),
-            'final_author': self.text_required_with_placeholder('Enter author'),
-            'final_series': self.text_with_placeholder('Enter series name'),
-            'final_series_number': self.text_with_placeholder('Enter series number'),
-            'final_publisher': self.text_with_placeholder('Enter publisher'),
-            'final_cover_path': self.get_widget('file_input'),
-            'language': self.get_widget('select'),
-            'isbn': self.text_with_placeholder('Enter ISBN'),
-            'publication_year': self.number_with_range(
-                min_val=1000,
-                max_val=2030,
-                placeholder='Enter publication year'
+            "final_title": self.text_required_with_placeholder("Enter title"),
+            "final_author": self.text_required_with_placeholder("Enter author"),
+            "final_series": self.text_with_placeholder("Enter series name"),
+            "final_series_number": self.text_with_placeholder("Enter series number"),
+            "final_publisher": self.text_with_placeholder("Enter publisher"),
+            "final_cover_path": self.get_widget("file_input"),
+            "language": self.get_widget("select"),
+            "isbn": self.text_with_placeholder("Enter ISBN"),
+            "publication_year": self.number_with_range(
+                min_val=1000, max_val=2030, placeholder="Enter publication year"
             ),
-            'description': forms.Textarea(attrs={
-                'class': 'form-control',
-                'rows': 5,
-                'placeholder': 'Enter description'
-            }),
-            'is_reviewed': self.get_widget('checkbox'),
+            "description": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 5,
+                    "placeholder": "Enter description",
+                }
+            ),
+            "is_reviewed": self.get_widget("checkbox"),
         }
 
     def clean_final_title(self):
         """Validate final title using base validator"""
         return self.validate_required_text(
-            self.cleaned_data.get('final_title'),
-            'Title'
+            self.cleaned_data.get("final_title"), "Title"
         )
 
     def clean_final_author(self):
         """Validate final author using base validator"""
         return self.validate_required_text(
-            self.cleaned_data.get('final_author'),
-            'Author'
+            self.cleaned_data.get("final_author"), "Author"
         )
 
     def clean_final_series_number(self):
         """Validate final series number using base validator"""
-        return self.validate_series_number(
-            self.cleaned_data.get('final_series_number')
-        )
+        return self.validate_series_number(self.cleaned_data.get("final_series_number"))
 
     def clean_publication_year(self):
         """Validate publication year using base validator"""
         return self.validate_year(
-            self.cleaned_data.get('publication_year'),
-            "Publication year"
+            self.cleaned_data.get("publication_year"), "Publication year"
         )
 
     def clean_isbn(self):
         """Validate ISBN using base validator"""
-        return self.validate_isbn(
-            self.cleaned_data.get('isbn')
-        )
+        return self.validate_isbn(self.cleaned_data.get("isbn"))
 
     def clean_manual_genres(self):
         """Validate manual genres using base validator"""
         return self.validate_comma_separated_list(
-            self.cleaned_data.get('manual_genres'),
-            'Manual genres'
+            self.cleaned_data.get("manual_genres"), "Manual genres"
         )

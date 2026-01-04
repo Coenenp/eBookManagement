@@ -1,65 +1,79 @@
-# Byte-compiled / optimized / DLL files
+# -------------------------
+# PYTHON
+# -------------------------
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
 
 # Virtual environments
 venv/
 env/
 ENV/
+.venv/
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-default_*.sqlite3  # Test database files
-media/
-staticfiles/
-
-# Debug and temporary files
-debug_*.py
-fix_*.py
-temp_*.py
-
-# Environment variables
-.env
-
-# VSCode settings
-.vscode/
-
-# macOS files
-.DS_Store
-
-# PyCharm
-.idea/
-
-# Coverage reports
-htmlcov/
-.coverage
-
-# Migrations (optional, sometimes you want to include these)
-# */migrations/
-
-# mypy
+# Python tooling
 .mypy_cache/
-
-# pytest cache
 .pytest_cache/
+pip-wheel-metadata/
+*.egg-info/
+.eggs/
 
-# celery beat schedule file
-celerybeat-schedule
-
-# Sphinx docs
-docs/_build/
-
-# Unit test / coverage reports
+# Coverage
 .coverage
+.coverage.*
+htmlcov/
 *.cover
 coverage.xml
 
 # PyInstaller
 *.manifest
 *.spec
+
+# -------------------------
+# DJANGO (optional)
+# -------------------------
+*.log
+local_settings.py
+db.sqlite3
+default_*.sqlite3
+media/
+staticfiles/
+
+# -------------------------
+# NODE / JAVASCRIPT
+# -------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+.pnp/
+.pnp.js
+
+# -------------------------
+# ENVIRONMENT VARIABLES
+# -------------------------
+.env
+.env.*
+*.env
+
+# -------------------------
+# EDITORS / IDEs
+# -------------------------
+.vscode/
+.idea/
+
+# -------------------------
+# OS FILES
+# -------------------------
+.DS_Store
+Thumbs.db
+
+# -------------------------
+# DOCUMENTATION / BUILD
+# -------------------------
+docs/_build/
+build/
+dist/

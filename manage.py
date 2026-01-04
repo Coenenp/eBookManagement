@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """Django's command-line utility for administrative tasks."""
+import logging
 import os
 import sys
-import logging
 
 logging.basicConfig(
     stream=sys.stdout,

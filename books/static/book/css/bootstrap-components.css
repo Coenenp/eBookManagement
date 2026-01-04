@@ -4,6 +4,7 @@
  */
 
 /* Standardized badge variants */
+
 .badge-stat {
     font-size: 0.875rem; /* Consistent size for statistics */
 }
@@ -27,8 +28,6 @@
     background-color: var(--bs-info) !important;
     color: var(--bs-white) !important;
 }
-
-
 
 .content-type-other {
     background-color: var(--bs-light) !important;

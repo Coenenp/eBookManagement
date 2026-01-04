@@ -3,22 +3,13 @@ Test suite for books/scanner/extractors/comicvine.py
 Tests Comic Vine API integration and metadata extraction.
 """
 
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
+
 from django.test import TestCase, override_settings
 
-from books.models import (
-    DataSource, BookTitle, BookCover, BookPublisher, Publisher,
-    BookMetadata, BookAuthor, Author, Series, BookSeries
-)
+from books.models import Author, BookAuthor, BookCover, BookMetadata, BookPublisher, BookSeries, BookTitle, DataSource, Publisher, Series
+from books.scanner.extractors.comicvine import ComicVineAPI, _save_cover_from_url, _save_creators, _save_issue_metadata, _save_volume_metadata, query_comicvine_metadata
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
-from books.scanner.extractors.comicvine import (
-    ComicVineAPI,
-    query_comicvine_metadata,
-    _save_volume_metadata,
-    _save_issue_metadata,
-    _save_creators,
-    _save_cover_from_url
-)
 
 
 class ComicVineAPITests(TestCase):

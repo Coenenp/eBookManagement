@@ -5,13 +5,14 @@ Test scanning with real delays to verify progress tracking
 
 import os
 import tempfile
-import django
-from pathlib import Path
 import threading
 import time
-
-from books.scanner.background import background_scan_folder, add_active_scan, get_all_active_scans
 import uuid
+from pathlib import Path
+
+import django
+
+from books.scanner.background import add_active_scan, background_scan_folder, get_all_active_scans
 
 # Setup Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ebook_manager.settings')

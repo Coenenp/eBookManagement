@@ -3,10 +3,13 @@
 This module provides functions for extracting metadata from PDF files
 including title, author, and document properties.
 """
-from PyPDF2 import PdfReader
-from books.models import DataSource, BookTitle, BookMetadata
-from books.utils.author import attach_authors
+
 import logging
+
+from PyPDF2 import PdfReader
+
+from books.models import BookMetadata, BookTitle, DataSource
+from books.utils.author import attach_authors
 
 logger = logging.getLogger("books.scanner")
 
@@ -14,8 +17,7 @@ logger = logging.getLogger("books.scanner")
 def _get_pdf_internal_source():
     """Get or create the PDF Internal DataSource."""
     source, created = DataSource.objects.get_or_create(
-        name=DataSource.PDF_INTERNAL,
-        defaults={'trust_level': 0.6}
+        name=DataSource.PDF_INTERNAL, defaults={"trust_level": 0.6}
     )
     return source
 
@@ -33,7 +35,7 @@ def extract(book):
                     book=book,
                     title=title_text,
                     source=source,
-                    defaults={'confidence': source.trust_level}
+                    defaults={"confidence": source.trust_level},
                 )
 
         if meta.author:
@@ -47,9 +49,12 @@ def extract(book):
             if creator_text:  # Only create if non-empty after stripping
                 BookMetadata.objects.get_or_create(
                     book=book,
-                    field_name='creator',
+                    field_name="creator",
                     source=source,
-                    defaults={'field_value': creator_text, 'confidence': source.trust_level}
+                    defaults={
+                        "field_value": creator_text,
+                        "confidence": source.trust_level,
+                    },
                 )
 
     except Exception as e:

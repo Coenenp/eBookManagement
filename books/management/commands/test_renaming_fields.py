@@ -1,10 +1,11 @@
-from django.core.management.base import BaseCommand
-from books.models import UserProfile, FinalMetadata
 from django.contrib.auth.models import User
+from django.core.management.base import BaseCommand
+
+from books.models import FinalMetadata, UserProfile
 
 
 class Command(BaseCommand):
-    help = 'Test the new renaming preference fields'
+    help = "Test the new renaming preference fields"
 
     def handle(self, *args, **options):
         self.stdout.write("Testing new model fields...")
@@ -14,13 +15,24 @@ class Command(BaseCommand):
         if user:
             profile = UserProfile.get_or_create_for_user(user)
             self.stdout.write("UserProfile fields test:")
-            self.stdout.write(f"  Default folder pattern: {repr(profile.default_folder_pattern)}")
-            self.stdout.write(f"  Default filename pattern: {repr(profile.default_filename_pattern)}")
+            self.stdout.write(
+                f"  Default folder pattern: {repr(profile.default_folder_pattern)}"
+            )
+            self.stdout.write(
+                f"  Default filename pattern: {repr(profile.default_filename_pattern)}"
+            )
             self.stdout.write(f"  Saved patterns: {profile.saved_patterns}")
-            self.stdout.write(f"  Include companion files: {profile.include_companion_files}")
+            self.stdout.write(
+                f"  Include companion files: {profile.include_companion_files}"
+            )
 
             # Test pattern saving
-            profile.save_pattern('Test Pattern', '${author}/${title}', '${title}.${ext}', 'Test description')
+            profile.save_pattern(
+                "Test Pattern",
+                "${author}/${title}",
+                "${title}.${ext}",
+                "Test description",
+            )
             self.stdout.write(f"  After saving pattern: {profile.saved_patterns}")
         else:
             self.stdout.write("No users found")

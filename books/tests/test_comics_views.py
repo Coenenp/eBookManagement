@@ -3,14 +3,13 @@ Test cases for comics-related views and functionality.
 """
 
 import json
-from django.test import TestCase, Client
+
 from django.contrib.auth.models import User
+from django.test import Client, TestCase
 from django.urls import reverse
-from books.models import (
-    FinalMetadata, DataSource,
-    Series, BookSeries
-)
-from books.tests.test_helpers import create_test_scan_folder, create_test_book_with_file
+
+from books.models import BookSeries, DataSource, FinalMetadata, Series
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class ComicsViewsTestCase(TestCase):

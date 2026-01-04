@@ -3,12 +3,13 @@ Wizard Integration Tests
 Complete wizard system integration and workflow testing.
 """
 
-import tempfile
 import shutil
-from django.test import TestCase, Client
+import tempfile
+from unittest.mock import Mock, patch
+
 from django.contrib.auth.models import User
+from django.test import Client, TestCase
 from django.urls import reverse
-from unittest.mock import patch, Mock
 
 from books.models import ScanFolder, SetupWizard
 

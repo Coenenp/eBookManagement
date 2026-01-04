@@ -5,17 +5,15 @@ MetadataFormMixin, and FinalMetadataSyncMixin functionality.
 Focuses on achieving 100% coverage for the mixins module.
 """
 import os
-import django
-from django.test import TestCase
-from django import forms
-from django.utils import timezone
 from unittest.mock import patch
 
-from books.mixins import (
-    StandardWidgetMixin, BaseMetadataValidator, StandardFormMixin,
-    MetadataFormMixin, FinalMetadataSyncMixin
-)
-from books.models import FinalMetadata, DataSource, Author
+import django
+from django import forms
+from django.test import TestCase
+from django.utils import timezone
+
+from books.mixins import BaseMetadataValidator, FinalMetadataSyncMixin, MetadataFormMixin, StandardFormMixin, StandardWidgetMixin
+from books.models import Author, DataSource, FinalMetadata
 from books.tests.test_helpers import create_test_book_with_file
 
 # Must set Django settings before importing Django models

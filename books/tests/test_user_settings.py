@@ -7,12 +7,14 @@ caching behavior, and personalization features across the views.
 
 import json
 from unittest.mock import patch
-from django.test import TestCase, Client
+
 from django.contrib.auth.models import User
-from django.urls import reverse
 from django.core.cache import cache
+from django.test import Client, TestCase
+from django.urls import reverse
+
 from books.models import UserProfile
-from books.tests.test_helpers import create_test_scan_folder, create_test_book_with_file
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class UserProfileTests(TestCase):

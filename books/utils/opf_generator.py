@@ -6,10 +6,11 @@ metadata files from FinalMetadata objects. The generated OPF files contain
 all curated metadata in a standards-compliant format that can be read by
 other ebook management tools.
 """
+import logging
 from datetime import datetime
 from pathlib import Path
+
 from lxml import etree as ET
-import logging
 
 logger = logging.getLogger("books.scanner")
 

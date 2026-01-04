@@ -5,12 +5,10 @@ Tests TC7: Verify that conflicting metadata from multiple sources
 is resolved correctly based on confidence scores and source trust levels.
 """
 from django.test import TestCase
-from books.models import (
-    DataSource, BookMetadata, BookTitle, BookAuthor,
-    Author, FinalMetadata, Publisher, BookPublisher
-)
-from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
+
+from books.models import Author, BookAuthor, BookMetadata, BookPublisher, BookTitle, DataSource, FinalMetadata, Publisher
 from books.scanner.resolver import resolve_final_metadata
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class MetadataConflictResolutionTests(TestCase):

@@ -8,7 +8,7 @@
     --theme-border-radius: var(--bs-border-radius, 0.375rem);
     --theme-transition: all 0.2s ease-in-out;
     --theme-box-shadow-hover: var(--bs-box-shadow-lg);
-    
+
     /* Custom semantic colors with fallbacks */
     --theme-reading-progress: linear-gradient(90deg, var(--bs-success), var(--bs-info));
     --theme-badge-gradient: linear-gradient(45deg, var(--bs-success), var(--bs-teal, var(--bs-success)));
@@ -44,27 +44,53 @@ legend {
 ========================================= */
 
 /* Text utilities */
-.text-size-09 { font-size: 0.9rem; }
-.text-size-075 { font-size: 0.75rem; }
-.text-break-all { 
-    word-break: break-all; 
-    line-height: 1.2; 
-    max-width: 100%; 
+.text-size-09 {
+    font-size: 0.9rem;
 }
-.text-pre-line { white-space: pre-line; }
+.text-size-075 {
+    font-size: 0.75rem;
+}
+.text-break-all {
+    word-break: break-all;
+    line-height: 1.2;
+    max-width: 100%;
+}
+.text-pre-line {
+    white-space: pre-line;
+}
 
 /* Use Bootstrap semantic colors for better theme support */
-.text-theme-primary { color: var(--bs-primary) !important; }
-.text-theme-success { color: var(--bs-success) !important; }
-.text-theme-warning { color: var(--bs-warning) !important; }
-.text-theme-danger { color: var(--bs-danger) !important; }
-.text-theme-info { color: var(--bs-info) !important; }
+.text-theme-primary {
+    color: var(--bs-primary) !important;
+}
+.text-theme-success {
+    color: var(--bs-success) !important;
+}
+.text-theme-warning {
+    color: var(--bs-warning) !important;
+}
+.text-theme-danger {
+    color: var(--bs-danger) !important;
+}
+.text-theme-info {
+    color: var(--bs-info) !important;
+}
 
-.bg-theme-primary { background-color: var(--bs-primary) !important; }
-.bg-theme-success { background-color: var(--bs-success) !important; }
-.bg-theme-warning { background-color: var(--bs-warning) !important; }
-.bg-theme-danger { background-color: var(--bs-danger) !important; }
-.bg-theme-info { background-color: var(--bs-info) !important; }
+.bg-theme-primary {
+    background-color: var(--bs-primary) !important;
+}
+.bg-theme-success {
+    background-color: var(--bs-success) !important;
+}
+.bg-theme-warning {
+    background-color: var(--bs-warning) !important;
+}
+.bg-theme-danger {
+    background-color: var(--bs-danger) !important;
+}
+.bg-theme-info {
+    background-color: var(--bs-info) !important;
+}
 
 /* Purple color using Bootstrap purple if available, fallback to custom */
 .bg-purple {
@@ -72,32 +98,60 @@ legend {
 }
 
 /* Enhanced shadow utilities using Bootstrap variables */
-.shadow-theme-sm { box-shadow: var(--bs-box-shadow-sm) !important; }
-.shadow-theme { box-shadow: var(--bs-box-shadow) !important; }
-.shadow-theme-lg { box-shadow: var(--bs-box-shadow-lg) !important; }
+.shadow-theme-sm {
+    box-shadow: var(--bs-box-shadow-sm) !important;
+}
+.shadow-theme {
+    box-shadow: var(--bs-box-shadow) !important;
+}
+.shadow-theme-lg {
+    box-shadow: var(--bs-box-shadow-lg) !important;
+}
 
 /* ======================================
    📏 Size & Spacing Utilities
 ========================================= */
 
 /* Size constraints */
-.max-width-100 { max-width: 100%; }
-.max-height-300 { max-height: 300px; }
-.max-height-70vh { max-height: 70vh; }
+.max-width-100 {
+    max-width: 100%;
+}
+.max-height-300 {
+    max-height: 300px;
+}
+.max-height-70vh {
+    max-height: 70vh;
+}
 
 /* Table column widths - Use CSS custom properties for consistency */
-.col-width-40 { width: 40px; }
-.col-width-120 { width: 120px; }
-.col-width-140 { width: 140px; }
-.col-width-160 { max-width: 160px; }
-.col-width-250 { width: 250px; }
+.col-width-40 {
+    width: 40px;
+}
+.col-width-120 {
+    width: 120px;
+}
+.col-width-140 {
+    width: 140px;
+}
+.col-width-160 {
+    max-width: 160px;
+}
+.col-width-250 {
+    width: 250px;
+}
 
 /* Progress height utilities */
-.progress-height-15 { height: 15px; }
-.progress-tall { height: 25px; }
+.progress-height-15 {
+    height: 15px;
+}
+.progress-tall {
+    height: 25px;
+}
 
 /* Z-index utilities */
-.z-index-1050 { z-index: 1050; }
+.z-index-1050 {
+    z-index: 1050;
+}
 
 /* ======================================
    📱 Responsive Utilities
@@ -107,16 +161,16 @@ legend {
     .col-md-2 {
         margin-bottom: 1rem;
     }
-    
+
     .card-body {
         padding: 0.75rem;
     }
-    
+
     .cover-tiny {
         width: 40px;
         height: 60px;
     }
-    
+
     /* Stack book info vertically on very small screens */
     .list-group-item .d-flex {
         flex-direction: column;
@@ -129,7 +183,7 @@ legend {
         flex-direction: column;
         align-items: start !important;
     }
-    
+
     .badge {
         margin-top: 0.25rem;
     }
@@ -178,7 +232,9 @@ legend {
 }
 
 .scale-down {
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    transition:
+        opacity 0.3s ease,
+        transform 0.3s ease;
     opacity: 0;
     transform: scale(0.9);
 }
@@ -195,7 +251,7 @@ legend {
 
 /* Fade-in Animation */
 .fade-in {
-    animation: fadeIn 0.6s cubic-bezier(0.4, 0.0, 0.2, 1);
+    animation: fadeIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @keyframes fadeIn {

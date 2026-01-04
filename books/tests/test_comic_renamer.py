@@ -1,10 +1,12 @@
 """Tests for comic book renamer functionality."""
-from django.test import TestCase
-from django.contrib.auth.models import User
-from unittest.mock import patch, MagicMock
-import tempfile
 import shutil
-from books.models import Book, BookFile, DataSource, BookMetadata, FinalMetadata, ScanFolder
+import tempfile
+from unittest.mock import MagicMock, patch
+
+from django.contrib.auth.models import User
+from django.test import TestCase
+
+from books.models import Book, BookFile, BookMetadata, DataSource, FinalMetadata, ScanFolder
 from books.views import BookRenamerView
 
 

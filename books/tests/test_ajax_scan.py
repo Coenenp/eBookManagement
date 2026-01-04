@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 """Test script to trigger AJAX scan and capture the exact error."""
 
-import os
-import django
 import json
-from django.test import Client
-from django.contrib.auth import get_user_model
+import os
+
+import django
 import pytest
+from django.contrib.auth import get_user_model
+from django.test import Client
 
 # Setup Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ebook_manager.settings')

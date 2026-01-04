@@ -1,0 +1,17 @@
+{
+    "name": "ebook-management",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "format": "prettier --write .",
+        "prepare": "husky install"
+    },
+    "devDependencies": {
+        "prettier": "^3.7.4",
+        "husky": "^9.0.0",
+        "lint-staged": "^15.0.0"
+    },
+    "lint-staged": {
+        "*.{js,ts,jsx,tsx,html,css,json,md}": "prettier --write"
+    }
+}

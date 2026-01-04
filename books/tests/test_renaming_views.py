@@ -6,13 +6,13 @@ with the web interface and user interactions.
 
 import json
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from django.test import TestCase, Client
-from django.urls import reverse
 from django.contrib.auth import get_user_model
+from django.test import Client, TestCase
+from django.urls import reverse
 
-from books.models import Author, Series, Genre
+from books.models import Author, Genre, Series
 from books.tests.test_helpers import create_test_book_with_file
 
 
@@ -57,7 +57,7 @@ class RenamingViewsTestCase(TestCase):
         )
 
         # Create metadata relationships
-        from books.models import DataSource, BookTitle, BookAuthor, BookSeries, FinalMetadata
+        from books.models import BookAuthor, BookSeries, BookTitle, DataSource, FinalMetadata
 
         # Create data source (use get_or_create to avoid duplicates)
         self.data_source, created = DataSource.objects.get_or_create(

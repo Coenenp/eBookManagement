@@ -3,15 +3,17 @@ Comprehensive test suite for AJAX endpoints functionality.
 Addresses low coverage in views/ajax.py (24% coverage).
 """
 
-from django.test import TestCase, Client
-from django.contrib.auth.models import User
-from django.urls import reverse
-from books.models import Author, Series, FinalMetadata, DataSource, ScanFolder
-from books.tests.test_helpers import create_test_book_with_file
 import json
-import tempfile
-import shutil
 import os
+import shutil
+import tempfile
+
+from django.contrib.auth.models import User
+from django.test import Client, TestCase
+from django.urls import reverse
+
+from books.models import Author, DataSource, FinalMetadata, ScanFolder, Series
+from books.tests.test_helpers import create_test_book_with_file
 
 
 class BaseAjaxTestCaseWithTempDir(TestCase):

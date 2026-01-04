@@ -11,20 +11,18 @@ Tests all views and functions in sections.py including:
 """
 
 import json
-import tempfile
 import shutil
-from unittest.mock import patch
-from django.test import TestCase, Client
-from django.contrib.auth.models import User
-from django.urls import reverse
+import tempfile
 import uuid
+from unittest.mock import patch
 
-from books.models import (
-    Book, FinalMetadata, ScanFolder, DataSource, Series, BookSeries,
-    Author, BookMetadata
-)
-from books.views.sections import get_book_metadata_dict, get_book_cover_url
+from django.contrib.auth.models import User
+from django.test import Client, TestCase
+from django.urls import reverse
+
+from books.models import Author, Book, BookMetadata, BookSeries, DataSource, FinalMetadata, ScanFolder, Series
 from books.tests.test_helpers import create_test_book_with_file
+from books.views.sections import get_book_cover_url, get_book_metadata_dict
 
 
 class SectionsTestCase(TestCase):

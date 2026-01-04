@@ -3,34 +3,42 @@ Management command to demonstrate intelligent API scanner integration.
 
 This shows how the new API tracking system integrates with existing scanning.
 """
+
 import logging
+
 from django.core.management.base import BaseCommand
 from django.db import transaction
-from books.models import Book, DataSource, APIAccessLog, ScanSession, BookAPICompleteness
 
+from books.models import (
+    APIAccessLog,
+    Book,
+    BookAPICompleteness,
+    DataSource,
+    ScanSession,
+)
 
-logger = logging.getLogger('books.scanner')
+logger = logging.getLogger("books.scanner")
 
 
 class Command(BaseCommand):
-    help = 'Demonstrate intelligent API tracking integration'
+    help = "Demonstrate intelligent API tracking integration"
 
     def add_arguments(self, parser):
         parser.add_argument(
-            '--setup-demo',
-            action='store_true',
-            help='Set up demo data for API tracking'
+            "--setup-demo",
+            action="store_true",
+            help="Set up demo data for API tracking",
         )
         parser.add_argument(
-            '--simulate-api-calls',
-            action='store_true',
-            help='Simulate API calls and demonstrate tracking'
+            "--simulate-api-calls",
+            action="store_true",
+            help="Simulate API calls and demonstrate tracking",
         )
 
     def handle(self, *args, **options):
-        if options['setup_demo']:
+        if options["setup_demo"]:
             self.setup_demo_data()
-        elif options['simulate_api_calls']:
+        elif options["simulate_api_calls"]:
             self.simulate_api_interactions()
         else:
             self.show_system_overview()
@@ -42,7 +50,9 @@ class Command(BaseCommand):
         # Get some existing books
         books = Book.objects.available()[:5]
         if not books:
-            self.stdout.write(self.style.ERROR("No books found. Please run a scan first."))
+            self.stdout.write(
+                self.style.ERROR("No books found. Please run a scan first.")
+            )
             return
 
         # Get API data sources
@@ -62,27 +72,34 @@ class Command(BaseCommand):
                         book=book,
                         data_source=google_books,
                         defaults={
-                            'status': APIAccessLog.SUCCESS,
-                            'metadata_retrieved': True,
-                            'items_found': 5,
-                            'confidence_score': 0.8
-                        }
+                            "status": APIAccessLog.SUCCESS,
+                            "metadata_retrieved": True,
+                            "items_found": 5,
+                            "confidence_score": 0.8,
+                        },
                     )
-                    log.record_attempt(success=True, items_found=5, confidence=0.8, metadata_retrieved=True)
+                    log.record_attempt(
+                        success=True,
+                        items_found=5,
+                        confidence=0.8,
+                        metadata_retrieved=True,
+                    )
                 elif book.pk % 3 == 1:
                     # Rate limited Open Library
                     log, created = APIAccessLog.objects.get_or_create(
                         book=book,
                         data_source=open_library,
-                        defaults={'status': APIAccessLog.RATE_LIMITED}
+                        defaults={"status": APIAccessLog.RATE_LIMITED},
                     )
-                    log.record_attempt(success=False, error_message="Rate limit exceeded")
+                    log.record_attempt(
+                        success=False, error_message="Rate limit exceeded"
+                    )
                 else:
                     # Failed API call
                     log, created = APIAccessLog.objects.get_or_create(
                         book=book,
                         data_source=google_books,
-                        defaults={'status': APIAccessLog.FAILED}
+                        defaults={"status": APIAccessLog.FAILED},
                     )
                     log.record_attempt(success=False, error_message="API timeout")
 
@@ -90,43 +107,45 @@ class Command(BaseCommand):
                 completeness, created = BookAPICompleteness.objects.get_or_create(
                     book=book,
                     defaults={
-                        'google_books_complete': book.pk % 3 == 0,
-                        'open_library_complete': False,
-                        'needs_external_scan': True,
-                        'missing_sources': ['Open Library'] if book.pk % 3 != 2 else []
-                    }
+                        "google_books_complete": book.pk % 3 == 0,
+                        "open_library_complete": False,
+                        "needs_external_scan": True,
+                        "missing_sources": ["Open Library"] if book.pk % 3 != 2 else [],
+                    },
                 )
                 completeness.calculate_completeness()
 
         # Create a demo scan session
         session = ScanSession.objects.create(
-            session_id='demo_session_001',
+            session_id="demo_session_001",
             total_books=len(books),
             processed_books=len(books),
             books_with_external_data=len([b for b in books if b.pk % 3 == 0]),
             api_calls_made={
-                'Google Books': len(books),
-                'Open Library': len(books) // 2
+                "Google Books": len(books),
+                "Open Library": len(books) // 2,
             },
             api_failures={
-                'Google Books': len([b for b in books if b.pk % 3 == 2]),
-                'Open Library': len([b for b in books if b.pk % 3 == 1])
+                "Google Books": len([b for b in books if b.pk % 3 == 2]),
+                "Open Library": len([b for b in books if b.pk % 3 == 1]),
             },
-            rate_limits_hit={
-                'Open Library': len([b for b in books if b.pk % 3 == 1])
-            },
+            rate_limits_hit={"Open Library": len([b for b in books if b.pk % 3 == 1])},
             is_active=False,
             can_resume=True,
             resume_queue=[
                 {
-                    'book_id': b.pk,
-                    'missing_sources': ['Open Library'],
-                    'added_at': '2024-01-15T10:00:00Z'
-                } for b in books if b.pk % 3 != 0
-            ]
+                    "book_id": b.pk,
+                    "missing_sources": ["Open Library"],
+                    "added_at": "2024-01-15T10:00:00Z",
+                }
+                for b in books
+                if b.pk % 3 != 0
+            ],
         )
 
-        self.stdout.write(self.style.SUCCESS(f"Demo data created for {len(books)} books"))
+        self.stdout.write(
+            self.style.SUCCESS(f"Demo data created for {len(books)} books")
+        )
         self.stdout.write(f"Session created: {session.session_id}")
 
     def simulate_api_interactions(self):
@@ -139,7 +158,11 @@ class Command(BaseCommand):
         )[:3]
 
         if not books_needing_scan:
-            self.stdout.write(self.style.WARNING("No books need external scanning. Run --setup-demo first."))
+            self.stdout.write(
+                self.style.WARNING(
+                    "No books need external scanning. Run --setup-demo first."
+                )
+            )
             return
 
         google_books = DataSource.objects.filter(name=DataSource.GOOGLE_BOOKS).first()
@@ -152,7 +175,7 @@ class Command(BaseCommand):
             log, created = APIAccessLog.objects.get_or_create(
                 book=book,
                 data_source=google_books,
-                defaults={'status': APIAccessLog.NOT_ATTEMPTED}
+                defaults={"status": APIAccessLog.NOT_ATTEMPTED},
             )
 
             if log.can_retry_now:
@@ -162,21 +185,25 @@ class Command(BaseCommand):
                     success=True,
                     items_found=3,
                     confidence=0.75,
-                    metadata_retrieved=True
+                    metadata_retrieved=True,
                 )
-                completeness.mark_source_complete('Google Books')
+                completeness.mark_source_complete("Google Books")
                 self.stdout.write("  📚 Metadata retrieved successfully!")
             else:
-                next_retry = log.next_retry_after.strftime('%Y-%m-%d %H:%M') if log.next_retry_after else 'N/A'
+                next_retry = (
+                    log.next_retry_after.strftime("%Y-%m-%d %H:%M")
+                    if log.next_retry_after
+                    else "N/A"
+                )
                 self.stdout.write(f"  ⏳ API not available (next retry: {next_retry})")
 
         self.stdout.write(self.style.SUCCESS("\nAPI interaction simulation complete!"))
 
     def show_system_overview(self):
         """Show overview of the intelligent API system"""
-        self.stdout.write("\n" + "="*60)
+        self.stdout.write("\n" + "=" * 60)
         self.stdout.write("INTELLIGENT API SCANNING SYSTEM OVERVIEW")
-        self.stdout.write("="*60)
+        self.stdout.write("=" * 60)
 
         # System components
         self.stdout.write("\n📦 SYSTEM COMPONENTS:")
@@ -184,7 +211,9 @@ class Command(BaseCommand):
         self.stdout.write("  • ScanSession: Manages scan sessions and resumption")
         self.stdout.write("  • BookAPICompleteness: Optimizes future scans")
         self.stdout.write("  • IntelligentAPIScanner: Graceful degradation logic")
-        self.stdout.write("  • BackgroundScanner: Integrated intelligent API management")
+        self.stdout.write(
+            "  • BackgroundScanner: Integrated intelligent API management"
+        )
 
         # Current state
         total_books = Book.objects.count()
@@ -210,7 +239,9 @@ class Command(BaseCommand):
         # Usage examples
         self.stdout.write("\n USAGE EXAMPLES:")
         self.stdout.write("  python manage.py demo_intelligent_api --setup-demo")
-        self.stdout.write("  python manage.py demo_intelligent_api --simulate-api-calls")
+        self.stdout.write(
+            "  python manage.py demo_intelligent_api --simulate-api-calls"
+        )
         self.stdout.write("  python manage.py test_intelligent_scan --show-stats")
 
         # Integration points
@@ -220,4 +251,4 @@ class Command(BaseCommand):
         self.stdout.write("  • API tracking integrates with external data sources")
         self.stdout.write("  • Seamless integration with current scanning workflow")
 
-        self.stdout.write("\n" + "="*60)
+        self.stdout.write("\n" + "=" * 60)

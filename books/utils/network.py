@@ -5,7 +5,7 @@ This module provides utilities for making network requests with retry mechanisms
 and error handling for external services.
 """
 
-from typing import Dict, Any
+from typing import Any, Dict
 
 
 def make_request(service_name: str) -> Dict[str, Any]:

@@ -4,13 +4,15 @@ This module provides functions for scanning the actual content of ebooks
 to find ISBN numbers embedded in the text, typically found on title pages,
 copyright pages, or back cover sections.
 """
-import re
-import logging
-from pathlib import Path
-from books.models import DataSource, BookMetadata
-from books.utils.isbn import normalize_isbn, is_valid_isbn13, is_valid_isbn10
 
-logger = logging.getLogger('books.scanner')
+import logging
+import re
+from pathlib import Path
+
+from books.models import BookMetadata, DataSource
+from books.utils.isbn import is_valid_isbn10, is_valid_isbn13, normalize_isbn
+
+logger = logging.getLogger("books.scanner")
 
 
 def extract_isbn_from_content(book, page_limit=10):
@@ -29,14 +31,16 @@ def extract_isbn_from_content(book, page_limit=10):
         file_extension = file_path.suffix.lower()
 
         # Route to appropriate extractor based on file type
-        if file_extension == '.epub':
+        if file_extension == ".epub":
             return _extract_from_epub(book, page_limit)
-        elif file_extension == '.pdf':
+        elif file_extension == ".pdf":
             return _extract_from_pdf(book, page_limit)
-        elif file_extension in ['.mobi', '.azw', '.azw3']:
+        elif file_extension in [".mobi", ".azw", ".azw3"]:
             return _extract_from_mobi(book, page_limit)
         else:
-            logger.warning(f"Unsupported file type for content ISBN extraction: {file_extension}")
+            logger.warning(
+                f"Unsupported file type for content ISBN extraction: {file_extension}"
+            )
             return []
 
     except Exception as e:
@@ -53,12 +57,14 @@ def _extract_from_epub(book, page_limit):
         isbn_candidates = []
 
         # Get all text items (chapters, pages)
-        items = [item for item in epub_book.get_items() if item.get_type() == 9]  # ITEM_DOCUMENT
+        items = [
+            item for item in epub_book.get_items() if item.get_type() == 9
+        ]  # ITEM_DOCUMENT
 
         # Scan first few items (usually contain title/copyright pages)
         for i, item in enumerate(items[:page_limit]):
             try:
-                content = item.get_content().decode('utf-8', errors='ignore')
+                content = item.get_content().decode("utf-8", errors="ignore")
                 text = _extract_text_from_html(content)
                 isbn_candidates.extend(_find_isbn_patterns(text))
             except Exception as e:
@@ -69,11 +75,13 @@ def _extract_from_epub(book, page_limit):
         if len(items) > page_limit:
             for i, item in enumerate(items[-page_limit:]):
                 try:
-                    content = item.get_content().decode('utf-8', errors='ignore')
+                    content = item.get_content().decode("utf-8", errors="ignore")
                     text = _extract_text_from_html(content)
                     isbn_candidates.extend(_find_isbn_patterns(text))
                 except Exception as e:
-                    logger.debug(f"Failed to process EPUB item {len(items)-page_limit+i}: {e}")
+                    logger.debug(
+                        f"Failed to process EPUB item {len(items)-page_limit+i}: {e}"
+                    )
                     continue
 
         return _validate_and_dedupe_isbns(isbn_candidates)
@@ -131,7 +139,9 @@ def _extract_from_mobi(book, page_limit):
     try:
         # Try to use mobidedrm or similar library if available
         # For now, return empty list as MOBI parsing is complex
-        logger.info(f"MOBI content ISBN extraction not yet implemented for {book.file_path}")
+        logger.info(
+            f"MOBI content ISBN extraction not yet implemented for {book.file_path}"
+        )
         return []
 
     except Exception as e:
@@ -144,7 +154,7 @@ def _extract_text_from_html(html_content):
     try:
         from bs4 import BeautifulSoup
 
-        soup = BeautifulSoup(html_content, 'html.parser')
+        soup = BeautifulSoup(html_content, "html.parser")
 
         # Remove script and style elements
         for script in soup(["script", "style"]):
@@ -154,12 +164,13 @@ def _extract_text_from_html(html_content):
         text = soup.get_text()
         lines = (line.strip() for line in text.splitlines())
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        return ' '.join(chunk for chunk in chunks if chunk)
+        return " ".join(chunk for chunk in chunks if chunk)
 
     except ImportError:
         # Fallback: simple HTML tag removal
         import re
-        text = re.sub('<[^<]+?>', '', html_content)
+
+        text = re.sub("<[^<]+?>", "", html_content)
         return text
     except Exception as e:
         logger.debug(f"HTML text extraction failed: {e}")
@@ -182,32 +193,32 @@ def _find_isbn_patterns(text):
 
     # Pattern 1: ISBN prefix followed by number (with or without hyphens)
     # Matches ISBN: 9780134685991 or ISBN-13: 978-0-13-468599-1
-    isbn_pattern = r'(?i)ISBN(?:-?1[03])?[-:\s]*([0-9-\s]+[0-9Xx])'
+    isbn_pattern = r"(?i)ISBN(?:-?1[03])?[-:\s]*([0-9-\s]+[0-9Xx])"
     matches = re.finditer(isbn_pattern, text)
     for match in matches:
         # Remove hyphens and spaces for consistent format
-        clean_isbn = re.sub(r'[-\s]', '', match.group(1))
+        clean_isbn = re.sub(r"[-\s]", "", match.group(1))
         # Only keep if it's 10 or 13 digits (plus optional X)
-        if re.match(r'^[0-9]{9}[0-9Xx]$|^[0-9]{13}$', clean_isbn):
+        if re.match(r"^[0-9]{9}[0-9Xx]$|^[0-9]{13}$", clean_isbn):
             isbn_candidates.append(clean_isbn)
 
     # Pattern 2: 13-digit numbers starting with 978 or 979 (standard ISBN-13 prefixes)
-    isbn13_pattern = r'\b(97[89][0-9]{10})\b'
+    isbn13_pattern = r"\b(97[89][0-9]{10})\b"
     matches = re.finditer(isbn13_pattern, text)
     for match in matches:
         isbn_candidates.append(match.group(1))
 
     # Pattern 3: 10-digit ISBN patterns (more restrictive to avoid false positives)
     # Look for 10-digit numbers with specific formatting or context
-    isbn10_context_pattern = r'(?i)(?:ISBN|International\s+Standard\s+Book\s+Number)[-:\s]*([0-9-\s]+[0-9Xx])'
+    isbn10_context_pattern = r"(?i)(?:ISBN|International\s+Standard\s+Book\s+Number)[-:\s]*([0-9-\s]+[0-9Xx])"
     matches = re.finditer(isbn10_context_pattern, text)
     for match in matches:
-        clean_isbn = re.sub(r'[-\s]', '', match.group(1))
-        if re.match(r'^[0-9]{9}[0-9Xx]$|^[0-9]{13}$', clean_isbn):
+        clean_isbn = re.sub(r"[-\s]", "", match.group(1))
+        if re.match(r"^[0-9]{9}[0-9Xx]$|^[0-9]{13}$", clean_isbn):
             isbn_candidates.append(clean_isbn)
 
     # Pattern 4: Look for numbers near copyright or publication info
-    copyright_context = r'(?i)(?:copyright|published|edition|print).*?([0-9]{10,13})'
+    copyright_context = r"(?i)(?:copyright|published|edition|print).*?([0-9]{10,13})"
     matches = re.finditer(copyright_context, text)
     for match in matches:
         candidate = match.group(1)
@@ -235,7 +246,7 @@ def _validate_and_dedupe_isbns(candidates):
             continue
 
         # Clean the candidate
-        cleaned = re.sub(r'[^0-9Xx]', '', candidate)
+        cleaned = re.sub(r"[^0-9Xx]", "", candidate)
 
         if len(cleaned) == 10:
             if is_valid_isbn10(cleaned):
@@ -262,8 +273,8 @@ def save_content_isbns(book):
         source, created = DataSource.objects.get_or_create(
             name=DataSource.CONTENT_SCAN,
             defaults={
-                'trust_level': 0.85,  # Will be overridden by bootstrap if already exists
-            }
+                "trust_level": 0.85,  # Will be overridden by bootstrap if already exists
+            },
         )
 
         # Extract ISBNs from content
@@ -279,10 +290,12 @@ def save_content_isbns(book):
             try:
                 metadata, created = BookMetadata.objects.get_or_create(
                     book=book,
-                    field_name='isbn',
+                    field_name="isbn",
                     field_value=isbn,
                     source=source,
-                    defaults={'confidence': source.trust_level}  # Use source's trust level
+                    defaults={
+                        "confidence": source.trust_level
+                    },  # Use source's trust level
                 )
                 if created:
                     saved_count += 1
@@ -291,7 +304,9 @@ def save_content_isbns(book):
                 logger.warning(f"Failed to save content ISBN {isbn}: {e}")
 
         if saved_count > 0:
-            logger.info(f"Saved {saved_count} ISBNs from content scan for {book.file_path}")
+            logger.info(
+                f"Saved {saved_count} ISBNs from content scan for {book.file_path}"
+            )
         else:
             logger.info(f"All content ISBNs already existed for {book.file_path}")
 
@@ -316,49 +331,45 @@ def bulk_scan_content_isbns(books_queryset=None, page_limit=10):
         books_queryset = Book.objects.all()
 
     stats = {
-        'total_books': 0,
-        'books_with_isbns': 0,
-        'total_isbns_found': 0,
-        'errors': 0
+        "total_books": 0,
+        "books_with_isbns": 0,
+        "total_isbns_found": 0,
+        "errors": 0,
     }
 
     for book in books_queryset:
         try:
-            stats['total_books'] += 1
+            stats["total_books"] += 1
 
             # Check if we already have content-scanned ISBNs for this book
             existing_content_isbns = BookMetadata.objects.filter(
-                book=book,
-                field_name='isbn',
-                source__name=DataSource.CONTENT_SCAN
+                book=book, field_name="isbn", source__name=DataSource.CONTENT_SCAN
             ).count()
 
             if existing_content_isbns > 0:
-                logger.debug(f"Skipping {book.file_path}, already has content-scanned ISBNs")
+                logger.debug(
+                    f"Skipping {book.file_path}, already has content-scanned ISBNs"
+                )
                 continue
 
             # Extract and save ISBNs
             initial_count = BookMetadata.objects.filter(
-                book=book,
-                field_name='isbn',
-                source__name=DataSource.CONTENT_SCAN
+                book=book, field_name="isbn", source__name=DataSource.CONTENT_SCAN
             ).count()
 
             save_content_isbns(book)
 
             final_count = BookMetadata.objects.filter(
-                book=book,
-                field_name='isbn',
-                source__name=DataSource.CONTENT_SCAN
+                book=book, field_name="isbn", source__name=DataSource.CONTENT_SCAN
             ).count()
 
             new_isbns = final_count - initial_count
             if new_isbns > 0:
-                stats['books_with_isbns'] += 1
-                stats['total_isbns_found'] += new_isbns
+                stats["books_with_isbns"] += 1
+                stats["total_isbns_found"] += new_isbns
 
         except Exception as e:
-            stats['errors'] += 1
+            stats["errors"] += 1
             logger.error(f"Error scanning {book.file_path}: {e}")
 
     return stats

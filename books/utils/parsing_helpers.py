@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from typing import List, Tuple, Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 def clean_title_and_extract_series_number(raw_title: str) -> Tuple[str, Optional[float]]:

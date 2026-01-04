@@ -1,7 +1,7 @@
 """
 Context processors for wizard functionality.
 """
-from books.models import ScanFolder, Book, SetupWizard
+from books.models import Book, ScanFolder, SetupWizard
 
 
 def wizard_context(request):

@@ -3,6 +3,7 @@
 This module provides functions for detecting ebook file formats,
 finding cover images, and handling OPF metadata files.
 """
+
 import os
 from pathlib import Path
 
@@ -10,14 +11,14 @@ from pathlib import Path
 def get_file_format(file_path: str) -> str:
     ext = Path(file_path).suffix.lower()
     return {
-        '.epub': 'epub',
-        '.mobi': 'mobi',
-        '.pdf': 'pdf',
-        '.azw': 'azw',
-        '.azw3': 'azw3',
-        '.cbr': 'cbr',
-        '.cbz': 'cbz',
-    }.get(ext, 'unknown')
+        ".epub": "epub",
+        ".mobi": "mobi",
+        ".pdf": "pdf",
+        ".azw": "azw",
+        ".azw3": "azw3",
+        ".cbr": "cbr",
+        ".cbz": "cbz",
+    }.get(ext, "unknown")
 
 
 def find_cover_file(ebook_path: str, cover_files: list) -> str:

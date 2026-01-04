@@ -6,25 +6,25 @@ This module provides web interface views for:
 - Viewing API rate limit status
 - Managing active scan jobs
 """
-import uuid
+
 import logging
 import threading
-from django.shortcuts import render, redirect
-from django.http import JsonResponse
-from django.contrib import messages
-from django.views.decorators.http import require_http_methods
-from django.contrib.auth.decorators import login_required
+import uuid
+
 from django.apps import apps
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.shortcuts import redirect, render
+from django.views.decorators.http import require_http_methods
 
 # Import scanner modules
-from books.scanner.background import (
-    background_scan_folder, background_rescan_books,
-    get_scan_progress, get_all_active_scans, add_active_scan
-)
-from books.scanner.rate_limiting import get_api_status, check_api_health
+from books.constants import SCAN_PRIORITY
+from books.scanner.background import add_active_scan, background_rescan_books, background_scan_folder, get_all_active_scans, get_scan_progress
+from books.scanner.rate_limiting import check_api_health, get_api_status
 from books.utils.language_manager import LanguageManager
 
-logger = logging.getLogger('books.scanner')
+logger = logging.getLogger("books.scanner")
 
 
 @login_required
@@ -41,49 +41,43 @@ def scan_dashboard(request):
         # Combine API status with health
         api_info = {}
         for api_name, status in api_status.items():
-            api_info[api_name] = {
-                **status,
-                'healthy': api_health.get(api_name, False)
-            }
+            api_info[api_name] = {**status, "healthy": api_health.get(api_name, False)}
     except Exception as e:
         logger.warning(f"Failed to get API status: {e}")
         api_info = {}
 
     # Get recent scan folders with book count annotation - DATABASE ONLY (FAST)
     from django.db.models import Count, Q
-    ScanFolder = apps.get_model('books', 'ScanFolder')
-    ScanStatus = apps.get_model('books', 'ScanStatus')
+
+    ScanFolder = apps.get_model("books", "ScanFolder")
+    ScanStatus = apps.get_model("books", "ScanStatus")
 
     # Get folders with basic info only - no filesystem operations (OPTIMIZED)
-    recent_folders = list(ScanFolder.objects.annotate(
-        book_count=Count('book')
-    ).select_related().order_by('-created_at')[:10])
+    recent_folders = list(ScanFolder.objects.annotate(book_count=Count("book")).select_related().order_by("-created_at")[:10])
 
     # Add basic progress info without filesystem calls (FAST)
     for folder in recent_folders:
         folder.progress_info = {
-            'scanned': folder.book_count,  # From annotation
-            'total_files': 0,  # Will be loaded via AJAX
-            'percentage': 0,  # Will be calculated via AJAX
-            'needs_scan': True,  # Assume true, will be updated via AJAX
-            'loading': True  # Flag for UI to show loading spinner
+            "scanned": folder.book_count,  # From annotation
+            "total_files": 0,  # Will be loaded via AJAX
+            "percentage": 0,  # Will be calculated via AJAX
+            "needs_scan": True,  # Assume true, will be updated via AJAX
+            "loading": True,  # Flag for UI to show loading spinner
         }
 
     # Check for interrupted scans (Failed status with progress > 0) - OPTIMIZED
-    interrupted_scans = ScanStatus.objects.filter(
-        Q(status='Failed') & Q(processed_files__gt=0),
-        scan_folders__isnull=False
-    ).order_by('-updated')[:5]
+    interrupted_scans = ScanStatus.objects.filter(Q(status="Failed") & Q(processed_files__gt=0), scan_folders__isnull=False).order_by("-updated")[:5]
 
     # Get recent scan history for dashboard - OPTIMIZED
     from books.models import ScanHistory, ScanQueue
-    recent_scan_history = ScanHistory.objects.select_related().order_by('-completed_at')[:5]
+
+    recent_scan_history = ScanHistory.objects.select_related().order_by("-completed_at")[:5]
 
     # Pre-calculate interrupted scan progress (DATABASE ONLY - FAST)
     interrupted_scans_with_progress = []
     for scan in interrupted_scans:
-        total_files = getattr(scan, 'total_files', 0)
-        processed_files = getattr(scan, 'processed_files', 0)
+        total_files = getattr(scan, "total_files", 0)
+        processed_files = getattr(scan, "processed_files", 0)
 
         # Calculate progress percentage
         progress_percentage = 0
@@ -95,63 +89,62 @@ def scan_dashboard(request):
         if scan.scan_folders:
             try:
                 import json
+
                 folders_data = json.loads(scan.scan_folders)
                 if folders_data and len(folders_data) > 0:
-                    folder_name = folders_data[0].get('name', 'Unknown') if isinstance(folders_data[0], dict) else str(folders_data[0])
+                    folder_name = folders_data[0].get("name", "Unknown") if isinstance(folders_data[0], dict) else str(folders_data[0])
             except (json.JSONDecodeError, (AttributeError, KeyError, IndexError)):
                 folder_name = "Unknown"
 
-        interrupted_scans_with_progress.append({
-            'scan': scan,
-            'folder_name': folder_name,
-            'processed_files': processed_files,
-            'total_files': total_files,
-            'progress_percentage': progress_percentage,
-            'progress_display': f"{processed_files}/{total_files}" if total_files > 0 else f"{processed_files}/?"
-        })
+        interrupted_scans_with_progress.append(
+            {
+                "scan": scan,
+                "folder_name": folder_name,
+                "processed_files": processed_files,
+                "total_files": total_files,
+                "progress_percentage": progress_percentage,
+                "progress_display": f"{processed_files}/{total_files}" if total_files > 0 else f"{processed_files}/?",
+            }
+        )
 
     # Get upcoming scan queue (next 5 pending items) - OPTIMIZED
-    scan_queue = ScanQueue.objects.filter(
-        status__in=['pending', 'scheduled']
-    ).select_related().order_by('-priority', 'created_at')[:5]
+    scan_queue = ScanQueue.objects.filter(status__in=["pending", "scheduled"]).select_related().order_by("-priority", "created_at")[:5]
 
     # Get recent scan sessions with resumable books - NEW
     from books.models import ScanSession
-    recent_sessions = ScanSession.objects.filter(
-        can_resume=True,
-        is_active=False
-    ).order_by('-updated_at')[:5]
+
+    recent_sessions = ScanSession.objects.filter(can_resume=True, is_active=False).order_by("-updated_at")[:5]
 
     context = {
-        'active_scans': active_scans,
-        'api_status': api_info,
-        'recent_folders': recent_folders,
-        'interrupted_scans': interrupted_scans,
-        'interrupted_scans_with_progress': interrupted_scans_with_progress,
-        'scan_queue': scan_queue,
-        'recent_scan_history': recent_scan_history,
-        'recent_sessions': recent_sessions,  # NEW
-        'language_choices': LanguageManager.get_language_choices(),
-        'page_title': 'Scanning Dashboard'
+        "active_scans": active_scans,
+        "api_status": api_info,
+        "recent_folders": recent_folders,
+        "interrupted_scans": interrupted_scans,
+        "interrupted_scans_with_progress": interrupted_scans_with_progress,
+        "scan_queue": scan_queue,
+        "recent_scan_history": recent_scan_history,
+        "recent_sessions": recent_sessions,  # NEW
+        "language_choices": LanguageManager.get_language_choices(),
+        "page_title": "Scanning Dashboard",
     }
 
-    return render(request, 'books/scanning/dashboard.html', context)
+    return render(request, "books/scanning/dashboard.html", context)
 
 
 @login_required
 @require_http_methods(["POST"])
 def start_folder_scan(request):
     """Start a background folder scan."""
-    folder_path = request.POST.get('folder_path')
-    folder_id = request.POST.get('folder_id')
-    folder_name = request.POST.get('folder_name', '').strip()
-    content_type = request.POST.get('content_type', 'ebooks')
-    language = request.POST.get('language', 'en')
-    enable_external_apis = request.POST.get('enable_external_apis') == 'on'
+    folder_path = request.POST.get("folder_path")
+    folder_id = request.POST.get("folder_id")
+    folder_name = request.POST.get("folder_name", "").strip()
+    content_type = request.POST.get("content_type", "ebooks")
+    language = request.POST.get("language", "en")
+    enable_external_apis = request.POST.get("enable_external_apis") == "on"
 
     # Handle scanning by folder_id
     if folder_id and not folder_path:
-        ScanFolder = apps.get_model('books', 'ScanFolder')
+        ScanFolder = apps.get_model("books", "ScanFolder")
         try:
             scan_folder = ScanFolder.objects.get(id=folder_id)
             folder_path = scan_folder.path
@@ -160,11 +153,11 @@ def start_folder_scan(request):
             language = scan_folder.language
         except ScanFolder.DoesNotExist:
             messages.error(request, "Scan folder not found")
-            return redirect('books:scan_dashboard')
+            return redirect("books:scan_dashboard")
 
     if not folder_path:
         messages.error(request, "Folder path is required")
-        return redirect('books:scan_dashboard')
+        return redirect("books:scan_dashboard")
 
     # Check if we should queue or execute immediately
     from books.models import ScanQueue
@@ -177,9 +170,9 @@ def start_folder_scan(request):
         # Queue the scan instead of running it immediately
         queue_item = ScanQueue.objects.create(
             name=f"Folder Scan: {folder_name or folder_path}",
-            scan_type='folder',
-            status='pending',
-            priority=2,  # Normal priority
+            scan_type="folder",
+            status="pending",
+            priority=SCAN_PRIORITY["normal"],  # Normal priority
             folder_paths=[folder_path],
             rescan_existing=False,
             update_metadata=True,
@@ -188,10 +181,12 @@ def start_folder_scan(request):
             created_by=request.user,
         )
 
-        messages.info(request,
-                      f"Scan queued due to concurrent scan limit ({len(active_scans)}/{max_concurrent_scans} active). "
-                      f"Your scan '{queue_item.name}' (Queue ID: {queue_item.id}) will start automatically when a slot becomes available.")
-        return redirect('books:scan_dashboard')
+        messages.info(
+            request,
+            f"Scan queued due to concurrent scan limit ({len(active_scans)}/{max_concurrent_scans} active). "
+            f"Your scan '{queue_item.name}' (Queue ID: {queue_item.id}) will start automatically when a slot becomes available.",
+        )
+        return redirect("books:scan_dashboard")
 
     # Generate job ID and execute immediately
     job_id = str(uuid.uuid4())
@@ -204,17 +199,8 @@ def start_folder_scan(request):
         logger.info(f"[THREAD START] Creating background thread for job {job_id}")
         thread = threading.Thread(
             target=background_scan_folder,
-            args=(
-                job_id,
-                folder_path,
-                language,
-                enable_external_apis,
-                content_type,
-                folder_name,
-                False,  # rescan=False
-                None    # resume_from=None
-            ),
-            daemon=True
+            args=(job_id, folder_path, language, enable_external_apis, content_type, folder_name, False, None),  # rescan=False  # resume_from=None
+            daemon=True,
         )
         thread.start()
         logger.info(f"[THREAD STARTED] Background thread started for job {job_id}, thread: {thread.name}")
@@ -226,21 +212,21 @@ def start_folder_scan(request):
     except Exception as e:
         messages.error(request, f"Failed to start scan: {str(e)}")
 
-    return redirect('books:scan_dashboard')
+    return redirect("books:scan_dashboard")
 
 
 @login_required
 @require_http_methods(["POST"])
 def start_book_rescan(request):
     """Start a background rescan of existing books."""
-    book_ids_str = request.POST.get('book_ids', '')
-    folder_id = request.POST.get('folder_id')
-    rescan_all = request.POST.get('rescan_all') == 'on'
-    enable_external_apis = request.POST.get('enable_external_apis') == 'on'
+    book_ids_str = request.POST.get("book_ids", "")
+    folder_id = request.POST.get("folder_id")
+    rescan_all = request.POST.get("rescan_all") == "on"
+    enable_external_apis = request.POST.get("enable_external_apis") == "on"
 
     # Priority 1: Folder rescan (rescan=True means full folder scan with cleanup)
     if folder_id and rescan_all:
-        ScanFolder = apps.get_model('books', 'ScanFolder')
+        ScanFolder = apps.get_model("books", "ScanFolder")
         try:
             folder = ScanFolder.objects.get(id=folder_id)
 
@@ -251,11 +237,12 @@ def start_book_rescan(request):
             if len(active_scans) >= max_concurrent_scans:
                 # Queue the rescan
                 from books.models import ScanQueue
+
                 queue_item = ScanQueue.objects.create(
                     name=f"Folder Rescan: {folder.name}",
-                    scan_type='folder',
-                    status='pending',
-                    priority=3,  # High priority for rescans
+                    scan_type="folder",
+                    status="pending",
+                    priority=SCAN_PRIORITY["high"],  # High priority for rescans
                     folder_paths=[folder.path],
                     rescan_existing=True,
                     update_metadata=True,
@@ -264,10 +251,12 @@ def start_book_rescan(request):
                     created_by=request.user,
                 )
 
-                messages.info(request,
-                              f"Rescan queued due to concurrent scan limit ({len(active_scans)}/{max_concurrent_scans} active). "
-                              f"Your rescan '{queue_item.name}' (Queue ID: {queue_item.id}) will start automatically when a slot becomes available.")
-                return redirect('books:scan_dashboard')
+                messages.info(
+                    request,
+                    f"Rescan queued due to concurrent scan limit ({len(active_scans)}/{max_concurrent_scans} active). "
+                    f"Your rescan '{queue_item.name}' (Queue ID: {queue_item.id}) will start automatically when a slot becomes available.",
+                )
+                return redirect("books:scan_dashboard")
 
             job_id = str(uuid.uuid4())
             # Add job to active scans list first
@@ -276,17 +265,8 @@ def start_book_rescan(request):
             # Full folder rescan with cleanup of removed books - run in background thread
             thread = threading.Thread(
                 target=background_scan_folder,
-                args=(
-                    job_id,
-                    folder.path,
-                    folder.language,
-                    enable_external_apis,
-                    folder.content_type,
-                    folder.name,
-                    True,  # rescan=True
-                    None   # resume_from=None
-                ),
-                daemon=True
+                args=(job_id, folder.path, folder.language, enable_external_apis, folder.content_type, folder.name, True, None),  # rescan=True  # resume_from=None
+                daemon=True,
             )
             thread.start()
 
@@ -299,12 +279,12 @@ def start_book_rescan(request):
             messages.error(request, "Scan folder not found")
         except Exception as e:
             messages.error(request, f"Failed to start folder rescan: {str(e)}")
-        return redirect('books:scan_dashboard')
+        return redirect("books:scan_dashboard")
 
     # Priority 2: Global rescan of all books (legacy support)
     elif rescan_all:
-        Book = apps.get_model('books', 'Book')
-        book_ids = list(Book.objects.values_list('id', flat=True))
+        Book = apps.get_model("books", "Book")
+        book_ids = list(Book.objects.values_list("id", flat=True))
         scan_description = f"all {len(book_ids)} books"
         job_id = str(uuid.uuid4())
         try:
@@ -312,42 +292,34 @@ def start_book_rescan(request):
             add_active_scan(job_id)
 
             # Run rescan in background thread
-            thread = threading.Thread(
-                target=background_rescan_books,
-                args=(job_id, book_ids, enable_external_apis),
-                daemon=True
-            )
+            thread = threading.Thread(target=background_rescan_books, args=(job_id, book_ids, enable_external_apis), daemon=True)
             thread.start()
 
             messages.success(request, f"Background rescan started for {scan_description} (Job ID: {job_id})")
         except Exception as e:
             messages.error(request, f"Failed to start global rescan: {str(e)}")
-        return redirect('books:scan_dashboard')
+        return redirect("books:scan_dashboard")
 
     # Priority 3: Specific book IDs rescan
     elif book_ids_str:
         try:
-            book_ids = [int(id_str.strip()) for id_str in book_ids_str.split(',') if id_str.strip()]
+            book_ids = [int(id_str.strip()) for id_str in book_ids_str.split(",") if id_str.strip()]
             scan_description = f"{len(book_ids)} selected books"
             job_id = str(uuid.uuid4())
             # Add job to active scans list first
             add_active_scan(job_id)
 
             # Run rescan in background thread
-            thread = threading.Thread(
-                target=background_rescan_books,
-                args=(job_id, book_ids, enable_external_apis),
-                daemon=True
-            )
+            thread = threading.Thread(target=background_rescan_books, args=(job_id, book_ids, enable_external_apis), daemon=True)
             thread.start()
 
             messages.success(request, f"Background rescan started for {scan_description} (Job ID: {job_id})")
         except ValueError:
             messages.error(request, "Invalid book IDs")
-        return redirect('books:scan_dashboard')
+        return redirect("books:scan_dashboard")
     else:
         messages.error(request, "Must specify books to rescan")
-        return redirect('books:scan_dashboard')
+        return redirect("books:scan_dashboard")
 
 
 @login_required
@@ -356,7 +328,7 @@ def scan_progress_ajax(request, job_id):
     progress = get_scan_progress(job_id)
 
     if not progress:
-        return JsonResponse({'error': 'Job not found'}, status=404)
+        return JsonResponse({"error": "Job not found"}, status=404)
 
     return JsonResponse(progress)
 
@@ -370,10 +342,7 @@ def api_status_ajax(request):
     # Combine status with health
     combined_status = {}
     for api_name, status in api_status.items():
-        combined_status[api_name] = {
-            **status,
-            'healthy': api_health.get(api_name, False)
-        }
+        combined_status[api_name] = {**status, "healthy": api_health.get(api_name, False)}
 
     return JsonResponse(combined_status)
 
@@ -382,7 +351,7 @@ def api_status_ajax(request):
 def active_scans_ajax(request):
     """AJAX endpoint for getting active scans."""
     active_scans = get_all_active_scans()
-    return JsonResponse({'scans': active_scans})
+    return JsonResponse({"scans": active_scans})
 
 
 @login_required
@@ -394,92 +363,96 @@ def cancel_scan_ajax(request, job_id):
     success = cancel_scan(job_id)
 
     if success:
-        return JsonResponse({'success': True, 'message': 'Scan cancelled'})
+        return JsonResponse({"success": True, "message": "Scan cancelled"})
     else:
-        return JsonResponse({'success': False, 'error': 'Failed to cancel scan'}, status=400)
+        return JsonResponse({"success": False, "error": "Failed to cancel scan"}, status=400)
 
 
 @login_required
 def scan_history(request):
     """View scan history and completed jobs."""
     from django.core.paginator import Paginator
+
     from books.models import ScanHistory
 
     # Get all scan history entries, ordered by most recent first
-    scan_history_list = ScanHistory.objects.all().select_related('scan_folder')
+    scan_history_list = ScanHistory.objects.all().select_related("scan_folder")
 
     # Pagination
     paginator = Paginator(scan_history_list, 20)  # Show 20 scans per page
-    page_number = request.GET.get('page')
+    page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
     # Get statistics
     total_scans = scan_history_list.count()
-    successful_scans = scan_history_list.filter(status='completed').count()
-    failed_scans = scan_history_list.filter(status='failed').count()
+    successful_scans = scan_history_list.filter(status="completed").count()
+    failed_scans = scan_history_list.filter(status="failed").count()
 
     # Calculate success rate
     success_rate = (successful_scans / total_scans * 100) if total_scans > 0 else 0
 
     # Get recent statistics (last 30 days)
     from datetime import timedelta
+
     from django.utils import timezone
+
     recent_date = timezone.now() - timedelta(days=30)
     recent_scans = scan_history_list.filter(completed_at__gte=recent_date)
 
     context = {
-        'page_title': 'Scan History',
-        'page_obj': page_obj,
-        'scan_history': page_obj.object_list,
-        'stats': {
-            'total_scans': total_scans,
-            'successful_scans': successful_scans,
-            'failed_scans': failed_scans,
-            'success_rate': round(success_rate, 1),
-            'recent_scans_count': recent_scans.count(),
-        }
+        "page_title": "Scan History",
+        "page_obj": page_obj,
+        "scan_history": page_obj.object_list,
+        "stats": {
+            "total_scans": total_scans,
+            "successful_scans": successful_scans,
+            "failed_scans": failed_scans,
+            "success_rate": round(success_rate, 1),
+            "recent_scans_count": recent_scans.count(),
+        },
     }
 
-    return render(request, 'books/scanning/history.html', context)
+    return render(request, "books/scanning/history.html", context)
 
 
 @login_required
 def scan_queue(request):
     """View for managing the scan queue."""
     from django.core.paginator import Paginator
+
     from books.models import ScanQueue
 
     # Get all queue items
-    queue_items = ScanQueue.objects.all().order_by('-priority', 'created_at')
+    queue_items = ScanQueue.objects.all().order_by("-priority", "created_at")
 
     # Pagination
     paginator = Paginator(queue_items, 20)  # 20 items per page
-    page_number = request.GET.get('page')
+    page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
     # Statistics
     total_items = queue_items.count()
-    pending_items = queue_items.filter(status='pending').count()
-    scheduled_items = queue_items.filter(status='scheduled').count()
-    processing_items = queue_items.filter(status='processing').count()
-    completed_items = queue_items.filter(status='completed').count()
-    failed_items = queue_items.filter(status='failed').count()
+    pending_items = queue_items.filter(status="pending").count()
+    scheduled_items = queue_items.filter(status="scheduled").count()
+    processing_items = queue_items.filter(status="processing").count()
+    completed_items = queue_items.filter(status="completed").count()
+    failed_items = queue_items.filter(status="failed").count()
 
     context = {
-        'page_title': 'Scan Queue Management',
-        'page_obj': page_obj,
-        'queue_items': page_obj.object_list,
-        'stats': {
-            'total_items': total_items,
-            'pending_items': pending_items,
-            'scheduled_items': scheduled_items,
-            'processing_items': processing_items,
-            'completed_items': completed_items,
-            'failed_items': failed_items,
-        }
+        "page_title": "Scan Queue Management",
+        "page_obj": page_obj,
+        "queue_items": page_obj.object_list,
+        "stats": {
+            "total_items": total_items,
+            "pending_items": pending_items,
+            "scheduled_items": scheduled_items,
+            "processing_items": processing_items,
+            "completed_items": completed_items,
+            "failed_items": failed_items,
+        },
     }
 
-    return render(request, 'books/scanning/queue.html', context)
+    return render(request, "books/scanning/queue.html", context)
 
 
 def _check_and_process_queue():
@@ -494,9 +467,7 @@ def _check_and_process_queue():
         return  # Still at capacity
 
     # Get next pending scan from queue
-    next_scan = ScanQueue.objects.filter(
-        status='pending'
-    ).order_by('-priority', 'created_at').first()
+    next_scan = ScanQueue.objects.filter(status="pending").order_by("-priority", "created_at").first()
 
     if next_scan:
         # Execute the queued scan
@@ -510,7 +481,7 @@ def _check_and_process_queue():
             add_active_scan(job_id)
 
             # Start the scan based on type
-            if next_scan.scan_type == 'folder' and next_scan.folder_paths:
+            if next_scan.scan_type == "folder" and next_scan.folder_paths:
                 folder_path = next_scan.folder_paths[0]  # Use first folder
 
                 thread = threading.Thread(
@@ -518,14 +489,14 @@ def _check_and_process_queue():
                     args=(
                         job_id,
                         folder_path,
-                        'en',  # Default language
+                        "en",  # Default language
                         next_scan.fetch_covers,
-                        'ebooks',  # Default content type
+                        "ebooks",  # Default content type
                         next_scan.name,
                         next_scan.rescan_existing,
-                        None    # resume_from=None
+                        None,  # resume_from=None
                     ),
-                    daemon=True
+                    daemon=True,
                 )
                 thread.start()
                 logger.info(f"[QUEUE] Started queued scan {next_scan.name} (Job ID: {job_id})")
@@ -539,36 +510,25 @@ def _check_and_process_queue():
 @login_required
 def scanning_help(request):
     """Help page for scanning features."""
-    context = {
-        'page_title': 'Scanning Help'
-    }
+    context = {"page_title": "Scanning Help"}
 
-    return render(request, 'books/scanning/help.html', context)
+    return render(request, "books/scanning/help.html", context)
 
 
 @login_required
 def scan_folder_progress_ajax(request, folder_id):
     """AJAX endpoint to get detailed progress info for a specific folder."""
     try:
-        ScanFolder = apps.get_model('books', 'ScanFolder')
+        ScanFolder = apps.get_model("books", "ScanFolder")
         folder = ScanFolder.objects.get(id=folder_id)
 
         # Get progress info (this is the expensive operation, now done individually)
         progress_info = folder.get_scan_progress_info()
 
-        return JsonResponse({
-            'success': True,
-            'progress': progress_info
-        })
+        return JsonResponse({"success": True, "progress": progress_info})
 
     except ScanFolder.DoesNotExist:
-        return JsonResponse({
-            'success': False,
-            'error': 'Folder not found'
-        }, status=404)
+        return JsonResponse({"success": False, "error": "Folder not found"}, status=404)
     except Exception as e:
         logger.error(f"Error getting progress for folder {folder_id}: {e}")
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        }, status=500)
+        return JsonResponse({"success": False, "error": str(e)}, status=500)

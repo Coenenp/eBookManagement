@@ -4,9 +4,11 @@ Tests for the management commands related to scanning.
 
 from io import StringIO
 from unittest.mock import patch
+
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
+
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 

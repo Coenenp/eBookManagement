@@ -1,0 +1,18 @@
+{% extends 'books/base.html' %}
+
+{% block title %}Delete Genre - Ebook Library Manager{% endblock %}
+
+{% block content %}
+<h2>Delete Genre</h2>
+<p><strong>Heads up!</strong> Deleting the genre <strong>"{{ object.name }}"</strong> will remove all associations with books in your library.</p>
+<p>The books themselves will remain, but their genre information may become incomplete. Are you sure you want to continue?</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">
+        <i class="fas fa-trash"></i> Delete
+    </button>
+    <a href="{% url 'books:genre_list' %}" class="btn btn-secondary">
+        <i class="fas fa-times"></i> Cancel
+    </a>
+</form>
+{% endblock %}

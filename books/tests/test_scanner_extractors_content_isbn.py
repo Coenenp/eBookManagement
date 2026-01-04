@@ -2,19 +2,22 @@
 Test cases for Content ISBN Scanner Extractor
 """
 import os
-import tempfile
 import shutil
+import tempfile
+from unittest.mock import MagicMock, patch
+
 from django.test import TestCase
-from unittest.mock import patch, MagicMock
-from books.models import (
-    Book, ScanFolder, DataSource, BookMetadata
+
+from books.models import Book, BookMetadata, DataSource, ScanFolder
+from books.scanner.extractors.content_isbn import (
+    _extract_text_from_html,
+    _find_isbn_patterns,
+    _validate_and_dedupe_isbns,
+    bulk_scan_content_isbns,
+    extract_isbn_from_content,
+    save_content_isbns,
 )
 from books.tests.test_helpers import create_test_book_with_file
-from books.scanner.extractors.content_isbn import (
-    extract_isbn_from_content, save_content_isbns,
-    _find_isbn_patterns, _validate_and_dedupe_isbns,
-    _extract_text_from_html, bulk_scan_content_isbns
-)
 
 
 class ContentISBNExtractorTests(TestCase):

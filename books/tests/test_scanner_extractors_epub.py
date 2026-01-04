@@ -2,16 +2,15 @@
 Test cases for EPUB Scanner Extractor
 """
 import os
-import tempfile
 import shutil
+import tempfile
+from unittest.mock import MagicMock, patch
+
 from django.test import TestCase
-from unittest.mock import patch, MagicMock
-from books.models import (
-    ScanFolder, DataSource, BookTitle, BookAuthor,
-    BookPublisher, BookMetadata, Publisher
-)
-from books.tests.test_helpers import create_test_book_with_file
+
+from books.models import BookAuthor, BookMetadata, BookPublisher, BookTitle, DataSource, Publisher, ScanFolder
 from books.scanner.extractors.epub import extract
+from books.tests.test_helpers import create_test_book_with_file
 
 
 class EPUBExtractorTests(TestCase):

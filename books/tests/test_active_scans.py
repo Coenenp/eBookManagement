@@ -2,11 +2,12 @@
 Test cases for active scans functionality
 """
 
-from django.test import TestCase
-from django.core.cache import cache
 from unittest.mock import patch
 
-from books.scanner.background import add_active_scan, get_all_active_scans, ScanProgress
+from django.core.cache import cache
+from django.test import TestCase
+
+from books.scanner.background import ScanProgress, add_active_scan, get_all_active_scans
 
 
 class ActiveScansTests(TestCase):

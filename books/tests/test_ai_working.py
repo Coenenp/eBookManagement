@@ -3,12 +3,13 @@ Working test suite for AI-driven filename pattern recognition system.
 """
 
 import unittest
-from django.test import TestCase
+
 from django.contrib.auth.models import User
+from django.test import TestCase
 
 from books.models import AIFeedback
-from books.tests.test_helpers import create_test_scan_folder, create_test_book_with_file
 from books.scanner.ai.filename_recognizer import FilenamePatternRecognizer
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
 class WorkingAITests(TestCase):

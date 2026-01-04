@@ -4,21 +4,37 @@ Tests for model methods, properties, relationships, and edge cases.
 Focuses on achieving higher coverage for the models module.
 """
 import os
-import tempfile
 import shutil
-import django
-from django.test import TestCase
-from django.db import IntegrityError
-from django.core.exceptions import ValidationError
-from django.contrib.auth.models import User
-from django.utils import timezone
-from unittest.mock import patch
+import tempfile
 import uuid
+from unittest.mock import patch
+
+import django
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError
+from django.test import TestCase
+from django.utils import timezone
 
 from books.models import (
-    DataSource, ScanFolder, Book, BookFile, Author, BookAuthor, Series, BookSeries,
-    Publisher, BookPublisher, BookCover, BookMetadata, FinalMetadata,
-    ScanLog, ScanStatus, FileOperation, AIFeedback, UserProfile
+    AIFeedback,
+    Author,
+    Book,
+    BookAuthor,
+    BookCover,
+    BookFile,
+    BookMetadata,
+    BookPublisher,
+    BookSeries,
+    DataSource,
+    FileOperation,
+    FinalMetadata,
+    Publisher,
+    ScanFolder,
+    ScanLog,
+    ScanStatus,
+    Series,
+    UserProfile,
 )
 from books.tests.test_helpers import create_test_book_with_file
 

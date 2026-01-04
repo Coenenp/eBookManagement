@@ -3,14 +3,12 @@ Comprehensive test suite for analytics dashboard functionality.
 Addresses 0% coverage in analytics modules.
 """
 
-from django.test import TestCase, Client
 from django.contrib.auth.models import User
+from django.test import Client, TestCase
 from django.urls import reverse
-from books.models import Book, Author, Series, Genre, DataSource, FinalMetadata
-from books.analytics.dashboard_metrics import (
-    get_content_type_statistics, get_issue_statistics,
-    get_recent_activity
-)
+
+from books.analytics.dashboard_metrics import get_content_type_statistics, get_issue_statistics, get_recent_activity
+from books.models import Author, Book, DataSource, FinalMetadata, Genre, Series
 
 
 class DashboardMetricsTests(TestCase):

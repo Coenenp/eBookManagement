@@ -5,9 +5,26 @@ including books, authors, publishers, metadata, and scan operations. Provides
 comprehensive admin views with filtering, search, and bulk operations.
 """
 from django.contrib import admin
+
 from .models import (
-    Author, Book, BookAuthor, BookCover, BookFile, BookGenre, BookMetadata, BookSeries, BookTitle, BookPublisher,
-    DataSource, FinalMetadata, Genre, Publisher, ScanFolder, ScanLog, ScanStatus, Series
+    Author,
+    Book,
+    BookAuthor,
+    BookCover,
+    BookFile,
+    BookGenre,
+    BookMetadata,
+    BookPublisher,
+    BookSeries,
+    BookTitle,
+    DataSource,
+    FinalMetadata,
+    Genre,
+    Publisher,
+    ScanFolder,
+    ScanLog,
+    ScanStatus,
+    Series,
 )
 
 # ----------------------

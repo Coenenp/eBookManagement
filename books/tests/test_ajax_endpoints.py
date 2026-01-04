@@ -7,15 +7,17 @@ asynchronous operations.
 """
 
 import json
-import tempfile
 import shutil
-from unittest.mock import patch, MagicMock
-from django.test import TestCase, Client, RequestFactory, override_settings
+import tempfile
+from unittest.mock import MagicMock, patch
+
 from django.contrib.auth.models import User
-from django.urls import reverse
-from django.http import JsonResponse
 from django.core.cache import cache
-from books.models import FinalMetadata, DataSource, AIFeedback, UserProfile, ScanFolder
+from django.http import JsonResponse
+from django.test import Client, RequestFactory, TestCase, override_settings
+from django.urls import reverse
+
+from books.models import AIFeedback, DataSource, FinalMetadata, ScanFolder, UserProfile
 from books.tests.test_helpers import create_test_book_with_file
 
 

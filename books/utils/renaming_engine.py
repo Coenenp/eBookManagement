@@ -4,12 +4,12 @@ Ebook & Series Renamer - Template Engine
 JMTE-compatible template processing for flexible file and folder renaming.
 Supports dynamic tokens, automatic omission of empty values, and character normalization.
 """
-import re
 import logging
-from typing import Optional, List, Tuple
+import re
 from pathlib import Path
-from django.db import models
+from typing import List, Optional, Tuple
 
+from django.db import models
 
 logger = logging.getLogger(__name__)
 

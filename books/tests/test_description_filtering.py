@@ -1,6 +1,7 @@
 """Tests for the description sanitization filter."""
 
 from django.test import TestCase
+
 from books.templatetags.custom_filters import sanitize_description
 
 

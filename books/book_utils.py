@@ -2,18 +2,16 @@
 Book management utilities for handling metadata, covers, and form processing.
 """
 
-import os
 import json
 import logging
-from django.conf import settings
-from django.shortcuts import get_object_or_404
-from django.http import JsonResponse
-from django.db import IntegrityError
+import os
 
-from .models import (
-    Author, Book, BookTitle, BookAuthor, BookCover, BookSeries, BookPublisher,
-    BookGenre, BookMetadata, DataSource, Series, Publisher, Genre
-)
+from django.conf import settings
+from django.db import IntegrityError
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+
+from .models import Author, Book, BookAuthor, BookCover, BookGenre, BookMetadata, BookPublisher, BookSeries, BookTitle, DataSource, Genre, Publisher, Series
 
 logger = logging.getLogger('books.scanner')
 

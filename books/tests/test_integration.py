@@ -7,11 +7,13 @@ data consistency, session management, and complex business processes.
 
 import json
 import time
-from django.test import TestCase, Client, TransactionTestCase
+
 from django.contrib.auth.models import User
-from django.urls import reverse
 from django.db import transaction
-from books.models import Book, FinalMetadata, BookMetadata, DataSource, ScanFolder
+from django.test import Client, TestCase, TransactionTestCase
+from django.urls import reverse
+
+from books.models import Book, BookMetadata, DataSource, FinalMetadata, ScanFolder
 from books.tests.test_helpers import create_test_book_with_file
 
 

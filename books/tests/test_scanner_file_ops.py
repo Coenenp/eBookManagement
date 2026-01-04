@@ -1,13 +1,11 @@
 """
 Test cases for Scanner File Operations
 """
-from django.test import TestCase
 from pathlib import Path
-from books.scanner.file_ops import (
-    get_file_format,
-    find_cover_file,
-    find_opf_file
-)
+
+from django.test import TestCase
+
+from books.scanner.file_ops import find_cover_file, find_opf_file, get_file_format
 
 
 class ScannerFileOpsTests(TestCase):

@@ -51,12 +51,9 @@ window.audiobooksConfig = {
         audiobooks_main: '{% url "books:audiobooks_main" %}'
     }
 };
-
-document.addEventListener('DOMContentLoaded', function() {
-    window.audiobooksManager = new AudiobooksSectionManager();
-});
 </script>
 <script src="{% static 'book/js/media-library-utils.js' %}"></script>
 <script src="{% static 'book/js/base-section-manager.js' %}"></script>
 <script src="{% static 'book/js/audiobooks-section.js' %}"></script>
+<script src="{% static 'book/js/audiobooks-section-init.js' %}"></script>
 {% endblock %}

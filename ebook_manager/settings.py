@@ -13,7 +13,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 import sys
 from pathlib import Path
-from dotenv import load_dotenv, dotenv_values
+
+from dotenv import dotenv_values, load_dotenv
 
 # Load .env file and force override system environment variables for specific keys
 env_file_path = Path(__file__).resolve().parent.parent / '.env'

@@ -928,16 +928,16 @@
 
 <!-- Include external JavaScript files -->
 <script src="{% static 'book/js/book-metadata.js' %}"></script>
+<script src="{% static 'book/js/book-metadata-init.js' %}"></script>
 <script>
     // Initialize metadata functionality with Django template data
     document.addEventListener('DOMContentLoaded', function() {
-        // Initialize metadata form handler with Django template data
         const finalMetadata = {
             title: "{{ book.finalmetadata.final_title|escapejs }}",
             author: "{{ book.finalmetadata.final_author|escapejs }}",
             series: "{{ book.finalmetadata.final_series|escapejs }}",
             seriesNumber: "{{ book.finalmetadata.final_series_number|escapejs }}",
-            genre: [],  // Will be populated below
+            genre: [],
             description: "{{ book.finalmetadata.final_description|escapejs }}",
             isbn: "{{ book.finalmetadata.final_isbn|escapejs }}",
             publisher: "{{ book.finalmetadata.final_publisher|escapejs }}",
@@ -946,37 +946,19 @@
             cover: "{{ book.finalmetadata.final_cover_path|escapejs }}"
         };
 
-        // Current genres from Django
         const currentGenres = [
             {% for genre in book.finalmetadata.final_genres.all %}
                 "{{ genre.name|escapejs }}"{% if not forloop.last %},{% endif %}
             {% endfor %}
         ];
 
-        // Language choices from Django
         const languageChoices = [
             {% for code, name in form.final_language.field.choices %}
                 { code: "{{ code|escapejs }}", name: "{{ name|escapejs }}" }{% if not forloop.last %},{% endif %}
             {% endfor %}
         ];
 
-        // CSRF token
-        const csrfToken = "{{ csrf_token }}";
-        
-        // Book ID
-        const bookId = {{ book.id }};
-
-        // Initialize the main metadata form handler
-        window.metadataHandler = new MetadataFormHandler(
-            finalMetadata,
-            currentGenres,
-            languageChoices,
-            csrfToken,
-            bookId
-        );
-
-        // Initialize ISBN lookup functionality
-        window.isbnLookup = new ISBNLookup(csrfToken);
+        initializeMetadataForm(finalMetadata, currentGenres, languageChoices, "{{ csrf_token }}", {{ book.id }});
     });
 </script>
 

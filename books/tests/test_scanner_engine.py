@@ -4,13 +4,14 @@ This module tests the core scanning engine logic, status tracking,
 resumption capabilities, and metadata completion functionality.
 """
 
-import os
 import json
+import os
 import tempfile
 from unittest.mock import patch
+
 from django.test import TestCase
 
-from books.models import ScanStatus, ScanFolder, FinalMetadata, DataSource
+from books.models import DataSource, FinalMetadata, ScanFolder, ScanStatus
 from books.scanner.scanner_engine import EbookScanner
 from books.tests.test_helpers import create_test_book_with_file
 
@@ -35,7 +36,7 @@ class EbookScannerTests(TestCase):
         self.assertEqual(scanner.cover_extensions, {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"})
 
         # Test that scanner uses centralized extensions from models
-        from books.models import COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
+        from books.models import AUDIOBOOK_FORMATS, COMIC_FORMATS, EBOOK_FORMATS
         expected_extensions = set()
         for fmt in EBOOK_FORMATS:
             expected_extensions.add(f'.{fmt}')

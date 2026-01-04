@@ -3,11 +3,12 @@
 This module provides template filters for mathematical operations,
 text processing, and data formatting in Django templates.
 """
-from django import template
-import urllib.parse
-import os
 import logging
+import os
+import urllib.parse
+
 import bleach
+from django import template
 
 logger = logging.getLogger('books.scanner')
 register = template.Library()

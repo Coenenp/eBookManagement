@@ -5,31 +5,27 @@ This module provides a workflow for processing books one at a time from the top,
 allowing users to review, confirm metadata, rename/move files, manage duplicates,
 and handle remaining files in the folder.
 """
+import logging
 import os
 import shutil
-import logging
-import requests
 from pathlib import Path
 from typing import Dict, List
 
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.decorators import login_required
+import requests
 from django.contrib import messages
-from django.shortcuts import render, redirect, get_object_or_404
-from django.views import View
-from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.views import View
 
-from books.models import (
-    Book, BookFile, FinalMetadata, DataSource,
-    BookTitle, BookAuthor, Author, BookSeries, Series,
-    BookPublisher, Publisher, BookMetadata
-)
+from books.models import Author, Book, BookAuthor, BookFile, BookMetadata, BookPublisher, BookSeries, BookTitle, DataSource, FinalMetadata, Publisher, Series
 from books.scanner.external import query_metadata_and_covers_with_terms
-from books.utils.opf_generator import save_opf_file, get_opf_filename
 from books.utils.batch_renamer import CompanionFileFinder
 from books.utils.isbn import normalize_isbn, normalize_publication_year
+from books.utils.opf_generator import get_opf_filename, save_opf_file
 
 logger = logging.getLogger('books.scanner')
 

@@ -4,12 +4,14 @@ This module provides consolidated template tags for book cover display,
 metadata badges, and other book-related UI components.
 """
 # book_extras.py - Consolidated template tags for book display
-from django import template
-from books.utils.image_utils import encode_cover_to_base64
-import os
 import logging
+import os
+
 import requests
+from django import template
 from django.conf import settings
+
+from books.utils.image_utils import encode_cover_to_base64
 
 register = template.Library()
 logger = logging.getLogger('books.scanner')

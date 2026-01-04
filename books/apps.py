@@ -12,9 +12,11 @@ class BooksConfig(AppConfig):
     name = 'books'
 
     def ready(self):
-        from books.scanner.bootstrap import ensure_data_sources
-        from django.conf import settings
         import sys
+
+        from django.conf import settings
+
+        from books.scanner.bootstrap import ensure_data_sources
 
         # Only run bootstrap during production migrations, not tests
         def bootstrap_handler(sender, **kwargs):

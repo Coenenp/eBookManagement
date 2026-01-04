@@ -13,12 +13,14 @@ Supported APIs:
 - Comic Vine: 200 requests/hour
 - Open Library: No official limit (conservative: 60/minute)
 """
+
 import logging
 import time
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Any
-from django.core.cache import cache
+from typing import Any, Dict, Optional
+
 import requests
+from django.core.cache import cache
 
 logger = logging.getLogger("books.scanner")
 
@@ -28,36 +30,36 @@ class RateLimitConfig:
 
     # API Configurations
     GOOGLE_BOOKS = {
-        'name': 'Google Books',
-        'daily_limit': 1000,
-        'hourly_limit': None,
-        'minute_limit': None,
-        'base_delay': 0.1,  # 100ms between requests
-        'backoff_multiplier': 2.0,
-        'circuit_breaker_threshold': 5,  # failures before circuit opens
-        'circuit_breaker_timeout': 300,  # 5 minutes
+        "name": "Google Books",
+        "daily_limit": 1000,
+        "hourly_limit": None,
+        "minute_limit": None,
+        "base_delay": 0.1,  # 100ms between requests
+        "backoff_multiplier": 2.0,
+        "circuit_breaker_threshold": 5,  # failures before circuit opens
+        "circuit_breaker_timeout": 300,  # 5 minutes
     }
 
     COMIC_VINE = {
-        'name': 'Comic Vine',
-        'daily_limit': None,
-        'hourly_limit': 200,
-        'minute_limit': None,
-        'base_delay': 18.1,  # 18.1 seconds to stay well under 200/hour
-        'backoff_multiplier': 2.0,
-        'circuit_breaker_threshold': 3,
-        'circuit_breaker_timeout': 600,  # 10 minutes
+        "name": "Comic Vine",
+        "daily_limit": None,
+        "hourly_limit": 200,
+        "minute_limit": None,
+        "base_delay": 18.1,  # 18.1 seconds to stay well under 200/hour
+        "backoff_multiplier": 2.0,
+        "circuit_breaker_threshold": 3,
+        "circuit_breaker_timeout": 600,  # 10 minutes
     }
 
     OPEN_LIBRARY = {
-        'name': 'Open Library',
-        'daily_limit': None,
-        'hourly_limit': None,
-        'minute_limit': 60,  # Conservative limit
-        'base_delay': 1.0,  # 1 second between requests
-        'backoff_multiplier': 1.5,
-        'circuit_breaker_threshold': 5,
-        'circuit_breaker_timeout': 180,  # 3 minutes
+        "name": "Open Library",
+        "daily_limit": None,
+        "hourly_limit": None,
+        "minute_limit": 60,  # Conservative limit
+        "base_delay": 1.0,  # 1 second between requests
+        "backoff_multiplier": 1.5,
+        "circuit_breaker_threshold": 5,
+        "circuit_breaker_timeout": 180,  # 3 minutes
     }
 
 
@@ -73,12 +75,12 @@ class RateLimitTracker:
         """Generate cache key for tracking periods."""
         now = datetime.now()
 
-        if period == 'daily':
-            period_key = now.strftime('%Y-%m-%d')
-        elif period == 'hourly':
-            period_key = now.strftime('%Y-%m-%d-%H')
-        elif period == 'minute':
-            period_key = now.strftime('%Y-%m-%d-%H-%M')
+        if period == "daily":
+            period_key = now.strftime("%Y-%m-%d")
+        elif period == "hourly":
+            period_key = now.strftime("%Y-%m-%d-%H")
+        elif period == "minute":
+            period_key = now.strftime("%Y-%m-%d-%H-%M")
         else:
             raise ValueError(f"Invalid period: {period}")
 
@@ -98,12 +100,12 @@ class RateLimitTracker:
         new_count = count + 1
 
         # Set expiration based on period
-        if period == 'daily':
+        if period == "daily":
             timeout = 86400  # 24 hours
-        elif period == 'hourly':
-            timeout = 3600   # 1 hour
-        elif period == 'minute':
-            timeout = 60     # 1 minute
+        elif period == "hourly":
+            timeout = 3600  # 1 hour
+        elif period == "minute":
+            timeout = 60  # 1 minute
         else:
             timeout = 86400
 
@@ -113,43 +115,49 @@ class RateLimitTracker:
     def check_limits(self) -> Dict[str, Any]:
         """Check if API limits allow a new request."""
         result = {
-            'allowed': True,
-            'reason': None,
-            'retry_after': 0,
-            'current_counts': {}
+            "allowed": True,
+            "reason": None,
+            "retry_after": 0,
+            "current_counts": {},
         }
 
         # Check daily limit
-        if self.config.get('daily_limit'):
-            daily_count = self._get_current_count('daily')
-            result['current_counts']['daily'] = daily_count
+        if self.config.get("daily_limit"):
+            daily_count = self._get_current_count("daily")
+            result["current_counts"]["daily"] = daily_count
 
-            if daily_count >= self.config['daily_limit']:
-                result['allowed'] = False
-                result['reason'] = f"Daily limit exceeded ({daily_count}/{self.config['daily_limit']})"
-                result['retry_after'] = self._seconds_until_next_period('daily')
+            if daily_count >= self.config["daily_limit"]:
+                result["allowed"] = False
+                result["reason"] = (
+                    f"Daily limit exceeded ({daily_count}/{self.config['daily_limit']})"
+                )
+                result["retry_after"] = self._seconds_until_next_period("daily")
                 return result
 
         # Check hourly limit
-        if self.config.get('hourly_limit'):
-            hourly_count = self._get_current_count('hourly')
-            result['current_counts']['hourly'] = hourly_count
+        if self.config.get("hourly_limit"):
+            hourly_count = self._get_current_count("hourly")
+            result["current_counts"]["hourly"] = hourly_count
 
-            if hourly_count >= self.config['hourly_limit']:
-                result['allowed'] = False
-                result['reason'] = f"Hourly limit exceeded ({hourly_count}/{self.config['hourly_limit']})"
-                result['retry_after'] = self._seconds_until_next_period('hourly')
+            if hourly_count >= self.config["hourly_limit"]:
+                result["allowed"] = False
+                result["reason"] = (
+                    f"Hourly limit exceeded ({hourly_count}/{self.config['hourly_limit']})"
+                )
+                result["retry_after"] = self._seconds_until_next_period("hourly")
                 return result
 
         # Check minute limit
-        if self.config.get('minute_limit'):
-            minute_count = self._get_current_count('minute')
-            result['current_counts']['minute'] = minute_count
+        if self.config.get("minute_limit"):
+            minute_count = self._get_current_count("minute")
+            result["current_counts"]["minute"] = minute_count
 
-            if minute_count >= self.config['minute_limit']:
-                result['allowed'] = False
-                result['reason'] = f"Per-minute limit exceeded ({minute_count}/{self.config['minute_limit']})"
-                result['retry_after'] = self._seconds_until_next_period('minute')
+            if minute_count >= self.config["minute_limit"]:
+                result["allowed"] = False
+                result["reason"] = (
+                    f"Per-minute limit exceeded ({minute_count}/{self.config['minute_limit']})"
+                )
+                result["retry_after"] = self._seconds_until_next_period("minute")
                 return result
 
         return result
@@ -158,11 +166,15 @@ class RateLimitTracker:
         """Calculate seconds until the next period starts."""
         now = datetime.now()
 
-        if period == 'daily':
-            next_period = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        elif period == 'hourly':
-            next_period = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-        elif period == 'minute':
+        if period == "daily":
+            next_period = (now + timedelta(days=1)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+        elif period == "hourly":
+            next_period = (now + timedelta(hours=1)).replace(
+                minute=0, second=0, microsecond=0
+            )
+        elif period == "minute":
             next_period = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
         else:
             return 3600  # Default to 1 hour
@@ -171,36 +183,36 @@ class RateLimitTracker:
 
     def record_request(self):
         """Record a successful request."""
-        if self.config.get('daily_limit'):
-            self._increment_count('daily')
-        if self.config.get('hourly_limit'):
-            self._increment_count('hourly')
-        if self.config.get('minute_limit'):
-            self._increment_count('minute')
+        if self.config.get("daily_limit"):
+            self._increment_count("daily")
+        if self.config.get("hourly_limit"):
+            self._increment_count("hourly")
+        if self.config.get("minute_limit"):
+            self._increment_count("minute")
 
     def get_status(self) -> Dict[str, Any]:
         """Get current rate limit status."""
         status = {
-            'api_name': self.api_name,
-            'current_counts': {},
-            'limits': {},
-            'next_reset': {}
+            "api_name": self.api_name,
+            "current_counts": {},
+            "limits": {},
+            "next_reset": {},
         }
 
-        if self.config.get('daily_limit'):
-            status['current_counts']['daily'] = self._get_current_count('daily')
-            status['limits']['daily'] = self.config['daily_limit']
-            status['next_reset']['daily'] = self._seconds_until_next_period('daily')
+        if self.config.get("daily_limit"):
+            status["current_counts"]["daily"] = self._get_current_count("daily")
+            status["limits"]["daily"] = self.config["daily_limit"]
+            status["next_reset"]["daily"] = self._seconds_until_next_period("daily")
 
-        if self.config.get('hourly_limit'):
-            status['current_counts']['hourly'] = self._get_current_count('hourly')
-            status['limits']['hourly'] = self.config['hourly_limit']
-            status['next_reset']['hourly'] = self._seconds_until_next_period('hourly')
+        if self.config.get("hourly_limit"):
+            status["current_counts"]["hourly"] = self._get_current_count("hourly")
+            status["limits"]["hourly"] = self.config["hourly_limit"]
+            status["next_reset"]["hourly"] = self._seconds_until_next_period("hourly")
 
-        if self.config.get('minute_limit'):
-            status['current_counts']['minute'] = self._get_current_count('minute')
-            status['limits']['minute'] = self.config['minute_limit']
-            status['next_reset']['minute'] = self._seconds_until_next_period('minute')
+        if self.config.get("minute_limit"):
+            status["current_counts"]["minute"] = self._get_current_count("minute")
+            status["limits"]["minute"] = self.config["minute_limit"]
+            status["next_reset"]["minute"] = self._seconds_until_next_period("minute")
 
         return status
 
@@ -216,13 +228,13 @@ class CircuitBreaker:
 
     def is_open(self) -> bool:
         """Check if circuit breaker is open (API is considered down)."""
-        state = cache.get(self.cache_key, {'failures': 0, 'last_failure': 0})
+        state = cache.get(self.cache_key, {"failures": 0, "last_failure": 0})
 
-        if state['failures'] < self.failure_threshold:
+        if state["failures"] < self.failure_threshold:
             return False
 
         # Check if timeout has passed
-        if time.time() - state['last_failure'] > self.timeout:
+        if time.time() - state["last_failure"] > self.timeout:
             # Reset the circuit breaker
             self.reset()
             return False
@@ -235,15 +247,19 @@ class CircuitBreaker:
 
     def record_failure(self):
         """Record a failed API call."""
-        state = cache.get(self.cache_key, {'failures': 0, 'last_failure': 0})
-        state['failures'] += 1
-        state['last_failure'] = time.time()
+        state = cache.get(self.cache_key, {"failures": 0, "last_failure": 0})
+        state["failures"] += 1
+        state["last_failure"] = time.time()
         cache.set(self.cache_key, state, self.timeout * 2)
 
-        logger.warning(f"[CIRCUIT BREAKER] {self.api_name} failure #{state['failures']}")
+        logger.warning(
+            f"[CIRCUIT BREAKER] {self.api_name} failure #{state['failures']}"
+        )
 
-        if state['failures'] >= self.failure_threshold:
-            logger.error(f"[CIRCUIT BREAKER] {self.api_name} circuit opened after {state['failures']} failures")
+        if state["failures"] >= self.failure_threshold:
+            logger.error(
+                f"[CIRCUIT BREAKER] {self.api_name} circuit opened after {state['failures']} failures"
+            )
 
     def reset(self):
         """Reset the circuit breaker."""
@@ -260,14 +276,14 @@ class RateLimitedAPIClient:
         self.rate_tracker = RateLimitTracker(api_name, config)
         self.circuit_breaker = CircuitBreaker(
             api_name,
-            config.get('circuit_breaker_threshold', 5),
-            config.get('circuit_breaker_timeout', 300)
+            config.get("circuit_breaker_threshold", 5),
+            config.get("circuit_breaker_timeout", 300),
         )
         self.last_request_time = 0
 
     def _enforce_base_delay(self):
         """Enforce minimum delay between requests."""
-        base_delay = self.config.get('base_delay', 0.1)
+        base_delay = self.config.get("base_delay", 0.1)
         current_time = time.time()
         time_since_last = current_time - self.last_request_time
 
@@ -278,7 +294,15 @@ class RateLimitedAPIClient:
 
         self.last_request_time = time.time()
 
-    def make_request(self, url: str, params: Dict = None, headers: Dict = None, timeout: int = 30, cache_key: str = None, cache_timeout: int = 3600) -> Optional[Dict]:
+    def make_request(
+        self,
+        url: str,
+        params: Dict = None,
+        headers: Dict = None,
+        timeout: int = 30,
+        cache_key: str = None,
+        cache_timeout: int = 3600,
+    ) -> Optional[Dict]:
         """Make a rate-limited request to the API."""
 
         # Check circuit breaker
@@ -295,11 +319,15 @@ class RateLimitedAPIClient:
 
         # Check rate limits
         limit_check = self.rate_tracker.check_limits()
-        if not limit_check['allowed']:
-            logger.warning(f"[{self.api_name}] Rate limit exceeded: {limit_check['reason']}")
-            if limit_check['retry_after'] < 3600:  # Only wait if it's less than an hour
-                logger.info(f"[{self.api_name}] Waiting {limit_check['retry_after']}s for rate limit reset")
-                time.sleep(limit_check['retry_after'])
+        if not limit_check["allowed"]:
+            logger.warning(
+                f"[{self.api_name}] Rate limit exceeded: {limit_check['reason']}"
+            )
+            if limit_check["retry_after"] < 3600:  # Only wait if it's less than an hour
+                logger.info(
+                    f"[{self.api_name}] Waiting {limit_check['retry_after']}s for rate limit reset"
+                )
+                time.sleep(limit_check["retry_after"])
             else:
                 return None
 
@@ -311,18 +339,19 @@ class RateLimitedAPIClient:
 
             # Make the request
             response = requests.get(
-                url,
-                params=params,
-                headers=headers,
-                timeout=timeout
+                url, params=params, headers=headers, timeout=timeout
             )
 
             # Handle rate limiting responses
             if response.status_code == 429:
-                retry_after = int(response.headers.get('Retry-After', 60))
-                logger.warning(f"[{self.api_name}] 429 rate limit, waiting {retry_after}s")
+                retry_after = int(response.headers.get("Retry-After", 60))
+                logger.warning(
+                    f"[{self.api_name}] 429 rate limit, waiting {retry_after}s"
+                )
                 time.sleep(retry_after)
-                return self.make_request(url, params, headers, timeout, cache_key, cache_timeout)
+                return self.make_request(
+                    url, params, headers, timeout, cache_key, cache_timeout
+                )
 
             response.raise_for_status()
             data = response.json()
@@ -350,10 +379,10 @@ class RateLimitedAPIClient:
     def get_status(self) -> Dict[str, Any]:
         """Get comprehensive status of the API client."""
         return {
-            'api_name': self.api_name,
-            'rate_limits': self.rate_tracker.get_status(),
-            'circuit_breaker_open': self.circuit_breaker.is_open(),
-            'config': self.config
+            "api_name": self.api_name,
+            "rate_limits": self.rate_tracker.get_status(),
+            "circuit_breaker_open": self.circuit_breaker.is_open(),
+            "config": self.config,
         }
 
 
@@ -362,9 +391,15 @@ class APIManager:
 
     def __init__(self):
         self.clients = {
-            'google_books': RateLimitedAPIClient('Google Books', RateLimitConfig.GOOGLE_BOOKS),
-            'comic_vine': RateLimitedAPIClient('Comic Vine', RateLimitConfig.COMIC_VINE),
-            'open_library': RateLimitedAPIClient('Open Library', RateLimitConfig.OPEN_LIBRARY),
+            "google_books": RateLimitedAPIClient(
+                "Google Books", RateLimitConfig.GOOGLE_BOOKS
+            ),
+            "comic_vine": RateLimitedAPIClient(
+                "Comic Vine", RateLimitConfig.COMIC_VINE
+            ),
+            "open_library": RateLimitedAPIClient(
+                "Open Library", RateLimitConfig.OPEN_LIBRARY
+            ),
         }
 
     def get_client(self, api_name: str) -> Optional[RateLimitedAPIClient]:
@@ -373,10 +408,7 @@ class APIManager:
 
     def get_all_status(self) -> Dict[str, Any]:
         """Get status of all API clients."""
-        return {
-            name: client.get_status()
-            for name, client in self.clients.items()
-        }
+        return {name: client.get_status() for name, client in self.clients.items()}
 
     def check_api_health(self) -> Dict[str, bool]:
         """Check health status of all APIs."""

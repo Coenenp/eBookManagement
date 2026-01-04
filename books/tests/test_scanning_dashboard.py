@@ -1,14 +1,16 @@
 """
 Tests for scanning dashboard functionality
 """
-import tempfile
 import os
-from django.test import TestCase, Client
-from django.urls import reverse
+import tempfile
+from unittest.mock import patch
+
 from django.contrib.auth.models import User
+from django.test import Client, TestCase
+from django.urls import reverse
+
 from books.models import ScanFolder, UserProfile
 from books.tests.test_helpers import create_test_book_with_file
-from unittest.mock import patch
 
 
 class ScanningDashboardTests(TestCase):
@@ -159,8 +161,9 @@ class ScanningDashboardTests(TestCase):
     def test_scanning_dashboard_last_scanned_display(self):
         """Test that last scanned information is displayed correctly"""
         # Update one folder to have a last_scanned date
-        from django.utils import timezone
         import datetime
+
+        from django.utils import timezone
 
         self.folder1.last_scanned = timezone.now() - datetime.timedelta(hours=2)
         self.folder1.save()

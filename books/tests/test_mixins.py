@@ -3,18 +3,13 @@ Test suite for books/mixins/ package
 Tests all form mixins, validators, and utility functions.
 """
 
-from django import forms
-from django.test import TestCase
-from django.core.exceptions import ValidationError
 from unittest.mock import patch
 
-from books.mixins import (
-    StandardWidgetMixin,
-    BaseMetadataValidator,
-    StandardFormMixin,
-    MetadataFormMixin,
-    FinalMetadataSyncMixin
-)
+from django import forms
+from django.core.exceptions import ValidationError
+from django.test import TestCase
+
+from books.mixins import BaseMetadataValidator, FinalMetadataSyncMixin, MetadataFormMixin, StandardFormMixin, StandardWidgetMixin
 
 
 class StandardWidgetMixinTests(TestCase):
@@ -578,7 +573,7 @@ class MixinIntegrationTests(TestCase):
         self.assertEqual(widget.attrs.get('max'), '2030')
 
         # For server-side validation, we need proper validators
-        from django.core.validators import MinValueValidator, MaxValueValidator
+        from django.core.validators import MaxValueValidator, MinValueValidator
         field_with_validators = forms.IntegerField(
             widget=widget,
             validators=[MinValueValidator(1000), MaxValueValidator(2030)]

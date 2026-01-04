@@ -9,18 +9,16 @@ Tests SeriesMainView and series_ajax_list functionality including:
 - Books with and without series information
 """
 
-from django.test import TestCase, Client
-from django.contrib.auth.models import User
-from django.urls import reverse
 import json
 from unittest.mock import patch
 
-from books.models import (
-    Book, Series, BookSeries, FinalMetadata,
-    DataSource
-)
-from books.views.sections import get_book_metadata_dict
+from django.contrib.auth.models import User
+from django.test import Client, TestCase
+from django.urls import reverse
+
+from books.models import Book, BookSeries, DataSource, FinalMetadata, Series
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
+from books.views.sections import get_book_metadata_dict
 
 
 class SeriesViewsTestCase(TestCase):

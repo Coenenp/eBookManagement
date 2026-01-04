@@ -4,17 +4,16 @@ Tests for Django admin interface functionality.
 This module tests the admin interface for all book-related models,
 including superuser creation, admin views, and admin functionality.
 """
-import tempfile
-import shutil
 import os
-from django.test import TestCase, Client
-from django.contrib.auth.models import User
+import shutil
+import tempfile
+
 from django.contrib.admin.sites import AdminSite
-from books.models import (
-    Author, Book, BookAuthor, BookTitle, DataSource,
-    Genre, Publisher, ScanFolder, Series
-)
+from django.contrib.auth.models import User
+from django.test import Client, TestCase
+
 from books.admin import BookAdmin, BookAuthorAdmin
+from books.models import Author, Book, BookAuthor, BookTitle, DataSource, Genre, Publisher, ScanFolder, Series
 from books.tests.test_helpers import create_test_book_with_file
 
 

@@ -4,18 +4,17 @@ Tests for book_extras.py and custom_filters.py template tags.
 Focuses on achieving higher coverage for template tag functionality.
 """
 import os
-import django
-from django.test import TestCase, RequestFactory
-from django.template import Context, Template
-from unittest.mock import patch, Mock, mock_open, PropertyMock
-
-from books.models import (
-    DataSource, ScanFolder, FinalMetadata, Author, BookTitle, BookAuthor
-)
-from books.tests.test_helpers import create_test_book_with_file
-from books.templatetags import book_extras, custom_filters
-import tempfile
 import shutil
+import tempfile
+from unittest.mock import Mock, PropertyMock, mock_open, patch
+
+import django
+from django.template import Context, Template
+from django.test import RequestFactory, TestCase
+
+from books.models import Author, BookAuthor, BookTitle, DataSource, FinalMetadata, ScanFolder
+from books.templatetags import book_extras, custom_filters
+from books.tests.test_helpers import create_test_book_with_file
 
 # Must set Django settings before importing Django models
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ebook_manager.settings')
@@ -331,7 +330,7 @@ class CustomFiltersTemplateTagsTests(BaseTestCaseWithTempDir):
         )
 
         # Create source data for auto-update to pull from
-        from books.models import Author, BookTitle, BookAuthor
+        from books.models import Author, BookAuthor, BookTitle
         author = Author.objects.create(name='Test Author')
         BookTitle.objects.create(
             book=self.book,

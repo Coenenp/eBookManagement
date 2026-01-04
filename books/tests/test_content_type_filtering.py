@@ -6,10 +6,12 @@ appropriate for their designated content type.
 """
 import os
 import tempfile
-from django.test import TestCase
-from books.models import ScanFolder, DataSource
-from books.scanner.folder import scan_directory
 from unittest.mock import patch
+
+from django.test import TestCase
+
+from books.models import DataSource, ScanFolder
+from books.scanner.folder import scan_directory
 
 
 class ContentTypeFilteringTests(TestCase):

@@ -2,14 +2,15 @@
 Wizard System Validation Tests
 Final validation tests for complete wizard system functionality.
 """
-import tempfile
 import shutil
-from django.test import TestCase, Client
-from django.contrib.auth.models import User
-from django.urls import reverse
+import tempfile
 from unittest.mock import patch
 
-from books.models import SetupWizard, ScanFolder
+from django.contrib.auth.models import User
+from django.test import Client, TestCase
+from django.urls import reverse
+
+from books.models import ScanFolder, SetupWizard
 
 
 class WizardFinalValidationTests(TestCase):

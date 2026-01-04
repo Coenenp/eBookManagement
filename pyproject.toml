@@ -1,0 +1,16 @@
+[tool.black]
+line-length = 180
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 180
+select = ["E", "F", "I"]  # Errors, Flake8, Import sorting
+ignore = ["E501"]        # Ignore line-length (Black handles it)
+
+[tool.ruff.lint]
+preview = false
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"

@@ -3,8 +3,9 @@
 This module provides functions for resolving final metadata from multiple
 sources and calculating confidence scores for metadata accuracy.
 """
-import re
+
 import logging
+import re
 
 from books.models import FinalMetadata
 
@@ -16,26 +17,40 @@ def resolve_final_metadata(book):
     final_metadata, _ = FinalMetadata.objects.get_or_create(book=book)
 
     # 🖋️ Title
-    best_title = book.titles.filter(is_active=True).order_by('-confidence').first()
+    best_title = book.titles.filter(is_active=True).order_by("-confidence").first()
     if best_title:
         final_metadata.final_title = best_title.title
         final_metadata.final_title_confidence = best_title.confidence
 
     # 👤 Author
-    best_author = book.author_relationships.filter(is_active=True).order_by('-confidence', '-is_main_author').first()
+    best_author = (
+        book.author_relationships.filter(is_active=True)
+        .order_by("-confidence", "-is_main_author")
+        .first()
+    )
     if best_author:
         final_metadata.final_author = best_author.author.name
         final_metadata.final_author_confidence = best_author.confidence
 
     # 📚 Series
-    best_series = book.series_relationships.filter(is_active=True).order_by('-confidence').first()
+    best_series = (
+        book.series_relationships.filter(is_active=True).order_by("-confidence").first()
+    )
     if best_series:
         final_metadata.final_series = best_series.series.name
-        final_metadata.final_series_number = str(best_series.series_number) if best_series.series_number is not None else ''
+        final_metadata.final_series_number = (
+            str(best_series.series_number)
+            if best_series.series_number is not None
+            else ""
+        )
         final_metadata.final_series_confidence = best_series.confidence
 
     # 📕 Cover
-    best_cover = book.covers.filter(is_active=True).order_by('-confidence', '-is_high_resolution', '-width').first()
+    best_cover = (
+        book.covers.filter(is_active=True)
+        .order_by("-confidence", "-is_high_resolution", "-width")
+        .first()
+    )
     if best_cover and best_cover.cover_path:
         final_metadata.final_cover_path = best_cover.cover_path
         final_metadata.final_cover_confidence = best_cover.confidence
@@ -44,40 +59,48 @@ def resolve_final_metadata(book):
         final_metadata.has_cover = False
 
     # 🏢 Publisher
-    best_pub = book.publisher_relationships.filter(is_active=True).order_by('-confidence').first()
+    best_pub = (
+        book.publisher_relationships.filter(is_active=True)
+        .order_by("-confidence")
+        .first()
+    )
     if best_pub:
         final_metadata.final_publisher = best_pub.publisher.name
         final_metadata.final_publisher_confidence = best_pub.confidence
 
     # 📑 Additional metadata
     metadata_fields = {
-        'language': 'language',
-        'isbn': 'isbn',
-        'publication_year': 'publication_year',
-        'description': 'description',
+        "language": "language",
+        "isbn": "isbn",
+        "publication_year": "publication_year",
+        "description": "description",
     }
 
     for field_name, attr_name in metadata_fields.items():
         best_metadata = (
             book.metadata.filter(field_name=field_name)
             .filter(is_active=True)
-            .order_by('-confidence')
+            .order_by("-confidence")
             .first()
         )
         if best_metadata:
             value = best_metadata.field_value
-            if field_name == 'publication_year':
+            if field_name == "publication_year":
                 try:
                     # Handles strings like "1998", "circa 2005", "Published in 2012"
-                    year_match = re.search(r'\b(18|19|20)\d{2}\b', str(value))
+                    year_match = re.search(r"\b(18|19|20)\d{2}\b", str(value))
                     if year_match:
                         year = int(year_match.group())
                         if 1000 < year <= 2100:  # sanity check
                             final_metadata.publication_year = year
                         else:
-                            logger.warning(f"[YEAR OUT OF RANGE] Parsed year '{year}' from '{value}'")
+                            logger.warning(
+                                f"[YEAR OUT OF RANGE] Parsed year '{year}' from '{value}'"
+                            )
                     else:
-                        logger.warning(f"[YEAR PARSE FAIL] No valid year found in '{value}'")
+                        logger.warning(
+                            f"[YEAR PARSE FAIL] No valid year found in '{value}'"
+                        )
                 except Exception as e:
                     logger.warning(f"[YEAR CAST ERROR] field_value='{value}' — {e}")
             else:

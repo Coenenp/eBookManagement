@@ -2,9 +2,11 @@
 Test cases for book detail view navigation functionality.
 """
 import tempfile
-from django.test import TestCase, Client
+
 from django.contrib.auth.models import User
+from django.test import Client, TestCase
 from django.urls import reverse
+
 from books.models import FinalMetadata, ScanFolder
 from books.tests.test_helpers import create_test_book_with_file
 

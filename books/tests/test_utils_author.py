@@ -2,9 +2,10 @@
 Test cases for Author utilities
 """
 from django.test import TestCase
+
 from books.models import Author, BookAuthor, DataSource
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
-from books.utils.author import split_author_parts, attach_authors
+from books.utils.author import attach_authors, split_author_parts
 
 
 class AuthorUtilsTests(TestCase):

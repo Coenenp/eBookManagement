@@ -1,15 +1,15 @@
 """
 Test cases for ISBN utilities
 """
-from unittest.mock import patch, Mock
-from django.test import TestCase, RequestFactory, Client
+from unittest.mock import Mock, patch
+
 from django.contrib.auth.models import User
+from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
-from books.utils.isbn import (
-    normalize_isbn, is_valid_isbn13, is_valid_isbn10, convert_to_isbn13
-)
+
+from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
+from books.utils.isbn import convert_to_isbn13, is_valid_isbn10, is_valid_isbn13, normalize_isbn
 from books.views import isbn_lookup
-from books.tests.test_helpers import create_test_scan_folder, create_test_book_with_file
 
 
 class ISBNUtilsTests(TestCase):

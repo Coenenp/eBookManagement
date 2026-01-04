@@ -4,12 +4,13 @@ Tests wizard field pre-population from database and environment.
 """
 
 import os
-from django.test import TestCase, RequestFactory
-from django.contrib.auth.models import User
 from unittest.mock import patch
 
+from django.contrib.auth.models import User
+from django.test import RequestFactory, TestCase
+
 from books.models import SetupWizard
-from books.views.wizard import WizardScrapersView, WizardContentTypesView
+from books.views.wizard import WizardContentTypesView, WizardScrapersView
 
 
 class WizardPrePopulationTests(TestCase):

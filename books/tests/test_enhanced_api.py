@@ -6,11 +6,11 @@ for the new UI design with content entities and file aggregation.
 """
 import os
 import sys
-import django
 
-from django.test import Client
-from django.contrib.auth.models import User
+import django
 import pytest
+from django.contrib.auth.models import User
+from django.test import Client
 
 # Add the project directory to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

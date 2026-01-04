@@ -2,6 +2,7 @@
 Template tags for language management.
 """
 from django import template
+
 from books.utils.language_manager import LanguageManager
 
 register = template.Library()

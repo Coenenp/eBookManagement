@@ -3,8 +3,9 @@
 This module provides functions for downloading, processing, and encoding
 book cover images for display and storage operations.
 """
-import os
 import base64
+import os
+
 import requests
 from django.conf import settings
 from django.utils.text import slugify

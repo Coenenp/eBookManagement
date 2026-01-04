@@ -7,17 +7,16 @@ This module provides web interface views for:
 - Managing active scan jobs
 """
 import uuid
-from django.shortcuts import render, redirect
-from django.http import JsonResponse
+
 from django.contrib import messages
-from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.shortcuts import redirect, render
+from django.views.decorators.http import require_http_methods
+
 from books.models import Book, ScanFolder
-from books.scanner.background import (
-    background_scan_folder, background_rescan_books,
-    get_scan_progress, get_all_active_scans
-)
-from books.scanner.rate_limiting import get_api_status, check_api_health
+from books.scanner.background import background_rescan_books, background_scan_folder, get_all_active_scans, get_scan_progress
+from books.scanner.rate_limiting import check_api_health, get_api_status
 
 
 @login_required

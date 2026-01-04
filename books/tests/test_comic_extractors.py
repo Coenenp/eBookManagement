@@ -1,14 +1,20 @@
 """Tests for comic book archive extractors (CBR/CBZ)."""
 
-from unittest.mock import patch, MagicMock
-from django.test import TestCase
-import tempfile
 import shutil
-from books.models import Book, BookFile, DataSource, BookMetadata, ScanFolder
+import tempfile
+from unittest.mock import MagicMock, patch
+
+from django.test import TestCase
+
+from books.models import Book, BookFile, BookMetadata, DataSource, ScanFolder
 from books.scanner.extractors.comic import (
-    extract_cbr, extract_cbz, _clean_comic_title,
-    _parse_filename_metadata, _extract_comic_info_xml,
-    _detect_issue_type, get_comic_series_list
+    _clean_comic_title,
+    _detect_issue_type,
+    _extract_comic_info_xml,
+    _parse_filename_metadata,
+    extract_cbr,
+    extract_cbz,
+    get_comic_series_list,
 )
 
 

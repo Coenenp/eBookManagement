@@ -3,10 +3,11 @@ Wizard HTTP and AJAX Testing
 Tests wizard HTTP endpoints and AJAX functionality.
 """
 
-from django.test import TestCase, Client, RequestFactory
+from unittest.mock import Mock, patch
+
 from django.contrib.auth.models import User
+from django.test import Client, RequestFactory, TestCase
 from django.urls import reverse
-from unittest.mock import patch, Mock
 
 from books.models import ScanFolder
 
@@ -492,8 +493,8 @@ class WizardHTTPPerformanceTests(TestCase):
 
     def test_wizard_database_query_efficiency(self):
         """Test wizard database query efficiency"""
-        from django.test.utils import override_settings
         from django.db import connection
+        from django.test.utils import override_settings
 
         with override_settings(DEBUG=True):
             # Reset queries

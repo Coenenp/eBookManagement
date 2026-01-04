@@ -3,13 +3,12 @@ Tests for the API rate limiting and circuit breaker implementation.
 """
 
 import time
-from unittest.mock import patch, MagicMock
-from django.test import TestCase
-from django.core.cache import cache
+from unittest.mock import MagicMock, patch
 
-from books.scanner.rate_limiting import (
-    RateLimitConfig, RateLimitTracker, CircuitBreaker, RateLimitedAPIClient, APIManager
-)
+from django.core.cache import cache
+from django.test import TestCase
+
+from books.scanner.rate_limiting import APIManager, CircuitBreaker, RateLimitConfig, RateLimitedAPIClient, RateLimitTracker
 
 
 class RateLimitTrackerTests(TestCase):

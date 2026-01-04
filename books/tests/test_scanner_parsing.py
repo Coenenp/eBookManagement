@@ -2,10 +2,8 @@
 Test cases for Scanner Parsing
 """
 from django.test import TestCase
-from books.scanner.parsing import (
-    resolve_title_author_ambiguity,
-    parse_path_metadata
-)
+
+from books.scanner.parsing import parse_path_metadata, resolve_title_author_ambiguity
 
 
 class ScannerParsingTests(TestCase):

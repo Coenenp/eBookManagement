@@ -1,17 +1,16 @@
 """
 Tests for ajax, pagination, and filter mixins
 """
-from django.test import TestCase, RequestFactory
-from django.http import JsonResponse
-from django.contrib.auth.models import User
-from books.models import Book, ScanFolder, FinalMetadata
-from books.mixins import (
-    StandardAjaxResponseMixin, StandardPaginationMixin, BookFilterMixin,
-    standard_ajax_handler, BookAjaxViewMixin, ajax_book_operation
-)
-from books.tests.test_helpers import create_test_book_with_file
 import json
 import tempfile
+
+from django.contrib.auth.models import User
+from django.http import JsonResponse
+from django.test import RequestFactory, TestCase
+
+from books.mixins import BookAjaxViewMixin, BookFilterMixin, StandardAjaxResponseMixin, StandardPaginationMixin, ajax_book_operation, standard_ajax_handler
+from books.models import Book, FinalMetadata, ScanFolder
+from books.tests.test_helpers import create_test_book_with_file
 
 
 class StandardAjaxResponseMixinTests(TestCase):

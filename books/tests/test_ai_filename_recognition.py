@@ -9,23 +9,21 @@ This module tests the complete AI functionality including:
 - Integration with scanner system
 """
 
-import unittest
-import tempfile
-import shutil
 import json
-from unittest.mock import patch, Mock
-from django.test import TestCase, RequestFactory
+import shutil
+import tempfile
+import unittest
+from unittest.mock import Mock, patch
+
 from django.contrib.auth.models import User
 from django.http import JsonResponse
+from django.test import RequestFactory, TestCase
 
-from books.models import FinalMetadata, DataSource, AIFeedback, ScanFolder
-from books.tests.test_helpers import create_test_book_with_file
-from books.scanner.ai.filename_recognizer import FilenamePatternRecognizer
 from books.management.commands.train_ai_models import Command as TrainCommand
-from books.views import (
-    AIFeedbackListView,
-    ajax_submit_ai_feedback, ajax_retrain_ai_models, ajax_ai_model_status
-)
+from books.models import AIFeedback, DataSource, FinalMetadata, ScanFolder
+from books.scanner.ai.filename_recognizer import FilenamePatternRecognizer
+from books.tests.test_helpers import create_test_book_with_file
+from books.views import AIFeedbackListView, ajax_ai_model_status, ajax_retrain_ai_models, ajax_submit_ai_feedback
 
 
 class FilenamePatternRecognizerTests(TestCase):

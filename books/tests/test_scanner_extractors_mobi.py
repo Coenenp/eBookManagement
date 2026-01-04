@@ -1,18 +1,17 @@
 """
 Test cases for MOBI Scanner Extractor
 """
-import os
-import tempfile
-import shutil
-from django.test import TestCase
-from unittest.mock import patch, mock_open
-from books.models import (
-    ScanFolder, DataSource, BookTitle, BookAuthor,
-    BookPublisher, BookMetadata, Publisher
-)
-from books.tests.test_helpers import create_test_book_with_file
-from books.scanner.extractors.mobi import extract
 import json
+import os
+import shutil
+import tempfile
+from unittest.mock import mock_open, patch
+
+from django.test import TestCase
+
+from books.models import BookAuthor, BookMetadata, BookPublisher, BookTitle, DataSource, Publisher, ScanFolder
+from books.scanner.extractors.mobi import extract
+from books.tests.test_helpers import create_test_book_with_file
 
 
 class MOBIExtractorTests(TestCase):

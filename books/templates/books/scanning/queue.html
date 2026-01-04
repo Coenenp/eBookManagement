@@ -239,12 +239,5 @@
 
 {% load static %}
 <script src="{% static 'book/js/scanning-dashboard.js' %}"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize scanning queue management
-    if (typeof ScanningQueue !== 'undefined') {
-        new ScanningQueue();
-    }
-});
-</script>
+<script src="{% static 'book/js/scanning-queue-init.js' %}"></script>
 {% endblock %}

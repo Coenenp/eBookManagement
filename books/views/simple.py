@@ -5,15 +5,15 @@ This module contains miscellaneous utility views that don't fit into
 other categories - privacy policy, about pages, statistics, etc.
 """
 import requests
-from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Count
+from django.http import JsonResponse
+from django.shortcuts import render
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
-from django.http import JsonResponse
-from django.db.models import Count
 
-from books.models import Book, Author, Genre, Series, FinalMetadata
+from books.models import Author, Book, FinalMetadata, Genre, Series
 
 
 # Static/Information Pages
@@ -132,6 +132,7 @@ def system_status(request):
     """System health check and status view."""
     try:
         import os
+
         from django.conf import settings
 
         status = {
@@ -222,6 +223,7 @@ def quick_search(request):
 def export_library_csv(request):
     """Export library data as CSV."""
     import csv
+
     from django.http import HttpResponse
 
     try:

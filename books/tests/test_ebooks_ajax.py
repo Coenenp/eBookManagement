@@ -5,9 +5,10 @@ Run this after setting up Django environment to test the AJAX functionality.
 """
 
 import os
+
 import django
-from django.test.client import Client
 from django.contrib.auth.models import User
+from django.test.client import Client
 
 # Setup Django environment
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ebook_manager.settings')

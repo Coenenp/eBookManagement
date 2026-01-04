@@ -3,14 +3,12 @@ Test OPF generation functionality
 """
 import os
 import tempfile
+
 from django.test import TestCase
+
 from books.models import FinalMetadata
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
-from books.utils.opf_generator import (
-    generate_opf_from_final_metadata,
-    save_opf_file,
-    get_opf_filename
-)
+from books.utils.opf_generator import generate_opf_from_final_metadata, get_opf_filename, save_opf_file
 
 
 class OPFGenerationTests(TestCase):

@@ -12,13 +12,9 @@ from pathlib import Path
 
 from django.test import TestCase
 
-from books.models import Author, Series, ScanFolder, BookTitle, FinalMetadata, DataSource
-from books.utils.renaming_engine import (
-    RenamingEngine,
-    RenamingPatternValidator,
-    PREDEFINED_PATTERNS
-)
+from books.models import Author, BookTitle, DataSource, FinalMetadata, ScanFolder, Series
 from books.tests.test_helpers import create_test_book_with_file
+from books.utils.renaming_engine import PREDEFINED_PATTERNS, RenamingEngine, RenamingPatternValidator
 
 
 class BaseTestCaseWithTempDir(TestCase):

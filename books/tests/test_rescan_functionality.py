@@ -3,13 +3,15 @@ Tests for the external metadata rescan functionality.
 """
 
 import json
-import tempfile
-import shutil
 import os
-from django.test import TestCase, Client
-from django.urls import reverse
+import shutil
+import tempfile
+
 from django.contrib.auth.models import User
-from books.models import FinalMetadata, BookTitle, BookAuthor, Author, DataSource, ScanFolder
+from django.test import Client, TestCase
+from django.urls import reverse
+
+from books.models import Author, BookAuthor, BookTitle, DataSource, FinalMetadata, ScanFolder
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 

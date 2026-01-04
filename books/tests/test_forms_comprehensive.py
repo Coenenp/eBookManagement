@@ -4,21 +4,27 @@ Tests for form validation, widget configuration, cleaning methods, and edge case
 Focuses on achieving higher coverage for the forms module.
 """
 import os
-import django
-from django.test import TestCase
-from django.core.files.uploadedfile import SimpleUploadedFile
-from django.contrib.auth.models import User
 import tempfile
 
+import django
+from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase
+
 from books.forms import (
-    UserRegisterForm, ScanFolderForm, BookSearchForm, MetadataReviewForm,
-    BookStatusForm, BookEditForm, BookCoverForm, BulkUpdateForm,
-    AdvancedSearchForm, UserProfileForm
+    AdvancedSearchForm,
+    BookCoverForm,
+    BookEditForm,
+    BookSearchForm,
+    BookStatusForm,
+    BulkUpdateForm,
+    MetadataReviewForm,
+    ScanFolderForm,
+    UserProfileForm,
+    UserRegisterForm,
 )
 from books.mixins import StandardFormMixin
-from books.models import (
-    ScanFolder, FinalMetadata, UserProfile
-)
+from books.models import FinalMetadata, ScanFolder, UserProfile
 from books.tests.test_helpers import create_test_book_with_file
 
 # Must set Django settings before importing Django models
@@ -299,8 +305,9 @@ class MetadataReviewFormTests(TestCase):
     def test_metadata_review_form_cover_upload(self):
         """Test MetadataReviewForm cover upload field"""
         # Create a simple 1x1 pixel image file (minimal valid JPEG)
-        from PIL import Image
         import io
+
+        from PIL import Image
 
         # Create a 1x1 pixel image
         img = Image.new('RGB', (1, 1), color='red')

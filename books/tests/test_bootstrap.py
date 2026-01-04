@@ -1,5 +1,6 @@
 """Tests for scanner bootstrap functionality."""
 from django.test import TestCase
+
 from books.models import DataSource
 from books.scanner.bootstrap import ensure_data_sources
 

@@ -4,20 +4,20 @@ Complete end-to-end testing covering all test cases from TC1-TC9 specification.
 Tests real-world scenarios, edge cases, and integration between all components.
 """
 
-import tempfile
 import shutil
-from pathlib import Path
+import tempfile
 import time
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
-from django.test import TransactionTestCase
 from django.contrib.auth import get_user_model
+from django.test import TransactionTestCase
 
-from books.models import Book, Author, Series, Genre, BookTitle, BookAuthor, DataSource, FinalMetadata
-from books.utils.renaming_engine import RenamingEngine, PREDEFINED_PATTERNS
-from books.utils.batch_renamer import BatchRenamer
+from books.models import Author, Book, BookAuthor, BookTitle, DataSource, FinalMetadata, Genre, Series
 from books.tests.test_helpers import create_test_book_with_file
+from books.utils.batch_renamer import BatchRenamer
+from books.utils.renaming_engine import PREDEFINED_PATTERNS, RenamingEngine
 
 
 class ComprehensiveRenamingTestCase(TransactionTestCase):

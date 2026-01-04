@@ -3,13 +3,16 @@
 This module provides functions for extracting metadata from MOBI files
 including title, author, publisher, and other bibliographic information.
 """
-import mobi
-from django.db import IntegrityError
-from books.utils.author import attach_authors
-from books.models import DataSource, Publisher, BookPublisher, BookMetadata, BookTitle
+
+import json
 import logging
 import os
-import json
+
+import mobi
+from django.db import IntegrityError
+
+from books.models import BookMetadata, BookPublisher, BookTitle, DataSource, Publisher
+from books.utils.author import attach_authors
 
 logger = logging.getLogger("books.scanner")
 
@@ -17,8 +20,7 @@ logger = logging.getLogger("books.scanner")
 def _get_mobi_internal_source():
     """Get or create the MOBI Internal DataSource."""
     source, created = DataSource.objects.get_or_create(
-        name=DataSource.MOBI_INTERNAL,
-        defaults={'trust_level': 0.75}
+        name=DataSource.MOBI_INTERNAL, defaults={"trust_level": 0.75}
     )
     return source
 
@@ -44,7 +46,9 @@ def extract(book):
         encoding = metadata.get("encoding")
         publisher = metadata.get("publisher")
 
-        logger.info(f"Title: {title or 'Unknown'}, Author: {author or 'Unknown'}, Encoding: {encoding or 'Unknown'}")
+        logger.info(
+            f"Title: {title or 'Unknown'}, Author: {author or 'Unknown'}, Encoding: {encoding or 'Unknown'}"
+        )
 
         # Get internal source
         source = _get_mobi_internal_source()
@@ -57,7 +61,7 @@ def extract(book):
                     book=book,
                     title=title_text,
                     source=source,
-                    defaults={'confidence': source.trust_level}
+                    defaults={"confidence": source.trust_level},
                 )
 
         # Authors
@@ -68,7 +72,9 @@ def extract(book):
         if publisher:
             cleaned_name = publisher.strip()
             if cleaned_name:  # Only create if non-empty after stripping
-                existing_pub = Publisher.objects.filter(name__iexact=cleaned_name).first()
+                existing_pub = Publisher.objects.filter(
+                    name__iexact=cleaned_name
+                ).first()
                 if existing_pub:
                     pub_obj = existing_pub
                 else:
@@ -78,15 +84,15 @@ def extract(book):
                         book=book,
                         publisher=pub_obj,
                         source=source,
-                        defaults={'confidence': source.trust_level}
+                        defaults={"confidence": source.trust_level},
                     )
                 except IntegrityError as e:
-                    logger.warning(f"[BOOKPUBLISHER DUPLICATE] Could not create BookPublisher for {book.file_path}: {e}")
+                    logger.warning(
+                        f"[BOOKPUBLISHER DUPLICATE] Could not create BookPublisher for {book.file_path}: {e}"
+                    )
 
         # Optional fields to record
-        optional_fields = {
-            'encoding': encoding
-        }
+        optional_fields = {"encoding": encoding}
 
         for field, value in optional_fields.items():
             if value:
@@ -94,7 +100,10 @@ def extract(book):
                     book=book,
                     field_name=field,
                     source=source,
-                    defaults={'field_value': value.strip(), 'confidence': source.trust_level}
+                    defaults={
+                        "field_value": value.strip(),
+                        "confidence": source.trust_level,
+                    },
                 )
 
         return {

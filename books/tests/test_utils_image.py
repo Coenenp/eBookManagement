@@ -1,16 +1,15 @@
 """
 Test cases for Image utilities
 """
-from django.test import TestCase, override_settings
-from unittest.mock import patch, mock_open, MagicMock
-import tempfile
 import os
-from books.utils.image_utils import (
-    download_and_store_cover,
-    encode_cover_to_base64
-)
+import tempfile
+from unittest.mock import MagicMock, mock_open, patch
+
+from django.test import TestCase, override_settings
+
 # Removed unused imports
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
+from books.utils.image_utils import download_and_store_cover, encode_cover_to_base64
 
 
 class ImageUtilsTests(TestCase):

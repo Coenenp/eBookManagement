@@ -5,19 +5,16 @@ Tests all dashboard methods, statistics calculations, and chart data preparation
 
 import json
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from django.test import TestCase, Client
 from django.contrib.auth.models import User
+from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from books.models import (
-    Book, Author, Series, Publisher, Genre, DataSource, ScanLog,
-    FinalMetadata, BookSeries
-)
-from books.views import DashboardView
+from books.models import Author, Book, BookSeries, DataSource, FinalMetadata, Genre, Publisher, ScanLog, Series
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
+from books.views import DashboardView
 
 
 class DashboardViewTests(TestCase):
@@ -347,7 +344,7 @@ class DashboardViewTests(TestCase):
             content_stats = dashboard_metrics.get_content_type_statistics()
         except ImportError:
             # Fallback to basic counting
-            from books.models import Book, COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
+            from books.models import AUDIOBOOK_FORMATS, COMIC_FORMATS, EBOOK_FORMATS, Book
             content_stats = {
                 'ebook_count': Book.objects.filter(file_format__in=EBOOK_FORMATS).count(),
                 'comic_count': Book.objects.filter(file_format__in=COMIC_FORMATS).count(),

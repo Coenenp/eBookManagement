@@ -1,11 +1,18 @@
+import json
 import logging
 import os
-import json
+
 from django.utils import timezone
 
-from books.models import ScanStatus, ScanFolder, COMIC_FORMATS, EBOOK_FORMATS, AUDIOBOOK_FORMATS
-from books.scanner.folder import scan_directory
+from books.models import (
+    AUDIOBOOK_FORMATS,
+    COMIC_FORMATS,
+    EBOOK_FORMATS,
+    ScanFolder,
+    ScanStatus,
+)
 from books.scanner.ai import initialize_ai_system
+from books.scanner.folder import scan_directory
 
 logger = logging.getLogger("books.scanner")
 
@@ -19,11 +26,11 @@ class EbookScanner:
         # Use centralized extension lists from models
         self.ebook_extensions = set()
         for fmt in EBOOK_FORMATS:
-            self.ebook_extensions.add(f'.{fmt}')
+            self.ebook_extensions.add(f".{fmt}")
         for fmt in COMIC_FORMATS:
-            self.ebook_extensions.add(f'.{fmt}')
+            self.ebook_extensions.add(f".{fmt}")
         for fmt in AUDIOBOOK_FORMATS:
-            self.ebook_extensions.add(f'.{fmt}')
+            self.ebook_extensions.add(f".{fmt}")
 
         # Initialize AI filename recognition system
         self.ai_recognizer = None
@@ -35,18 +42,11 @@ class EbookScanner:
             self.run(folder_path)
             # Count processed books as a rough measure of success
             from books.models import Book
+
             processed_count = Book.objects.count()
-            return {
-                'success': True,
-                'files_processed': processed_count,
-                'errors': []
-            }
+            return {"success": True, "files_processed": processed_count, "errors": []}
         except Exception as e:
-            return {
-                'success': False,
-                'files_processed': 0,
-                'errors': [str(e)]
-            }
+            return {"success": False, "files_processed": 0, "errors": [str(e)]}
 
     def run(self, folder_path=None):
         # Handle resume mode
@@ -54,12 +54,10 @@ class EbookScanner:
             return self._resume_scan(folder_path)
 
         # Get the latest scan status or create one
-        status = ScanStatus.objects.order_by('-started').first()
-        if not status or status.status in ['Completed', 'Failed']:
+        status = ScanStatus.objects.order_by("-started").first()
+        if not status or status.status in ["Completed", "Failed"]:
             status = ScanStatus.objects.create(
-                status="Running",
-                progress=0,
-                message="Initializing scan..."
+                status="Running", progress=0, message="Initializing scan..."
             )
         else:
             status.status = "Running"
@@ -99,18 +97,23 @@ class EbookScanner:
         total_files_across_all_folders = 0
         for path in folders_to_scan:
             from books.scanner.folder import _collect_files
+
             # Get the scan folder object to determine content-type specific extensions
             scan_folder_obj, _ = ScanFolder.objects.get_or_create(
                 path=path, defaults={"is_active": True}
             )
             content_specific_extensions = scan_folder_obj.get_extensions()
-            ebook_files, _, _ = _collect_files(path, content_specific_extensions, self.cover_extensions)
+            ebook_files, _, _ = _collect_files(
+                path, content_specific_extensions, self.cover_extensions
+            )
             total_files_across_all_folders += len(ebook_files)
 
         status.total_files = total_files_across_all_folders
         status.save()
 
-        logger.info(f"Total files to process across all folders: {total_files_across_all_folders}")
+        logger.info(
+            f"Total files to process across all folders: {total_files_across_all_folders}"
+        )
 
         # Track if any failures occurred
         has_failures = False
@@ -160,7 +163,9 @@ class EbookScanner:
     def _resume_scan(self, folder_path=None):
         """Resume an interrupted scan from where it left off"""
         # Find the most recent interrupted scan
-        status = ScanStatus.objects.filter(status='Running').order_by('-started').first()
+        status = (
+            ScanStatus.objects.filter(status="Running").order_by("-started").first()
+        )
 
         if not status:
             logger.info("No interrupted scan found. Starting new scan.")
@@ -248,43 +253,61 @@ class EbookScanner:
                 )
 
                 # Get books in this folder that don't have complete metadata
-                incomplete_books = Book.objects.filter(
-                    scan_folder=scan_folder,
-                    files__file_path__startswith=folder_path
-                ).exclude(
-                    # Exclude books that have FinalMetadata (considered complete)
-                    id__in=FinalMetadata.objects.values_list('book_id', flat=True)
-                ).exclude(
-                    # Exclude corrupted books
-                    is_corrupted=True
-                ).distinct()
+                incomplete_books = (
+                    Book.objects.filter(
+                        scan_folder=scan_folder,
+                        files__file_path__startswith=folder_path,
+                    )
+                    .exclude(
+                        # Exclude books that have FinalMetadata (considered complete)
+                        id__in=FinalMetadata.objects.values_list("book_id", flat=True)
+                    )
+                    .exclude(
+                        # Exclude corrupted books
+                        is_corrupted=True
+                    )
+                    .distinct()
+                )
 
                 all_incomplete_books.extend(list(incomplete_books))
-                logger.info(f"Found {incomplete_books.count()} incomplete books in {folder_path}")
+                logger.info(
+                    f"Found {incomplete_books.count()} incomplete books in {folder_path}"
+                )
 
             except Exception as e:
                 logger.error(f"Error checking incomplete books in {folder_path}: {e}")
 
         if all_incomplete_books:
-            logger.info(f"Found {len(all_incomplete_books)} total books needing metadata completion")
+            logger.info(
+                f"Found {len(all_incomplete_books)} total books needing metadata completion"
+            )
 
             # Complete metadata for these books
             for i, book in enumerate(all_incomplete_books, 1):
                 try:
                     primary_file = book.primary_file
-                    file_path = primary_file.file_path if primary_file else f"Book {book.id}"
-                    logger.info(f"[METADATA COMPLETION] Processing book {book.id}: {file_path}")
+                    file_path = (
+                        primary_file.file_path if primary_file else f"Book {book.id}"
+                    )
+                    logger.info(
+                        f"[METADATA COMPLETION] Processing book {book.id}: {file_path}"
+                    )
 
                     # Update status to show what we're doing
                     status.message = f"Completing metadata for book {book.id} ({i}/{len(all_incomplete_books)})"
                     status.save()
 
                     # Import the required functions
-                    from books.scanner.folder import query_metadata_and_covers, resolve_final_metadata
+                    from books.scanner.folder import (
+                        query_metadata_and_covers,
+                        resolve_final_metadata,
+                    )
 
                     # Skip the file creation part, book already exists
                     # Go straight to metadata collection steps
-                    logger.info(f"[METADATA and COVER CANDIDATES QUERY] Path: {file_path}")
+                    logger.info(
+                        f"[METADATA and COVER CANDIDATES QUERY] Path: {file_path}"
+                    )
                     query_metadata_and_covers(book)
 
                     try:
@@ -292,15 +315,22 @@ class EbookScanner:
                         resolve_final_metadata(book)
                         logger.info(f"Completed metadata for book {book.id}")
                     except Exception as e:
-                        logger.error(f"Final metadata resolution failed for {file_path}: {str(e)}")
+                        logger.error(
+                            f"Final metadata resolution failed for {file_path}: {str(e)}"
+                        )
 
                 except Exception as e:
-                    logger.error(f"[METADATA COMPLETION ERROR] Book {book.id}: {str(e)}")
+                    logger.error(
+                        f"[METADATA COMPLETION ERROR] Book {book.id}: {str(e)}"
+                    )
                     import traceback
+
                     traceback.print_exc()
 
                 if i % 10 == 0:  # Log every 10 books
-                    logger.info(f"Completed metadata for {i}/{len(all_incomplete_books)} books")
+                    logger.info(
+                        f"Completed metadata for {i}/{len(all_incomplete_books)} books"
+                    )
         else:
             logger.info("No incomplete metadata books found")
 
@@ -327,15 +357,20 @@ class EbookScanner:
             # Convert to standard format and filter by confidence
             ai_metadata = {}
             for field, (value, confidence) in predictions.items():
-                if confidence >= self.ai_recognizer.confidence_threshold and value.strip():
+                if (
+                    confidence >= self.ai_recognizer.confidence_threshold
+                    and value.strip()
+                ):
                     ai_metadata[field] = {
-                        'value': value.strip(),
-                        'confidence': confidence,
-                        'source': 'ai_prediction'
+                        "value": value.strip(),
+                        "confidence": confidence,
+                        "source": "ai_prediction",
                     }
 
             if ai_metadata:
-                logger.info(f"AI predicted metadata for '{filename}': {list(ai_metadata.keys())}")
+                logger.info(
+                    f"AI predicted metadata for '{filename}': {list(ai_metadata.keys())}"
+                )
 
             return ai_metadata
 

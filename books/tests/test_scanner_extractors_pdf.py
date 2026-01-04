@@ -2,15 +2,15 @@
 Test cases for PDF Scanner Extractor
 """
 import os
-import tempfile
 import shutil
+import tempfile
+from unittest.mock import MagicMock, patch
+
 from django.test import TestCase
-from unittest.mock import patch, MagicMock
-from books.models import (
-    ScanFolder, DataSource, BookTitle, BookAuthor, BookMetadata
-)
-from books.tests.test_helpers import create_test_book_with_file
+
+from books.models import BookAuthor, BookMetadata, BookTitle, DataSource, ScanFolder
 from books.scanner.extractors.pdf import extract
+from books.tests.test_helpers import create_test_book_with_file
 
 
 class PDFExtractorTests(TestCase):

@@ -1,18 +1,20 @@
 """
 Test cases for Parsing Helper utilities
 """
-from django.test import TestCase
 from pathlib import Path
+
+from django.test import TestCase
+
 from books.utils.parsing_helpers import (
-    clean_title_and_extract_series_number,
     clean_author_string,
-    split_authors,
-    normalize_surnames,
+    clean_title_and_extract_series_number,
     extract_folder_clues,
-    looks_like_author,
-    is_probable_author,
     extract_number_from_filename,
-    fallback_segment_resolution
+    fallback_segment_resolution,
+    is_probable_author,
+    looks_like_author,
+    normalize_surnames,
+    split_authors,
 )
 
 

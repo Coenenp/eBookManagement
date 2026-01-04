@@ -1,9 +1,11 @@
 """Test the scan history functionality."""
-import pytest
 from datetime import timedelta
+
+import pytest
 from django.test import TestCase
 from django.utils import timezone
-from books.models import ScanHistory, ScanFolder
+
+from books.models import ScanFolder, ScanHistory
 
 
 @pytest.mark.django_db

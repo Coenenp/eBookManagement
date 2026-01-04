@@ -4,19 +4,16 @@ Tests MetadataProcessor and related utility functions.
 """
 
 import os
-import tempfile
 import shutil
-from unittest.mock import patch, MagicMock
-from django.test import TestCase, RequestFactory
+import tempfile
+from unittest.mock import MagicMock, patch
+
 from django.contrib.auth.models import User
 from django.db import IntegrityError
+from django.test import RequestFactory, TestCase
 
-from books.models import (
-    Author, Series, Publisher, Genre, DataSource, ScanFolder,
-    FinalMetadata, BookSeries, BookTitle, BookAuthor, BookPublisher,
-    BookMetadata
-)
 from books.book_utils import MetadataProcessor
+from books.models import Author, BookAuthor, BookMetadata, BookPublisher, BookSeries, BookTitle, DataSource, FinalMetadata, Genre, Publisher, ScanFolder, Series
 from books.tests.test_helpers import create_test_book_with_file
 
 

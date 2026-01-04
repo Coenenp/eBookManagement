@@ -4,17 +4,19 @@ This module provides functions for parsing ebook filenames to extract
 metadata like titles, authors, series information, and publication data.
 Enhanced with AI-powered pattern recognition.
 """
+
 import re
 from pathlib import Path
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, List, Optional, Tuple
+
 from books.utils.parsing_helpers import (
-    split_authors,
-    normalize_surnames,
-    extract_folder_clues,
     clean_title_and_extract_series_number,
-    is_probable_author,
+    extract_folder_clues,
     extract_number_from_filename,
-    fallback_segment_resolution
+    fallback_segment_resolution,
+    is_probable_author,
+    normalize_surnames,
+    split_authors,
 )
 
 
@@ -26,13 +28,15 @@ def resolve_title_author_ambiguity(part1: str, part2: str) -> Tuple[str, List[st
 
     # Check if either part contains multiple authors (comma-separated)
     def contains_multiple_authors(text: str) -> bool:
-        return ',' in text and len([p.strip() for p in text.split(',') if p.strip()]) > 1
+        return (
+            "," in text and len([p.strip() for p in text.split(",") if p.strip()]) > 1
+        )
 
     # Check if text looks like author names (including multiple authors)
     def looks_like_authors(text: str) -> bool:
         if contains_multiple_authors(text):
             # Check if each comma-separated part looks like a name
-            parts = [p.strip() for p in text.split(',') if p.strip()]
+            parts = [p.strip() for p in text.split(",") if p.strip()]
             return all(is_probable_author(part) for part in parts)
         else:
             return is_probable_author(text)
@@ -63,30 +67,25 @@ def resolve_title_author_ambiguity(part1: str, part2: str) -> Tuple[str, List[st
 
 def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
     path = Path(file_path)
-    base_name = path.stem.replace('_', ' ').strip()
+    base_name = path.stem.replace("_", " ").strip()
 
-    metadata = {
-        "title": None,
-        "authors": [],
-        "series": None,
-        "series_number": None
-    }
+    metadata = {"title": None, "authors": [], "series": None, "series_number": None}
 
     series_number = extract_number_from_filename(base_name)
     if series_number and not metadata["series_number"]:
         metadata["series_number"] = series_number
 
     patterns = [
-        r'^(?P<num>\d{1,2}(?:\.\d)?)\.\s+(?P<title>.+)$',
-        r'^\[(?P<series>.+?)\]\s*(?P<title>.+?)\s*-\s*(?P<author>.+)$',
-        r'^(?P<series>.+?)\s+-\s+(?P<num>\d{1,2}(?:\.\d)?)\s+-\s+(?P<title>.+?)\s+-\s+(?P<author>.+)$',
-        r'^(?P<num>\d{1,2}(?:\.\d)?)\s+[-.]\s+(?P<title>.+?)\s+[-.]\s+(?P<author>.+)$',
-        r'^(?P<title>.+?)\s+by\s+(?P<author>.+)$',
-        r'^(?P<author_last>[^,]+),\s*(?P<author_first>[^\-]+)\s*-\s*(?P<title>.+)$',  # Move this before general patterns
-        r'^(?P<author>.+?)\s*-\s*(?P<title>.+)$',
-        r'^(?P<title>.+?)\s*-\s*(?P<author>.+)$',
-        r'^(?P<title>.+?)\s*\((?P<author>.+?)\)$',
-        r'^(?P<title>.+)$'
+        r"^(?P<num>\d{1,2}(?:\.\d)?)\.\s+(?P<title>.+)$",
+        r"^\[(?P<series>.+?)\]\s*(?P<title>.+?)\s*-\s*(?P<author>.+)$",
+        r"^(?P<series>.+?)\s+-\s+(?P<num>\d{1,2}(?:\.\d)?)\s+-\s+(?P<title>.+?)\s+-\s+(?P<author>.+)$",
+        r"^(?P<num>\d{1,2}(?:\.\d)?)\s+[-.]\s+(?P<title>.+?)\s+[-.]\s+(?P<author>.+)$",
+        r"^(?P<title>.+?)\s+by\s+(?P<author>.+)$",
+        r"^(?P<author_last>[^,]+),\s*(?P<author_first>[^\-]+)\s*-\s*(?P<title>.+)$",  # Move this before general patterns
+        r"^(?P<author>.+?)\s*-\s*(?P<title>.+)$",
+        r"^(?P<title>.+?)\s*-\s*(?P<author>.+)$",
+        r"^(?P<title>.+?)\s*\((?P<author>.+?)\)$",
+        r"^(?P<title>.+)$",
     ]
 
     # Pattern matching
@@ -99,7 +98,9 @@ def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
 
         # Intelligent resolution
         if "title" in groups and "author" in groups:
-            title, authors = resolve_title_author_ambiguity(groups["title"], groups["author"])
+            title, authors = resolve_title_author_ambiguity(
+                groups["title"], groups["author"]
+            )
             metadata["title"] = title
             metadata["authors"] = authors
         elif "author" in groups:
@@ -108,7 +109,9 @@ def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
             # Handle "Last, First - Title" format correctly
             # Pattern captures: author_last="Doe", author_first="John" from "Doe, John - Title"
             # So we need to put first name first: "John Doe"
-            full_name = f"{groups['author_first'].strip()} {groups['author_last'].strip()}"
+            full_name = (
+                f"{groups['author_first'].strip()} {groups['author_last'].strip()}"
+            )
             metadata["authors"] = [full_name]
             if "title" in groups:
                 metadata["title"] = groups["title"].strip()
@@ -137,7 +140,9 @@ def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
 
     # Series number extraction from title
     if metadata["title"]:
-        metadata["title"], series_number = clean_title_and_extract_series_number(metadata["title"])
+        metadata["title"], series_number = clean_title_and_extract_series_number(
+            metadata["title"]
+        )
         if series_number is not None:
             metadata["series_number"] = series_number
 
@@ -154,25 +159,20 @@ def parse_comic_metadata(file_path: str) -> Dict[str, Optional[str]]:
     And extracts folder-based author information from known comic creators.
     """
     path = Path(file_path)
-    base_name = path.stem.replace('_', ' ').strip()
+    base_name = path.stem.replace("_", " ").strip()
 
-    metadata = {
-        "title": None,
-        "authors": [],
-        "series": None,
-        "series_number": None
-    }
+    metadata = {"title": None, "authors": [], "series": None, "series_number": None}
 
     # Comic-specific patterns
     comic_patterns = [
         # "De Rode Ridder - 271 - De kruisvaarder (Digitale rip)"
-        r'^(?P<series>.+?)\s+-\s+(?P<num>\d{1,3}(?:\.\d+)?)\s+-\s+(?P<title>.+?)(?:\s+\([^)]*\))?$',
+        r"^(?P<series>.+?)\s+-\s+(?P<num>\d{1,3}(?:\.\d+)?)\s+-\s+(?P<title>.+?)(?:\s+\([^)]*\))?$",
         # "Batman 15 - The Dark Knight Returns"
-        r'^(?P<series>.+?)\s+(?P<num>\d{1,3}(?:\.\d+)?)\s+-\s+(?P<title>.+)$',
+        r"^(?P<series>.+?)\s+(?P<num>\d{1,3}(?:\.\d+)?)\s+-\s+(?P<title>.+)$",
         # "Superman #42 Return of Doomsday"
-        r'^(?P<series>.+?)\s+#(?P<num>\d{1,3}(?:\.\d+)?)\s+(?P<title>.+)$',
+        r"^(?P<series>.+?)\s+#(?P<num>\d{1,3}(?:\.\d+)?)\s+(?P<title>.+)$",
         # "X-Men Issue 100"
-        r'^(?P<series>.+?)\s+Issue\s+(?P<num>\d{1,3}(?:\.\d+)?)\s+(?P<title>.+)$',
+        r"^(?P<series>.+?)\s+Issue\s+(?P<num>\d{1,3}(?:\.\d+)?)\s+(?P<title>.+)$",
     ]
 
     # Try comic-specific patterns first
@@ -192,7 +192,7 @@ def parse_comic_metadata(file_path: str) -> Dict[str, Optional[str]]:
     # If no comic pattern matched, fall back to basic extraction
     if not metadata["series"] and not metadata["title"]:
         # Extract series and issue number from any format
-        series_match = re.match(r'^(.+?)\s+(\d{1,3}(?:\.\d+)?)', base_name)
+        series_match = re.match(r"^(.+?)\s+(\d{1,3}(?:\.\d+)?)", base_name)
         if series_match:
             metadata["series"] = series_match.group(1).strip()
             try:
@@ -216,21 +216,25 @@ def _extract_comic_author_from_folders(path: Path) -> List[str]:
     """Extract comic book author from folder structure using known creators."""
     # Known comic creators and their series
     known_creators = {
-        'willy vandersteen': ['de rode ridder', 'suske en wiske', 'bessy'],
-        'marc sleen': ['nero'],
-        'stan lee': ['spider-man', 'x-men', 'fantastic four', 'iron man', 'hulk'],
-        'frank miller': ['sin city', 'daredevil', 'batman dark knight'],
-        'alan moore': ['watchmen', 'v for vendetta', 'league of extraordinary gentlemen'],
-        'neil gaiman': ['sandman', 'american gods'],
-        'grant morrison': ['batman', 'new x-men'],
-        'hergé': ['tintin', 'kuifje'],
-        'peyo': ['smurf', 'smurfen'],
-        'morris': ['lucky luke'],
-        'goscinny': ['asterix', 'lucky luke'],
-        'uderzo': ['asterix'],
+        "willy vandersteen": ["de rode ridder", "suske en wiske", "bessy"],
+        "marc sleen": ["nero"],
+        "stan lee": ["spider-man", "x-men", "fantastic four", "iron man", "hulk"],
+        "frank miller": ["sin city", "daredevil", "batman dark knight"],
+        "alan moore": [
+            "watchmen",
+            "v for vendetta",
+            "league of extraordinary gentlemen",
+        ],
+        "neil gaiman": ["sandman", "american gods"],
+        "grant morrison": ["batman", "new x-men"],
+        "hergé": ["tintin", "kuifje"],
+        "peyo": ["smurf", "smurfen"],
+        "morris": ["lucky luke"],
+        "goscinny": ["asterix", "lucky luke"],
+        "uderzo": ["asterix"],
     }
 
-    folders = [p.name.replace('_', ' ').strip().lower() for p in path.parents[:4]]
+    folders = [p.name.replace("_", " ").strip().lower() for p in path.parents[:4]]
 
     # Check folder names for creator names or series
     for folder_name in folders:
@@ -247,7 +251,9 @@ def _extract_comic_author_from_folders(path: Path) -> List[str]:
     return []
 
 
-def parse_path_metadata_with_ai(file_path: str, ai_recognizer=None) -> Dict[str, Optional[str]]:
+def parse_path_metadata_with_ai(
+    file_path: str, ai_recognizer=None
+) -> Dict[str, Optional[str]]:
     """Enhanced parsing that combines traditional pattern matching with AI predictions."""
     # Get traditional parsing results
     traditional_metadata = parse_path_metadata(file_path)
@@ -268,10 +274,10 @@ def parse_path_metadata_with_ai(file_path: str, ai_recognizer=None) -> Dict[str,
         for field, (ai_value, confidence) in ai_predictions.items():
             # Map AI field names to our metadata keys
             field_mapping = {
-                'title': 'title',
-                'author': 'authors',
-                'series': 'series',
-                'volume': 'series_number'
+                "title": "title",
+                "author": "authors",
+                "series": "series",
+                "volume": "series_number",
             }
 
             if field in field_mapping:
@@ -279,28 +285,30 @@ def parse_path_metadata_with_ai(file_path: str, ai_recognizer=None) -> Dict[str,
 
                 # Use AI prediction if confident and traditional method didn't find anything
                 # or if AI is highly confident (> 0.8)
-                should_use_ai = (
-                    confidence >= ai_recognizer.confidence_threshold and
-                    (not enhanced_metadata.get(metadata_key) or confidence > 0.8)
+                should_use_ai = confidence >= ai_recognizer.confidence_threshold and (
+                    not enhanced_metadata.get(metadata_key) or confidence > 0.8
                 )
 
                 if should_use_ai and ai_value.strip():
-                    if metadata_key == 'authors':
+                    if metadata_key == "authors":
                         # Handle authors specially - split and normalize
-                        enhanced_metadata[metadata_key] = normalize_surnames(split_authors(ai_value))
+                        enhanced_metadata[metadata_key] = normalize_surnames(
+                            split_authors(ai_value)
+                        )
                     else:
                         enhanced_metadata[metadata_key] = ai_value.strip()
 
                     ai_confidence_used[field] = confidence
 
         # Add metadata source information
-        enhanced_metadata['_ai_used'] = ai_confidence_used
+        enhanced_metadata["_ai_used"] = ai_confidence_used
 
         return enhanced_metadata
 
     except Exception as e:
         # If AI processing fails, fall back to traditional parsing
         import logging
+
         logger = logging.getLogger("books.scanner")
         logger.warning(f"AI parsing failed for '{file_path}': {e}")
         return traditional_metadata

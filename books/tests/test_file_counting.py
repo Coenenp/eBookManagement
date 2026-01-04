@@ -5,6 +5,7 @@ Test cases for scanning file counting functionality.
 import os
 import tempfile
 from pathlib import Path
+
 from django.test import TestCase
 
 from books.scanner.folder import _collect_files

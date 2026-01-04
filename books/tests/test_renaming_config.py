@@ -6,6 +6,7 @@ Provides test discovery, configuration, and utility functions for the renaming t
 import os
 import sys
 from pathlib import Path
+
 from books.tests.test_helpers import create_test_book_with_file
 
 # Add the project root to Python path for imports
@@ -101,7 +102,7 @@ class RenamingTestUtils:
         Returns:
             Book instance
         """
-        from books.models import Book, Format, BookTitle
+        from books.models import Book, BookTitle, Format
 
         # Get or create default format
         format_obj, _ = Format.objects.get_or_create(
@@ -151,7 +152,7 @@ class TestDataGenerator:
     @staticmethod
     def generate_test_books(count=10):
         """Generate a collection of test books with various metadata combinations"""
-        from books.models import Author, Series, Format, Language, Category
+        from books.models import Author, Category, Format, Language, Series
 
         # Ensure required objects exist
         format_obj, _ = Format.objects.get_or_create(

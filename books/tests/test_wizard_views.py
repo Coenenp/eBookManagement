@@ -4,19 +4,15 @@ Tests setup wizard functionality for guiding new users.
 """
 
 import tempfile
-from unittest.mock import patch, Mock
-from django.test import TestCase, Client
+from unittest.mock import Mock, patch
+
 from django.contrib.auth.models import User
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
+from django.test import Client, TestCase
 from django.urls import reverse
-from django.http import JsonResponse, HttpResponse, HttpResponseRedirect
 
 from books.models import ScanFolder
-from books.views.wizard import (
-    WizardRequiredMixin,
-    WizardWelcomeView,
-    WizardFoldersView,
-    WizardContentTypesView
-)
+from books.views.wizard import WizardContentTypesView, WizardFoldersView, WizardRequiredMixin, WizardWelcomeView
 
 
 class WizardRequiredMixinTests(TestCase):
@@ -503,8 +499,9 @@ class WizardCompleteViewTests(TestCase):
 
     def test_wizard_complete_view_start_initial_scan(self):
         """Test starting initial scan"""
-        from books.models import SetupWizard
         import tempfile
+
+        from books.models import SetupWizard
 
         # Create temporary directory and set up wizard
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -535,8 +532,9 @@ class WizardCompleteViewTests(TestCase):
 
     def test_wizard_complete_view_configuration_summary(self):
         """Test that configuration summary shows setup choices"""
-        from books.models import SetupWizard
         import tempfile
+
+        from books.models import SetupWizard
 
         # Create a temporary directory for testing
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -599,8 +597,9 @@ class WizardIntegrationTests(TestCase):
 
     def test_complete_wizard_flow(self):
         """Test complete wizard flow from start to finish"""
-        from books.models import SetupWizard
         import tempfile
+
+        from books.models import SetupWizard
 
         # Use a temporary directory
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -712,8 +711,9 @@ class WizardIntegrationTests(TestCase):
 
     def test_wizard_initial_scan_trigger(self):
         """Test that wizard can trigger initial scan"""
-        from books.models import SetupWizard
         import tempfile
+
+        from books.models import SetupWizard
 
         # Set up wizard with a folder
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -4,12 +4,14 @@ Tests wizard view context data and pre-population functionality.
 """
 
 import os
-from django.test import TestCase, RequestFactory
-from django.contrib.auth.models import User
 from unittest.mock import patch
 
+from django.contrib.auth.models import User
+from django.test import RequestFactory, TestCase
+
 from books.models import SetupWizard
-from books.views.wizard import WizardScrapersView, WizardContentTypesView
+from books.views.wizard import WizardContentTypesView, WizardScrapersView
+
 # Setup Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ebook_manager.settings')
 

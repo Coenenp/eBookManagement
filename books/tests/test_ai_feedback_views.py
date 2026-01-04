@@ -7,11 +7,13 @@ and status checking.
 """
 
 import json
-from unittest.mock import patch, MagicMock
-from django.test import TestCase, Client
+from unittest.mock import MagicMock, patch
+
 from django.contrib.auth.models import User
+from django.test import Client, TestCase
 from django.urls import reverse
-from books.models import Book, BookFile, FinalMetadata, BookMetadata, DataSource, AIFeedback
+
+from books.models import AIFeedback, Book, BookFile, BookMetadata, DataSource, FinalMetadata
 
 
 class AIFeedbackListViewTests(TestCase):

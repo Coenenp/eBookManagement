@@ -2,6 +2,7 @@
 Context processors for the books app.
 """
 from django.conf import settings
+
 from books.utils.language_manager import LanguageManager
 
 

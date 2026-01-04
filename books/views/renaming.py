@@ -4,65 +4,61 @@ Book renaming and organization views.
 This module contains views for book renaming functionality.
 TODO: Extract from original views.py file (~1,500 lines) - currently placeholders.
 """
+
 import os
-from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.decorators import login_required
-from django.views.generic import ListView, TemplateView
-from django.http import JsonResponse
+
 from django.apps import apps
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import models
+from django.http import JsonResponse
+from django.views.generic import ListView, TemplateView
+
+from books.constants import PAGINATION
 from books.models import COMIC_FORMATS
 from books.utils.batch_renamer import BatchRenamer
-from django.db import models
 
 
 def get_model(model_name):
-    return apps.get_model('books', model_name)
+    return apps.get_model("books", model_name)
 
 
 class BookRenamerView(LoginRequiredMixin, ListView):
     """Enhanced view for organizing and renaming reviewed books with template patterns."""
-    template_name = 'books/book_renamer.html'
-    context_object_name = 'books'
-    paginate_by = 50
+
+    template_name = "books/book_renamer.html"
+    context_object_name = "books"
+    paginate_by = PAGINATION["book_renamer"]
 
     def get_model(self):
-        return get_model('Book')
+        return get_model("Book")
 
     def get_queryset(self):
         """Return reviewed books that can be renamed/organized."""
         Book = self.get_model()
 
         # Get books that have been reviewed and are ready for renaming
-        queryset = Book.objects.filter(
-            finalmetadata__is_reviewed=True
-        ).select_related(
-            'finalmetadata',
-            'scan_folder'
-        ).order_by(
-            'finalmetadata__final_series',
-            'finalmetadata__final_series_number',
-            'finalmetadata__final_title'
+        queryset = (
+            Book.objects.filter(finalmetadata__is_reviewed=True)
+            .select_related("finalmetadata", "scan_folder")
+            .order_by("finalmetadata__final_series", "finalmetadata__final_series_number", "finalmetadata__final_title")
         )
 
         # Apply search filter if provided
-        request = getattr(self, 'request', None)
+        request = getattr(self, "request", None)
         if request:
-            search = request.GET.get('search')
+            search = request.GET.get("search")
             if search:
                 queryset = queryset.filter(
-                    models.Q(finalmetadata__final_title__icontains=search) |
-                    models.Q(finalmetadata__final_author__icontains=search) |
-                    models.Q(finalmetadata__final_series__icontains=search)
+                    models.Q(finalmetadata__final_title__icontains=search)
+                    | models.Q(finalmetadata__final_author__icontains=search)
+                    | models.Q(finalmetadata__final_series__icontains=search)
                 )
 
             # Apply issue_type filter for comic books
-            issue_type = request.GET.get('issue_type')
+            issue_type = request.GET.get("issue_type")
             if issue_type:
-                queryset = queryset.filter(
-                    metadata__field_name='issue_type',
-                    metadata__field_value=issue_type,
-                    metadata__is_active=True
-                ).distinct()
+                queryset = queryset.filter(metadata__field_name="issue_type", metadata__field_value=issue_type, metadata__is_active=True).distinct()
 
         return queryset
 
@@ -74,21 +70,19 @@ class BookRenamerView(LoginRequiredMixin, ListView):
         from books.utils.renaming_engine import PREDEFINED_PATTERNS
 
         # Add predefined patterns
-        context['predefined_patterns'] = PREDEFINED_PATTERNS
+        context["predefined_patterns"] = PREDEFINED_PATTERNS
 
         # Add token reference for the UI
         token_reference = self._get_token_reference()
-        context['available_tokens'] = token_reference
-        context['token_reference'] = token_reference  # Some tests expect this key
+        context["available_tokens"] = token_reference
+        context["token_reference"] = token_reference  # Some tests expect this key
 
         # Add pattern validator for frontend validation
-        context['pattern_examples'] = self._get_pattern_examples()
+        context["pattern_examples"] = self._get_pattern_examples()
 
         # Process books for enhanced display
-        context['books_with_previews'] = self._enhance_books_with_previews(
-            context['books'],
-            self.request.GET.get('folder_pattern', ''),
-            self.request.GET.get('filename_pattern', '')
+        context["books_with_previews"] = self._enhance_books_with_previews(
+            context["books"], self.request.GET.get("folder_pattern", ""), self.request.GET.get("filename_pattern", "")
         )
 
         return context
@@ -96,50 +90,45 @@ class BookRenamerView(LoginRequiredMixin, ListView):
     def _get_token_reference(self):
         """Get comprehensive token reference for the UI."""
         return {
-            'basic': [
-                {'token': '${title}', 'description': 'Book title', 'example': '21 Lessons for the 21st Century'},
-                {'token': '${author.sortname}', 'description': 'Author (Last, First)', 'example': 'Harari, Yuval Noah'},
-                {'token': '${author.fullname}', 'description': 'Author full name', 'example': 'Yuval Noah Harari'},
-                {'token': '${language}', 'description': 'Book language', 'example': 'English'},
-                {'token': '${category}', 'description': 'Book category', 'example': 'Non-Fiction'},
-                {'token': '${ext}', 'description': 'File extension', 'example': 'epub'},
+            "basic": [
+                {"token": "${title}", "description": "Book title", "example": "21 Lessons for the 21st Century"},
+                {"token": "${author.sortname}", "description": "Author (Last, First)", "example": "Harari, Yuval Noah"},
+                {"token": "${author.fullname}", "description": "Author full name", "example": "Yuval Noah Harari"},
+                {"token": "${language}", "description": "Book language", "example": "English"},
+                {"token": "${category}", "description": "Book category", "example": "Non-Fiction"},
+                {"token": "${ext}", "description": "File extension", "example": "epub"},
             ],
-            'series': [
-                {'token': '${bookseries.title}', 'description': 'Series name', 'example': 'Foundation Series'},
-                {'token': '${bookseries.number}', 'description': 'Series number', 'example': '01'},
-                {'token': '${bookseries.titleSortable}', 'description': 'Series (sortable)', 'example': 'Foundation Series, The'},
+            "series": [
+                {"token": "${bookseries.title}", "description": "Series name", "example": "Foundation Series"},
+                {"token": "${bookseries.number}", "description": "Series number", "example": "01"},
+                {"token": "${bookseries.titleSortable}", "description": "Series (sortable)", "example": "Foundation Series, The"},
             ],
-            'advanced': [
-                {'token': '${title[0]}', 'description': 'First character of title', 'example': '2'},
-                {'token': '${title;first}', 'description': 'First letter (A-Z) or #', 'example': '#'},
-                {'token': '${publicationyear}', 'description': 'Publication year', 'example': '2021'},
-                {'token': '${decadeShort}', 'description': 'Decade (short)', 'example': '2020s'},
-                {'token': '${format}', 'description': 'File format', 'example': 'EPUB'},
-                {'token': '${genre}', 'description': 'Genre', 'example': 'Science Fiction'},
-            ]
+            "advanced": [
+                {"token": "${title[0]}", "description": "First character of title", "example": "2"},
+                {"token": "${title;first}", "description": "First letter (A-Z) or #", "example": "#"},
+                {"token": "${publicationyear}", "description": "Publication year", "example": "2021"},
+                {"token": "${decadeShort}", "description": "Decade (short)", "example": "2020s"},
+                {"token": "${format}", "description": "File format", "example": "EPUB"},
+                {"token": "${genre}", "description": "Genre", "example": "Science Fiction"},
+            ],
         }
 
     def _get_pattern_examples(self):
         """Get pattern examples for different use cases."""
         return [
+            {"name": "Simple Author-Title", "folder": "${author.sortname}", "filename": "${title}.${ext}", "result": "Harari, Yuval Noah/21 Lessons for the 21st Century.epub"},
             {
-                'name': 'Simple Author-Title',
-                'folder': '${author.sortname}',
-                'filename': '${title}.${ext}',
-                'result': 'Harari, Yuval Noah/21 Lessons for the 21st Century.epub'
+                "name": "Category-Based",
+                "folder": "${category}/${author.sortname}",
+                "filename": "${title}.${ext}",
+                "result": "Non-Fiction/Harari, Yuval Noah/21 Lessons for the 21st Century.epub",
             },
             {
-                'name': 'Category-Based',
-                'folder': '${category}/${author.sortname}',
-                'filename': '${title}.${ext}',
-                'result': 'Non-Fiction/Harari, Yuval Noah/21 Lessons for the 21st Century.epub'
+                "name": "Series-Aware",
+                "folder": "${author.sortname}/${bookseries.title}",
+                "filename": "${bookseries.title} #${bookseries.number} - ${title}.${ext}",
+                "result": "Asimov, Isaac/Foundation Series/Foundation Series #01 - Foundation.epub",
             },
-            {
-                'name': 'Series-Aware',
-                'folder': '${author.sortname}/${bookseries.title}',
-                'filename': '${bookseries.title} #${bookseries.number} - ${title}.${ext}',
-                'result': 'Asimov, Isaac/Foundation Series/Foundation Series #01 - Foundation.epub'
-            }
         ]
 
     def _enhance_books_with_previews(self, books, folder_pattern, filename_pattern):
@@ -149,6 +138,7 @@ class BookRenamerView(LoginRequiredMixin, ListView):
         # If patterns are provided, use them to generate previews
         if folder_pattern and filename_pattern:
             from books.utils.renaming_engine import RenamingEngine
+
             engine = RenamingEngine()
 
             for book in books:
@@ -159,77 +149,73 @@ class BookRenamerView(LoginRequiredMixin, ListView):
                 except Exception:
                     preview_path = "Error generating preview"
 
-                enhanced_books.append({
-                    'book': book,
-                    'current_path': getattr(book, 'file_path', ''),
-                    'preview': preview_path,
-                    'new_path': preview_path,  # Add new_path for test compatibility
-                    'warnings': self._generate_warnings(book)
-                })
+                enhanced_books.append(
+                    {
+                        "book": book,
+                        "current_path": getattr(book, "file_path", ""),
+                        "preview": preview_path,
+                        "new_path": preview_path,  # Add new_path for test compatibility
+                        "warnings": self._generate_warnings(book),
+                    }
+                )
         else:
             # No patterns provided, generate suggested paths and warnings
             for book in books:
-                current_path = getattr(book, 'file_path', '')
+                current_path = getattr(book, "file_path", "")
                 new_path = self._generate_suggested_path(book)
 
-                enhanced_books.append({
-                    'book': book,
-                    'current_path': current_path,
-                    'preview': None,
-                    'new_path': new_path,
-                    'warnings': self._generate_warnings(book)
-                })
+                enhanced_books.append({"book": book, "current_path": current_path, "preview": None, "new_path": new_path, "warnings": self._generate_warnings(book)})
 
         return enhanced_books
 
     def _generate_suggested_path(self, book):
         """Generate suggested file path for book organization."""
-        if not hasattr(book, 'finalmetadata') or not book.finalmetadata:
-            return '/eBooks Library/Uncategorized/'
+        if not hasattr(book, "finalmetadata") or not book.finalmetadata:
+            return "/eBooks Library/Uncategorized/"
 
         metadata = book.finalmetadata
         # Basic path structure: /eBooks Library/[Format]/[Language]/[Category]/[Author]/[Series]/[Title]
         parts = [
-            'eBooks Library',
-            getattr(metadata, 'final_format', 'Unknown Format'),
-            getattr(metadata, 'final_language', 'Unknown Language'),
-            getattr(metadata, 'final_category', 'Books'),
-            getattr(metadata, 'final_author', 'Unknown Author'),
+            "eBooks Library",
+            getattr(metadata, "final_format", "Unknown Format"),
+            getattr(metadata, "final_language", "Unknown Language"),
+            getattr(metadata, "final_category", "Books"),
+            getattr(metadata, "final_author", "Unknown Author"),
         ]
 
         # Add series if available
-        if getattr(metadata, 'final_series', None):
+        if getattr(metadata, "final_series", None):
             parts.append(metadata.final_series)
 
         # Add title as filename
-        title = getattr(metadata, 'final_title', 'Unknown Title')
+        title = getattr(metadata, "final_title", "Unknown Title")
         filename = f"{title}.{getattr(metadata, 'final_format', 'epub').lower()}"
 
-        return '/' + '/'.join(parts) + '/' + filename
+        return "/" + "/".join(parts) + "/" + filename
 
     def _generate_warnings(self, book):
         """Generate warnings for problematic books."""
         warnings = []
 
-        if not hasattr(book, 'finalmetadata') or not book.finalmetadata:
+        if not hasattr(book, "finalmetadata") or not book.finalmetadata:
             warnings.append("No final metadata available")
             return warnings
 
         metadata = book.finalmetadata
 
         # Check for missing critical fields
-        if not getattr(metadata, 'final_title', None):
+        if not getattr(metadata, "final_title", None):
             warnings.append("Missing title")
 
-        if not getattr(metadata, 'final_author', None):
+        if not getattr(metadata, "final_author", None):
             warnings.append("Missing author")
 
-        if not getattr(metadata, 'final_format', None):
+        if not getattr(metadata, "final_format", None):
             warnings.append("Missing format information")
 
         # Check for series issues
-        series = getattr(metadata, 'final_series', None)
-        series_number = getattr(metadata, 'final_series_number', None)
+        series = getattr(metadata, "final_series", None)
+        series_number = getattr(metadata, "final_series_number", None)
 
         if series and not series_number:
             warnings.append("Series specified but no series number")
@@ -244,23 +230,18 @@ class BookRenamerView(LoginRequiredMixin, ListView):
         series_map = {}
 
         for book in books:
-            if hasattr(book, 'finalmetadata') and book.finalmetadata:
-                series_name = getattr(book.finalmetadata, 'final_series', None) or 'Standalone Books'
+            if hasattr(book, "finalmetadata") and book.finalmetadata:
+                series_name = getattr(book.finalmetadata, "final_series", None) or "Standalone Books"
                 if series_name not in series_map:
-                    series_map[series_name] = {
-                        'name': series_name,
-                        'count': 0,
-                        'numbers': [],
-                        'books': []
-                    }
+                    series_map[series_name] = {"name": series_name, "count": 0, "numbers": [], "books": []}
 
-                series_map[series_name]['count'] += 1
-                series_map[series_name]['books'].append(book)
+                series_map[series_name]["count"] += 1
+                series_map[series_name]["books"].append(book)
 
                 # Add series number if available
-                series_number = getattr(book.finalmetadata, 'final_series_number', None)
+                series_number = getattr(book.finalmetadata, "final_series_number", None)
                 if series_number:
-                    series_map[series_name]['numbers'].append(str(series_number))
+                    series_map[series_name]["numbers"].append(str(series_number))
 
         return list(series_map.values())
 
@@ -270,37 +251,32 @@ class BookRenamerView(LoginRequiredMixin, ListView):
 
         # Get all series with their books
         series_analysis = {}
-        books = Book.objects.filter(finalmetadata__is_reviewed=True).select_related('finalmetadata')
+        books = Book.objects.filter(finalmetadata__is_reviewed=True).select_related("finalmetadata")
 
         for book in books:
-            if hasattr(book, 'finalmetadata') and book.finalmetadata:
-                series_name = getattr(book.finalmetadata, 'final_series', None)
+            if hasattr(book, "finalmetadata") and book.finalmetadata:
+                series_name = getattr(book.finalmetadata, "final_series", None)
                 if series_name:
                     if series_name not in series_analysis:
-                        series_analysis[series_name] = {
-                            'name': series_name,
-                            'books': [],
-                            'numbers': set(),
-                            'complete': False
-                        }
+                        series_analysis[series_name] = {"name": series_name, "books": [], "numbers": set(), "complete": False}
 
-                    series_analysis[series_name]['books'].append(book)
-                    series_number = getattr(book.finalmetadata, 'final_series_number', None)
+                    series_analysis[series_name]["books"].append(book)
+                    series_number = getattr(book.finalmetadata, "final_series_number", None)
                     if series_number:
-                        series_analysis[series_name]['numbers'].add(int(series_number))
+                        series_analysis[series_name]["numbers"].add(int(series_number))
 
         # Determine completeness
         for series_name, data in series_analysis.items():
-            if data['numbers']:
-                expected_numbers = set(range(1, max(data['numbers']) + 1))
-                data['complete'] = data['numbers'] == expected_numbers
+            if data["numbers"]:
+                expected_numbers = set(range(1, max(data["numbers"]) + 1))
+                data["complete"] = data["numbers"] == expected_numbers
             else:
-                data['complete'] = False
+                data["complete"] = False
 
         return {
-            'complete_series': [name for name, data in series_analysis.items() if data['complete']],
-            'incomplete_series': [name for name, data in series_analysis.items() if not data['complete']],
-            'series_analysis': series_analysis
+            "complete_series": [name for name, data in series_analysis.items() if data["complete"]],
+            "incomplete_series": [name for name, data in series_analysis.items() if not data["complete"]],
+            "series_analysis": series_analysis,
         }
 
     def _generate_comic_file_path(self, book):
@@ -311,20 +287,20 @@ class BookRenamerView(LoginRequiredMixin, ListView):
             for meta in book.metadata.filter(is_active=True):
                 metadata[meta.field_name] = meta.field_value
 
-            series_name = getattr(book.finalmetadata, 'final_series', '') or metadata.get('series', 'Unknown Series')
-            issue_type = metadata.get('issue_type', 'main_series')
-            original_filename = book.file_path.split('/')[-1] if book.file_path else 'unknown.cbz'
+            series_name = getattr(book.finalmetadata, "final_series", "") or metadata.get("series", "Unknown Series")
+            issue_type = metadata.get("issue_type", "main_series")
+            original_filename = book.file_path.split("/")[-1] if book.file_path else "unknown.cbz"
 
             # Generate file prefix based on issue type
-            if issue_type == 'main_series':
-                issue_number = metadata.get('issue_number', '01')
+            if issue_type == "main_series":
+                issue_number = metadata.get("issue_number", "01")
                 prefix = f"{series_name} - {int(issue_number):02d}"
-            elif issue_type == 'annual':
-                annual_number = metadata.get('annual_number', '1')
+            elif issue_type == "annual":
+                annual_number = metadata.get("annual_number", "1")
                 prefix = f"{series_name} - A{annual_number:0>2}"
-            elif issue_type == 'special':
+            elif issue_type == "special":
                 prefix = f"{series_name} - S01"
-            elif issue_type == 'collection':
+            elif issue_type == "collection":
                 prefix = f"{series_name} - SP01"
             else:
                 prefix = f"{series_name} - 01"
@@ -341,30 +317,30 @@ class BookRenamerView(LoginRequiredMixin, ListView):
     def _get_comic_subfolder(self, issue_type, metadata):
         """Get comic subfolder based on issue type."""
         subfolder_map = {
-            'annual': 'Annuals',
-            'special': 'Specials',
-            'collection': 'Collections',
-            'one_shot': 'One-Shots',
-            'preview': 'Previews',
-            'alternate_reality': 'Alternate Reality',
-            'crossover': 'Events',
-            'main_series': 'Unknown'  # Default fallback
+            "annual": "Annuals",
+            "special": "Specials",
+            "collection": "Collections",
+            "one_shot": "One-Shots",
+            "preview": "Previews",
+            "alternate_reality": "Alternate Reality",
+            "crossover": "Events",
+            "main_series": "Unknown",  # Default fallback
         }
-        return subfolder_map.get(issue_type, 'Unknown')
+        return subfolder_map.get(issue_type, "Unknown")
 
     def _generate_comic_filename(self, issue_type, metadata, series, book):
         """Generate comic filename based on metadata."""
-        title = getattr(book.finalmetadata, 'final_title', 'Unknown Title')
+        title = getattr(book.finalmetadata, "final_title", "Unknown Title")
 
-        if issue_type == 'main_series':
-            issue_number = metadata.get('issue_number', 1)
+        if issue_type == "main_series":
+            issue_number = metadata.get("issue_number", 1)
             return f"{series} #{issue_number:03d} - {title}"
-        elif issue_type == 'annual':
-            annual_number = metadata.get('annual_number', 1)
+        elif issue_type == "annual":
+            annual_number = metadata.get("annual_number", 1)
             return f"{series} Annual #{annual_number} - {title}"
-        elif issue_type == 'special':
+        elif issue_type == "special":
             return f"{series} Special - {title}"
-        elif issue_type == 'one_shot':
+        elif issue_type == "one_shot":
             return f"{series} One-Shot - {title}"
         else:
             return f"{series} - {title}"
@@ -372,80 +348,73 @@ class BookRenamerView(LoginRequiredMixin, ListView):
     def _analyze_comic_series_completion(self):
         """Analyze comic series completion for comic books."""
         # Get all comic books (CBZ, CBR formats)
-        comic_books = self.get_queryset().filter(
-            files__file_format__in=COMIC_FORMATS,
-            finalmetadata__final_series__isnull=False
-        ).exclude(finalmetadata__final_series='')
+        comic_books = self.get_queryset().filter(files__file_format__in=COMIC_FORMATS, finalmetadata__final_series__isnull=False).exclude(finalmetadata__final_series="")
 
         series_data = {}
 
         for book in comic_books:
             series_name = book.finalmetadata.final_series
             if series_name not in series_data:
-                series_data[series_name] = {
-                    'name': series_name,
-                    'main_series_count': 0,
-                    'annuals_count': 0,
-                    'specials_count': 0,
-                    'is_complete': True  # Default to complete
-                }
+                series_data[series_name] = {"name": series_name, "main_series_count": 0, "annuals_count": 0, "specials_count": 0, "is_complete": True}  # Default to complete
 
             # Get issue type from metadata
-            issue_type = 'main_series'  # Default
-            for meta in book.metadata.filter(field_name='issue_type', is_active=True):
+            issue_type = "main_series"  # Default
+            for meta in book.metadata.filter(field_name="issue_type", is_active=True):
                 issue_type = meta.field_value
                 break
 
             # Count by type
-            if issue_type == 'annual':
-                series_data[series_name]['annuals_count'] += 1
-            elif issue_type in ['special', 'one_shot']:
-                series_data[series_name]['specials_count'] += 1
+            if issue_type == "annual":
+                series_data[series_name]["annuals_count"] += 1
+            elif issue_type in ["special", "one_shot"]:
+                series_data[series_name]["specials_count"] += 1
             else:
-                series_data[series_name]['main_series_count'] += 1
+                series_data[series_name]["main_series_count"] += 1
 
         return {
-            'all_series': list(series_data.values()),
-            'complete_series': [s for s in series_data.values() if s['is_complete']],
-            'incomplete_series': [s for s in series_data.values() if not s['is_complete']],
-            'total_series': len(series_data),
-            'complete_count': len([s for s in series_data.values() if s['is_complete']]),
-            'incomplete_count': len([s for s in series_data.values() if not s['is_complete']])
+            "all_series": list(series_data.values()),
+            "complete_series": [s for s in series_data.values() if s["is_complete"]],
+            "incomplete_series": [s for s in series_data.values() if not s["is_complete"]],
+            "total_series": len(series_data),
+            "complete_count": len([s for s in series_data.values() if s["is_complete"]]),
+            "incomplete_count": len([s for s in series_data.values() if not s["is_complete"]]),
         }
 
 
 class BookRenamerPreviewView(LoginRequiredMixin, TemplateView):
     """Preview book renaming operations."""
-    template_name = 'books/book_renamer_preview.html'
+
+    template_name = "books/book_renamer_preview.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # TODO: Implement preview logic
-        context['preview_items'] = []
+        context["preview_items"] = []
         return context
 
 
 class BookRenamerExecuteView(LoginRequiredMixin, TemplateView):
     """Execute book renaming operations."""
-    template_name = 'books/book_renamer_execute.html'
+
+    template_name = "books/book_renamer_execute.html"
 
     def post(self, request, *args, **kwargs):
         """Execute book renaming operations."""
         import json
 
-        selected_books = request.POST.getlist('selected_books')
+        selected_books = request.POST.getlist("selected_books")
         if not selected_books:
-            return JsonResponse({'status': 'error', 'message': 'No books selected'}, status=400)
+            return JsonResponse({"status": "error", "message": "No books selected"}, status=400)
 
         # Parse file actions
-        file_actions_str = request.POST.get('file_actions', '[]')
+        file_actions_str = request.POST.get("file_actions", "[]")
         try:
             file_actions = json.loads(file_actions_str) if file_actions_str else []
         except json.JSONDecodeError:
             file_actions = []
 
         results = []
-        Book = get_model('Book')
+        Book = get_model("Book")
 
         for book_id in selected_books:
             try:
@@ -453,112 +422,98 @@ class BookRenamerExecuteView(LoginRequiredMixin, TemplateView):
                 result = self._rename_book_files(book, request.user, file_actions)
 
                 # Create FileOperation for tracking
-                FileOperation = get_model('FileOperation')
+                FileOperation = get_model("FileOperation")
                 FileOperation.objects.create(
                     book=book,
-                    operation_type='rename',
-                    original_file_path=getattr(book, 'file_path', ''),
-                    new_file_path=result.get('new_path', ''),
-                    status='completed',
+                    operation_type="rename",
+                    original_file_path=getattr(book, "file_path", ""),
+                    new_file_path=result.get("new_path", ""),
+                    status="completed",
                     user=request.user,
-                    notes=f"Renamed from {getattr(book, 'file_path', '')} to {result.get('new_path', '')}"
+                    notes=f"Renamed from {getattr(book, 'file_path', '')} to {result.get('new_path', '')}",
                 )
 
-                results.append({
-                    'book_id': book_id,
-                    'status': 'success',
-                    'result': result
-                })
+                results.append({"book_id": book_id, "status": "success", "result": result})
             except Book.DoesNotExist:
-                results.append({
-                    'book_id': book_id,
-                    'status': 'error',
-                    'message': 'Book not found'
-                })
+                results.append({"book_id": book_id, "status": "error", "message": "Book not found"})
             except Exception as e:
-                results.append({
-                    'book_id': book_id,
-                    'status': 'error',
-                    'message': str(e)
-                })
+                results.append({"book_id": book_id, "status": "error", "message": str(e)})
 
-        successful_results = [r for r in results if r['status'] == 'success']
-        error_results = [r for r in results if r['status'] == 'error']
+        successful_results = [r for r in results if r["status"] == "success"]
+        error_results = [r for r in results if r["status"] == "error"]
 
-        return JsonResponse({
-            'status': 'success',
-            'results': results,
-            'message': f'Processed {len(results)} books',
-            'total': len(results),
-            'successful': len(successful_results),
-            'errors': error_results,  # Return the actual error list, not the count
-            'success': [r['result'] for r in successful_results],  # Results of successful operations
-            'warnings': [r['message'] for r in error_results],  # Error messages as warnings
-        })
+        return JsonResponse(
+            {
+                "status": "success",
+                "results": results,
+                "message": f"Processed {len(results)} books",
+                "total": len(results),
+                "successful": len(successful_results),
+                "errors": error_results,  # Return the actual error list, not the count
+                "success": [r["result"] for r in successful_results],  # Results of successful operations
+                "warnings": [r["message"] for r in error_results],  # Error messages as warnings
+            }
+        )
 
     def _rename_book_files(self, book, user, file_actions):
         """Rename book files based on final metadata."""
         # For now, return a mock result
         # TODO: Implement actual file renaming logic
-        new_path = f'/new/path/{book.id}/renamed_book.epub'
+        new_path = f"/new/path/{book.id}/renamed_book.epub"
 
-        return {
-            'new_path': new_path,
-            'additional_files': [],
-            'old_path': getattr(book, 'file_path', ''),
-            'status': 'renamed'
-        }
+        return {"new_path": new_path, "additional_files": [], "old_path": getattr(book, "file_path", ""), "status": "renamed"}
 
     def _get_file_action(self, file_index, file_actions):
         """Get the action for a specific file index."""
         if not file_actions or not isinstance(file_actions, list):
-            return 'rename'  # Default action
+            return "rename"  # Default action
 
         if file_index < len(file_actions):
-            return file_actions[file_index].get('action', 'rename')
+            return file_actions[file_index].get("action", "rename")
 
-        return 'rename'  # Default for indices beyond the list
+        return "rename"  # Default for indices beyond the list
 
     def _get_file_description(self, extension, file_path):
         """Get a human-readable description for a file based on its extension."""
         extension = extension.lower()
 
         descriptions = {
-            '.opf': 'eBook metadata file (OPF)',
-            '.jpg': 'Book cover image (JPEG)',
-            '.jpeg': 'Book cover image (JPEG)',
-            '.png': 'Book cover image (PNG)',
-            '.txt': 'Text file (may contain author info, synopsis, etc.)',
-            '.pdf': 'PDF document',
-            '.epub': 'EPUB eBook file',
-            '.mobi': 'Kindle eBook file (MOBI)',
-            '.azw': 'Kindle eBook file (AZW)',
-            '.azw3': 'Kindle eBook file (AZW3)',
-            '.cbr': 'Comic book archive (RAR)',
-            '.cbz': 'Comic book archive (ZIP)',
+            ".opf": "eBook metadata file (OPF)",
+            ".jpg": "Book cover image (JPEG)",
+            ".jpeg": "Book cover image (JPEG)",
+            ".png": "Book cover image (PNG)",
+            ".txt": "Text file (may contain author info, synopsis, etc.)",
+            ".pdf": "PDF document",
+            ".epub": "EPUB eBook file",
+            ".mobi": "Kindle eBook file (MOBI)",
+            ".azw": "Kindle eBook file (AZW)",
+            ".azw3": "Kindle eBook file (AZW3)",
+            ".cbr": "Comic book archive (RAR)",
+            ".cbz": "Comic book archive (ZIP)",
         }
 
         if extension in descriptions:
             return descriptions[extension]
 
         # Unknown extension - return generic description
-        ext_name = extension[1:].upper() if extension.startswith('.') else extension.upper()
-        return f'{ext_name} file'
+        ext_name = extension[1:].upper() if extension.startswith(".") else extension.upper()
+        return f"{ext_name} file"
 
 
 class BookRenamerFileDetailsView(LoginRequiredMixin, TemplateView):
     """File details for book renaming."""
-    template_name = 'books/book_renamer_file_details.html'
+
+    template_name = "books/book_renamer_file_details.html"
 
     def post(self, request, *args, **kwargs):
         """Handle POST requests for file details."""
-        book_id = request.POST.get('book_id') or request.GET.get('book_id')
+        book_id = request.POST.get("book_id") or request.GET.get("book_id")
 
         if not book_id:
-            return JsonResponse({'error': 'book_id is required'}, status=400)
+            return JsonResponse({"error": "book_id is required"}, status=400)
 
         try:
-            Book = get_model('Book')
+            Book = get_model("Book")
             book = Book.objects.get(id=book_id)
 
             # Get file details
@@ -566,53 +521,53 @@ class BookRenamerFileDetailsView(LoginRequiredMixin, TemplateView):
 
             # Check if file is missing
             if file_details is None:
-                return JsonResponse({
-                    'error': 'Main book file not found'
-                }, status=200)
+                return JsonResponse({"error": "Main book file not found"}, status=200)
 
             # Categorize files
             automatic_files = []
             optional_files = []
 
             for file_info in file_details:
-                if file_info.get('required', False) or file_info.get('type') == 'main':
+                if file_info.get("required", False) or file_info.get("type") == "main":
                     automatic_files.append(file_info)
                 else:
                     optional_files.append(file_info)
 
-            current_path = getattr(book, 'file_path', '')
+            current_path = getattr(book, "file_path", "")
 
-            return JsonResponse({
-                'success': True,
-                'status': 'success',
-                'current_path': current_path,
-                'new_path': current_path,  # For now, same as current
-                'book': {
-                    'id': book.id,
-                    'title': getattr(book.finalmetadata, 'final_title', 'Unknown') if hasattr(book, 'finalmetadata') else 'Unknown',
-                    'file_path': current_path,
-                },
-                'book_info': {
-                    'id': book.id,
-                    'title': getattr(book.finalmetadata, 'final_title', 'Unknown') if hasattr(book, 'finalmetadata') else 'Unknown',
-                    'author': getattr(book.finalmetadata, 'final_author', 'Unknown') if hasattr(book, 'finalmetadata') else 'Unknown',
-                    'file_path': current_path,
-                },
-                'files': file_details,
-                'automatic_files': automatic_files,
-                'optional_files': optional_files
-            })
+            return JsonResponse(
+                {
+                    "success": True,
+                    "status": "success",
+                    "current_path": current_path,
+                    "new_path": current_path,  # For now, same as current
+                    "book": {
+                        "id": book.id,
+                        "title": getattr(book.finalmetadata, "final_title", "Unknown") if hasattr(book, "finalmetadata") else "Unknown",
+                        "file_path": current_path,
+                    },
+                    "book_info": {
+                        "id": book.id,
+                        "title": getattr(book.finalmetadata, "final_title", "Unknown") if hasattr(book, "finalmetadata") else "Unknown",
+                        "author": getattr(book.finalmetadata, "final_author", "Unknown") if hasattr(book, "finalmetadata") else "Unknown",
+                        "file_path": current_path,
+                    },
+                    "files": file_details,
+                    "automatic_files": automatic_files,
+                    "optional_files": optional_files,
+                }
+            )
 
         except Book.DoesNotExist:
-            return JsonResponse({'error': 'Book not found'}, status=404)
+            return JsonResponse({"error": "Book not found"}, status=404)
         except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
+            return JsonResponse({"error": str(e)}, status=500)
 
     def _get_file_details(self, book):
         """Get detailed information about book files."""
 
         files = []
-        main_file_path = getattr(book, 'file_path', '')
+        main_file_path = getattr(book, "file_path", "")
 
         if main_file_path:
             if not os.path.exists(main_file_path):
@@ -623,37 +578,30 @@ class BookRenamerFileDetailsView(LoginRequiredMixin, TemplateView):
             # Main book file
             file_size = os.path.getsize(main_file_path)
             original_name = os.path.basename(main_file_path)
-            files.append({
-                'original': main_file_path,
-                'original_name': original_name,
-                'new': main_file_path,  # Same as original for now
-                'new_name': original_name,  # Same as original for now
-                'size': file_size,
-                'size_formatted': self._format_file_size(file_size),
-                'type': 'main',
-                'extension': os.path.splitext(original_name)[1].lower(),
-                'description': 'Main book file',
-                'required': True
-            })
+            files.append(
+                {
+                    "original": main_file_path,
+                    "original_name": original_name,
+                    "new": main_file_path,  # Same as original for now
+                    "new_name": original_name,  # Same as original for now
+                    "size": file_size,
+                    "size_formatted": self._format_file_size(file_size),
+                    "type": "main",
+                    "extension": os.path.splitext(original_name)[1].lower(),
+                    "description": "Main book file",
+                    "required": True,
+                }
+            )
 
             # Look for associated files (cover, metadata, etc.)
             base_dir = os.path.dirname(main_file_path)
             base_name = os.path.splitext(os.path.basename(main_file_path))[0]
 
             # Common associated file patterns
-            patterns = [
-                f"{base_name}.opf",
-                f"{base_name}.jpg",
-                f"{base_name}.jpeg",
-                f"{base_name}.png",
-                f"{base_name}.txt",
-                "cover.jpg",
-                "cover.png",
-                "metadata.opf"
-            ]
+            patterns = [f"{base_name}.opf", f"{base_name}.jpg", f"{base_name}.jpeg", f"{base_name}.png", f"{base_name}.txt", "cover.jpg", "cover.png", "metadata.opf"]
 
             # Define which file types are automatic vs optional
-            automatic_extensions = {'.opf', '.jpg', '.jpeg', '.png'}
+            automatic_extensions = {".opf", ".jpg", ".jpeg", ".png"}
 
             for pattern in patterns:
                 associated_path = os.path.join(base_dir, pattern)
@@ -664,37 +612,39 @@ class BookRenamerFileDetailsView(LoginRequiredMixin, TemplateView):
 
                     # Determine file type and description
                     # Use extension without dot as type for test compatibility
-                    if extension == '.opf':
-                        description = 'Metadata file'
-                        file_type = 'opf'
-                    elif extension in {'.jpg', '.jpeg'}:
-                        description = 'Cover image'
-                        file_type = 'jpg'
-                    elif extension == '.png':
-                        description = 'Cover image'
-                        file_type = 'png'
-                    elif extension == '.txt':
-                        description = 'Description file'
-                        file_type = 'txt'
+                    if extension == ".opf":
+                        description = "Metadata file"
+                        file_type = "opf"
+                    elif extension in {".jpg", ".jpeg"}:
+                        description = "Cover image"
+                        file_type = "jpg"
+                    elif extension == ".png":
+                        description = "Cover image"
+                        file_type = "png"
+                    elif extension == ".txt":
+                        description = "Description file"
+                        file_type = "txt"
                     else:
-                        description = 'Associated file'
-                        file_type = extension[1:] if extension else 'unknown'  # Remove dot
+                        description = "Associated file"
+                        file_type = extension[1:] if extension else "unknown"  # Remove dot
 
                     # Check if it's automatic or optional
                     is_automatic = extension in automatic_extensions
 
-                    files.append({
-                        'original': associated_path,
-                        'original_name': original_name,
-                        'new': associated_path,  # Same as original for now
-                        'new_name': original_name,  # Same as original for now
-                        'size': assoc_size,
-                        'size_formatted': self._format_file_size(assoc_size),
-                        'type': file_type,
-                        'extension': extension,
-                        'description': description,
-                        'required': is_automatic
-                    })
+                    files.append(
+                        {
+                            "original": associated_path,
+                            "original_name": original_name,
+                            "new": associated_path,  # Same as original for now
+                            "new_name": original_name,  # Same as original for now
+                            "size": assoc_size,
+                            "size_formatted": self._format_file_size(assoc_size),
+                            "type": file_type,
+                            "extension": extension,
+                            "description": description,
+                            "required": is_automatic,
+                        }
+                    )
 
         return files
 
@@ -712,13 +662,15 @@ class BookRenamerFileDetailsView(LoginRequiredMixin, TemplateView):
 
 class BookRenamerRevertView(LoginRequiredMixin, TemplateView):
     """Revert book renaming operations."""
-    template_name = 'books/book_renamer_revert.html'
+
+    template_name = "books/book_renamer_revert.html"
 
 
 class BookRenamerHistoryView(LoginRequiredMixin, ListView):
     """History of book renaming operations."""
-    template_name = 'books/book_renamer_history.html'
-    context_object_name = 'history_items'
+
+    template_name = "books/book_renamer_history.html"
+    context_object_name = "history_items"
 
     def get_queryset(self):
         # TODO: Implement history queryset
@@ -729,14 +681,14 @@ class BookRenamerHistoryView(LoginRequiredMixin, ListView):
 def bulk_rename_view(request):
     """Bulk rename functionality."""
     # TODO: Implement bulk rename
-    return JsonResponse({'status': 'success', 'message': 'Bulk rename not yet implemented'})
+    return JsonResponse({"status": "success", "message": "Bulk rename not yet implemented"})
 
 
 @login_required
 def rename_book_form(request):
     """Rename book form handler."""
     # TODO: Implement rename form
-    return JsonResponse({'status': 'success', 'message': 'Rename form not yet implemented'})
+    return JsonResponse({"status": "success", "message": "Rename form not yet implemented"})
 
 
 @login_required
@@ -745,27 +697,27 @@ def rename_book(request, book_id):
     # Import os from the parent views module to allow test patching
     from books.views import os as parent_os
 
-    if request.method == 'POST':
+    if request.method == "POST":
         try:
-            Book = get_model('Book')
+            Book = get_model("Book")
             book = Book.objects.get(id=book_id)
 
-            new_filename = request.POST.get('new_filename')
+            new_filename = request.POST.get("new_filename")
             if not new_filename:
-                return JsonResponse({'success': False, 'error': 'New filename is required'})
+                return JsonResponse({"success": False, "error": "New filename is required"})
 
             # Get the primary file
             primary_file = book.primary_file
             if not primary_file:
-                return JsonResponse({'success': False, 'error': 'Book file not found'})
+                return JsonResponse({"success": False, "error": "Book file not found"})
 
             old_path = primary_file.file_path
             if not old_path:
-                return JsonResponse({'success': False, 'error': 'Book file path not found'})
+                return JsonResponse({"success": False, "error": "Book file path not found"})
 
             # Check if the old file exists (this will be mocked by tests)
             if not parent_os.path.exists(old_path):
-                return JsonResponse({'success': False, 'error': 'Original file not found'})
+                return JsonResponse({"success": False, "error": "Original file not found"})
 
             # Build new path
             new_path = parent_os.path.join(parent_os.path.dirname(old_path), new_filename)
@@ -777,72 +729,71 @@ def rename_book(request, book_id):
             primary_file.file_path = new_path
             primary_file.save()
 
-            return JsonResponse({'success': True, 'message': 'Book renamed successfully'})
+            return JsonResponse({"success": True, "message": "Book renamed successfully"})
 
         except Book.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'Book not found'}, status=404)
+            return JsonResponse({"success": False, "error": "Book not found"}, status=404)
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+            return JsonResponse({"success": False, "error": str(e)})
 
-    return JsonResponse({'success': False, 'error': 'Only POST method allowed'})
+    return JsonResponse({"success": False, "error": "Only POST method allowed"})
 
 
 @login_required
 def preview_rename(request):
     """Preview book rename operation."""
-    if request.method == 'POST':
+    if request.method == "POST":
         try:
-            book_id = request.POST.get('book_id')
-            new_filename = request.POST.get('new_filename')
-            pattern = request.POST.get('pattern')
+            book_id = request.POST.get("book_id")
+            new_filename = request.POST.get("new_filename")
+            pattern = request.POST.get("pattern")
 
             if not book_id:
-                return JsonResponse({'success': False, 'error': 'Book ID is required'})
+                return JsonResponse({"success": False, "error": "Book ID is required"})
 
             if not new_filename and not pattern:
-                return JsonResponse({'success': False, 'error': 'New filename or pattern required'})
+                return JsonResponse({"success": False, "error": "New filename or pattern required"})
 
-            Book = get_model('Book')
+            Book = get_model("Book")
             book = Book.objects.get(id=book_id)
 
             # If pattern is provided, generate filename from it
             if pattern and not new_filename:
                 # Mock pattern processing - in real implementation, this would use book metadata
-                new_filename = 'Test Author - Test Title.epub'
+                new_filename = "Test Author - Test Title.epub"
 
-            return JsonResponse({
-                'success': True,
-                'preview': {
-                    'old_name': book.file_path.split('/')[-1] if book.file_path else 'Unknown',
-                    'new_name': new_filename,
-                    'book_title': getattr(book, 'title', 'Unknown Title')
+            return JsonResponse(
+                {
+                    "success": True,
+                    "preview": {
+                        "old_name": book.file_path.split("/")[-1] if book.file_path else "Unknown",
+                        "new_name": new_filename,
+                        "book_title": getattr(book, "title", "Unknown Title"),
+                    },
                 }
-            })
+            )
 
         except Book.DoesNotExist:
-            return JsonResponse({'success': False, 'error': 'Book not found'})
+            return JsonResponse({"success": False, "error": "Book not found"})
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+            return JsonResponse({"success": False, "error": str(e)})
 
-    return JsonResponse({'success': False, 'error': 'Only POST method allowed'})
+    return JsonResponse({"success": False, "error": "Only POST method allowed"})
 
 
 @login_required
 def preview_pattern(request):
     """Preview renaming pattern for batch operations."""
-    if request.method == 'POST':
+    if request.method == "POST":
         try:
             from books.utils.renaming_engine import RenamingEngine, RenamingPatternValidator
 
-            folder_pattern = request.POST.get('folder_pattern', '')
-            filename_pattern = request.POST.get('filename_pattern', '')
-            book_ids = request.POST.getlist('book_ids', [])
+            folder_pattern = request.POST.get("folder_pattern", "")
+            filename_pattern = request.POST.get("filename_pattern", "")
+            book_ids = request.POST.getlist("book_ids", [])
 
             if not folder_pattern or not filename_pattern:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Both folder and filename patterns are required'
-                })
+                return JsonResponse({"success": False, "error": "Both folder and filename patterns are required"})
 
             # Validate patterns
             validator = RenamingPatternValidator()
@@ -850,15 +801,10 @@ def preview_pattern(request):
             filename_valid, filename_warnings = validator.validate_pattern(filename_pattern)
 
             if not folder_valid or not filename_valid:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Invalid patterns',
-                    'folder_warnings': folder_warnings,
-                    'filename_warnings': filename_warnings
-                })
+                return JsonResponse({"success": False, "error": "Invalid patterns", "folder_warnings": folder_warnings, "filename_warnings": filename_warnings})
 
             # Generate previews for selected books
-            Book = get_model('Book')
+            Book = get_model("Book")
             engine = RenamingEngine()
             previews = []
 
@@ -872,63 +818,57 @@ def preview_pattern(request):
 
                     full_path = f"{target_folder}/{target_filename}" if target_folder and target_filename else None
 
-                    previews.append({
-                        'book_id': book.id,
-                        'current_path': book.file_path,
-                        'target_folder': target_folder,
-                        'target_filename': target_filename,
-                        'full_target_path': full_path,
-                        'new_path': full_path,  # Add for test compatibility
-                        'title': getattr(book.finalmetadata, 'final_title', 'Unknown') if hasattr(book, 'finalmetadata') else 'Unknown',
-                        'author': getattr(book.finalmetadata, 'final_author', 'Unknown') if hasattr(book, 'finalmetadata') else 'Unknown'
-                    })
+                    previews.append(
+                        {
+                            "book_id": book.id,
+                            "current_path": book.file_path,
+                            "target_folder": target_folder,
+                            "target_filename": target_filename,
+                            "full_target_path": full_path,
+                            "new_path": full_path,  # Add for test compatibility
+                            "title": getattr(book.finalmetadata, "final_title", "Unknown") if hasattr(book, "finalmetadata") else "Unknown",
+                            "author": getattr(book.finalmetadata, "final_author", "Unknown") if hasattr(book, "finalmetadata") else "Unknown",
+                        }
+                    )
                 except Exception as e:
-                    previews.append({
-                        'book_id': book.id,
-                        'error': str(e),
-                        'current_path': book.file_path
-                    })
+                    previews.append({"book_id": book.id, "error": str(e), "current_path": book.file_path})
 
-            return JsonResponse({
-                'success': True,
-                'previews': previews,
-                'folder_warnings': folder_warnings,
-                'filename_warnings': filename_warnings,
-                'total_books': len(book_ids),
-                'preview_count': len(previews)
-            })
+            return JsonResponse(
+                {
+                    "success": True,
+                    "previews": previews,
+                    "folder_warnings": folder_warnings,
+                    "filename_warnings": filename_warnings,
+                    "total_books": len(book_ids),
+                    "preview_count": len(previews),
+                }
+            )
 
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+            return JsonResponse({"success": False, "error": str(e)})
 
-    return JsonResponse({'success': False, 'error': 'Only POST method allowed'})
+    return JsonResponse({"success": False, "error": "Only POST method allowed"})
 
 
 @login_required
 def execute_batch_rename(request):
     """Execute batch renaming operation."""
-    if request.method == 'POST':
+    if request.method == "POST":
         try:
-            folder_pattern = request.POST.get('folder_pattern', '')
-            filename_pattern = request.POST.get('filename_pattern', '')
-            book_ids = request.POST.getlist('book_ids', [])
-            dry_run = request.POST.get('dry_run', 'true').lower() == 'true'
-            include_companions = request.POST.get('include_companions', 'true').lower() == 'true'
+            folder_pattern = request.POST.get("folder_pattern", "")
+            filename_pattern = request.POST.get("filename_pattern", "")
+            book_ids = request.POST.getlist("book_ids", [])
+            dry_run = request.POST.get("dry_run", "true").lower() == "true"
+            include_companions = request.POST.get("include_companions", "true").lower() == "true"
 
             if not folder_pattern or not filename_pattern:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Both folder and filename patterns are required'
-                })
+                return JsonResponse({"success": False, "error": "Both folder and filename patterns are required"})
 
             if not book_ids:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No books selected for renaming'
-                })
+                return JsonResponse({"success": False, "error": "No books selected for renaming"})
 
             # Get books to rename
-            Book = get_model('Book')
+            Book = get_model("Book")
             books = Book.objects.filter(id__in=book_ids)
 
             # Create batch renamer
@@ -943,50 +883,31 @@ def execute_batch_rename(request):
             if dry_run:
                 # Return preview without executing
                 previews = renamer.preview_operations()
-                return JsonResponse({
-                    'success': True,
-                    'dry_run': True,
-                    'summary': operation_summary,
-                    'operations': previews[:20]  # Limit for UI display
-                })
+                return JsonResponse({"success": True, "dry_run": True, "summary": operation_summary, "operations": previews[:20]})  # Limit for UI display
             else:
                 # Execute the operations
                 successful, failed, errors = renamer.execute_operations()
 
-                return JsonResponse({
-                    'success': True,
-                    'dry_run': False,
-                    'summary': operation_summary,
-                    'results': {
-                        'successful': successful,
-                        'failed': failed,
-                        'errors': errors
-                    }
-                })
+                return JsonResponse({"success": True, "dry_run": False, "summary": operation_summary, "results": {"successful": successful, "failed": failed, "errors": errors}})
 
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+            return JsonResponse({"success": False, "error": str(e)})
 
-    return JsonResponse({'success': False, 'error': 'Only POST method allowed'})
+    return JsonResponse({"success": False, "error": "Only POST method allowed"})
 
 
 @login_required
 def validate_pattern(request):
     """Validate a renaming pattern."""
-    if request.method == 'POST':
+    if request.method == "POST":
         try:
             from books.utils.renaming_engine import RenamingPatternValidator
 
-            pattern = request.POST.get('pattern', '')
-            pattern_type = request.POST.get('type', 'folder')  # 'folder' or 'filename'
+            pattern = request.POST.get("pattern", "")
+            pattern_type = request.POST.get("type", "folder")  # 'folder' or 'filename'
 
-            if not pattern or pattern.strip() == '':
-                return JsonResponse({
-                    'success': True,
-                    'valid': False,
-                    'warnings': ['Pattern cannot be empty'],
-                    'error': 'Pattern is required'
-                })
+            if not pattern or pattern.strip() == "":
+                return JsonResponse({"success": True, "valid": False, "warnings": ["Pattern cannot be empty"], "error": "Pattern is required"})
 
             validator = RenamingPatternValidator()
             is_valid, warnings = validator.validate_pattern(pattern)
@@ -996,22 +917,16 @@ def validate_pattern(request):
             if is_valid:
                 try:
                     # Get a sample book for preview
-                    Book = get_model('Book')
+                    Book = get_model("Book")
                     sample_book = Book.objects.filter(finalmetadata__isnull=False).first()
                     if sample_book:
                         preview = validator.preview_pattern(pattern, sample_book)
                 except Exception:
                     preview = "Could not generate preview"
 
-            return JsonResponse({
-                'success': True,
-                'valid': is_valid,
-                'warnings': warnings,
-                'preview': preview,
-                'pattern_type': pattern_type
-            })
+            return JsonResponse({"success": True, "valid": is_valid, "warnings": warnings, "preview": preview, "pattern_type": pattern_type})
 
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+            return JsonResponse({"success": False, "error": str(e)})
 
-    return JsonResponse({'success': False, 'error': 'Only POST method allowed'})
+    return JsonResponse({"success": False, "error": "Only POST method allowed"})

@@ -5,16 +5,16 @@ and integration with the file system.
 """
 
 import os
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 from django.test import TestCase, TransactionTestCase
 
-from books.models import Book, Author, Series, BookAuthor, BookSeries, DataSource, FinalMetadata
+from books.models import Author, Book, BookAuthor, BookSeries, DataSource, FinalMetadata, Series
 from books.tests.test_helpers import create_test_book_with_file
-from books.utils.batch_renamer import BatchRenamer, CompanionFileFinder, RenamingHistory, FileOperation
+from books.utils.batch_renamer import BatchRenamer, CompanionFileFinder, FileOperation, RenamingHistory
 
 
 class BatchRenamerTestCase(TransactionTestCase):

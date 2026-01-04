@@ -1,17 +1,16 @@
 """
 Tests for the background scanner implementation.
 """
-import tempfile
-import shutil
 import os
+import shutil
+import tempfile
 from unittest.mock import patch
-from django.test import TestCase
-from django.core.cache import cache
 
-from books.scanner.background import (
-    ScanProgress, BackgroundScanner, background_scan_folder, background_rescan_books, get_scan_progress, get_all_active_scans, cancel_scan
-)
-from books.models import ScanFolder, DataSource
+from django.core.cache import cache
+from django.test import TestCase
+
+from books.models import DataSource, ScanFolder
+from books.scanner.background import BackgroundScanner, ScanProgress, background_rescan_books, background_scan_folder, cancel_scan, get_all_active_scans, get_scan_progress
 from books.tests.test_helpers import create_test_book_with_file
 
 

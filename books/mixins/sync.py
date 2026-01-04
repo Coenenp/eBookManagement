@@ -1,6 +1,7 @@
 """
 Model synchronization mixins for books app.
 """
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -27,8 +28,10 @@ class FinalMetadataSyncMixin:
         or deactivated. This ensures FinalMetadata always shows the
         best available metadata.
         """
-        if not hasattr(self, 'book'):
-            logger.warning(f"{self.__class__.__name__} has no 'book' attribute for sync")
+        if not hasattr(self, "book"):
+            logger.warning(
+                f"{self.__class__.__name__} has no 'book' attribute for sync"
+            )
             return
 
         if not self.book:
@@ -37,7 +40,7 @@ class FinalMetadataSyncMixin:
 
         try:
             # Check if FinalMetadata exists
-            if hasattr(self.book, 'finalmetadata') and self.book.finalmetadata:
+            if hasattr(self.book, "finalmetadata") and self.book.finalmetadata:
                 final = self.book.finalmetadata
 
                 # Only sync if not reviewed (unless forced by user later)
@@ -45,18 +48,18 @@ class FinalMetadataSyncMixin:
                     logger.debug(
                         f"Triggering FinalMetadata sync from {self.__class__.__name__} change",
                         extra={
-                            'book_id': self.book.id,
-                            'metadata_type': self.__class__.__name__,
-                            'is_active': getattr(self, 'is_active', None),
-                            'confidence': getattr(self, 'confidence', None)
-                        }
+                            "book_id": self.book.id,
+                            "metadata_type": self.__class__.__name__,
+                            "is_active": getattr(self, "is_active", None),
+                            "confidence": getattr(self, "confidence", None),
+                        },
                     )
                     # Explicitly sync (save_after=True by default)
                     final.sync_from_sources(save_after=True)
                 else:
                     logger.debug(
                         "Skipped FinalMetadata sync - book is reviewed",
-                        extra={'book_id': self.book.id}
+                        extra={"book_id": self.book.id},
                     )
             else:
                 logger.debug(
@@ -66,11 +69,8 @@ class FinalMetadataSyncMixin:
         except Exception as e:
             logger.error(
                 f"Error in post_deactivation_sync for {self.__class__.__name__}",
-                extra={
-                    'book_id': self.book.id if self.book else None,
-                    'error': str(e)
-                },
-                exc_info=True
+                extra={"book_id": self.book.id if self.book else None, "error": str(e)},
+                exc_info=True,
             )
 
     def save(self, *args, **kwargs):
