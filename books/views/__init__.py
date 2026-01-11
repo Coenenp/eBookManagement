@@ -17,31 +17,31 @@ REFACTORING STATUS:
 ⏳ AI Feedback views (ai_feedback.py) - TODO: AI integration
 """
 
-# Import modules for backward compatibility with tests
+# Legacy imports for backward compatibility
+# ruff: noqa: I001
 import os  # noqa: F401
 import subprocess  # noqa: F401
 
 import requests  # noqa: F401
 from django.conf import settings  # noqa: F401
+from django.contrib import messages  # noqa: F401
 from django.core.files.storage import default_storage  # noqa: F401
 from django.http import JsonResponse  # noqa: F401
+from django.shortcuts import redirect
+from django.urls import reverse  # noqa: F401
 
-# Import models for test compatibility
-try:
-    from books.models import Book, ScanLog  # noqa: F401
-except ImportError:
-    pass
+from books.models import Book
 
-# Core views - COMPLETED
 # AI Feedback views - BASIC PLACEHOLDERS CREATED
 from .ai_feedback import AIFeedbackDetailView, AIFeedbackListView, submit_ai_feedback  # noqa: F401
 
 # AJAX views - COMPLETED (includes 80+ consolidated placeholder functions)
-# Import all AJAX functions with wildcards to catch all needed functions
 from .ajax import *  # noqa: F401,F403
 
 # API Status views - NEW
 from .api_status import APIStatusView, api_health_status, resume_failed_api_calls, retry_all_priority, retry_book_api  # noqa: F401
+
+# Core views - COMPLETED
 from .core import BookDetailView, BookListView, DashboardView, DeletedBooksView, UploadFileView, clear_cache_view, debug_view, signup, system_status_view  # noqa: F401
 
 # Management views - COMPLETED
@@ -81,9 +81,6 @@ from .management import (  # noqa: F401
 
 # Metadata views - COMPLETED
 from .metadata import BookMetadataUpdateView, BookMetadataView  # noqa: F401
-
-# Quick Process views - NEW
-from .quick_process import QuickProcessView, quick_process_ajax_preview  # noqa: F401
 
 # Placeholder imports for incomplete modules - will be replaced as modules are created
 # Renaming views - ENHANCED WITH PATTERN ENGINE
@@ -169,9 +166,20 @@ from .utilities import (  # noqa: F401
     sanitize_filename,
 )
 
+
+# Backwards compatibility redirect for QuickProcessView
+def quick_process_redirect(request):
+    """Redirect /quick-process/ to first unreviewed book in workflow mode."""
+    next_book = Book.objects.filter(finalmetadata__isnull=False).exclude(finalmetadata__is_reviewed=True).order_by("id").first()
+
+    if next_book:
+        return redirect(f"{reverse('books:book_metadata', kwargs={'pk': next_book.id})}?workflow=1")
+    else:
+        messages.info(request, "No books to process. All books have been reviewed!")
+        return redirect("books:dashboard")
+
+
 # Mock function for testing error handling
-
-
 def problematic_function():
     """Mock function that can be patched to raise exceptions in tests."""
     return "Normal operation"

@@ -1978,6 +1978,7 @@ __all__ = [
     "ajax_retrain_ai_models",
     "ajax_ai_model_status",
     "ajax_fetch_external_data",
+    "ajax_rename_preview",
     "update_trust",
     "ajax_rescan_external_metadata",
     "isbn_lookup",
@@ -2128,3 +2129,41 @@ def ajax_update_trust_level(request):
         return JsonResponse({"success": True, "message": f"Trust level updated to {trust_level}", "data_source_id": data_source_id, "trust_level": trust_level})
     except Exception as e:
         return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+
+@require_http_methods(["GET"])
+@login_required
+def ajax_rename_preview(request, book_id):
+    """AJAX endpoint for rename preview - generates preview path for a book."""
+    try:
+        from books.models import Book
+        from books.utils.renaming_engine import RenamingEngine
+
+        book = get_object_or_404(Book, id=book_id)
+
+        folder_pattern = request.GET.get("folder_pattern", "")
+        filename_pattern = request.GET.get("filename_pattern", "")
+
+        if not folder_pattern and not filename_pattern:
+            return JsonResponse({"success": False, "error": "At least one pattern is required"})
+
+        engine = RenamingEngine()
+
+        try:
+            target_folder = engine.process_template(folder_pattern, book) if folder_pattern else ""
+            target_filename = engine.process_template(filename_pattern, book) if filename_pattern else ""
+
+            if target_folder and target_filename:
+                preview_path = f"{target_folder}/{target_filename}"
+            elif target_folder:
+                preview_path = target_folder
+            else:
+                preview_path = target_filename
+
+            return JsonResponse({"success": True, "preview_path": preview_path})
+        except Exception as e:
+            return JsonResponse({"success": False, "error": f"Error processing patterns: {str(e)}"})
+
+    except Exception as e:
+        logger.error(f"Error in ajax_rename_preview: {e}")
+        return JsonResponse({"success": False, "error": str(e)})

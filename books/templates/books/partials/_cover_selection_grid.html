@@ -1,0 +1,79 @@
+{% load static %}
+{# Cover selection grid with checkboxes for downloading multiple covers #}
+
+{% if covers %}
+<div class="card">
+    <div class="card-header bg-light">
+        <h5 class="mb-0"><i class="fas fa-image"></i> Available Covers</h5>
+        <small class="text-muted">Select covers to download and save</small>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            {% for cover in covers %}
+            <div class="col-md-3 col-lg-2 mb-3">
+                <div class="cover-option-wrapper">
+                    <div class="cover-option p-2 rounded border {% if cover.is_active %}border-primary{% endif %}" 
+                         data-cover-id="{{ cover.id }}" 
+                         onclick="toggleCoverSelection(this)">
+                        <img src="{{ cover.url }}" alt="Cover from {{ cover.source }}" 
+                             class="img-fluid rounded" 
+                             onerror="this.src='{% static "books/images/no-cover.png" %}'">
+                        <div class="mt-2 text-center">
+                            <span class="badge bg-secondary">{{ cover.source }}</span>
+                            {% if cover.width and cover.height %}
+                            <small class="text-muted d-block">{{ cover.width }}×{{ cover.height }}</small>
+                            {% endif %}
+                            <span class="badge {% if cover.confidence >= 0.8 %}bg-success{% elif cover.confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
+                                {{ cover.confidence|floatformat:2 }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="form-check mt-1">
+                        <input class="form-check-input cover-checkbox" 
+                               type="checkbox" 
+                               name="selected_covers" 
+                               value="{{ cover.id }}" 
+                               id="cover_{{ cover.id }}"
+                               {% if cover.is_active %}checked{% endif %}>
+                        <label class="form-check-label small" for="cover_{{ cover.id }}">
+                            Download
+                        </label>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="mt-3">
+            <button type="button" class="btn btn-primary" onclick="downloadSelectedCovers()">
+                <i class="fas fa-download me-1"></i>Download Selected Covers
+            </button>
+            <button type="button" class="btn btn-outline-secondary" onclick="selectAllCovers()">
+                Select All
+            </button>
+            <button type="button" class="btn btn-outline-secondary" onclick="deselectAllCovers()">
+                Deselect All
+            </button>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="fas fa-info-circle me-2"></i>No covers available. Use the Rescan button to fetch covers from external sources.
+</div>
+{% endif %}
+
+<style>
+.cover-option {
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.cover-option:hover {
+    border-color: var(--bs-primary) !important;
+    box-shadow: 0 0 10px rgba(var(--bs-primary-rgb), 0.3);
+}
+.cover-option.selected {
+    border-color: var(--bs-primary) !important;
+    box-shadow: 0 0 10px rgba(var(--bs-primary-rgb), 0.5);
+}
+</style>

@@ -102,9 +102,8 @@ urlpatterns = [
     path("rename-books/file-details/", views.BookRenamerFileDetailsView.as_view(), name="book_renamer_file_details"),
     path("rename-books/revert/", views.BookRenamerRevertView.as_view(), name="book_renamer_revert"),
     path("rename-books/history/", views.BookRenamerHistoryView.as_view(), name="book_renamer_history"),
-    # Quick book-by-book processing
-    path("quick-process/", views.QuickProcessView.as_view(), name="quick_process"),
-    path("quick-process/preview/", views.quick_process_ajax_preview, name="quick_process_preview"),
+    # Quick book-by-book processing (redirects to new metadata workflow)
+    path("quick-process/", views.quick_process_redirect, name="quick_process"),
     # API Status and Intelligent Scanning
     path("api-status/", views.APIStatusView.as_view(), name="api_status"),
     path("api-status/retry/<int:book_id>/", views.retry_book_api, name="retry_book_api"),
@@ -150,6 +149,7 @@ urlpatterns = [
     path("ajax/book/<int:book_id>/upload_cover/", views.ajax_upload_cover, name="ajax_upload_cover"),
     path("ajax/book/<int:book_id>/manage_cover/", views.ajax_manage_cover, name="ajax_manage_cover"),
     path("ajax/book/<int:book_id>/rescan/", views.ajax_rescan_external_metadata, name="ajax_rescan_external_metadata"),
+    path("ajax/book/<int:book_id>/rename-preview/", views.ajax_rename_preview, name="ajax_rename_preview"),
     # Book management AJAX
     path("ajax/create-book/", views.ajax_create_book, name="ajax_create_book"),
     path("ajax/update-book/", views.ajax_update_book, name="ajax_update_book"),

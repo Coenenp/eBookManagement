@@ -1,0 +1,1348 @@
+{% extends 'books/base.html' %}
+{% load crispy_forms_tags %}
+{% load static %}
+{% load book_extras %}
+{% load custom_filters %}
+{% load language_tags %}
+
+{% block title %}{{ book.filename }} - Ebook Library Manager{% endblock %}
+
+{% block extra_css %}
+<style>
+    .nav-tabs .nav-link {
+        color: #6c757d;
+    }
+    .nav-tabs .nav-link.active {
+        font-weight: bold;
+    }
+    .tab-content {
+        border: 1px solid #dee2e6;
+        border-top: none;
+        padding: 1.5rem;
+        background-color: #fff;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="mb-0">
+                    <i class="fas fa-book-reader text-primary me-2"></i>
+                    Metadata & Processing
+                </h1>
+                <div class="d-flex gap-2">
+                    <div class="badge bg-{{ book.finalmetadata.is_reviewed|yesno:'success,warning' }} fs-6">
+                        <i class="fas fa-{{ book.finalmetadata.is_reviewed|yesno:'check-circle,exclamation-triangle' }} me-1"></i>
+                        {{ book.finalmetadata.is_reviewed|yesno:'Reviewed,Needs Review' }}
+                    </div>
+                    {% if workflow_mode %}
+                    <div class="badge bg-info fs-6">
+                        <i class="fas fa-stream me-1"></i>
+                        Workflow Mode
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="post" action="{% url 'books:book_metadata_update' book.id %}" enctype="multipart/form-data" id="metadataForm">
+        {% csrf_token %}
+        <input type="hidden" name="book_id" value="{{ book.id }}">
+
+        <!-- Navigation Tabs -->
+        <ul class="nav nav-tabs" id="metadataTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="metadata-tab" data-bs-toggle="tab" data-bs-target="#metadata" type="button" role="tab">
+                    <i class="fas fa-tags me-1"></i> Metadata Review
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="covers-tab" data-bs-toggle="tab" data-bs-target="#covers" type="button" role="tab">
+                    <i class="fas fa-images me-1"></i> Covers <span class="badge bg-secondary">{{ covers|length }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="fileops-tab" data-bs-toggle="tab" data-bs-target="#fileops" type="button" role="tab">
+                    <i class="fas fa-folder-open me-1"></i> File Operations
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="duplicates-tab" data-bs-toggle="tab" data-bs-target="#duplicates" type="button" role="tab">
+                    <i class="fas fa-clone me-1"></i> Duplicates
+                    {% if duplicates %}
+                    <span class="badge bg-warning">{{ duplicates|length }}</span>
+                    {% endif %}
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="metadataTabContent">
+            <!-- Metadata Review Tab -->
+            <div class="tab-pane fade show active" id="metadata" role="tabpanel">
+                {% include 'books/partials/_metadata_radio_fields.html' with readonly=False %}
+            </div>
+
+            <!-- Covers Tab -->
+            <div class="tab-pane fade" id="covers" role="tabpanel">
+                {% include 'books/partials/_cover_selection_grid.html' %}
+            </div>
+
+            <!-- File Operations Tab -->
+            <div class="tab-pane fade" id="fileops" role="tabpanel">
+                {% include 'books/partials/_file_operations_panel.html' %}
+            </div>
+
+            <!-- Duplicates Tab -->
+            <div class="tab-pane fade" id="duplicates" role="tabpanel">
+                {% include 'books/partials/_duplicate_detection.html' %}
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="card mt-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="btn-group" role="group">
+                        {% if workflow_mode %}
+                            {% if prev_book %}
+                            <a href="{% url 'books:book_metadata' prev_book.id %}?workflow=1" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-1"></i> Previous
+                            </a>
+                            {% endif %}
+                            <button type="submit" name="action" value="skip" class="btn btn-warning">
+                                <i class="fas fa-forward me-1"></i> Skip
+                            </button>
+                            <button type="submit" name="action" value="save_next" class="btn btn-success">
+                                <i class="fas fa-check me-1"></i> Save & Next
+                            </button>
+                        {% else %}
+                            <button type="submit" name="action" value="save" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i> Save Changes
+                            </button>
+                        {% endif %}
+                    </div>
+
+                    <div class="btn-group" role="group">
+                        <button type="submit" name="action" value="delete" class="btn btn-outline-danger" 
+                                onclick="return confirm('Are you sure you want to delete this book and its files?');">
+                            <i class="fas fa-trash me-1"></i> Delete Book
+                        </button>
+                        <a href="{% url 'books:book_detail' book.id %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-eye me-1"></i> View Details
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <!-- Rescan Section (Outside Form) -->
+    <div class="card mt-3">
+        <div class="card-header bg-light">
+            <h5 class="card-title mb-0">
+                <i class="fas fa-sync-alt text-info me-2"></i>
+                Rescan Metadata
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{% url 'books:rescan_external_metadata' book.id %}" class="row g-3">
+                {% csrf_token %}
+                
+                <div class="col-md-12">
+                    <label class="form-label">Select Sources to Query:</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="sources" value="google" id="source_google" checked>
+                        <label class="form-check-label" for="source_google">
+                            Google Books
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="sources" value="openlibrary" id="source_openlibrary" checked>
+                        <label class="form-check-label" for="source_openlibrary">
+                            Open Library
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="sources" value="goodreads" id="source_goodreads">
+                        <label class="form-check-label" for="source_goodreads">
+                            Goodreads
+                        </label>
+                    </div>
+                </div>
+
+                <div class="col-md-12">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="clear_existing" id="clear_existing" value="true">
+                        <label class="form-check-label" for="clear_existing">
+                            Clear existing external metadata before rescanning
+                        </label>
+                    </div>
+                </div>
+
+                <div class="col-md-12">
+                    <button type="submit" class="btn btn-info">
+                        <i class="fas fa-sync-alt me-1"></i>
+                        Rescan External Sources
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'books/js/metadata_enhanced.js' %}"></script>
+<script>
+    // Initialize tabs from URL hash
+    $(document).ready(function() {
+        var hash = window.location.hash;
+        if (hash) {
+            $('.nav-tabs a[href="' + hash + '"]').tab('show');
+        }
+        
+        // Update URL hash when tab is changed
+        $('a[data-bs-toggle="tab"]').on('shown.bs.tab', function(e) {
+            window.location.hash = e.target.hash;
+        });
+    });
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="mb-0">
+                    <i class="fas fa-book-reader text-primary me-2"></i>
+                    Metadata Review
+                </h1>
+                <div class="badge bg-{{ book.finalmetadata.is_reviewed|yesno:'success,warning' }} fs-6">
+                    <i class="fas fa-{{ book.finalmetadata.is_reviewed|yesno:'check-circle,exclamation-triangle' }} me-1"></i>
+                    {{ book.finalmetadata.is_reviewed|yesno:'Reviewed,Needs Review' }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="post" action="{% url 'books:book_metadata_update' book.id %}" enctype="multipart/form-data" class="mb-3">
+        {% csrf_token %}
+
+        <!-- Metadata Overview Section -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-info-circle text-info me-2"></i>
+                    Book Overview
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <!-- Title -->
+                        {% if book.finalmetadata.final_title %}
+                        <div class="mb-2">
+                            <i class="fas fa-heading me-2 text-muted"></i>
+                            <strong>Title:</strong>
+                            {{ book.finalmetadata.final_title }}
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Author -->
+                        {% if book.finalmetadata.final_author %}
+                        <div class="mb-2">
+                            <i class="fas fa-user me-2 text-muted"></i>
+                            <strong>Author:</strong>
+                            {{ book.finalmetadata.final_author }}
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Publisher -->
+                        {% if book.finalmetadata.final_publisher %}
+                        <div class="mb-2">
+                            <i class="fas fa-building me-2 text-muted"></i>
+                            <strong>Publisher:</strong>
+                            {{ book.finalmetadata.final_publisher }}
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Year -->
+                        {% if book.finalmetadata.publication_year %}
+                        <div class="mb-2">
+                            <i class="fas fa-calendar me-2 text-muted"></i>
+                            <strong>Year:</strong>
+                            {{ book.finalmetadata.publication_year }}
+                        </div>
+                        {% endif %}
+                        
+                        <!-- ISBN -->
+                        {% if book.finalmetadata.isbn %}
+                        <div class="mb-2">
+                            <i class="fas fa-barcode me-2 text-muted"></i>
+                            <strong>ISBN:</strong>
+                            <code class="small">{{ book.finalmetadata.isbn }}</code>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Series -->
+                        {% if book.finalmetadata.final_series %}
+                        <div class="mb-2">
+                            <i class="fas fa-list-ol me-2 text-muted"></i>
+                            <strong>Series:</strong>
+                            {{ book.finalmetadata.final_series }}
+                            {% if book.finalmetadata.final_series_number %}
+                            <i class="fas fa-hashtag ms-2 me-1 text-muted"></i>{{ book.finalmetadata.final_series_number }}
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Genres -->
+                        {% if book.genre_relationships.all %}
+                        <div class="mb-2">
+                            <i class="fas fa-tags me-2 text-muted"></i>
+                            <strong>Genres:</strong>
+                            {% for genre_rel in book.genre_relationships.all|slice:":5" %}
+                                <span class="badge bg-info text-dark me-1">{{ genre_rel.genre.name }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <!-- Content Type -->
+                        <div class="mb-2">
+                            <i class="fas fa-book me-2 text-muted"></i>
+                            <strong>Type:</strong>
+                            <span class="badge bg-primary">eBook</span>
+                        </div>
+                        
+                        <!-- Review Status -->
+                        <div class="mb-2">
+                            <i class="fas fa-flag me-2 text-muted"></i>
+                            <strong>Review Status:</strong>
+                            <span class="badge bg-{{ book.finalmetadata.is_reviewed|yesno:'success,warning' }}">
+                                {{ book.finalmetadata.is_reviewed|yesno:'Reviewed,Needs Review' }}
+                            </span>
+                        </div>
+                        
+                        <!-- Reading Status -->
+                        <div class="mb-2">
+                            <i class="fas fa-book-reader me-2 text-muted"></i>
+                            <strong>Reading Status:</strong>
+                            {% if book.is_read %}
+                                <span class="badge bg-success">Read</span>
+                            {% elif book.reading_progress > 0 %}
+                                <span class="badge bg-warning">Reading ({{ book.reading_progress }}%)</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Unread</span>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- File Information -->
+                        <div class="mb-3 mt-3">
+                            <div class="border-top pt-3">
+                                <h6 class="mb-2">
+                                    <i class="fas fa-folder-open me-2 text-muted"></i>
+                                    File Information
+                                </h6>
+                                <div class="mb-2">
+                                    <i class="fas fa-file me-2 text-muted"></i>
+                                    <strong>Filename:</strong>
+                                    <code class="small">{{ book.filename }}</code>
+                                </div>
+                                <div class="mb-2">
+                                    <span class="badge {{ book.file_format|format_color }} ms-2">{{ book.file_format|upper|default:"Unknown" }}</span>
+                                    <span class="badge bg-secondary ms-1">{{ book.file_size|filesizeformat }}</span>
+                                    {% if book.finalmetadata.language %}
+                                    <span class="badge bg-secondary ms-1">{{ book.finalmetadata.language|language_name }}</span>
+                                    {% endif %}
+                                </div>
+                                {% if book.scan_folder %}
+                                <div class="mb-2">
+                                    <i class="fas fa-hdd me-2 text-muted"></i>
+                                    <strong>Scan Folder:</strong>
+                                    <a href="{% url 'books:edit_scan_folder' book.scan_folder.id %}" class="text-decoration-none">{{ book.scan_folder.name }}</a>
+                                </div>
+                                {% endif %}
+                                <div class="mb-2">
+                                    <i class="fas fa-folder me-2 text-muted"></i>
+                                    <strong>Path:</strong>
+                                    <code class="small text-muted">{{ book.file_path }}</code>
+                                </div>
+                                {% if book.last_scanned %}
+                                <div class="mb-2">
+                                    <i class="fas fa-clock me-2 text-muted"></i>
+                                    <strong>Last Scanned:</strong>
+                                    {{ book.last_scanned|date:"M d, Y" }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Quality Metrics -->
+                        <div class="mb-2">
+                            <strong>Confidence:</strong>
+                            <span class="badge {% if book.finalmetadata.overall_confidence >= 0.8 %}bg-success{% elif book.finalmetadata.overall_confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
+                                {{ book.finalmetadata.overall_confidence|mul:100|floatformat:0 }}%
+                            </span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>Completeness:</strong>
+                            <span class="badge {% if book.finalmetadata.completeness_score >= 0.8 %}bg-success{% elif book.finalmetadata.completeness_score >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
+                                {{ book.finalmetadata.completeness_score|mul:100|floatformat:0 }}%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Description -->
+                {% if book.finalmetadata.description %}
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="border-top pt-3">
+                            <div class="mb-2">
+                                <i class="fas fa-align-left me-2 text-muted"></i>
+                                <strong>Description:</strong>
+                            </div>
+                            <div class="text-muted">
+                                {{ book.finalmetadata.description|truncatewords:100 }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Cover Section -->
+        <div class="card mb-4 shadow-sm cover-section">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-image text-success me-2"></i>
+                    Book Cover
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-cover">
+                    <i class="fas fa-undo me-1"></i>Reset to Final
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Original Cover -->
+                    {% if book.cover_path %}
+                    <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                        <div class="card h-100 border-2 {% if book.cover_path == book.finalmetadata.final_cover_path %}border-primary{% else %}border-light{% endif %}">
+                            {% book_cover book "medium" %}
+                            <div class="card-body p-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="final_cover_path" 
+                                           value="{{ book.cover_path }}" id="cover_original"
+                                           {% if book.cover_path == book.finalmetadata.final_cover_path %}checked{% endif %}>
+                                    <label class="form-check-label fw-bold" for="cover_original">
+                                        Original Scan
+                                        {% if book.cover_path == book.finalmetadata.final_cover_path %}
+                                        <span class="badge bg-primary ms-1">Final</span>
+                                        {% endif %}
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Metadata Covers -->
+                    {% for cover in all_covers %}
+                    <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                        <div class="card h-100 border-2 {% if cover.cover_path == book.finalmetadata.final_cover_path %}border-primary{% else %}border-light{% endif %}">
+                            <div class="card-body d-flex flex-column justify-content-center align-items-center p-2">
+                                <div class="text-center mb-3">
+                                    {% book_cover_from_metadata cover book "medium" %}
+                                </div>
+                                <div class="w-100 d-flex flex-column align-items-center">
+                                    <div class="form-check text-center">
+                                        <input class="form-check-input" type="radio" name="final_cover_path" 
+                                               value="{{ cover.cover_path }}" id="cover_{{ forloop.counter }}"
+                                               aria-describedby="cover_{{ forloop.counter }}_desc"
+                                               {% if cover.cover_path == book.finalmetadata.final_cover_path %}checked{% endif %}>
+                                        <label class="form-check-label fw-bold text-center d-block" for="cover_{{ forloop.counter }}">
+                                            <div class="mb-2">{{ cover.source.name }}</div>
+                                        </label>
+                                    </div>
+                                    <div class="text-center w-100">
+                                        <div class="d-flex justify-content-center align-items-center flex-wrap gap-1">
+                                            <span class="badge 
+                                                {% if cover.confidence >= 0.8 %}bg-success{% elif cover.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
+                                                aria-label="{% if cover.confidence >= 0.8 %}High{% elif cover.confidence >= 0.5 %}Medium{% else %}Low{% endif %} confidence: {{ cover.confidence|floatformat:2 }}">
+                                                <i class="fas fa-star me-1" aria-hidden="true"></i>{{ cover.confidence|floatformat:2 }}
+                                            </span>
+                                            {% if cover.cover_path == book.finalmetadata.final_cover_path %}
+                                                <span class="badge bg-primary" aria-label="Selected as final cover">Final</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            No metadata covers available for this book.
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                    <!-- Upload Custom Cover -->
+                    <div class="col-lg-3 col-md-4 col-sm-6 mb-3">
+                        <div class="card h-100 border-2 border-dashed border-secondary" id="uploadCoverCard">
+                            <div class="card-body d-flex flex-column justify-content-center align-items-center" id="uploadCoverBody">
+                                <i class="fas fa-upload fa-3x text-muted mb-3"></i>
+                                <div class="mb-3 text-center">
+                                    <label for="cover_upload" class="form-label fw-bold">Upload Custom Cover</label>
+                                    <input type="file" class="form-control" id="cover_upload" name="cover_upload" 
+                                           accept="image/*" data-action="upload-cover-immediate">
+                                    <div class="form-text">JPG, PNG, GIF, WebP (max 5MB)</div>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="final_cover_path" 
+                                           value="custom_upload" id="cover_custom">
+                                    <label class="form-check-label" for="cover_custom">
+                                        Use uploaded cover
+                                    </label>
+                                </div>
+                            </div>
+                            <!-- Progress bar for upload -->
+                            <div class="progress d-none" id="uploadProgress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated progress-bar-width-0" 
+                                     role="progressbar" aria-label="Cover upload progress" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Title Section -->
+        <fieldset class="card mb-4 shadow-sm" aria-labelledby="titleLegend">
+            <legend id="titleLegend" class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-heading text-primary me-2"></i>
+                    Book Title
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-title">
+                    <i class="fas fa-undo me-1"></i>Reset to Final
+                </button>
+            </legend>
+            <div class="card-body">
+                {% for title in all_titles %}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="final_title" 
+                           value="{{ title.title }}" id="title_{{ forloop.counter }}"
+                           aria-describedby="title_{{ forloop.counter }}_desc"
+                           {% if title.title == book.finalmetadata.final_title %}checked{% endif %}>
+                    <label class="form-check-label d-flex justify-content-between align-items-start" for="title_{{ forloop.counter }}">
+                        <span class="fw-bold">{{ title.title }}</span>
+                        <div>
+                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ title.source.name }}">
+                                <i class="fas {{ title.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ title.source.name }}
+                            </span>
+                            
+                            <span class="badge 
+                                {% if title.confidence >= 0.8 %}bg-success{% elif title.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
+                                aria-label="{% if title.confidence >= 0.8 %}High{% elif title.confidence >= 0.5 %}Medium{% else %}Low{% endif %} confidence: {{ title.confidence|floatformat:2 }}">
+                                <i class="fas fa-star me-1" aria-hidden="true"></i>{{ title.confidence|floatformat:2 }}
+                            </span>
+                            
+                            {% if title.title == book.finalmetadata.final_title %}
+                                <span class="badge bg-primary ms-1" aria-label="Selected as final title">Final</span>
+                            {% endif %}
+                        </div>
+                    </label>
+                </div>
+                {% endfor %}
+                <div class="mt-3">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="final_title" 
+                               value="__manual__" id="title_manual">
+                        <label class="form-check-label fw-bold" for="title_manual">
+                            <i class="fas fa-edit me-1"></i>Manual Entry
+                        </label>
+                    </div>
+                    <input type="text" name="manual_title" id="title_override" 
+                           placeholder="Enter custom title..." class="form-control">
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- Author Section -->
+        <fieldset class="card mb-4 shadow-sm" aria-labelledby="authorLegend">
+            <legend id="authorLegend" class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-user-edit text-info me-2"></i>
+                    Author
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-author">
+                    <i class="fas fa-undo me-1"></i>Reset to Final
+                </button>
+            </legend>
+            <div class="card-body">
+                {% for author in all_authors %}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="final_author" 
+                           value="{{ author.author.name }}" id="author_{{ forloop.counter }}"
+                           aria-describedby="author_{{ forloop.counter }}_desc"
+                           {% if author.author.name == book.finalmetadata.final_author %}checked{% endif %}>
+                    <label class="form-check-label d-flex justify-content-between align-items-start" for="author_{{ forloop.counter }}">
+                        <span class="fw-bold">{{ author.author.name }}</span>
+                        <div>
+                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ author.source.name }}">
+                                <i class="fas {{ author.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ author.source.name }}
+                            </span>
+                            
+                            <span class="badge 
+                                {% if author.confidence >= 0.8 %}bg-success{% elif author.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
+                                aria-label="{% if author.confidence >= 0.8 %}High{% elif author.confidence >= 0.5 %}Medium{% else %}Low{% endif %} confidence: {{ author.confidence|floatformat:2 }}">
+                                <i class="fas fa-star me-1" aria-hidden="true"></i>{{ author.confidence|floatformat:2 }}
+                            </span>
+                            
+                            {% if author.author.name == book.finalmetadata.final_author %}
+                                <span class="badge bg-primary ms-1" aria-label="Selected as final author">Final</span>
+                            {% endif %}
+                        </div>
+                    </label>
+                </div>
+                {% endfor %}
+                <div class="mt-3">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="final_author" 
+                               value="__manual__" id="author_manual">
+                        <label class="form-check-label fw-bold" for="author_manual">
+                            <i class="fas fa-edit me-1"></i>Manual Entry
+                        </label>
+                    </div>
+                    <input type="text" name="manual_author" id="author_override" 
+                           placeholder="Enter custom author..." class="form-control">
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- Series Section -->
+        <fieldset class="card mb-4 shadow-sm" aria-labelledby="seriesLegend">
+            <legend id="seriesLegend" class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-list-ol text-warning me-2"></i>
+                    Book Series
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-series">
+                    <i class="fas fa-undo me-1"></i>Reset to Final
+                </button>
+            </legend>
+            <div class="card-body">
+                {% if not book.finalmetadata.final_series|default_if_none:"" and not has_series_number_only %}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="final_series" 
+                           value="" id="series_none" checked>
+                    <label class="form-check-label" for="series_none">
+                        <em class="text-muted">No Series</em>
+                    </label>
+                </div>
+                {% endif %}
+                {% for s in all_series %}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="final_series" 
+                        value="{{ s.series.name }}" id="series_{{ forloop.counter }}"
+                        {% if s.series.name == book.finalmetadata.final_series %}checked{% endif %}
+                        data-series-name="{{ s.series.name }}"
+                        data-series-number="{{ s.series_number|default:'' }}"
+                        data-source="{{ s.source.name }}">
+                    <label class="form-check-label d-flex justify-content-between align-items-start" for="series_{{ forloop.counter }}">
+                        <span class="fw-bold">
+                            {{ s.series.name }}{% if s.series_number %} (#{{ s.series_number }}){% endif %}
+                        </span>
+                        <div>
+                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ s.source.name }}">
+                                <i class="fas {{ s.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ s.source.name }}
+                            </span>
+                            
+                            <span class="badge 
+                                {% if s.confidence >= 0.8 %}bg-success{% elif s.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
+                                aria-label="{% if s.confidence >= 0.8 %}High{% elif s.confidence >= 0.5 %}Medium{% else %}Low{% endif %} confidence: {{ s.confidence|floatformat:2 }}">
+                                <i class="fas fa-star me-1" aria-hidden="true"></i>{{ s.confidence|floatformat:2 }}
+                            </span>
+                            
+                            {% if s.series.name == book.finalmetadata.final_series %}
+                                <span class="badge bg-primary ms-1" aria-label="Selected as final series">Final</span>
+                            {% endif %}
+                        </div>
+                    </label>
+                </div>
+                {% empty %}
+                    <!-- Show series info if we have final metadata series but no series relationships -->
+                    {% if book.finalmetadata.final_series %}
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="final_series" 
+                            value="{{ book.finalmetadata.final_series }}" id="series_final" checked>
+                        <label class="form-check-label d-flex justify-content-between align-items-start" for="series_final">
+                            <span class="fw-bold">{{ book.finalmetadata.final_series }}</span>
+                            <div>
+                                <span class="badge bg-light text-dark me-2">Final Metadata</span>
+                                <span class="badge bg-primary ms-1">Final</span>
+                            </div>
+                        </label>
+                    </div>
+                    {% elif has_series_number_only and final_series_name %}
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="final_series" 
+                            value="{{ final_series_name }}" id="series_final" checked>
+                        <label class="form-check-label d-flex justify-content-between align-items-start" for="series_final">
+                            <span class="fw-bold">{{ final_series_name }}</span>
+                            <div>
+                                <span class="badge bg-light text-dark me-2">Final Metadata</span>
+                                <span class="badge bg-primary ms-1">Final</span>
+                            </div>
+                        </label>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+                <div class="mt-3">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="final_series" 
+                               value="__manual__" id="series_manual">
+                        <label class="form-check-label fw-bold" for="series_manual">
+                            <i class="fas fa-edit me-1"></i>Manual Entry
+                        </label>
+                    </div>
+                    <input type="text" name="manual_series" id="series_override" 
+                           placeholder="Enter custom series..." class="form-control">
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- Series Number Section -->
+        <fieldset class="card mb-4 shadow-sm" aria-labelledby="seriesNumberLegend">
+            <legend id="seriesNumberLegend" class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-hashtag text-secondary me-2"></i>
+                    Series Number
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-series-number">
+                    <i class="fas fa-undo me-1"></i>Reset to Final
+                </button>
+            </legend>
+            <div class="card-body">
+                {% for meta in series_number_metadata %}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="final_series_number" 
+                           value="{{ meta.field_value }}" id="series_num_{{ forloop.counter }}"
+                           aria-describedby="series_num_{{ forloop.counter }}_desc"
+                           {% if meta.field_value == book.finalmetadata.final_series_number %}checked{% endif %}>
+                    <label class="form-check-label d-flex justify-content-between align-items-start" for="series_num_{{ forloop.counter }}">
+                        <span class="fw-bold">{{ meta.field_value }}</span>
+                        <div>
+                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ meta.source.name }}">
+                                <i class="fas {{ meta.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ meta.source.name }}
+                            </span>
+                            
+                            <span class="badge 
+                                {% if meta.confidence >= 0.8 %}bg-success{% elif meta.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
+                                aria-label="{% if meta.confidence >= 0.8 %}High{% elif meta.confidence >= 0.5 %}Medium{% else %}Low{% endif %} confidence: {{ meta.confidence|floatformat:2 }}">
+                                <i class="fas fa-star me-1" aria-hidden="true"></i>{{ meta.confidence|floatformat:2 }}
+                            </span>
+                            
+                            {% if meta.field_value == book.finalmetadata.final_series_number %}
+                                <span class="badge bg-primary ms-1" aria-label="Selected as final series number">Final</span>
+                            {% endif %}
+                        </div>
+                    </label>
+                </div>
+                {% empty %}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="final_series_number" 
+                           value="" id="series_num_none"
+                           {% if not book.finalmetadata.final_series_number|default_if_none:"" %}checked{% endif %}>
+                    <label class="form-check-label" for="series_num_none">
+                        <em class="text-muted">No Series Number</em>
+                    </label>
+                </div>
+                {% endfor %}
+                <div class="mt-3">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="final_series_number" 
+                               value="__manual__" id="series_num_manual">
+                        <label class="form-check-label fw-bold" for="series_num_manual">
+                            <i class="fas fa-edit me-1"></i>Manual Entry
+                        </label>
+                    </div>
+                    <input type="text" name="manual_series_number" id="series_number_override" 
+                           placeholder="Enter custom series number..." class="form-control" pattern="[0-9]*">
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- Genres Section -->
+        <fieldset class="card mb-4 shadow-sm" aria-labelledby="genreLegend">
+            <legend id="genreLegend" class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-tags text-success me-2"></i>
+                    Genres
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-genre">
+                    <i class="fas fa-undo me-1"></i>Reset to Final
+                </button>
+            </legend>
+            <div class="card-body">
+                {% for genre in all_genres %}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" name="final_genres" 
+                           value="{{ genre.genre.name }}" id="genre_{{ forloop.counter }}"
+                           {% if genre.genre.name in current_genres %}checked{% endif %}>
+                    <label class="form-check-label d-flex justify-content-between align-items-start" for="genre_{{ forloop.counter }}">
+                        <span class="fw-bold">{{ genre.genre.name }}</span>
+                        <div>
+                            <span class="badge bg-light text-dark me-1" aria-label="Source: {{ genre.source.name }}">
+                                <i class="fas {{ genre.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ genre.source.name }}
+                            </span>
+                            
+                            <span class="badge 
+                                {% if genre.confidence >= 0.8 %}bg-success{% elif genre.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
+                                aria-label="{% if genre.confidence >= 0.8 %}High{% elif genre.confidence >= 0.5 %}Medium{% else %}Low{% endif %} confidence: {{ genre.confidence|floatformat:2 }}">
+                                <i class="fas fa-star me-1" aria-hidden="true"></i>{{ genre.confidence|floatformat:2 }}
+                            </span>
+                        </div>
+                    </label>
+                </div>
+                {% endfor %}
+                <div class="mt-3">
+                    <label for="manual_genres" class="form-label">
+                        <i class="fas fa-plus me-1"></i>Add Custom Genres (comma-separated)
+                    </label>
+                    <input type="text" name="manual_genres" id="manual_genres" 
+                           placeholder="Enter additional genres..." class="form-control">
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- Description Section -->
+        <fieldset class="card mb-4 shadow-sm" aria-labelledby="descriptionLegend">
+            <legend id="descriptionLegend" class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-align-left text-info me-2"></i>
+                    Description
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-description">
+                    <i class="fas fa-undo me-1"></i>Reset to Final
+                </button>
+            </legend>
+            <div class="card-body">
+                {% for meta in description_metadata %}
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="radio" name="final_description" 
+                           value="{{ meta.field_value }}" id="desc_{{ forloop.counter }}"
+                           aria-describedby="desc_{{ forloop.counter }}_desc"
+                           {% if meta.field_value == book.finalmetadata.description %}checked{% endif %}>
+                    <label class="form-check-label" for="desc_{{ forloop.counter }}">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <span class="badge bg-light text-dark me-2" aria-label="Source: {{ meta.source.name }}">
+                                    <i class="fas {{ meta.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ meta.source.name }}
+                                </span>
+                                
+                                <span class="badge 
+                                    {% if meta.confidence >= 0.8 %}bg-success{% elif meta.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
+                                    aria-label="{% if meta.confidence >= 0.8 %}High{% elif meta.confidence >= 0.5 %}Medium{% else %}Low{% endif %} confidence: {{ meta.confidence|floatformat:2 }}">
+                                    <i class="fas fa-star me-1" aria-hidden="true"></i>{{ meta.confidence|floatformat:2 }}
+                                </span>
+                                
+                                {% if meta.field_value == book.finalmetadata.description %}
+                                    <span class="badge bg-primary ms-1" aria-label="Selected as final description">Final</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="description-content small text-muted">
+                            {{ meta.field_value|sanitize_description|truncatewords:20|safe }}
+                        </div>
+                    </label>
+                </div>
+                {% empty %}
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="radio" name="final_description" 
+                           value="" id="desc_none"
+                           {% if not book.finalmetadata.description|default_if_none:"" %}checked{% endif %}>
+                    <label class="form-check-label" for="desc_none">
+                        <em class="text-muted">No Description</em>
+                    </label>
+                </div>
+                {% endfor %}
+                <div class="mt-3">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="final_description" 
+                               value="__manual__" id="desc_manual">
+                        <label class="form-check-label fw-bold" for="desc_manual">
+                            <i class="fas fa-edit me-1"></i>Manual Entry
+                        </label>
+                    </div>
+                    <textarea name="manual_description" id="description_override" rows="4" 
+                              class="form-control" placeholder="Enter custom description..."></textarea>
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- ISBN Section -->
+        <fieldset class="card mb-4 shadow-sm" aria-labelledby="isbnLegend">
+            <legend id="isbnLegend" class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-barcode text-dark me-2"></i>
+                    ISBN
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-isbn">
+                    <i class="fas fa-undo me-1"></i>Reset to Final
+                </button>
+            </legend>
+            <div class="card-body">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="final_isbn" 
+                           value="" id="isbn_none"
+                           {% if not book.finalmetadata.isbn|default_if_none:"" %}checked{% endif %}>
+                    <label class="form-check-label" for="isbn_none">
+                        <em class="text-muted">No ISBN</em>
+                    </label>
+                </div>
+                {% for meta in isbn_metadata %}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="final_isbn" 
+                           value="{{ meta.field_value }}" id="isbn_{{ forloop.counter }}"
+                           aria-describedby="isbn_{{ forloop.counter }}_desc"
+                           {% if meta.field_value == book.finalmetadata.isbn %}checked{% endif %}>
+                    <label class="form-check-label d-flex justify-content-between align-items-start" for="isbn_{{ forloop.counter }}">
+                        <div class="flex-grow-1">
+                            <div class="d-flex align-items-center">
+                                <span class="fw-bold font-monospace me-2">{{ meta.field_value }}</span>
+                                {% if meta.field_value|is_valid_isbn %}
+                                <button type="button" class="btn btn-sm btn-outline-info me-2" 
+                                        data-action="lookup-isbn" data-isbn="{{ meta.field_value }}" data-counter="{{ forloop.counter }}"
+                                        title="Look up this ISBN to see what book it represents">
+                                    <i class="fas fa-search"></i> Lookup
+                                </button>
+                                {% endif %}
+                            </div>
+                            <div class="small text-muted mt-1">
+                                {% load custom_filters %}
+                                {% with isbn_type=meta.field_value|isbn_type %}
+                                    {% if isbn_type == "ISBN-13" %}
+                                        <span class="badge bg-info text-white me-1">ISBN-13</span>
+                                    {% elif isbn_type == "ISBN-10" %}
+                                        <span class="badge bg-secondary text-white me-1">ISBN-10</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark me-1">{{ isbn_type }}</span>
+                                    {% endif %}
+                                {% endwith %}
+                                
+                                {% comment %}Add ISBN lookup information{% endcomment %}
+                                <span class="text-muted">
+                                    {% if meta.field_value|is_valid_isbn %}
+                                        <i class="fas fa-check-circle text-success me-1"></i>Valid for external lookups
+                                    {% else %}
+                                        <i class="fas fa-times-circle text-danger me-1"></i>Not valid for external lookups
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <!-- ISBN Lookup Results Container -->
+                            <div id="isbn_lookup_{{ forloop.counter }}" class="mt-2 isbn-lookup-hidden">
+                                <div class="alert alert-info" role="status">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <strong>ISBN Lookup Results:</strong>
+                                        <button type="button" class="btn-close btn-sm" data-action="hide-isbn-lookup" data-counter="{{ forloop.counter }}" aria-label="Close"></button>
+                                    </div>
+                                    <div id="isbn_lookup_content_{{ forloop.counter }}">
+                                        <div class="text-center py-2">
+                                            <div class="spinner-border spinner-border-sm text-info me-2" role="status" aria-hidden="true"></div>
+                                            Looking up ISBN...
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ meta.source.name }}">
+                                <i class="fas {{ meta.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ meta.source.name }}
+                            </span>
+                            
+                            <span class="badge 
+                                {% if meta.confidence >= 0.8 %}bg-success{% elif meta.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
+                                aria-label="{% if meta.confidence >= 0.8 %}High{% elif meta.confidence >= 0.5 %}Medium{% else %}Low{% endif %} confidence: {{ meta.confidence|floatformat:2 }}">
+                                <i class="fas fa-star me-1" aria-hidden="true"></i>{{ meta.confidence|floatformat:2 }}
+                            </span>
+                            
+                            {% if meta.field_value == book.finalmetadata.isbn %}
+                                <span class="badge bg-primary ms-1" aria-label="Selected as final ISBN">Final</span>
+                            {% endif %}
+                        </div>
+                    </label>
+                </div>
+                {% endfor %}
+                <div class="mt-3">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="final_isbn" 
+                               value="__manual__" id="isbn_manual">
+                        <label class="form-check-label fw-bold" for="isbn_manual">
+                            <i class="fas fa-edit me-1"></i>Manual Entry
+                        </label>
+                    </div>
+                    <input type="text" name="manual_isbn" id="isbn_override" 
+                           placeholder="Enter custom ISBN..." class="form-control">
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- Publisher Section -->
+        <fieldset class="card mb-4 shadow-sm" aria-labelledby="fieldset_publisher">
+            <legend id="fieldset_publisher" class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-building text-primary me-2"></i>
+                    Publisher
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-publisher">
+                    <i class="fas fa-undo me-1"></i>Reset to Final
+                </button>
+            </legend>
+            <div class="card-body">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="final_publisher" 
+                           value="" id="publisher_none"
+                           {% if not book.finalmetadata.final_publisher|default_if_none:"" %}checked{% endif %}>
+                    <label class="form-check-label" for="publisher_none">
+                        <em class="text-muted">No Publisher</em>
+                    </label>
+                </div>
+                {% for pub in all_publishers %}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="final_publisher" 
+                        value="{{ pub.publisher.name }}" id="publisher_{{ forloop.counter }}"
+                        aria-describedby="publisher_{{ forloop.counter }}_desc"
+                        {% if pub.publisher.name == book.finalmetadata.final_publisher %}checked{% endif %}>
+                    <label class="form-check-label d-flex justify-content-between align-items-start" for="publisher_{{ forloop.counter }}">
+                        <span class="fw-bold">{{ pub.publisher.name }}</span>
+                        <div>
+                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ pub.source.name }}">
+                                <i class="fas {{ pub.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ pub.source.name }}
+                            </span>
+                            
+                            <span class="badge 
+                                {% if pub.confidence >= 0.8 %}bg-success{% elif pub.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
+                                aria-label="{% if pub.confidence >= 0.8 %}High{% elif pub.confidence >= 0.5 %}Medium{% else %}Low{% endif %} confidence: {{ pub.confidence|floatformat:2 }}">
+                                <i class="fas fa-star me-1" aria-hidden="true"></i>{{ pub.confidence|floatformat:2 }}
+                            </span>
+                            
+                            {% if pub.publisher.name == book.finalmetadata.final_publisher %}
+                                <span class="badge bg-primary ms-1" aria-label="Selected as final publisher">Final</span>
+                            {% endif %}
+                        </div>
+                    </label>
+                </div>
+                {% endfor %}
+                <div class="mt-3">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="final_publisher" 
+                               value="__manual__" id="publisher_manual">
+                        <label class="form-check-label fw-bold" for="publisher_manual">
+                            <i class="fas fa-edit me-1"></i>Manual Entry
+                        </label>
+                    </div>
+                    <input type="text" name="manual_publisher" id="publisher_override" 
+                           placeholder="Enter custom publisher..." class="form-control">
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- Publication Year Section -->
+        <fieldset class="card mb-4 shadow-sm" aria-labelledby="fieldset_year">
+            <legend id="fieldset_year" class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-calendar-alt text-warning me-2"></i>
+                    Publication Year
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-year">
+                    <i class="fas fa-undo me-1"></i>Reset to Final
+                </button>
+            </legend>
+            <div class="card-body">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="final_publication_year" 
+                           value="" id="year_none"
+                           {% if not book.finalmetadata.publication_year|default_if_none:"" %}checked{% endif %}>
+                    <label class="form-check-label" for="year_none">
+                        <em class="text-muted">No Publication Year</em>
+                    </label>
+                </div>
+                {% for meta in year_metadata %}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="final_publication_year" 
+                           value="{{ meta.field_value }}" id="year_{{ forloop.counter }}"
+                           aria-describedby="year_{{ forloop.counter }}_desc"
+                            {% if meta.field_value|default_if_none:""|stringformat:"s" == book.finalmetadata.publication_year|default_if_none:""|stringformat:"s" %}checked{% endif %}>
+                    <label class="form-check-label d-flex justify-content-between align-items-start" for="year_{{ forloop.counter }}">
+                        <span class="fw-bold">{{ meta.field_value }}</span>
+                        <div>
+                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ meta.source.name }}">
+                                <i class="fas {{ meta.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ meta.source.name }}
+                            </span>
+                            
+                            <span class="badge 
+                                {% if meta.confidence >= 0.8 %}bg-success{% elif meta.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
+                                aria-label="{% if meta.confidence >= 0.8 %}High{% elif meta.confidence >= 0.5 %}Medium{% else %}Low{% endif %} confidence: {{ meta.confidence|floatformat:2 }}">
+                                <i class="fas fa-star me-1" aria-hidden="true"></i>{{ meta.confidence|floatformat:2 }}
+                            </span>
+                            
+                            {% if meta.field_value|stringformat:"s" == book.finalmetadata.publication_year|stringformat:"s" %}
+                                <span class="badge bg-primary ms-1" aria-label="Selected as final publication year">Final</span>
+                            {% endif %}
+                        </div>
+                    </label>
+                </div>
+                {% endfor %}
+                <div class="mt-3">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="final_publication_year" 
+                               value="__manual__" id="year_manual">
+                        <label class="form-check-label fw-bold" for="year_manual">
+                            <i class="fas fa-edit me-1"></i>Manual Entry
+                        </label>
+                    </div>
+                    <input type="text" name="manual_publication_year" id="year_override" 
+                           placeholder="Enter custom year..." class="form-control" pattern="[0-9]{4}">
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- Language Section -->
+        <fieldset class="card mb-4 shadow-sm" aria-labelledby="fieldset_language">
+            <legend id="fieldset_language" class="card-header bg-light d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-globe text-success me-2"></i>
+                    Language
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-language">
+                    <i class="fas fa-undo me-1"></i>Reset to Final
+                </button>
+            </legend>
+            <div class="card-body">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="final_language" 
+                           value="" id="language_none"
+                           {% if not book.finalmetadata.language|default_if_none:"" %}checked{% endif %}>
+                    <label class="form-check-label" for="language_none">
+                        <em class="text-muted">No Language</em>
+                    </label>
+                </div>
+                {% for lang in language_metadata %}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="final_language" 
+                           value="{{ lang.field_value }}" id="lang_{{ forloop.counter }}"
+                           aria-describedby="lang_{{ forloop.counter }}_desc"
+                           {% if lang.field_value == book.finalmetadata.language %}checked{% endif %}>
+                    <label class="form-check-label d-flex justify-content-between align-items-start" for="lang_{{ forloop.counter }}">
+                        <span class="fw-bold">{{ lang.field_value|language_name }}</span>
+                        <div>  
+                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ lang.source.name }}">
+                                <i class="fas {{ lang.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ lang.source.name }}
+                            </span>
+                            
+                            <span class="badge 
+                                {% if lang.confidence >= 0.8 %}bg-success{% elif lang.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
+                                aria-label="{% if lang.confidence >= 0.8 %}High{% elif lang.confidence >= 0.5 %}Medium{% else %}Low{% endif %} confidence: {{ lang.confidence|floatformat:2 }}">
+                                <i class="fas fa-star me-1" aria-hidden="true"></i>{{ lang.confidence|floatformat:2 }}
+                            </span>
+                            
+                            {% if lang.field_value == book.finalmetadata.language %}
+                                <span class="badge bg-primary ms-1" aria-label="Selected as final language">Final</span>
+                            {% endif %}
+                        </div>
+                    </label>
+                </div>
+                {% endfor %}
+                <div class="mt-3">
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="final_language" 
+                               value="__manual__" id="language_manual">
+                        <label class="form-check-label fw-bold" for="language_manual">
+                            <i class="fas fa-edit me-1"></i>Select from Dropdown
+                        </label>
+                    </div>
+                    <select name="manual_language" id="language_dropdown" class="form-select" aria-label="Select language from dropdown">
+                        <option value="">Select a language...</option>
+                        {% for code, name in language_choices %}
+                        <option value="{{ code }}">{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- Rescan External Metadata Section -->
+        <fieldset class="card mb-4 shadow-sm border-info" aria-labelledby="fieldset-rescan">
+            <legend id="fieldset-rescan" class="card-header bg-info text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-sync-alt me-2"></i>
+                    Rescan External Metadata
+                </h5>
+            </legend>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <p class="mb-2 text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Query external sources for updated metadata using current final values
+                            {% if book.finalmetadata.isbn %}
+                                <br><small class="text-success">
+                                    <i class="fas fa-barcode me-1"></i>
+                                    Will use ISBN for enhanced accuracy: {{ book.finalmetadata.isbn }}
+                                </small>
+                            {% endif %}
+                        </p>
+                        <div class="small text-muted">
+                            <strong>Current search terms:</strong>
+                            <span class="badge bg-light text-dark me-1">{{ book.finalmetadata.final_title|default:"No title"|truncatechars:30 }}</span>
+                            <span class="badge bg-light text-dark me-1">{{ book.finalmetadata.final_author|default:"No author"|truncatechars:25 }}</span>
+                            {% if book.finalmetadata.isbn %}
+                            <span class="badge bg-light text-dark">ISBN: {{ book.finalmetadata.isbn|truncatechars:15 }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <button type="button" id="quickRescanBtn" class="btn btn-info">
+                            <i class="fas fa-sync-alt me-2"></i>
+                            Quick Rescan
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Progress Section (Initially Hidden) -->
+                <div id="quickRescanProgress" class="mt-3 d-none">
+                    <div class="progress mb-2">
+                        <div id="quickRescanProgressBar" class="progress-bar progress-bar-striped progress-bar-animated progress-bar-initial" 
+                             role="progressbar" aria-label="Quick rescan progress" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    <div id="quickRescanStatus" class="text-muted small">Initializing rescan...</div>
+                </div>
+                
+                <!-- Results Section (Initially Hidden) -->
+                <div id="quickRescanResults" class="mt-3 d-none">
+                    <div class="alert alert-success mb-0">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <span id="quickRescanSummary">Rescan complete!</span>
+                        <button type="button" class="btn btn-sm btn-outline-success ms-2" data-action="reload-page">
+                            <i class="fas fa-refresh me-1"></i>Refresh to See New Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- Review Status and Save Section -->
+        <fieldset class="card mb-4 shadow-sm border-success" aria-labelledby="fieldset-review-status">
+            <legend id="fieldset-review-status" class="card-header bg-success text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-check-circle me-2"></i>
+                    Review Status & Save
+                </h5>
+            </legend>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="is_reviewed"
+                                   id="is_reviewed" checked>
+                            <label class="form-check-label fw-bold" for="is_reviewed">
+                                <i class="fas fa-flag me-1"></i>
+                                Mark as Reviewed
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6 text-md-end">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="fas fa-save me-2"></i>
+                            Save Metadata
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+    </form>
+
+    <!-- Navigation Section -->
+    <fieldset class="card shadow-sm" aria-labelledby="navigationLegend">
+        <legend id="navigationLegend" class="card-header bg-light">
+            <h5 class="card-title mb-0">
+                <i class="fas fa-navigation me-2"></i>
+                Navigation
+            </h5>
+        </legend>
+        <div class="card-body">
+            <div class="d-flex flex-wrap gap-2 justify-content-start">
+                {% if prev_book_id %}
+                <a href="{% url 'books:book_metadata' prev_book_id %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-chevron-left me-1"></i>Previous Book
+                </a>
+                {% endif %}
+                {% if next_book_id %}
+                <a href="{% url 'books:book_metadata' next_book_id %}" class="btn btn-outline-secondary">
+                    Next Book<i class="fas fa-chevron-right ms-1"></i>
+                </a>
+                {% endif %}
+                {% if False %}
+                <a href="#" class="btn btn-outline-warning">
+                    <i class="fas fa-exclamation-triangle me-1"></i>Next Unreviewed
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </fieldset>
+</div>
+
+<!-- Include external JavaScript files -->
+<script src="{% static 'book/js/book-metadata.js' %}"></script>
+<script src="{% static 'book/js/book-metadata-init.js' %}"></script>
+<script>
+    // Initialize metadata functionality with Django template data
+    document.addEventListener('DOMContentLoaded', function() {
+        const finalMetadata = {
+            title: "{{ book.finalmetadata.final_title|escapejs }}",
+            author: "{{ book.finalmetadata.final_author|escapejs }}",
+            series: "{{ book.finalmetadata.final_series|escapejs }}",
+            seriesNumber: "{{ book.finalmetadata.final_series_number|escapejs }}",
+            genre: [],
+            description: "{{ book.finalmetadata.final_description|escapejs }}",
+            isbn: "{{ book.finalmetadata.final_isbn|escapejs }}",
+            publisher: "{{ book.finalmetadata.final_publisher|escapejs }}",
+            year: "{{ book.finalmetadata.final_publication_year|escapejs }}",
+            language: "{{ book.finalmetadata.final_language|escapejs }}",
+            cover: "{{ book.finalmetadata.final_cover_path|escapejs }}"
+        };
+
+        const currentGenres = [
+            {% for genre in book.finalmetadata.final_genres.all %}
+                "{{ genre.name|escapejs }}"{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ];
+
+        const languageChoices = [
+            {% for code, name in form.final_language.field.choices %}
+                { code: "{{ code|escapejs }}", name: "{{ name|escapejs }}" }{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ];
+
+        initializeMetadataForm(finalMetadata, currentGenres, languageChoices, "{{ csrf_token }}", {{ book.id }});
+    });
+</script>
+
+{% endblock %}
+

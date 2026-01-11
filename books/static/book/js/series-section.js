@@ -591,10 +591,16 @@ class SeriesSectionManager extends BaseSectionManager {
                                         </div>
                                     </div>
                                     <div class="col-auto">
-                                        <button type="button" class="btn btn-sm btn-outline-primary" 
-                                                onclick="event.stopPropagation(); window.seriesManager.downloadBook(${book.id})">
-                                            <i class="fas fa-download"></i>
-                                        </button>
+                                        <div class="btn-group-vertical" role="group">
+                                            <button type="button" class="btn btn-sm btn-outline-primary mb-1" 
+                                                    onclick="event.stopPropagation(); window.seriesManager.downloadBook(${book.id})">
+                                                <i class="fas fa-download me-1"></i>Download
+                                            </button>
+                                            <a href="/book/${book.id}/" class="btn btn-sm btn-primary" 
+                                                    onclick="event.stopPropagation()">
+                                                <i class="fas fa-eye me-1"></i>View Details
+                                            </a>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -664,6 +670,12 @@ class SeriesSectionManager extends BaseSectionManager {
                             </div>
                         </div>
                     </div>
+                    <div class="row mt-2">
+                        <div class="col">
+                            <a href="/book/${book.id}/" class="btn btn-primary btn-sm w-100">
+                                <i class="fas fa-eye me-1"></i>View Full Details
+                            </a>
+                        </div>
                 </div>
 
                 <!-- Book content with tabs -->

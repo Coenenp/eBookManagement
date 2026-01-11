@@ -1,0 +1,60 @@
+{# Duplicate detection and resolution panel #}
+
+{% if duplicates %}
+<div class="card border-warning">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="fas fa-exclamation-triangle"></i> Duplicate Books Found ({{ duplicates|length }})</h5>
+    </div>
+    <div class="card-body">
+        <p>The following duplicate books were detected. Choose which copies to keep:</p>
+        
+        {% for dup in duplicates %}
+        <div class="duplicate-item border rounded p-3 mb-2 bg-light">
+            <div class="form-check">
+                <input class="form-check-input" 
+                       type="checkbox" 
+                       name="duplicate_ids" 
+                       value="{{ dup.book.id }}" 
+                       id="dup_{{ dup.book.id }}">
+                <label class="form-check-label" for="dup_{{ dup.book.id }}">
+                    <strong class="text-uppercase badge bg-secondary">{{ dup.type }}</strong>: {{ dup.reason }}<br>
+                    <code class="small">{{ dup.file_path }}</code>
+                </label>
+            </div>
+        </div>
+        {% endfor %}
+        
+        <div class="mt-4">
+            <label class="form-label fw-bold">Resolution Action:</label>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" 
+                       name="duplicate_action" value="keep_this" 
+                       id="keep_this" checked>
+                <label class="form-check-label" for="keep_this">
+                    Keep this book and delete selected duplicates above
+                </label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" 
+                       name="duplicate_action" value="keep_existing" 
+                       id="keep_existing">
+                <label class="form-check-label" for="keep_existing">
+                    Keep existing books and delete this one
+                </label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" 
+                       name="duplicate_action" value="keep_all" 
+                       id="keep_all">
+                <label class="form-check-label" for="keep_all">
+                    Keep all copies (no deletion)
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-success">
+    <i class="fas fa-check-circle me-2"></i>No duplicates detected for this book.
+</div>
+{% endif %}

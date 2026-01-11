@@ -274,10 +274,12 @@ def toggle_needs_review(request, book_id):
 @login_required
 def rescan_external_metadata(request, book_id):
     """Rescan external metadata for a book."""
+    import logging
+
     from django.apps import apps
+
     from books.scanner.external import query_metadata_and_covers_with_terms
     from books.scanner.resolver import resolve_final_metadata
-    import logging
 
     logger = logging.getLogger(__name__)
 

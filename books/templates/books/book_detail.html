@@ -127,13 +127,16 @@
     <!-- Book Header -->
     <div class="card mb-4 position-relative">
         <div class="card-body">
-            <!-- Reviewed Status Badge -->
-            <div class="position-absolute top-0 end-0 m-3">
+            <!-- Reviewed Status Badge and Quick Process Button -->
+            <div class="position-absolute top-0 end-0 m-3 d-flex flex-column gap-2 align-items-end">
                 {% if book.finalmetadata.is_reviewed %}
                     <span class="badge bg-success text-white" title="Book has been reviewed" aria-label="Reviewed">✅ Reviewed</span>
                 {% else %}
                     <span class="badge bg-warning text-dark" title="Book not yet reviewed" aria-label="Not reviewed">⚠️ Not Reviewed</span>
                 {% endif %}
+                <a href="{% url 'books:book_metadata' book.id %}?workflow=1" class="btn btn-primary btn-sm">
+                    <i class="fas fa-bolt me-1"></i>Quick Process
+                </a>
             </div>
             
             <div class="row align-items-center">

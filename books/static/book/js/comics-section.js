@@ -390,6 +390,12 @@ class ComicsSectionManager extends BaseSectionManager {
                             </div>
                         </div>
                     </div>
+                    <div class="row mt-2">
+                        <div class="col">
+                            <a href="/book/${comic.id}/" class="btn btn-primary btn-sm w-100">
+                                <i class="fas fa-eye me-1"></i>View Full Details
+                            </a>
+                        </div>
                 </div>
 
                 <!-- Tabbed content area -->

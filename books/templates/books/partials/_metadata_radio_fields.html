@@ -1,0 +1,101 @@
+{% load custom_filters %}
+{# Reusable metadata field selection with radio buttons #}
+
+<!-- Title Section -->
+<fieldset class="card mb-4 shadow-sm" aria-labelledby="titleLegend">
+    <legend id="titleLegend" class="card-header bg-light d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="fas fa-heading text-primary me-2"></i>
+            Book Title
+        </h5>
+        {% if not readonly %}
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-title">
+            <i class="fas fa-undo me-1"></i>Reset to Final
+        </button>
+        {% endif %}
+    </legend>
+    <div class="card-body">
+        {% for title in all_titles %}
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="final_title" 
+                   value="{{ title.title }}" id="title_{{ forloop.counter }}"
+                   {% if title.title == book.finalmetadata.final_title %}checked{% endif %}
+                   {% if readonly %}disabled{% endif %}>
+            <label class="form-check-label d-flex justify-content-between align-items-start" for="title_{{ forloop.counter }}">
+                <span class="fw-bold">{{ title.title }}</span>
+                <div>
+                    <span class="badge bg-light text-dark me-2">
+                        <i class="fas {{ title.source.name|source_icon }} me-1"></i>{{ title.source.name }}
+                    </span>
+                    <span class="badge {% if title.confidence >= 0.8 %}bg-success{% elif title.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                        <i class="fas fa-star me-1"></i>{{ title.confidence|floatformat:2 }}
+                    </span>
+                </div>
+            </label>
+        </div>
+        {% endfor %}
+        {% if not readonly %}
+        <div class="mt-3">
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="radio" name="final_title" value="__manual__" id="title_manual">
+                <label class="form-check-label fw-bold" for="title_manual">
+                    <i class="fas fa-edit me-1"></i>Manual Entry
+                </label>
+            </div>
+            <input type="text" name="manual_title" id="title_override" 
+                   placeholder="Enter custom title..." class="form-control">
+        </div>
+        {% endif %}
+    </div>
+</fieldset>
+
+<!-- Author Section -->
+<fieldset class="card mb-4 shadow-sm" aria-labelledby="authorLegend">
+    <legend id="authorLegend" class="card-header bg-light d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="fas fa-user-edit text-info me-2"></i>
+            Author
+        </h5>
+        {% if not readonly %}
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-action="reset-author">
+            <i class="fas fa-undo me-1"></i>Reset to Final
+        </button>
+        {% endif %}
+    </legend>
+    <div class="card-body">
+        {% for author in all_authors %}
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="radio" name="final_author" 
+                   value="{{ author.author.name }}" id="author_{{ forloop.counter }}"
+                   {% if author.author.name == book.finalmetadata.final_author %}checked{% endif %}
+                   {% if readonly %}disabled{% endif %}>
+            <label class="form-check-label d-flex justify-content-between align-items-start" for="author_{{ forloop.counter }}">
+                <span class="fw-bold">{{ author.author.name }}</span>
+                <div>
+                    <span class="badge bg-light text-dark me-2">
+                        <i class="fas {{ author.source.name|source_icon }} me-1"></i>{{ author.source.name }}
+                    </span>
+                    <span class="badge {% if author.confidence >= 0.8 %}bg-success{% elif author.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}">
+                        <i class="fas fa-star me-1"></i>{{ author.confidence|floatformat:2 }}
+                    </span>
+                </div>
+            </label>
+        </div>
+        {% endfor %}
+        {% if not readonly %}
+        <div class="mt-3">
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="radio" name="final_author" value="__manual__" id="author_manual">
+                <label class="form-check-label fw-bold" for="author_manual">
+                    <i class="fas fa-edit me-1"></i>Manual Entry
+                </label>
+            </div>
+            <input type="text" name="manual_author" id="author_override" 
+                   placeholder="Enter custom author..." class="form-control">
+        </div>
+        {% endif %}
+    </div>
+</fieldset>
+
+{# Note: Series, Publisher, Genre, ISBN, Language, etc. sections would follow similar pattern #}
+{# For now, including key fields. Full implementation would extract all fields from book_metadata.html #}
