@@ -425,6 +425,9 @@ class Book(HashFieldMixin, models.Model):
     @property
     def primary_file(self):
         """Get the primary BookFile for this book"""
+        # Use prefetched_files if available to avoid additional queries
+        if hasattr(self, "prefetched_files") and self.prefetched_files:
+            return self.prefetched_files[0]
         return self.files.first()
 
     @property
@@ -461,6 +464,18 @@ class Book(HashFieldMixin, models.Model):
         """Backward compatibility: get file format from primary file"""
         primary_file = self.primary_file
         return primary_file.file_format if primary_file else ""
+
+    @property
+    def filename(self):
+        """Get filename from primary file"""
+        primary_file = self.primary_file
+        return primary_file.filename if primary_file else ""
+
+    @property
+    def file_size(self):
+        """Get file size from primary file"""
+        primary_file = self.primary_file
+        return primary_file.file_size if primary_file else 0
 
     @property
     def relative_path(self):
@@ -2375,7 +2390,7 @@ class BookAPICompleteness(models.Model):
 
     def calculate_completeness(self):
         """Calculate overall metadata completeness based on available data"""
-        from books.constants import METADATA_SOURCE_WEIGHTS, COMPLETENESS_THRESHOLDS
+        from books.constants import COMPLETENESS_THRESHOLDS, METADATA_SOURCE_WEIGHTS
 
         weights = METADATA_SOURCE_WEIGHTS
 

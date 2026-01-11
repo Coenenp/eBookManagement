@@ -9,14 +9,12 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from django.db.models import Q, QuerySet
+from django.db.models import Prefetch, Q, QuerySet
 
-from books.models import Book
+from books.models import Book, BookFile
 
 REVIEW_TYPE_FILTERS = {
-    "needs_review": Q(finalmetadata__is_reviewed=False)
-    | Q(finalmetadata__is_reviewed__isnull=True)
-    | Q(finalmetadata__isnull=True),
+    "needs_review": Q(finalmetadata__is_reviewed=False) | Q(finalmetadata__is_reviewed__isnull=True) | Q(finalmetadata__isnull=True),
     "low_confidence": Q(finalmetadata__overall_confidence__lt=0.5),
     "incomplete": Q(finalmetadata__completeness_score__lt=0.5),
     "missing_cover": Q(finalmetadata__has_cover=False) | Q(finalmetadata__isnull=True),
@@ -39,15 +37,38 @@ SORT_FIELDS = {
 
 
 def base_book_queryset() -> QuerySet:
-    return Book.objects.select_related("finalmetadata", "scan_folder").prefetch_related(
-        "titles__source",
-        "author_relationships__author",
-        "author_relationships__source",
-        "genre_relationships__genre",
-        "genre_relationships__source",
-        "series_relationships__series",
-        "series_relationships__source",
-        "files",  # Add prefetch for book files to avoid N+1 in cover processing
+    # Optimize file queries by prefetching with specific ordering
+    files_prefetch = Prefetch(
+        "files", queryset=BookFile.objects.only("id", "book_id", "file_format", "file_size", "file_path", "cover_path").order_by("id"), to_attr="prefetched_files"
+    )
+
+    # Simplified queryset - only fetch what's needed for display
+    return (
+        Book.objects.select_related("finalmetadata", "scan_folder")
+        .prefetch_related(
+            files_prefetch,  # Use optimized file prefetch with only needed fields
+        )
+        .only(
+            "id",
+            "last_scanned",
+            "is_placeholder",
+            "is_duplicate",
+            "is_corrupted",
+            "finalmetadata__final_title",
+            "finalmetadata__final_author",
+            "finalmetadata__final_series",
+            "finalmetadata__final_series_number",
+            "finalmetadata__final_publisher",
+            "finalmetadata__publication_year",
+            "finalmetadata__language",
+            "finalmetadata__isbn",
+            "finalmetadata__overall_confidence",
+            "finalmetadata__completeness_score",
+            "finalmetadata__is_reviewed",
+            "finalmetadata__final_cover_path",
+            "scan_folder__name",
+            "scan_folder__path",
+        )
     )
 
 
@@ -94,11 +115,7 @@ def apply_standard_filters(qs: QuerySet, params: Dict[str, Any]) -> QuerySet:
     # Needs review composite condition
     needs_review = params.get("needs_review")
     if needs_review == "true":
-        qs = qs.filter(
-            Q(finalmetadata__is_reviewed=False)
-            | Q(finalmetadata__is_reviewed__isnull=True)
-            | Q(finalmetadata__isnull=True)
-        )
+        qs = qs.filter(Q(finalmetadata__is_reviewed=False) | Q(finalmetadata__is_reviewed__isnull=True) | Q(finalmetadata__isnull=True))
     elif needs_review == "false":
         qs = qs.filter(finalmetadata__is_reviewed=True)
 
@@ -117,16 +134,11 @@ def apply_standard_filters(qs: QuerySet, params: Dict[str, Any]) -> QuerySet:
     # Missing metadata filters
     missing = params.get("missing")
     missing_map = {
-        "title": Q(finalmetadata__final_title__isnull=True)
-        | Q(finalmetadata__final_title__exact=""),
-        "author": Q(finalmetadata__final_author__isnull=True)
-        | Q(finalmetadata__final_author__exact=""),
-        "cover": Q(finalmetadata__final_cover_path__isnull=True)
-        | Q(finalmetadata__final_cover_path__exact=""),
-        "series": Q(finalmetadata__final_series__isnull=True)
-        | Q(finalmetadata__final_series__exact=""),
-        "publisher": Q(finalmetadata__final_publisher__isnull=True)
-        | Q(finalmetadata__final_publisher__exact=""),
+        "title": Q(finalmetadata__final_title__isnull=True) | Q(finalmetadata__final_title__exact=""),
+        "author": Q(finalmetadata__final_author__isnull=True) | Q(finalmetadata__final_author__exact=""),
+        "cover": Q(finalmetadata__final_cover_path__isnull=True) | Q(finalmetadata__final_cover_path__exact=""),
+        "series": Q(finalmetadata__final_series__isnull=True) | Q(finalmetadata__final_series__exact=""),
+        "publisher": Q(finalmetadata__final_publisher__isnull=True) | Q(finalmetadata__final_publisher__exact=""),
         "metadata": Q(finalmetadata__isnull=True),
     }
     if missing in missing_map:

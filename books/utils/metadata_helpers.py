@@ -4,6 +4,7 @@ Consolidates repeated logic from sections.py and other views.
 """
 
 import os
+
 from django.conf import settings
 
 
@@ -181,18 +182,24 @@ def format_book_detail_for_json(book):
     # Add additional covers from cover entries
     for cover in book.covers.all():
         cover_media_url = ""
-        if cover.cover_url and cover.cover_url.startswith("http"):
-            cover_media_url = cover.cover_url
-        elif cover.cover_path:
-            if cover.cover_path.startswith(settings.MEDIA_ROOT):
+        # BookCover model uses cover_path, not cover_url
+        if cover.cover_path:
+            if cover.cover_path.startswith("http"):
+                # External URL
+                cover_media_url = cover.cover_path
+            elif cover.cover_path.startswith(settings.MEDIA_ROOT):
+                # Local file - convert to media URL
                 relative_path = cover.cover_path[len(settings.MEDIA_ROOT) :].lstrip("\\/")
                 cover_media_url = settings.MEDIA_URL + relative_path.replace("\\", "/")
             else:
+                # Other path
                 cover_media_url = cover.cover_path
 
         if cover_media_url:
             if cover_media_url != cover_url:  # Don't duplicate primary cover
-                covers_list.append({"id": cover.id, "source": cover.source or "Unknown", "url": cover_media_url, "is_final": cover.is_final})
+                covers_list.append(
+                    {"id": cover.id, "source": cover.source.name if cover.source else "Unknown", "url": cover_media_url, "is_final": getattr(cover, "is_final_metadata", False)}
+                )
 
     # Build metadata sources list for metadata tab
     metadata_sources = []
@@ -200,13 +207,32 @@ def format_book_detail_for_json(book):
         metadata_sources.append(
             {
                 "id": meta.id,
-                "source": meta.source or "Unknown",
+                "source": meta.source.name if meta.source else "Unknown",
                 "field_name": meta.field_name,
                 "field_value": meta.field_value,
                 "confidence": meta.confidence,
                 "is_active": meta.is_active,
             }
         )
+
+    # Get first file for top-level format and path
+    first_file = book.files.first()
+    file_format = first_file.file_format if first_file else None
+    file_path = first_file.file_path if first_file else None
+    file_size = first_file.file_size if first_file else None
+
+    # Get scan folder information safely
+    scan_folder_id = None
+    scan_folder_path = None
+    scan_folder_name = None
+    try:
+        if hasattr(book, "scan_folder") and book.scan_folder:
+            scan_folder_id = getattr(book.scan_folder, "id", None)
+            scan_folder_path = getattr(book.scan_folder, "path", None)  # Changed from 'folder_path' to 'path'
+            scan_folder_name = getattr(book.scan_folder, "name", None)
+    except Exception:
+        # Handle case where scan_folder doesn't exist or is inaccessible
+        pass
 
     # Build the complete book data
     book_data = {
@@ -224,6 +250,13 @@ def format_book_detail_for_json(book):
         "is_read": metadata.get("is_read", False),
         "reading_progress": metadata.get("reading_progress", 0),
         "last_scanned": book.last_scanned.isoformat() if book.last_scanned else None,
+        # Add top-level file info for easy access
+        "file_format": file_format,
+        "file_path": file_path,
+        "file_size": file_size,
+        "scan_folder_id": scan_folder_id,
+        "scan_folder_path": scan_folder_path,
+        "scan_folder_name": scan_folder_name,
         # Tab data for right panel
         "files": files_list,
         "covers": covers_list,

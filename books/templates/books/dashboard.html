@@ -28,33 +28,6 @@
                     <button class="btn btn-outline-primary" id="refreshDashboard">
                         <i class="fas fa-sync-alt me-1"></i>Refresh
                     </button>
-                    <div class="dropdown">
-                        <button class="btn btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-filter me-1"></i>Filters
-                        </button>
-                        <div class="dropdown-menu dropdown-menu-end p-3 filter-dropdown">
-                            <form id="dashboardFilters">
-                                <div class="mb-3">
-                                    <label for="content_type" class="form-label small">Content Type</label>
-                                    <select class="form-select form-select-sm" name="content_type" id="content_type" aria-label="Filter by content type">
-                                        <option value="">All Content</option>
-                                        <option value="ebook">E-books</option>
-                                        <option value="comic">Comics</option>
-                                        <option value="audiobook">Audiobooks</option>
-                                    </select>
-                                </div>
-                                <div class="mb-3">
-                                    <label for="review_status" class="form-label small">Review Status</label>
-                                    <select class="form-select form-select-sm" name="review_status" id="review_status" aria-label="Filter by review status">
-                                        <option value="">All Books</option>
-                                        <option value="reviewed">Reviewed</option>
-                                        <option value="unreviewed">Needs Review</option>
-                                    </select>
-                                </div>
-                                <button type="submit" class="btn btn-primary btn-sm w-100">Apply Filters</button>
-                            </form>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -201,69 +174,81 @@
 
         <!-- Total Books -->
         <div class="col-md-2 mb-3">
-            <div class="card h-100 bg-primary text-white">
-                <div class="card-body">
-                    <h6 class="card-title mb-2">Total Books</h6>
-                    <h2 class="mb-0 fw-bold">{{ total_books|default:0 }}</h2>
-                    <small class="opacity-75">All scanned items</small>
+            <a href="{% url 'books:book_list' %}" class="text-decoration-none">
+                <div class="card h-100 bg-primary text-white">
+                    <div class="card-body">
+                        <h6 class="card-title mb-2">Total Books</h6>
+                        <h2 class="mb-0 fw-bold">{{ total_books|default:0 }}</h2>
+                        <small class="opacity-75">All scanned items</small>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
 
         <!-- With Metadata -->
         <div class="col-md-2 mb-3">
-            <div class="card h-100 bg-success text-white">
-                <div class="card-body">
-                    <h6 class="card-title mb-2">With Title</h6>
-                    <h2 class="mb-0 fw-bold">{{ books_with_metadata|default:0 }}</h2>
-                    <small class="opacity-75">{{ completion_percentage|floatformat:1 }}% Titles</small>
+            <a href="{% url 'books:book_list' %}" class="text-decoration-none">
+                <div class="card h-100 bg-success text-white">
+                    <div class="card-body">
+                        <h6 class="card-title mb-2">With Title</h6>
+                        <h2 class="mb-0 fw-bold">{{ books_with_metadata|default:0 }}</h2>
+                        <small class="opacity-75">{{ completion_percentage|floatformat:1 }}% Titles</small>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
 
         <!-- With Cover -->
         <div class="col-md-2 mb-3">
-            <div class="card h-100 bg-info text-white">
-                <div class="card-body">
-                    <h6 class="card-title mb-2">With Cover</h6>
-                    <h2 class="mb-0 fw-bold">{{ books_with_cover|default:0 }}</h2>
-                    <small class="opacity-75">{{ books_with_original_cover|default:0 }} have original covers</small>
-                    <small class="opacity-75">{{ missing_cover_percentage|floatformat:1 }}% have no covers</small>
+            <a href="{% url 'books:book_list' %}" class="text-decoration-none">
+                <div class="card h-100 bg-info text-white">
+                    <div class="card-body">
+                        <h6 class="card-title mb-2">With Cover</h6>
+                        <h2 class="mb-0 fw-bold">{{ books_with_cover|default:0 }}</h2>
+                        <small class="opacity-75">{{ books_with_original_cover|default:0 }} have original covers</small>
+                        <small class="opacity-75">{{ missing_cover_percentage|floatformat:1 }}% have no covers</small>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
 
         <!-- Placeholders -->
         <div class="col-md-2 mb-3">
-            <div class="card h-100 bg-secondary text-white">
-                <div class="card-body">
-                    <h6 class="card-title mb-2">Placeholders</h6>
-                    <h2 class="mb-0 fw-bold">{{ placeholder_count|default:0 }}</h2>
-                    <small class="opacity-75">Temporary entries</small>
+            <a href="{% url 'books:book_list' %}?has_placeholder=true" class="text-decoration-none">
+                <div class="card h-100 bg-secondary text-white">
+                    <div class="card-body">
+                        <h6 class="card-title mb-2">Placeholders</h6>
+                        <h2 class="mb-0 fw-bold">{{ placeholder_count|default:0 }}</h2>
+                        <small class="opacity-75">Temporary entries</small>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
 
         <!-- Need Review -->
         <div class="col-md-2 mb-3">
-            <div class="card h-100 bg-warning text-dark">
-                <div class="card-body">
-                    <h6 class="card-title mb-2">Need Review</h6>
-                    <h2 class="mb-0 fw-bold">{{ needs_review_count|default:0 }}</h2>
-                    <small class="opacity-75">Unreviewed items</small>
+            <a href="{% url 'books:book_list' %}?needs_review=true" class="text-decoration-none">
+                <div class="card h-100 bg-warning text-dark">
+                    <div class="card-body">
+                        <h6 class="card-title mb-2">Need Review</h6>
+                        <h2 class="mb-0 fw-bold">{{ needs_review_count|default:0 }}</h2>
+                        <small class="opacity-75">Unreviewed items</small>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
 
         <!-- Corrupted Files -->
         <div class="col-md-2 mb-3">
-            <div class="card h-100 bg-danger text-white">
-                <div class="card-body">
-                    <h6 class="card-title mb-2">Corrupted Files</h6>
-                    <h2 class="mb-0 fw-bold">{{ corrupted_count|default:0 }}</h2>
-                    <small class="opacity-75">{{ corrupted_percentage|floatformat:1 }}% flagged</small>
+            <a href="{% url 'books:book_list' %}?corrupted=true" class="text-decoration-none">
+                <div class="card h-100 bg-danger text-white">
+                    <div class="card-body">
+                        <h6 class="card-title mb-2">Corrupted Files</h6>
+                        <h2 class="mb-0 fw-bold">{{ corrupted_count|default:0 }}</h2>
+                        <small class="opacity-75">{{ corrupted_percentage|floatformat:1 }}% flagged</small>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
 
     </div>
@@ -830,6 +815,12 @@ document.addEventListener('DOMContentLoaded', function() {
         series_main: '{% url "books:series_main" %}',
         author_list: '{% url "books:author_list" %}'
     };
+    
+    // Set URLs for DashboardNavigation
+    if (window.DashboardNavigation) {
+        window.DashboardNavigation.urls = navigationUrls;
+    }
+    
     initializeDashboardCharts(chartData, navigationUrls);
 });
 </script>

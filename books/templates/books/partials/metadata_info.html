@@ -1,0 +1,32 @@
+{% comment %}
+Reusable metadata field display with consistent icons and styling.
+
+Usage:
+{% include 'books/partials/metadata_info.html' with icon='fa-building' label='Publisher' value=book.publisher %}
+{% include 'books/partials/metadata_info.html' with icon='fa-calendar' label='Year' value=book.year %}
+{% include 'books/partials/metadata_info.html' with icon='fa-language' label='Language' value=book.language %}
+{% include 'books/partials/metadata_info.html' with icon='fa-file-alt' label='Format' value=book.format badge=True %}
+{% include 'books/partials/metadata_info.html' with icon='fa-barcode' label='ISBN' value=book.isbn code=True %}
+{% include 'books/partials/metadata_info.html' with icon='fa-hdd' label='Scan Folder' value=book.scan_folder.name url=edit_url %}
+{% include 'books/partials/metadata_info.html' with icon='fa-folder' label='Path' value=book.path code=True %}
+{% include 'books/partials/metadata_info.html' with icon='fa-file' label='Filename' value=book.filename code=True %}
+{% include 'books/partials/metadata_info.html' with icon='fa-clock' label='Last Scanned' value=book.last_scanned|date:"M d, Y" %}
+{% endcomment %}
+
+{% if value %}
+<div class="{{ mb_class|default:'mb-2' }}">
+    <i class="fas {{ icon }} me-2 text-muted"></i>
+    <strong>{{ label }}:</strong>
+    {% if url %}
+        <a href="{{ url }}" class="text-decoration-none">
+            {% if badge %}<span class="badge bg-secondary">{{ value }}</span>
+            {% elif code %}<code class="small">{{ value }}</code>
+            {% else %}{{ value }}{% endif %}
+        </a>
+    {% else %}
+        {% if badge %}<span class="badge bg-secondary">{{ value }}</span>
+        {% elif code %}<code class="small">{{ value }}</code>
+        {% else %}<span class="{% if small %}small {% endif %}">{{ value }}</span>{% endif %}
+    {% endif %}
+</div>
+{% endif %}

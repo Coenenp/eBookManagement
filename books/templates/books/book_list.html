@@ -11,8 +11,8 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
                 <h1 id="page-title" class="h3 mb-0">
-                    <i class="fas fa-book me-2"></i>
-                    Ebook Library
+                    <i class="fas fa-swatchbook me-2"></i>
+                    Library
                 </h1>
                 {% if first_review_target %}
                 <div class="alert alert-info mb-0 py-2">
@@ -142,7 +142,7 @@
                                             <option value="author" {% if missing_filter == 'author' %}selected{% endif %}>Missing Author</option>
                                             <option value="series" {% if missing_filter == 'series' %}selected{% endif %}>Missing Series</option>
                                             <option value="cover" {% if missing_filter == 'cover' %}selected{%  endif %}>Missing Cover</option>
-                                            <option value="publisher" {% if missing_filter == 'publisher' %}selected{% endif %}>Missing Punlisher</option>
+                                            <option value="publisher" {% if missing_filter == 'publisher' %}selected{% endif %}>Missing Publisher</option>
                                             <option value="metadata" {% if missing_filter == 'metadata' %}selected{% endif %}>No Metadata</option>
                                         </select>
                                     </div>
@@ -235,7 +235,7 @@
                     
                     <!-- Book Cover Header -->
                     <div class="text-center p-3 bg-light">
-                        {% book_cover book size='small' %}
+                        {% book_cover book size='small' skip_download=True %}
                     </div>
 
                     <!-- Book Details -->
@@ -243,8 +243,8 @@
                         <!-- Title -->
                         <h6 class="card-title mb-2">
                             <a href="{% url 'books:book_detail' book.pk %}" class="text-decoration-none text-dark">
-                                {% if book.final_metadata and book.final_metadata.final_title %}
-                                    {{ book.final_metadata.final_title|truncatechars:50 }}
+                                {% if book.finalmetadata and book.finalmetadata.final_title %}
+                                    {{ book.finalmetadata.final_title|truncatechars:50 }}
                                 {% elif book.titles.first %}
                                     {{ book.titles.first.title|truncatechars:50 }}
                                 {% else %}
@@ -256,8 +256,8 @@
                         <!-- Author -->
                         <p class="text-muted mb-2">
                             <i class="fas fa-user me-1"></i>
-                            {% if book.final_metadata and book.final_metadata.final_author %}
-                                {{ book.final_metadata.final_author|truncatechars:30 }}
+                            {% if book.finalmetadata and book.finalmetadata.final_author %}
+                                {{ book.finalmetadata.final_author|truncatechars:30 }}
                             {% elif book.author_relationships.first %}
                                 {{ book.author_relationships.first.author.name|truncatechars:30 }}
                             {% else %}
@@ -266,52 +266,74 @@
                         </p>
 
                         <!-- Series -->
-                        {% if book.final_metadata and book.final_metadata.final_series %}
+                        {% if book.finalmetadata and book.finalmetadata.final_series %}
                         <p class="text-muted small mb-2">
                             <i class="fas fa-list me-1"></i>
-                            {{ book.final_metadata.final_series|truncatechars:25 }}
-                            {% if book.final_metadata.final_series_number %}
-                            <span class="badge bg-secondary">#{{ book.final_metadata.final_series_number }}</span>
+                            {{ book.finalmetadata.final_series|truncatechars:25 }}
+                            {% if book.finalmetadata.final_series_number %}
+                            <span class="badge bg-secondary">#{{ book.finalmetadata.final_series_number }}</span>
                             {% endif %}
                         </p>
                         {% endif %}
 
-                        <!-- File Info -->
+                        <!-- Metadata Info -->
                         <div class="small text-muted mb-3">
-                            <div class="d-flex justify-content-between">
+                            {% if book.finalmetadata.final_publisher %}
+                            <div class="mt-1">
+                                <i class="fas fa-building me-1"></i>
+                                {{ book.finalmetadata.final_publisher|truncatechars:30 }}
+                            </div>
+                            {% endif %}
+                            {% if book.finalmetadata.publication_year %}
+                            <div class="mt-1">
+                                <i class="fas fa-calendar me-1"></i>
+                                {{ book.finalmetadata.publication_year }}
+                            </div>
+                            {% endif %}
+                            {% if book.finalmetadata and book.finalmetadata.language %}
+                            <div class="mt-1">
+                                <i class="fas fa-language me-1"></i>
+                                {{ book.finalmetadata.language|language_name }}
+                            </div>
+                            {% endif %}
+                            <div class="d-flex justify-content-between mt-1">
                                 <span>
                                     <i class="fas fa-file-alt me-1"></i>
-                                    {{ book.file_format|upper|default:"Unknown" }}
+                                    <span class="badge {{ book.file_format|format_color }}">{{ book.file_format|upper|default:"Unknown" }}</span>
                                 </span>
                                 <span>{{ book.file_size|filesizeformat|default:"Unknown" }}</span>
                             </div>
-                            {% if book.final_metadata and book.final_metadata.language %}
+                            {% if book.finalmetadata.isbn %}
                             <div class="mt-1">
-                                <i class="fas fa-language me-1"></i>
-                                {{ book.final_metadata.language }}
+                                <i class="fas fa-barcode me-1"></i>
+                                {{ book.finalmetadata.isbn }}
                             </div>
                             {% endif %}
                             {% if book.scan_folder %}
                             <div class="mt-1">
-                                <i class="fas fa-calendar me-1"></i>
+                                <i class="fas fa-hdd me-1"></i>
+                                <a href="{% url 'books:edit_scan_folder' book.scan_folder.id %}" class="text-muted text-decoration-none">{{ book.scan_folder.name|truncatechars:25 }}</a>
+                            </div>
+                            <div class="mt-1">
+                                <i class="fas fa-clock me-1"></i>
                                 {{ book.last_scanned|date:"M d, Y" }}
                             </div>
                             {% endif %}
                         </div>
 
                         <!-- Quality Scores -->
-                        {% if book.final_metadata %}
+                        {% if book.finalmetadata %}
                         <div class="mb-3">
                             <div class="d-flex justify-content-between small">
                                 <span>Confidence:</span>
-                                <span class="badge {% if book.final_metadata.overall_confidence >= 0.8 %}bg-success{% elif book.final_metadata.overall_confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
-                                    {{ book.final_metadata.overall_confidence|mul:100|floatformat:0 }}%
+                                <span class="badge {% if book.finalmetadata.overall_confidence >= 0.8 %}bg-success{% elif book.finalmetadata.overall_confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
+                                    {{ book.finalmetadata.overall_confidence|mul:100|floatformat:0 }}%
                                 </span>
                             </div>
                             <div class="d-flex justify-content-between small mt-1">
                                 <span>Completeness:</span>
-                                <span class="badge {% if book.final_metadata.completeness_score >= 0.8 %}bg-success{% elif book.final_metadata.completeness_score >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
-                                    {{ book.final_metadata.completeness_score|mul:100|floatformat:0 }}%
+                                <span class="badge {% if book.finalmetadata.completeness_score >= 0.8 %}bg-success{% elif book.finalmetadata.completeness_score >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
+                                    {{ book.finalmetadata.completeness_score|mul:100|floatformat:0 }}%
                                 </span>
                             </div>
                         </div>

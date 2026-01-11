@@ -13,7 +13,7 @@ from django.shortcuts import get_object_or_404
 
 from .models import Author, Book, BookAuthor, BookCover, BookGenre, BookMetadata, BookPublisher, BookSeries, BookTitle, DataSource, Genre, Publisher, Series
 
-logger = logging.getLogger('books.scanner')
+logger = logging.getLogger("books.scanner")
 
 
 class MetadataProcessor:
@@ -22,32 +22,29 @@ class MetadataProcessor:
     @staticmethod
     def handle_manual_entries(request, book, form_data):
         """Process manual entries and assign them to FinalMetadata."""
-        manual_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.MANUAL,
-            defaults={'trust_level': 1.0}
-        )
+        manual_source, _ = DataSource.objects.get_or_create(name=DataSource.MANUAL, defaults={"trust_level": 1.0})
 
         field_handlers = {
-            'final_title': MetadataProcessor._handle_manual_title,
-            'final_author': MetadataProcessor._handle_manual_author,
-            'final_series': MetadataProcessor._handle_manual_series,
-            'final_publisher': MetadataProcessor._handle_manual_publisher,
-            'publication_year': MetadataProcessor._handle_manual_metadata_field,
-            'language': MetadataProcessor._handle_manual_metadata_field,
-            'isbn': MetadataProcessor._handle_manual_metadata_field,
-            'description': MetadataProcessor._handle_manual_metadata_field,
+            "final_title": MetadataProcessor._handle_manual_title,
+            "final_author": MetadataProcessor._handle_manual_author,
+            "final_series": MetadataProcessor._handle_manual_series,
+            "final_publisher": MetadataProcessor._handle_manual_publisher,
+            "publication_year": MetadataProcessor._handle_manual_metadata_field,
+            "language": MetadataProcessor._handle_manual_metadata_field,
+            "isbn": MetadataProcessor._handle_manual_metadata_field,
+            "description": MetadataProcessor._handle_manual_metadata_field,
         }
 
         # Map field names to their corresponding model queries for checking existing data
         existing_data_checks = {
-            'final_title': lambda: book.titles.filter(is_active=True).exists(),
-            'final_author': lambda: book.author_relationships.filter(is_active=True).exists(),
-            'final_series': lambda: book.series_relationships.filter(is_active=True).exists(),
-            'final_publisher': lambda: book.publisher_relationships.filter(is_active=True).exists(),
-            'publication_year': lambda: book.metadata.filter(field_name='publication_year', is_active=True).exists(),
-            'language': lambda: book.metadata.filter(field_name='language', is_active=True).exists(),
-            'isbn': lambda: book.metadata.filter(field_name='isbn', is_active=True).exists(),
-            'description': lambda: book.metadata.filter(field_name='description', is_active=True).exists(),
+            "final_title": lambda: book.titles.filter(is_active=True).exists(),
+            "final_author": lambda: book.author_relationships.filter(is_active=True).exists(),
+            "final_series": lambda: book.series_relationships.filter(is_active=True).exists(),
+            "final_publisher": lambda: book.publisher_relationships.filter(is_active=True).exists(),
+            "publication_year": lambda: book.metadata.filter(field_name="publication_year", is_active=True).exists(),
+            "language": lambda: book.metadata.filter(field_name="language", is_active=True).exists(),
+            "isbn": lambda: book.metadata.filter(field_name="isbn", is_active=True).exists(),
+            "description": lambda: book.metadata.filter(field_name="description", is_active=True).exists(),
         }
 
         bulk_map = {
@@ -63,7 +60,7 @@ class MetadataProcessor:
 
         # Process each field
         for field_name, handler in field_handlers.items():
-            manual_flag = request.POST.get(f'manual_entry_{field_name}')
+            manual_flag = request.POST.get(f"manual_entry_{field_name}")
             field_value = form_data.get(field_name)
 
             # Check if field has a value
@@ -76,19 +73,17 @@ class MetadataProcessor:
             # 1. Explicitly marked as manual (manual_flag == 'true'), OR
             # 2. Field has a value but no existing data (no dropdown was shown), OR
             # 3. Field has a value and manual_flag is not explicitly 'false'
-            should_be_manual = (
-                manual_flag == 'true' or
-                (has_value and not has_existing_data and manual_flag != 'false')
-            )
+            should_be_manual = manual_flag == "true" or (has_value and not has_existing_data and manual_flag != "false")
 
-            logger.debug(f"Processing {field_name}: manual_flag={manual_flag}, has_value={bool(has_value)}, "
-                         f"has_existing_data={has_existing_data}, should_be_manual={should_be_manual}")
+            logger.debug(
+                f"Processing {field_name}: manual_flag={manual_flag}, has_value={bool(has_value)}, " f"has_existing_data={has_existing_data}, should_be_manual={should_be_manual}"
+            )
 
             if should_be_manual and has_value:
                 handler_form_data = form_data.copy()
-                if field_value == '__manual__':
+                if field_value == "__manual__":
                     manual_field_key = f"manual_{field_name.replace('final_', '')}"
-                    manual_value = request.POST.get(manual_field_key, '').strip()
+                    manual_value = request.POST.get(manual_field_key, "").strip()
                     if manual_value:
                         handler_form_data[field_name] = manual_value
 
@@ -100,18 +95,18 @@ class MetadataProcessor:
                     if entry_type in bulk_map:
                         bulk_map[entry_type].append(entry)
 
-                    if field_name.startswith('final_'):
+                    if field_name.startswith("final_"):
                         model_to_field = {
-                            BookTitle: 'title',
-                            BookAuthor: 'author__name',
-                            BookSeries: 'name',
-                            BookPublisher: 'name',
+                            BookTitle: "title",
+                            BookAuthor: "author__name",
+                            BookSeries: "name",
+                            BookPublisher: "name",
                         }
                         field_path = model_to_field.get(type(entry))
                         if field_path:
                             # Support nested fields like author.name
-                            if '__' in field_path:
-                                parts = field_path.split('__')
+                            if "__" in field_path:
+                                parts = field_path.split("__")
                                 value = entry
                                 for part in parts:
                                     value = getattr(value, part, None)
@@ -134,14 +129,14 @@ class MetadataProcessor:
                     logger.warning(f"No entry created for manual {field_name}")
 
             elif not should_be_manual and has_value:
-                # Use form_data directly for non-manual fields
+                # User selected from dropdown - just set the final value directly
                 value = form_data.get(field_name)
-                if field_name.startswith('final_'):
+                if field_name.startswith("final_"):
                     model_map = {
-                        'final_title': (BookTitle, 'title', None),  # title is a plain string
-                        'final_author': (BookAuthor, 'author', Author),
-                        'final_series': (BookSeries, 'series', Series),
-                        'final_publisher': (BookPublisher, 'publisher', Publisher),
+                        "final_title": (BookTitle, "title", None),
+                        "final_author": (BookAuthor, "author", Author),
+                        "final_series": (BookSeries, "series", Series),
+                        "final_publisher": (BookPublisher, "publisher", Publisher),
                     }
                     model_info = model_map.get(field_name)
                     if model_info and value:
@@ -154,11 +149,11 @@ class MetadataProcessor:
                             filter_value = value  # For plain string fields like title
 
                         if filter_value:
-                            filter_kwargs = {'book': book, field_attr: filter_value}
+                            filter_kwargs = {"book": book, field_attr: filter_value}
                             instance = model_class.objects.filter(**filter_kwargs).first()
                             if instance:
                                 value_to_assign = getattr(instance, field_attr)
-                                logger.debug(f"Assigning {field_name} = '{value_to_assign}' from {instance}")
+                                logger.debug(f"Selected from dropdown: {field_name} = '{value_to_assign}'")
                                 setattr(final_metadata, field_name, value_to_assign)
                             else:
                                 logger.warning(f"No matching {model_class.__name__} found for value '{value}'")
@@ -171,7 +166,7 @@ class MetadataProcessor:
                         logger.debug(f"Skipping assignment for {field_name} due to invalid value")
 
         # Handle manual genres
-        manual_genres = request.POST.get('manual_genres', '').strip()
+        manual_genres = request.POST.get("manual_genres", "").strip()
         if manual_genres:
             logger.debug(f"Processing manual genres: {manual_genres}")
             genre_entries = MetadataProcessor._handle_manual_genres(request, book, manual_source)
@@ -195,10 +190,10 @@ class MetadataProcessor:
 
     @staticmethod
     def _sanitize_metadata_value(field_name, value):
-        if value in [None, '', 'null']:
+        if value in [None, "", "null"]:
             return None
 
-        if field_name == 'publication_year':
+        if field_name == "publication_year":
             try:
                 return int(value)
             except (ValueError, TypeError):
@@ -213,30 +208,21 @@ class MetadataProcessor:
 
     @staticmethod
     def _handle_manual_title(book, field_name, form_data, manual_source):
-        title_value = form_data.get('final_title', '').strip()
+        title_value = form_data.get("final_title", "").strip()
         if title_value:
             logger.debug(f"Creating manual title entry: {title_value}")
-            return BookTitle(
-                book=book,
-                title=title_value,
-                source=manual_source,
-                confidence=1.0,
-                is_active=True  # Ensure it's active
-            )
+            return BookTitle(book=book, title=title_value, source=manual_source, confidence=1.0, is_active=True)
         return None
 
     @staticmethod
     def _handle_manual_author(book, field_name, form_data, manual_source):
-        author_value = form_data.get('final_author', '').strip()
+        author_value = form_data.get("final_author", "").strip()
         if author_value:
             logger.debug(f"Creating manual author entry: {author_value}")
 
             try:
                 # Try to create the author - the model's save() method handles normalization correctly now
-                author, created = Author.objects.get_or_create(
-                    name=author_value,
-                    defaults={'is_reviewed': True}
-                )
+                author, created = Author.objects.get_or_create(name=author_value, defaults={"is_reviewed": True})
                 if created:
                     logger.debug(f"Created new author: {author}")
                 else:
@@ -257,11 +243,7 @@ class MetadataProcessor:
                     return
 
             # Check if BookAuthor relationship already exists
-            existing_book_author = BookAuthor.objects.filter(
-                book=book,
-                author=author,
-                source=manual_source
-            ).first()
+            existing_book_author = BookAuthor.objects.filter(book=book, author=author, source=manual_source).first()
 
             if existing_book_author:
                 # Update existing entry
@@ -273,33 +255,22 @@ class MetadataProcessor:
                 return None  # Don't add to bulk create since we saved directly
             else:
                 # Create new BookAuthor entry
-                return BookAuthor(
-                    book=book,
-                    author=author,
-                    source=manual_source,
-                    confidence=1.0,
-                    is_main_author=True,
-                    is_active=True  # Ensure it's active
-                )
+                return BookAuthor(book=book, author=author, source=manual_source, confidence=1.0, is_main_author=True, is_active=True)
         return None
 
     @staticmethod
     def _handle_manual_series(book, field_name, form_data, manual_source):
-        series_value = form_data.get('final_series', '').strip()
+        series_value = form_data.get("final_series", "").strip()
         if series_value:
             logger.debug(f"Creating manual series entry: {series_value}")
             series, created = Series.objects.get_or_create(name=series_value)
             if created:
                 logger.debug(f"Created new series: {series}")
 
-            series_number = form_data.get('final_series_number', '').strip()
+            series_number = form_data.get("final_series_number", "").strip()
 
             # Check if this exact combination already exists
-            existing_book_series = BookSeries.objects.filter(
-                book=book,
-                series=series,
-                source=manual_source
-            ).first()
+            existing_book_series = BookSeries.objects.filter(book=book, series=series, source=manual_source).first()
 
             if existing_book_series:
                 # Update existing entry
@@ -311,73 +282,44 @@ class MetadataProcessor:
                 return None  # Don't add to bulk create since we saved directly
             else:
                 # Create new entry for bulk create
-                return BookSeries(
-                    book=book,
-                    series=series,
-                    source=manual_source,
-                    confidence=1.0,
-                    series_number=series_number if series_number else None,
-                    is_active=True
-                )
+                return BookSeries(book=book, series=series, source=manual_source, confidence=1.0, series_number=series_number if series_number else None, is_active=True)
         return None
 
     @staticmethod
     def _handle_manual_publisher(book, field_name, form_data, manual_source):
-        publisher_value = form_data.get('final_publisher', '').strip()
+        publisher_value = form_data.get("final_publisher", "").strip()
         if publisher_value:
             logger.debug(f"Creating manual publisher entry: {publisher_value}")
-            publisher, created = Publisher.objects.get_or_create(
-                name=publisher_value,
-                defaults={'is_reviewed': True}
-            )
+            publisher, created = Publisher.objects.get_or_create(name=publisher_value, defaults={"is_reviewed": True})
             if created:
                 logger.debug(f"Created new publisher: {publisher}")
 
-            return BookPublisher(
-                book=book,
-                publisher=publisher,
-                source=manual_source,
-                confidence=1.0,
-                is_active=True  # Ensure it's active
-            )
+            return BookPublisher(book=book, publisher=publisher, source=manual_source, confidence=1.0, is_active=True)
         return None
 
     @staticmethod
     def _handle_manual_metadata_field(book, field_name, form_data, manual_source):
-        value = form_data.get(field_name, '').strip() if isinstance(form_data.get(field_name), str) else form_data.get(field_name)
+        value = form_data.get(field_name, "").strip() if isinstance(form_data.get(field_name), str) else form_data.get(field_name)
         if value is not None and str(value).strip():
             logger.debug(f"Creating manual metadata entry for {field_name}: {value}")
-            return BookMetadata(
-                book=book,
-                field_name=field_name,
-                field_value=str(value),
-                source=manual_source,
-                confidence=1.0,
-                is_active=True  # Ensure it's active
-            )
+            return BookMetadata(book=book, field_name=field_name, field_value=str(value), source=manual_source, confidence=1.0, is_active=True)
         return None
 
     @staticmethod
     def _handle_manual_genres(request, book, manual_source):
-        manual_genres = request.POST.get('manual_genres', '').strip()
+        manual_genres = request.POST.get("manual_genres", "").strip()
         genre_entries = []
 
         if manual_genres:
             logger.debug(f"Processing manual genres: {manual_genres}")
-            genre_names = [g.strip() for g in manual_genres.split(',') if g.strip()]
+            genre_names = [g.strip() for g in manual_genres.split(",") if g.strip()]
             for genre_name in genre_names:
                 genre, created = Genre.objects.get_or_create(name=genre_name)
                 if created:
                     logger.debug(f"Created new genre: {genre}")
 
                 # Use the new create_or_update_best method to handle duplicates
-                book_genre = BookGenre.create_or_update_best(
-                    book=book,
-                    genre=genre,
-                    source=manual_source,
-                    confidence=1.0,
-                    is_active=True
-                )
+                book_genre = BookGenre.create_or_update_best(book=book, genre=genre, source=manual_source, confidence=1.0, is_active=True)
 
                 if book_genre:
                     logger.debug(f"Processed genre entry for: {genre_name}")
@@ -396,20 +338,20 @@ class CoverManager:
             import uuid
 
             # Create unique filename to avoid conflicts
-            file_ext = uploaded_file.name.split('.')[-1].lower()
+            file_ext = uploaded_file.name.split(".")[-1].lower()
             timestamp = int(time.time())
             unique_id = str(uuid.uuid4())[:8]
             filename = f"book_{book.id}_cover_{timestamp}_{unique_id}.{file_ext}"
 
-            upload_dir = os.path.join(settings.MEDIA_ROOT, 'cover_cache')
+            upload_dir = os.path.join(settings.MEDIA_ROOT, "cover_cache")
             os.makedirs(upload_dir, exist_ok=True)
 
             # Create relative path for storage
-            relative_path = os.path.join('cover_cache', filename).replace('\\', '/')
-            full_path = os.path.join(settings.MEDIA_ROOT, 'cover_cache', filename)
+            relative_path = os.path.join("cover_cache", filename).replace("\\", "/")
+            full_path = os.path.join(settings.MEDIA_ROOT, "cover_cache", filename)
 
             # Save file
-            with open(full_path, 'wb+') as destination:
+            with open(full_path, "wb+") as destination:
                 for chunk in uploaded_file.chunks():
                     destination.write(chunk)
 
@@ -417,17 +359,10 @@ class CoverManager:
             cover_url = f"{settings.MEDIA_URL}{relative_path}"
 
             # Get or create manual source
-            manual_source, _ = DataSource.objects.get_or_create(
-                name=DataSource.MANUAL,
-                defaults={'trust_level': 0.9}
-            )
+            manual_source, _ = DataSource.objects.get_or_create(name=DataSource.MANUAL, defaults={"trust_level": 0.9})
 
             # Check if this exact cover already exists
-            existing_cover = BookCover.objects.filter(
-                book=book,
-                cover_path=cover_url,
-                source=manual_source
-            ).first()
+            existing_cover = BookCover.objects.filter(book=book, cover_path=cover_url, source=manual_source).first()
 
             if existing_cover:
                 # Update existing cover
@@ -439,30 +374,14 @@ class CoverManager:
                 cover_entry = existing_cover
             else:
                 # Create new cover entry
-                cover_entry = BookCover.objects.create(
-                    book=book,
-                    cover_path=cover_url,
-                    source=manual_source,
-                    confidence=1.0,
-                    format=file_ext,
-                    is_active=True
-                )
+                cover_entry = BookCover.objects.create(book=book, cover_path=cover_url, source=manual_source, confidence=1.0, format=file_ext, is_active=True)
                 logger.debug(f"Created new cover: {cover_entry}")
 
-            return {
-                'success': True,
-                'cover_path': cover_url,
-                'cover_id': cover_entry.id,
-                'filename': filename,
-                'full_path': full_path
-            }
+            return {"success": True, "cover_path": cover_url, "cover_id": cover_entry.id, "filename": filename, "full_path": full_path}
 
         except Exception as e:
             logger.error(f"Error uploading cover for book {book.id}: {e}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
+            return {"success": False, "error": str(e)}
 
     @staticmethod
     def manage_cover_action(request, book_id):
@@ -475,10 +394,7 @@ class CoverManager:
             source_name = data.get("source")
 
             if not cover_path or not source_name:
-                return JsonResponse({
-                    "success": False,
-                    "message": "Missing cover_path or source"
-                }, status=400)
+                return JsonResponse({"success": False, "message": "Missing cover_path or source"}, status=400)
 
             normalized_source = source_name.strip().lower()
 
@@ -501,18 +417,17 @@ class CoverManager:
     def _handle_original_cover(book, action):
         """Handle actions on original cover."""
         if action == "select":
-            cover_path = book.primary_file.cover_path if book.primary_file else ''
+            cover_path = book.primary_file.cover_path if book.primary_file else ""
+
+            # Update final metadata to use original cover
             book.finalmetadata.final_cover_path = cover_path
             book.finalmetadata.final_cover_confidence = 0.96
             book.finalmetadata.save()
-            return JsonResponse({
-                "success": True,
-                "message": "Original cover selected",
-                "cover_path": cover_path
-            })
+
+            return JsonResponse({"success": True, "message": "Original cover selected", "cover_path": cover_path})
         elif action == "remove":
             # Check if original cover is currently selected as final cover
-            cover_path = book.primary_file.cover_path if book.primary_file else ''
+            cover_path = book.primary_file.cover_path if book.primary_file else ""
             was_final_cover = book.finalmetadata.final_cover_path == cover_path
 
             if was_final_cover:
@@ -520,16 +435,11 @@ class CoverManager:
                 book.finalmetadata.update_final_cover()
                 book.finalmetadata.save()
 
-                return JsonResponse({
-                    "success": True,
-                    "message": "Original cover removed from selection, switched to next best cover",
-                    "new_cover_path": book.finalmetadata.final_cover_path
-                })
+                return JsonResponse(
+                    {"success": True, "message": "Original cover removed from selection, switched to next best cover", "new_cover_path": book.finalmetadata.final_cover_path}
+                )
             else:
-                return JsonResponse({
-                    "success": False,
-                    "message": "Original cover is not currently selected"
-                }, status=400)
+                return JsonResponse({"success": False, "message": "Original cover is not currently selected"}, status=400)
 
         return JsonResponse({"success": False, "message": "Invalid action for original cover"}, status=400)
 
@@ -560,25 +470,17 @@ class CoverManager:
                 book.finalmetadata.save()
                 logger.debug(f"Removed final cover, updated to next best: {book.finalmetadata.final_cover_path}")
 
-                return JsonResponse({
-                    "success": True,
-                    "message": "Cover deactivated, switched to next best cover",
-                    "new_cover_path": book.finalmetadata.final_cover_path
-                })
+                return JsonResponse({"success": True, "message": "Cover deactivated, switched to next best cover", "new_cover_path": book.finalmetadata.final_cover_path})
 
             return JsonResponse({"success": True, "message": "Cover deactivated"})
 
         elif action == "select":
+            # Update final metadata to use this cover
             book.finalmetadata.final_cover_path = cover.cover_path
             book.finalmetadata.final_cover_confidence = cover.confidence
             book.finalmetadata.save()
-            cover.is_active = True
-            cover.save()
-            return JsonResponse({
-                "success": True,
-                "message": "Cover selected",
-                "cover_path": cover.cover_path
-            })
+
+            return JsonResponse({"success": True, "message": "Cover selected", "cover_path": cover.cover_path})
 
         return JsonResponse({"success": False, "message": "Invalid action"}, status=400)
 
@@ -590,37 +492,27 @@ class GenreManager:
     def handle_genre_updates(request, book, form):
         """Handle genre selection and manual genre additions - IMPROVED VERSION."""
         try:
-            selected_genres = request.POST.getlist('final_genres')
-            manual_genres = request.POST.get('manual_genres', '').strip()
+            selected_genres = request.POST.getlist("final_genres")
+            manual_genres = request.POST.get("manual_genres", "").strip()
 
             # Process manual genres - add them to selected list
             if manual_genres:
-                manual_genre_list = [g.strip() for g in manual_genres.split(',') if g.strip()]
+                manual_genre_list = [g.strip() for g in manual_genres.split(",") if g.strip()]
                 selected_genres.extend(manual_genre_list)
                 logger.debug(f"Manual genres added: {manual_genre_list}")
 
             # Get manual source
-            manual_source, _ = DataSource.objects.get_or_create(
-                name=DataSource.MANUAL,
-                defaults={'trust_level': 1.0}
-            )
+            manual_source, _ = DataSource.objects.get_or_create(name=DataSource.MANUAL, defaults={"trust_level": 1.0})
 
             # Get all currently active genres for this book to compare
-            current_active_genres = set(
-                BookGenre.objects.filter(book=book, is_active=True)
-                                 .values_list('genre__name', flat=True)
-            )
+            current_active_genres = set(BookGenre.objects.filter(book=book, is_active=True).values_list("genre__name", flat=True))
 
             selected_genre_names = set(selected_genres)
 
             # Deactivate genres that are no longer selected
             genres_to_deactivate = current_active_genres - selected_genre_names
             if genres_to_deactivate:
-                deactivated_count = BookGenre.objects.filter(
-                    book=book,
-                    genre__name__in=genres_to_deactivate,
-                    is_active=True
-                ).update(is_active=False)
+                deactivated_count = BookGenre.objects.filter(book=book, genre__name__in=genres_to_deactivate, is_active=True).update(is_active=False)
                 logger.debug(f"Deactivated {deactivated_count} genres: {list(genres_to_deactivate)}")
 
             # Process each selected genre using the new create_or_update_best method
@@ -631,13 +523,7 @@ class GenreManager:
                     logger.debug(f"Created new genre: {genre_name}")
 
                 # Use the new method to handle potential duplicates intelligently
-                book_genre = BookGenre.create_or_update_best(
-                    book=book,
-                    genre=genre,
-                    source=manual_source,
-                    confidence=1.0,
-                    is_active=True
-                )
+                book_genre = BookGenre.create_or_update_best(book=book, genre=genre, source=manual_source, confidence=1.0, is_active=True)
 
                 if book_genre:
                     logger.debug(f"Processed BookGenre relationship: {genre_name}")
@@ -656,34 +542,34 @@ class MetadataResetter:
     def reset_to_best_values(book, final_metadata):
         """Reset final metadata to most confident available values."""
         # Reset title
-        best_title = book.titles.filter(is_active=True).order_by('-confidence').first()
+        best_title = book.titles.filter(is_active=True).order_by("-confidence").first()
         if best_title:
             final_metadata.final_title = best_title.title
 
         # Reset author
-        best_author = book.author_relationships.filter(is_active=True).order_by('-confidence', '-is_main_author').first()
+        best_author = book.author_relationships.filter(is_active=True).order_by("-confidence", "-is_main_author").first()
         if best_author:
             final_metadata.final_author = best_author.author.name
 
         # Reset series
-        best_series = book.series_relationships.filter(is_active=True).order_by('-confidence').first()
+        best_series = book.series_relationships.filter(is_active=True).order_by("-confidence").first()
         if best_series:
             final_metadata.final_series = best_series.series.name
-            final_metadata.final_series_number = str(best_series.series_number) if best_series.series_number else ''
+            final_metadata.final_series_number = str(best_series.series_number) if best_series.series_number else ""
 
         # Reset publisher
-        best_publisher = book.publisher_relationships.filter(is_active=True).order_by('-confidence').first()
+        best_publisher = book.publisher_relationships.filter(is_active=True).order_by("-confidence").first()
         if best_publisher:
             final_metadata.final_publisher = best_publisher.publisher.name
 
         # Reset additional metadata fields
-        for field_name in ['isbn', 'language', 'publication_year', 'description']:
-            best_meta = book.metadata.filter(field_name=field_name, is_active=True).order_by('-confidence').first()
+        for field_name in ["isbn", "language", "publication_year", "description"]:
+            best_meta = book.metadata.filter(field_name=field_name, is_active=True).order_by("-confidence").first()
             if best_meta:
                 setattr(final_metadata, field_name, best_meta.field_value)
 
         # Reset cover
-        best_cover = book.covers.filter(is_active=True).order_by('-confidence', '-is_high_resolution').first()
+        best_cover = book.covers.filter(is_active=True).order_by("-confidence", "-is_high_resolution").first()
         if best_cover:
             final_metadata.final_cover_path = best_cover.cover_path
         elif book.primary_file and book.primary_file.cover_path:
@@ -702,22 +588,19 @@ class BookStatusManager:
             book = get_object_or_404(Book, id=book_id)
             final_metadata = getattr(book, "finalmetadata", None)
 
-            if 'is_reviewed' in request.POST and final_metadata:
-                final_metadata.is_reviewed = request.POST.get('is_reviewed') == 'true'
+            if "is_reviewed" in request.POST and final_metadata:
+                final_metadata.is_reviewed = request.POST.get("is_reviewed") == "true"
                 final_metadata.save()
 
-            if 'is_duplicate' in request.POST:
-                book.is_duplicate = request.POST.get('is_duplicate') == 'true'
+            if "is_duplicate" in request.POST:
+                book.is_duplicate = request.POST.get("is_duplicate") == "true"
                 book.save()
 
-            return JsonResponse({
-                'success': True,
-                'message': 'Book status updated successfully'
-            })
+            return JsonResponse({"success": True, "message": "Book status updated successfully"})
 
         except Exception as e:
             logger.error(f"Error updating book status for {book_id}: {e}")
-            return JsonResponse({'success': False, 'error': str(e)})
+            return JsonResponse({"success": False, "error": str(e)})
 
 
 class MetadataConflictAnalyzer:
@@ -730,83 +613,66 @@ class MetadataConflictAnalyzer:
             book = get_object_or_404(Book, id=book_id)
 
             conflicts = {
-                'titles': MetadataConflictAnalyzer._get_title_conflicts(book),
-                'authors': MetadataConflictAnalyzer._get_author_conflicts(book),
-                'series': MetadataConflictAnalyzer._get_series_conflicts(book),
-                'genres': MetadataConflictAnalyzer._get_genre_conflicts(book)
+                "titles": MetadataConflictAnalyzer._get_title_conflicts(book),
+                "authors": MetadataConflictAnalyzer._get_author_conflicts(book),
+                "series": MetadataConflictAnalyzer._get_series_conflicts(book),
+                "genres": MetadataConflictAnalyzer._get_genre_conflicts(book),
             }
 
-            return JsonResponse({'success': True, 'conflicts': conflicts})
+            return JsonResponse({"success": True, "conflicts": conflicts})
 
         except Exception as e:
             logger.error(f"Error getting conflicts for book {book_id}: {e}")
-            return JsonResponse({'success': False, 'error': str(e)})
+            return JsonResponse({"success": False, "error": str(e)})
 
     @staticmethod
     def _get_title_conflicts(book):
         """Get title conflicts."""
         conflicts = []
-        titles = book.titles.filter(is_active=True).order_by('-confidence')
+        titles = book.titles.filter(is_active=True).order_by("-confidence")
         if titles.count() > 1:
             for title in titles:
-                conflicts.append({
-                    'value': title.title,
-                    'source': getattr(title.source, 'name', str(title.source)),
-                    'confidence': title.confidence
-                })
+                conflicts.append({"value": title.title, "source": getattr(title.source, "name", str(title.source)), "confidence": title.confidence})
         return conflicts
 
     @staticmethod
     def _get_author_conflicts(book):
         """Get author conflicts."""
         conflicts = []
-        authors = book.author_relationships.filter(is_active=True).order_by('-confidence')
+        authors = book.author_relationships.filter(is_active=True).order_by("-confidence")
         if authors.count() > 1:
             for author in authors:
-                conflicts.append({
-                    'value': author.author.name,
-                    'source': getattr(author.source, 'name', str(author.source)),
-                    'confidence': author.confidence,
-                    'is_main': author.is_main_author
-                })
+                conflicts.append(
+                    {"value": author.author.name, "source": getattr(author.source, "name", str(author.source)), "confidence": author.confidence, "is_main": author.is_main_author}
+                )
         return conflicts
 
     @staticmethod
     def _get_series_conflicts(book):
         """Get series conflicts."""
         conflicts = []
-        series = book.series_relationships.filter(is_active=True).order_by('-confidence')
+        series = book.series_relationships.filter(is_active=True).order_by("-confidence")
         if series.count() > 1:
             for s in series:
                 value = f"{s.series.name} #{s.series_number}" if s.series_number else s.series.name
-                conflicts.append({
-                    'value': value,
-                    'source': getattr(s.source, 'name', str(s.source)),
-                    'confidence': s.confidence
-                })
+                conflicts.append({"value": value, "source": getattr(s.source, "name", str(s.source)), "confidence": s.confidence})
         return conflicts
 
     @staticmethod
     def _get_genre_conflicts(book):
         """Get genre conflicts."""
         conflicts = []
-        genres = book.genre_relationships.filter(is_active=True).order_by('-confidence')
+        genres = book.genre_relationships.filter(is_active=True).order_by("-confidence")
         unique_genres = {}
 
         for genre in genres:
             if genre.genre.name not in unique_genres:
                 unique_genres[genre.genre.name] = []
-            unique_genres[genre.genre.name].append({
-                'source': getattr(genre.source, 'name', str(genre.source)),
-                'confidence': genre.confidence
-            })
+            unique_genres[genre.genre.name].append({"source": getattr(genre.source, "name", str(genre.source)), "confidence": genre.confidence})
 
         for genre_name, sources in unique_genres.items():
             if len(sources) > 1:
-                conflicts.append({
-                    'value': genre_name,
-                    'sources': sources
-                })
+                conflicts.append({"value": genre_name, "sources": sources})
         return conflicts
 
 
@@ -814,13 +680,13 @@ class MetadataRemover:
     """Handles removal of metadata entries."""
 
     MODEL_MAP = {
-        'title': BookTitle,
-        'author': BookAuthor,
-        'cover': BookCover,
-        'series': BookSeries,
-        'publisher': BookPublisher,
-        'metadata': BookMetadata,
-        'genre': BookGenre,
+        "title": BookTitle,
+        "author": BookAuthor,
+        "cover": BookCover,
+        "series": BookSeries,
+        "publisher": BookPublisher,
+        "metadata": BookMetadata,
+        "genre": BookGenre,
     }
 
     @staticmethod
@@ -828,31 +694,34 @@ class MetadataRemover:
         """Remove metadata entry via AJAX."""
         try:
             payload = json.loads(request.body)
-            metadata_type = payload.get('type')
-            metadata_id = payload.get('id')
+            metadata_type = payload.get("type")
+            metadata_id = payload.get("id")
 
             if not metadata_type or not metadata_id:
-                return JsonResponse({'error': 'Missing type or ID'}, status=400)
+                return JsonResponse({"error": "Missing type or ID"}, status=400)
 
             model = MetadataRemover.MODEL_MAP.get(metadata_type)
             if not model:
-                return JsonResponse({'error': 'Invalid metadata type'}, status=400)
+                return JsonResponse({"error": "Invalid metadata type"}, status=400)
 
-            book = Book.objects.get(pk=book_id)
-            instance = model.objects.get(pk=metadata_id, book=book)
+            try:
+                book = Book.objects.get(pk=book_id)
+            except Book.DoesNotExist:
+                return JsonResponse({"error": "Book not found"}, status=404)
+
+            try:
+                instance = model.objects.get(pk=metadata_id, book=book)
+            except model.DoesNotExist:
+                return JsonResponse({"error": f"{metadata_type} metadata not found"}, status=404)
 
             if not instance.is_active:
-                return JsonResponse({'error': 'Metadata already inactive'}, status=400)
+                return JsonResponse({"error": "Metadata already inactive"}, status=400)
 
             instance.is_active = False
             instance.save()
 
-            return JsonResponse({'status': 'success', 'message': 'Metadata removed'})
+            return JsonResponse({"status": "success", "message": "Metadata removed"})
 
-        except Book.DoesNotExist:
-            return JsonResponse({'error': 'Book not found'}, status=404)
-        except model.DoesNotExist:
-            return JsonResponse({'error': f'{metadata_type} metadata not found'}, status=404)
         except Exception as e:
             logger.error(f"Error removing metadata for book {book_id}: {e}")
-            return JsonResponse({'error': str(e)}, status=500)
+            return JsonResponse({"error": str(e)}, status=500)

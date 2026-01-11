@@ -27,37 +27,189 @@
     <form method="post" action="{% url 'books:book_metadata_update' book.id %}" enctype="multipart/form-data" class="mb-3">
         {% csrf_token %}
 
-        <!-- File Info Section -->
+        <!-- Metadata Overview Section -->
         <div class="card mb-4 shadow-sm">
             <div class="card-header bg-light">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-folder-open text-info me-2"></i>
-                    File Information
+                    <i class="fas fa-info-circle text-info me-2"></i>
+                    Book Overview
                 </h5>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
+                        <!-- Title -->
+                        {% if book.finalmetadata.final_title %}
                         <div class="mb-2">
-                            <strong class="text-muted">Filename:</strong>
-                            <span class="ms-2 font-monospace">{{ book.filename }}</span>
+                            <i class="fas fa-heading me-2 text-muted"></i>
+                            <strong>Title:</strong>
+                            {{ book.finalmetadata.final_title }}
                         </div>
+                        {% endif %}
+                        
+                        <!-- Author -->
+                        {% if book.finalmetadata.final_author %}
                         <div class="mb-2">
-                            <strong class="text-muted">File Size:</strong>
-                            <span class="ms-2 badge bg-secondary">{{ book.file_size|filesizeformat }}</span>
+                            <i class="fas fa-user me-2 text-muted"></i>
+                            <strong>Author:</strong>
+                            {{ book.finalmetadata.final_author }}
                         </div>
+                        {% endif %}
+                        
+                        <!-- Publisher -->
+                        {% if book.finalmetadata.final_publisher %}
+                        <div class="mb-2">
+                            <i class="fas fa-building me-2 text-muted"></i>
+                            <strong>Publisher:</strong>
+                            {{ book.finalmetadata.final_publisher }}
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Year -->
+                        {% if book.finalmetadata.publication_year %}
+                        <div class="mb-2">
+                            <i class="fas fa-calendar me-2 text-muted"></i>
+                            <strong>Year:</strong>
+                            {{ book.finalmetadata.publication_year }}
+                        </div>
+                        {% endif %}
+                        
+                        <!-- ISBN -->
+                        {% if book.finalmetadata.isbn %}
+                        <div class="mb-2">
+                            <i class="fas fa-barcode me-2 text-muted"></i>
+                            <strong>ISBN:</strong>
+                            <code class="small">{{ book.finalmetadata.isbn }}</code>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Series -->
+                        {% if book.finalmetadata.final_series %}
+                        <div class="mb-2">
+                            <i class="fas fa-list-ol me-2 text-muted"></i>
+                            <strong>Series:</strong>
+                            {{ book.finalmetadata.final_series }}
+                            {% if book.finalmetadata.final_series_number %}
+                            <i class="fas fa-hashtag ms-2 me-1 text-muted"></i>{{ book.finalmetadata.final_series_number }}
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Genres -->
+                        {% if book.genre_relationships.all %}
+                        <div class="mb-2">
+                            <i class="fas fa-tags me-2 text-muted"></i>
+                            <strong>Genres:</strong>
+                            {% for genre_rel in book.genre_relationships.all|slice:":5" %}
+                                <span class="badge bg-info text-dark me-1">{{ genre_rel.genre.name }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                     </div>
+                    
                     <div class="col-md-6">
+                        <!-- Content Type -->
                         <div class="mb-2">
-                            <strong class="text-muted">Scan Folder:</strong>
-                            <span class="ms-2 badge bg-primary">{{ book.scan_folder.name }}</span>
+                            <i class="fas fa-book me-2 text-muted"></i>
+                            <strong>Type:</strong>
+                            <span class="badge bg-primary">eBook</span>
+                        </div>
+                        
+                        <!-- Review Status -->
+                        <div class="mb-2">
+                            <i class="fas fa-flag me-2 text-muted"></i>
+                            <strong>Review Status:</strong>
+                            <span class="badge bg-{{ book.finalmetadata.is_reviewed|yesno:'success,warning' }}">
+                                {{ book.finalmetadata.is_reviewed|yesno:'Reviewed,Needs Review' }}
+                            </span>
+                        </div>
+                        
+                        <!-- Reading Status -->
+                        <div class="mb-2">
+                            <i class="fas fa-book-reader me-2 text-muted"></i>
+                            <strong>Reading Status:</strong>
+                            {% if book.is_read %}
+                                <span class="badge bg-success">Read</span>
+                            {% elif book.reading_progress > 0 %}
+                                <span class="badge bg-warning">Reading ({{ book.reading_progress }}%)</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Unread</span>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- File Information -->
+                        <div class="mb-3 mt-3">
+                            <div class="border-top pt-3">
+                                <h6 class="mb-2">
+                                    <i class="fas fa-folder-open me-2 text-muted"></i>
+                                    File Information
+                                </h6>
+                                <div class="mb-2">
+                                    <i class="fas fa-file me-2 text-muted"></i>
+                                    <strong>Filename:</strong>
+                                    <code class="small">{{ book.filename }}</code>
+                                </div>
+                                <div class="mb-2">
+                                    <span class="badge {{ book.file_format|format_color }} ms-2">{{ book.file_format|upper|default:"Unknown" }}</span>
+                                    <span class="badge bg-secondary ms-1">{{ book.file_size|filesizeformat }}</span>
+                                    {% if book.finalmetadata.language %}
+                                    <span class="badge bg-secondary ms-1">{{ book.finalmetadata.language|language_name }}</span>
+                                    {% endif %}
+                                </div>
+                                {% if book.scan_folder %}
+                                <div class="mb-2">
+                                    <i class="fas fa-hdd me-2 text-muted"></i>
+                                    <strong>Scan Folder:</strong>
+                                    <a href="{% url 'books:edit_scan_folder' book.scan_folder.id %}" class="text-decoration-none">{{ book.scan_folder.name }}</a>
+                                </div>
+                                {% endif %}
+                                <div class="mb-2">
+                                    <i class="fas fa-folder me-2 text-muted"></i>
+                                    <strong>Path:</strong>
+                                    <code class="small text-muted">{{ book.file_path }}</code>
+                                </div>
+                                {% if book.last_scanned %}
+                                <div class="mb-2">
+                                    <i class="fas fa-clock me-2 text-muted"></i>
+                                    <strong>Last Scanned:</strong>
+                                    {{ book.last_scanned|date:"M d, Y" }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Quality Metrics -->
+                        <div class="mb-2">
+                            <strong>Confidence:</strong>
+                            <span class="badge {% if book.finalmetadata.overall_confidence >= 0.8 %}bg-success{% elif book.finalmetadata.overall_confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
+                                {{ book.finalmetadata.overall_confidence|mul:100|floatformat:0 }}%
+                            </span>
                         </div>
                         <div class="mb-2">
-                            <strong class="text-muted">Path:</strong>
-                            <small class="ms-2 text-muted font-monospace">{{ book.file_path }}</small>
+                            <strong>Completeness:</strong>
+                            <span class="badge {% if book.finalmetadata.completeness_score >= 0.8 %}bg-success{% elif book.finalmetadata.completeness_score >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
+                                {{ book.finalmetadata.completeness_score|mul:100|floatformat:0 }}%
+                            </span>
                         </div>
                     </div>
                 </div>
+                
+                <!-- Description -->
+                {% if book.finalmetadata.description %}
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div class="border-top pt-3">
+                            <div class="mb-2">
+                                <i class="fas fa-align-left me-2 text-muted"></i>
+                                <strong>Description:</strong>
+                            </div>
+                            <div class="text-muted">
+                                {{ book.finalmetadata.description|truncatewords:100 }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
 
@@ -159,7 +311,7 @@
                                 </div>
                             </div>
                             <!-- Progress bar for upload -->
-                            <div class="progress d-hidden" id="uploadProgress">
+                            <div class="progress d-none" id="uploadProgress">
                                 <div class="progress-bar progress-bar-striped progress-bar-animated progress-bar-width-0" 
                                      role="progressbar" aria-label="Cover upload progress" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                             </div>
@@ -190,7 +342,9 @@
                     <label class="form-check-label d-flex justify-content-between align-items-start" for="title_{{ forloop.counter }}">
                         <span class="fw-bold">{{ title.title }}</span>
                         <div>
-                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ title.source.name }}">{{ title.source.name }}</span>
+                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ title.source.name }}">
+                                <i class="fas {{ title.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ title.source.name }}
+                            </span>
                             
                             <span class="badge 
                                 {% if title.confidence >= 0.8 %}bg-success{% elif title.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
@@ -240,7 +394,9 @@
                     <label class="form-check-label d-flex justify-content-between align-items-start" for="author_{{ forloop.counter }}">
                         <span class="fw-bold">{{ author.author.name }}</span>
                         <div>
-                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ author.source.name }}">{{ author.source.name }}</span>
+                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ author.source.name }}">
+                                <i class="fas {{ author.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ author.source.name }}
+                            </span>
                             
                             <span class="badge 
                                 {% if author.confidence >= 0.8 %}bg-success{% elif author.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
@@ -303,7 +459,9 @@
                             {{ s.series.name }}{% if s.series_number %} (#{{ s.series_number }}){% endif %}
                         </span>
                         <div>
-                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ s.source.name }}">{{ s.source.name }}</span>
+                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ s.source.name }}">
+                                <i class="fas {{ s.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ s.source.name }}
+                            </span>
                             
                             <span class="badge 
                                 {% if s.confidence >= 0.8 %}bg-success{% elif s.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
@@ -380,7 +538,9 @@
                     <label class="form-check-label d-flex justify-content-between align-items-start" for="series_num_{{ forloop.counter }}">
                         <span class="fw-bold">{{ meta.field_value }}</span>
                         <div>
-                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ meta.source.name }}">{{ meta.source.name }}</span>
+                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ meta.source.name }}">
+                                <i class="fas {{ meta.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ meta.source.name }}
+                            </span>
                             
                             <span class="badge 
                                 {% if meta.confidence >= 0.8 %}bg-success{% elif meta.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
@@ -438,7 +598,9 @@
                     <label class="form-check-label d-flex justify-content-between align-items-start" for="genre_{{ forloop.counter }}">
                         <span class="fw-bold">{{ genre.genre.name }}</span>
                         <div>
-                            <span class="badge bg-light text-dark me-1" aria-label="Source: {{ genre.source.name }}">{{ genre.source.name }}</span>
+                            <span class="badge bg-light text-dark me-1" aria-label="Source: {{ genre.source.name }}">
+                                <i class="fas {{ genre.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ genre.source.name }}
+                            </span>
                             
                             <span class="badge 
                                 {% if genre.confidence >= 0.8 %}bg-success{% elif genre.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
@@ -480,7 +642,9 @@
                     <label class="form-check-label" for="desc_{{ forloop.counter }}">
                         <div class="d-flex justify-content-between align-items-start mb-2">
                             <div>
-                                <span class="badge bg-light text-dark me-2" aria-label="Source: {{ meta.source.name }}">{{ meta.source.name }}</span>
+                                <span class="badge bg-light text-dark me-2" aria-label="Source: {{ meta.source.name }}">
+                                    <i class="fas {{ meta.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ meta.source.name }}
+                                </span>
                                 
                                 <span class="badge 
                                     {% if meta.confidence >= 0.8 %}bg-success{% elif meta.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
@@ -598,7 +762,9 @@
                             </div>
                         </div>
                         <div>
-                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ meta.source.name }}">{{ meta.source.name }}</span>
+                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ meta.source.name }}">
+                                <i class="fas {{ meta.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ meta.source.name }}
+                            </span>
                             
                             <span class="badge 
                                 {% if meta.confidence >= 0.8 %}bg-success{% elif meta.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
@@ -656,7 +822,9 @@
                     <label class="form-check-label d-flex justify-content-between align-items-start" for="publisher_{{ forloop.counter }}">
                         <span class="fw-bold">{{ pub.publisher.name }}</span>
                         <div>
-                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ pub.source.name }}">{{ pub.source.name }}</span>
+                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ pub.source.name }}">
+                                <i class="fas {{ pub.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ pub.source.name }}
+                            </span>
                             
                             <span class="badge 
                                 {% if pub.confidence >= 0.8 %}bg-success{% elif pub.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
@@ -714,7 +882,9 @@
                     <label class="form-check-label d-flex justify-content-between align-items-start" for="year_{{ forloop.counter }}">
                         <span class="fw-bold">{{ meta.field_value }}</span>
                         <div>
-                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ meta.source.name }}">{{ meta.source.name }}</span>
+                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ meta.source.name }}">
+                                <i class="fas {{ meta.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ meta.source.name }}
+                            </span>
                             
                             <span class="badge 
                                 {% if meta.confidence >= 0.8 %}bg-success{% elif meta.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
@@ -770,9 +940,11 @@
                            aria-describedby="lang_{{ forloop.counter }}_desc"
                            {% if lang.field_value == book.finalmetadata.language %}checked{% endif %}>
                     <label class="form-check-label d-flex justify-content-between align-items-start" for="lang_{{ forloop.counter }}">
-                        <span class="fw-bold">{{ lang.field_value }}</span>
+                        <span class="fw-bold">{{ lang.field_value|language_name }}</span>
                         <div>  
-                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ lang.source.name }}">{{ lang.source.name }}</span>
+                            <span class="badge bg-light text-dark me-2" aria-label="Source: {{ lang.source.name }}">
+                                <i class="fas {{ lang.source.name|source_icon }} me-1" aria-hidden="true"></i>{{ lang.source.name }}
+                            </span>
                             
                             <span class="badge 
                                 {% if lang.confidence >= 0.8 %}bg-success{% elif lang.confidence >= 0.5 %}bg-warning text-dark{% else %}bg-danger{% endif %}"
@@ -916,8 +1088,8 @@
                     Next Book<i class="fas fa-chevron-right ms-1"></i>
                 </a>
                 {% endif %}
-                {% if next_needs_review_id %}
-                <a href="{% url 'books:book_metadata' next_needs_review_id %}" class="btn btn-outline-warning">
+                {% if False %}
+                <a href="#" class="btn btn-outline-warning">
                     <i class="fas fa-exclamation-triangle me-1"></i>Next Unreviewed
                 </a>
                 {% endif %}

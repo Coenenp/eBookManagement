@@ -52,17 +52,26 @@
     </div>
 </nav>
 
-<!-- Main Navigation Tabs -->
+<!-- Main Navigation Pills -->
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
     <div class="container">
         <div class="collapse navbar-collapse justify-content-center" id="mainNavTabs">
-            <ul class="nav nav-tabs nav-tabs-enhanced border-0 flex-wrap">
+            <ul class="nav nav-pills nav-pills-enhanced border-0 flex-wrap">
                 <!-- Dashboard Tab -->
                 <li class="nav-item">
                     <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" 
                        href="{% url 'books:dashboard' %}">
                         <i class="fas fa-tachometer-alt me-2"></i>
                         <span class="d-none d-md-inline">Dashboard</span>
+                    </a>
+                </li>
+
+                <!-- Full Library Tab -->
+                <li class="nav-item">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'book_list' %}active{% endif %}" 
+                       href="{% url 'books:book_list' %}">
+                        <i class="fas fa-swatchbook me-2"></i>
+                        <span class="d-none d-md-inline">Library</span>
                     </a>
                 </li>
 

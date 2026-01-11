@@ -10,6 +10,7 @@ from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
+from django.db.models import Prefetch
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.generic import DetailView, ListView, TemplateView
@@ -18,7 +19,7 @@ from books.book_utils import CoverManager, GenreManager, MetadataProcessor, Meta
 from books.constants import PAGINATION
 from books.forms import MetadataReviewForm, UserRegisterForm
 from books.mixins import BookListContextMixin, BookNavigationMixin, MetadataContextMixin
-from books.models import Book, FinalMetadata
+from books.models import Book, BookFile, FinalMetadata, ScanFolder
 from books.queries.book_queries import build_book_queryset
 from books.services.common import CoverService, DashboardService
 from books.views.wizard import WizardRequiredMixin
@@ -270,16 +271,72 @@ class BookListView(LoginRequiredMixin, ListView, BookListContextMixin):
     paginate_by = PAGINATION["book_library"]
 
     def get_queryset(self):
-        return build_book_queryset(self.request.GET)
+        qs = build_book_queryset(self.request.GET)
+        # Store the base queryset for counting before pagination
+        self._base_queryset = qs
+        # Return full queryset - pagination will handle limiting per page
+        return qs
+
+    def get_optimized_counts(self):
+        """Get counts efficiently from the filtered queryset instead of entire database"""
+        # Use the base queryset before slicing for accurate counts
+        qs = getattr(self, "_base_queryset", Book.objects.all())
+
+        # Get review counts using single query with conditional aggregation
+        from django.db.models import Avg, Count, Q
+
+        aggregates = qs.aggregate(
+            needs_review=Count("id", filter=Q(finalmetadata__is_reviewed__in=[False, None])),
+            low_confidence=Count("id", filter=Q(finalmetadata__overall_confidence__lt=0.7)),
+            incomplete=Count("id", filter=Q(finalmetadata__completeness_score__lt=0.8)),
+            missing_cover=Count("id", filter=Q(finalmetadata__final_cover_path__isnull=True) | Q(finalmetadata__final_cover_path="")),
+            duplicates=Count("id", filter=Q(is_duplicate=True)),
+            placeholders=Count("id", filter=Q(is_placeholder=True)),
+            corrupted=Count("id", filter=Q(is_corrupted=True)),
+            avg_confidence=Avg("finalmetadata__overall_confidence"),
+            avg_completeness=Avg("finalmetadata__completeness_score"),
+        )
+
+        return {
+            "review_counts": {
+                "needs_review": aggregates["needs_review"] or 0,
+                "low_confidence": aggregates["low_confidence"] or 0,
+                "incomplete": aggregates["incomplete"] or 0,
+                "missing_cover": aggregates["missing_cover"] or 0,
+                "duplicates": aggregates["duplicates"] or 0,
+                "placeholders": aggregates["placeholders"] or 0,
+            },
+            "corrupted_count": aggregates["corrupted"] or 0,
+            "avg_confidence": round(aggregates["avg_confidence"] or 0, 2),
+            "avg_completeness": round(aggregates["avg_completeness"] or 0, 2),
+        }
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        # Add statistics
-        context.update(self.get_list_statistics_context())
+        # Get optimized counts from filtered queryset only
+        context.update(self.get_optimized_counts())
 
-        # Add filter data
-        context.update(self.get_filter_context())
+        # Get filter options (languages, formats, etc.) - use base queryset WITHOUT slicing
+        base_qs = getattr(self, "_base_queryset", Book.objects.all())
+
+        # Get unique languages - use values() with distinct to avoid duplicates
+        language_codes = list(FinalMetadata.objects.filter(book__in=base_qs.values_list("id", flat=True), language__isnull=False).values_list("language", flat=True).distinct())
+
+        # Get unique formats - need to go through BookFile
+        format_list = list(BookFile.objects.filter(book__in=base_qs.values_list("id", flat=True), file_format__isnull=False).values_list("file_format", flat=True).distinct())
+
+        # Get unique scan folders
+        scan_folder_ids = list(base_qs.exclude(scan_folder__isnull=True).values_list("scan_folder_id", flat=True).distinct())
+
+        context.update(
+            {
+                "languages": [(lang, lang.title()) for lang in language_codes if lang],  # (code, display name)
+                "formats": sorted([fmt.upper() for fmt in format_list if fmt]),
+                "scan_folders": list(ScanFolder.objects.filter(id__in=scan_folder_ids)),
+                "datasources": [],  # Skip datasources for now - complex query
+            }
+        )
 
         # Add request parameters
         context.update(
@@ -299,9 +356,10 @@ class BookListView(LoginRequiredMixin, ListView, BookListContextMixin):
             }
         )
 
-        # Process covers for books
+        # Process covers for books - simplified for list view (covers lazy loaded in template)
         books = context.get("object_list", [])
-        context["books_with_covers"] = CoverService.process_covers_for_book_list(books)
+        # Just wrap books in the expected format - no cover processing needed since skip_download=True
+        context["books_with_covers"] = [{"book": book} for book in books]
 
         # Clean up query params
         if "page" in context["query_params"]:
@@ -332,31 +390,31 @@ class BookDetailView(LoginRequiredMixin, DetailView, BookNavigationMixin, Metada
     context_object_name = "book"
 
     def get_object(self):
-        # Only prefetch what's immediately needed
-        return get_object_or_404(Book.objects.select_related("finalmetadata", "scan_folder"), pk=self.kwargs["pk"])
+        # Prefetch files to avoid N+1 queries
+        files_prefetch = Prefetch("files", queryset=BookFile.objects.order_by("id"), to_attr="prefetched_files")
+        return get_object_or_404(Book.objects.select_related("finalmetadata", "scan_folder").prefetch_related(files_prefetch), pk=self.kwargs["pk"])
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         book = self.object
 
-        if self.request.GET.get("tab") == "edit":
-            # Full prefetch only for edit mode
-            book = Book.objects.prefetch_related(
-                "titles__source",
-                "author_relationships__author",
-                "author_relationships__source",
-                "genre_relationships__genre",
-                "genre_relationships__source",
-                "series_relationships__series",
-                "series_relationships__source",
-                "publisher_relationships__publisher",
-                "publisher_relationships__source",
-                "metadata__source",
-                "covers__source",
-            ).get(pk=book.pk)
+        # Always prefetch metadata for dropdowns
+        book = Book.objects.prefetch_related(
+            "titles__source",
+            "author_relationships__author",
+            "author_relationships__source",
+            "genre_relationships__genre",
+            "genre_relationships__source",
+            "series_relationships__series",
+            "series_relationships__source",
+            "publisher_relationships__publisher",
+            "publisher_relationships__source",
+            "metadata__source",
+            "covers__source",
+        ).get(pk=book.pk)
 
-        # Get cover path from first file
-        first_file = book.files.first()
+        # Get cover path from first file (use prefetched to avoid query)
+        first_file = book.primary_file  # Uses prefetched_files from get_object
         cover_path = first_file.cover_path if first_file else ""
 
         # Get or create final metadata
@@ -381,6 +439,42 @@ class BookDetailView(LoginRequiredMixin, DetailView, BookNavigationMixin, Metada
 
         # Get metadata context using mixin
         context.update(self.get_metadata_context(book))
+        context.update(self.get_metadata_fields_context(book))
+
+        # Build metadata_by_field for dropdowns
+        metadata_by_field = {}
+        # Use prefetched metadata and filter/sort in Python to avoid extra queries
+        all_metadata = [m for m in book.metadata.all() if m.is_active]
+        all_metadata.sort(key=lambda m: (-m.confidence, m.field_name))
+
+        for meta in all_metadata:
+            field = meta.field_name
+            if field not in metadata_by_field:
+                metadata_by_field[field] = []
+
+            # Determine if this is the final selected value
+            is_final = False
+            if field == "publication_year":
+                is_final = str(meta.field_value) == str(final_metadata.publication_year)
+            elif field == "language":
+                is_final = meta.field_value == final_metadata.language
+            elif field == "isbn":
+                is_final = meta.field_value == final_metadata.isbn
+            elif field == "description":
+                is_final = meta.field_value == final_metadata.description
+
+            # Determine if this is the top choice (highest confidence among active)
+            is_top = len(metadata_by_field[field]) == 0  # First one is top (already sorted by confidence)
+
+            metadata_by_field[field].append(
+                {
+                    "instance": meta,
+                    "is_final_selected": is_final,
+                    "is_top_choice": is_top,
+                }
+            )
+
+        context["metadata_by_field"] = metadata_by_field
 
         # Create form for edit tab
         context["form"] = MetadataReviewForm(instance=final_metadata, book=book)
@@ -440,8 +534,8 @@ class BookDetailView(LoginRequiredMixin, DetailView, BookNavigationMixin, Metada
                     # Save final metadata
                     final_metadata.save()
 
-                    # Update final values to ensure latest data is selected
-                    final_metadata.sync_from_sources()
+                    # Don't sync from sources after manual updates - the form already set the correct values
+                    # Manual entries have confidence=1.0 and will be automatically selected if sync is needed later
 
                 messages.success(request, "Final metadata updated successfully!")
 

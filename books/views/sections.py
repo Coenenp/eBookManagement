@@ -101,6 +101,7 @@ def ebooks_ajax_list(request):
         book_file = book.files.first()
         file_format = book_file.file_format if book_file else "UNKNOWN"
         file_size = book_file.file_size if book_file else 0
+        file_path = book_file.file_path if book_file else ""
         cover_path = book_file.cover_path if book_file and book_file.cover_path else ""
 
         ebooks_data.append(
@@ -110,13 +111,18 @@ def ebooks_ajax_list(request):
                 "author": metadata.get("author", "Unknown Author"),
                 "author_display": metadata.get("author", "Unknown Author"),
                 "publisher": metadata.get("publisher", ""),
+                "language": metadata.get("language", "en"),
+                "publication_year": str(metadata.get("publication_date", ""))[:4] if metadata.get("publication_date") else "",
                 "file_format": file_format,
                 "file_size": file_size,
+                "file_path": file_path,
                 "file_size_display": f"{file_size // (1024*1024)} MB" if file_size else "Unknown",
                 "last_scanned": book.last_scanned.isoformat() if book.last_scanned else None,
+                "series": series_info.series.name if series_info and series_info.series else "",
                 "series_name": series_info.series.name if series_info and series_info.series else "",
                 "series_position": series_info.series_number if series_info else None,
                 "cover_url": cover_path,
+                "scan_folder": book.scan_folder.path if book.scan_folder else "",
                 # Add reading status from metadata
                 "is_read": metadata.get("is_read", False),
                 "reading_progress": metadata.get("reading_progress", 0),
@@ -130,11 +136,18 @@ def ebooks_ajax_list(request):
 @ajax_response_handler
 def ebooks_ajax_detail(request, book_id):
     """AJAX endpoint for ebook detail"""
-    Book = apps.get_model("books", "Book")
-    book = get_object_or_404(Book, id=book_id)
-    ebook_data = format_book_detail_for_json(book)
+    import logging
 
-    return {"success": True, "ebook": ebook_data}
+    logger = logging.getLogger(__name__)
+
+    try:
+        Book = apps.get_model("books", "Book")
+        book = get_object_or_404(Book.objects.select_related("scan_folder", "finalmetadata"), id=book_id)
+        ebook_data = format_book_detail_for_json(book)
+        return {"success": True, "ebook": ebook_data}
+    except Exception as e:
+        logger.error(f"Error in ebooks_ajax_detail for book_id {book_id}: {str(e)}", exc_info=True)
+        raise
 
 
 class SeriesMainView(LoginRequiredMixin, TemplateView):
@@ -404,7 +417,7 @@ def comics_ajax_list(request):
 def comics_ajax_detail(request, comic_id):
     """AJAX endpoint for comic book detail"""
     Book = apps.get_model("books", "Book")
-    book = get_object_or_404(Book, id=comic_id)
+    book = get_object_or_404(Book.objects.select_related("scan_folder", "finalmetadata"), id=comic_id)
     comic_detail = format_book_detail_for_json(book)
 
     return {"success": True, "comic": comic_detail, "version": "unified"}
@@ -576,7 +589,7 @@ def audiobooks_ajax_detail(request, book_id):
 
     # Fall back to Book model (legacy)
     Book = apps.get_model("books", "Book")
-    book = get_object_or_404(Book, id=book_id)
+    book = get_object_or_404(Book.objects.select_related("scan_folder", "finalmetadata"), id=book_id)
     audiobook_data = format_book_detail_for_json(book)
 
     return {"success": True, "id": book.id, "audiobook": audiobook_data, **audiobook_data}  # Include all data at top level for compatibility
@@ -749,7 +762,7 @@ def series_ajax_detail(request, series_name):
                 "id": book.id,
                 "title": title,
                 "author": author,
-                "cover_url": getattr(book, "cover_url", None),
+                "cover_url": get_book_cover_url(book),
                 "file_format": book.file_format or "",
                 "file_size": book.file_size or 0,
                 "is_read": getattr(book, "is_read", False),

@@ -3,6 +3,7 @@
 This module provides consolidated template tags for book cover display,
 metadata badges, and other book-related UI components.
 """
+
 # book_extras.py - Consolidated template tags for book display
 import logging
 import os
@@ -14,7 +15,7 @@ from django.conf import settings
 from books.utils.image_utils import encode_cover_to_base64
 
 register = template.Library()
-logger = logging.getLogger('books.scanner')
+logger = logging.getLogger("books.scanner")
 
 
 def download_and_cache_cover(cover_url, book_id):
@@ -23,7 +24,7 @@ def download_and_cache_cover(cover_url, book_id):
         logger.info(f"Starting download for cover URL: {cover_url}")
 
         # Create cache directory if it doesn't exist
-        cache_dir = os.path.join(settings.MEDIA_ROOT, 'cover_cache')
+        cache_dir = os.path.join(settings.MEDIA_ROOT, "cover_cache")
         os.makedirs(cache_dir, exist_ok=True)
         logger.info(f"Cache directory: {cache_dir}")
 
@@ -46,7 +47,7 @@ def download_and_cache_cover(cover_url, book_id):
         response.raise_for_status()
         logger.info(f"Download successful, content length: {len(response.content)}")
 
-        with open(cache_path, 'wb') as f:
+        with open(cache_path, "wb") as f:
             f.write(response.content)
         logger.info(f"Saved to cache: {cache_path}")
 
@@ -63,29 +64,37 @@ def download_and_cache_cover(cover_url, book_id):
 def _get_fallback_context(book, size, badge):
     """Return fallback context for template rendering errors"""
     return {
-        'book': book,
-        'cover_path': '',
-        'is_url': False,
-        'size': size,
-        'badge': badge,
-        'base64_image': None,
+        "book": book,
+        "cover_path": "",
+        "is_url": False,
+        "size": size,
+        "badge": badge,
+        "base64_image": None,
     }
 
 
-def _process_cover_for_display(cover_path, book, add_cache_busting=False):
+def _process_cover_for_display(cover_path, book, add_cache_busting=False, skip_download=False):
     """
     Helper function to process cover paths for display.
     Handles URL downloading, local file encoding, and returns processed data.
+
+    Args:
+        skip_download: If True, don't download URL covers (for list views with many books)
     """
     if not cover_path:
-        return '', False, None
+        return "", False, None
 
     is_url = str(cover_path).startswith(("http://", "https://"))
     base64_image = None
 
     if is_url:
+        # For list views, skip downloading to avoid blocking page load
+        if skip_download:
+            logger.debug(f"Skipping download for book {getattr(book, 'id', 'unknown')} (list view optimization)")
+            return cover_path, True, None  # Return URL as-is, will be lazy loaded by browser
+
         # Download and cache URL-based covers, convert to base64
-        book_id = getattr(book, 'id', 'unknown')
+        book_id = getattr(book, "id", "unknown")
         logger.info(f"Processing URL cover for book {book_id}: {cover_path}")
         base64_image = download_and_cache_cover(cover_path, book_id)
 
@@ -95,16 +104,17 @@ def _process_cover_for_display(cover_path, book, add_cache_busting=False):
         elif add_cache_busting:
             # Add cache busting parameter to force browser refresh
             logger.warning("Failed to download/cache cover, adding cache busting")
-            timestamp = book.finalmetadata.last_updated.timestamp() if hasattr(book, 'finalmetadata') and book.finalmetadata else ''
-            separator = "&" if '?' in cover_path else "?"
+            timestamp = book.finalmetadata.last_updated.timestamp() if hasattr(book, "finalmetadata") and book.finalmetadata else ""
+            separator = "&" if "?" in cover_path else "?"
             cover_path += f"{separator}t={timestamp}"
     else:
-        # Handle local file paths
+        # Handle local file paths - always encode to base64 for consistent display
         try:
             if os.path.exists(cover_path):
-                logger.info(f"Processing local file: {cover_path}")
+                logger.debug(f"Encoding local file to base64: {cover_path}")
                 base64_image = encode_cover_to_base64(cover_path)
-                logger.info(f"Local file base64 result length: {len(base64_image) if base64_image else 0}")
+                if base64_image:
+                    logger.debug(f"Successfully encoded to base64, length: {len(base64_image)}")
         except Exception as e:
             logger.error(f"Error encoding local file {cover_path}: {e}")
             base64_image = None
@@ -112,25 +122,23 @@ def _process_cover_for_display(cover_path, book, add_cache_busting=False):
     return cover_path, is_url, base64_image
 
 
-@register.inclusion_tag('books/partials/book_cover.html')
-def book_cover_from_metadata(cover, book, size='medium', badge=None):
+@register.inclusion_tag("books/partials/book_cover.html")
+def book_cover_from_metadata(cover, book, size="medium", badge=None):
     """Render book cover from metadata cover object, with URL downloading and caching"""
     try:
-        cover_path = getattr(cover, 'cover_path', '') or ''
+        cover_path = getattr(cover, "cover_path", "") or ""
         logger.info(f"book_cover_from_metadata called with cover_path: {cover_path}")
 
         # Process the cover using shared logic
-        cover_path, is_url, base64_image = _process_cover_for_display(
-            cover_path, book, add_cache_busting=True
-        )
+        cover_path, is_url, base64_image = _process_cover_for_display(cover_path, book, add_cache_busting=True)
 
         result = {
-            'book': book,
-            'cover_path': cover_path,
-            'is_url': is_url,
-            'size': size,
-            'badge': badge,
-            'base64_image': base64_image,
+            "book": book,
+            "cover_path": cover_path,
+            "is_url": is_url,
+            "size": size,
+            "badge": badge,
+            "base64_image": base64_image,
         }
         logger.info(f"Returning template context: is_url={is_url}, has_base64={bool(base64_image)}")
         return result
@@ -139,30 +147,40 @@ def book_cover_from_metadata(cover, book, size='medium', badge=None):
         return _get_fallback_context(book, size, badge)
 
 
-@register.inclusion_tag('books/partials/book_cover.html')
-def book_cover(book, size='medium', badge=None):
-    """Render book cover with lazy loading and error handling"""
+@register.inclusion_tag("books/partials/book_cover.html")
+def book_cover(book, size="medium", badge=None, skip_download=False):
+    """
+    Render book cover with lazy loading and error handling
+
+    Args:
+        skip_download: If True, don't download covers (for list views with many books)
+    """
     try:
         # Get cover path from different sources
-        cover_path = ''
+        cover_path = ""
         base64_image = None
 
         # Check if we have cover data from the view context first
-        if hasattr(book, '_cover_data'):
-            cover_path = book._cover_data.get('cover_path', '')
-            base64_image = book._cover_data.get('cover_base64')
+        if hasattr(book, "_cover_data"):
+            cover_path = book._cover_data.get("cover_path", "")
+            base64_image = book._cover_data.get("cover_base64")
         else:
             # Fallback to model data
-            if hasattr(book, 'finalmetadata') and book.finalmetadata:
-                cover_path = getattr(book.finalmetadata, 'final_cover_path', '') or ''
+            if hasattr(book, "finalmetadata") and book.finalmetadata:
+                cover_path = getattr(book.finalmetadata, "final_cover_path", "") or ""
             else:
-                cover_path = getattr(book, 'cover_path', '') or ''
+                cover_path = getattr(book, "cover_path", "") or ""
+
+            # If no cover from finalmetadata, try to get from first file
+            if not cover_path and hasattr(book, "prefetched_files") and book.prefetched_files:
+                first_file = book.prefetched_files[0]
+                cover_path = getattr(first_file, "cover_path", "") or ""
+            elif not cover_path and hasattr(book, "primary_file") and book.primary_file:
+                cover_path = getattr(book.primary_file, "cover_path", "") or ""
 
         # Only process if we don't already have base64 from context
         if not base64_image:
-            cover_path, is_url, base64_image = _process_cover_for_display(
-                cover_path, book, add_cache_busting=False
-            )
+            cover_path, is_url, base64_image = _process_cover_for_display(cover_path, book, add_cache_busting=False, skip_download=skip_download)
         else:
             # We have base64 from context, determine if original was URL
             is_url = str(cover_path).startswith(("http://", "https://"))
@@ -170,12 +188,12 @@ def book_cover(book, size='medium', badge=None):
                 is_url = False  # We have base64, don't need URL
 
         return {
-            'book': book,
-            'cover_path': cover_path,
-            'is_url': is_url,
-            'size': size,
-            'badge': badge,
-            'base64_image': base64_image,
+            "book": book,
+            "cover_path": cover_path,
+            "is_url": is_url,
+            "size": size,
+            "badge": badge,
+            "base64_image": base64_image,
         }
     except Exception as e:
         logger.error(f"Error rendering book cover for book {getattr(book, 'id', 'unknown')}: {e}")
@@ -186,7 +204,7 @@ def book_cover(book, size='medium', badge=None):
 def safe_finalmetadata(book, field_name):
     """Safely access finalmetadata fields, returning None or default if metadata doesn't exist"""
     try:
-        if hasattr(book, 'finalmetadata') and book.finalmetadata:
+        if hasattr(book, "finalmetadata") and book.finalmetadata:
             return getattr(book.finalmetadata, field_name, None)
         return None
     except Exception:
@@ -197,7 +215,7 @@ def safe_finalmetadata(book, field_name):
 def has_finalmetadata(book):
     """Check if book has finalmetadata safely"""
     try:
-        return hasattr(book, 'finalmetadata') and book.finalmetadata is not None
+        return hasattr(book, "finalmetadata") and book.finalmetadata is not None
     except Exception:
         return False
 
@@ -208,7 +226,7 @@ def language_display(language_code):
     from books.utils.language_manager import LanguageManager
 
     if not language_code:
-        return ''
+        return ""
 
     return LanguageManager.get_language_name(language_code)
 

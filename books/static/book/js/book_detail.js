@@ -22,14 +22,14 @@ class BookDetailManager {
     initializeTabFunctionality() {
         const tabButtons = document.querySelectorAll('#bookTabs .nav-link[data-bs-toggle="tab"]');
         const tabContents = document.querySelectorAll('.tab-pane');
-        
-        tabButtons.forEach(button => {
-            button.addEventListener('click', function(e) {
+
+        tabButtons.forEach((button) => {
+            button.addEventListener('click', function (e) {
                 e.preventDefault();
-                
-                tabButtons.forEach(btn => btn.classList.remove('active'));
-                tabContents.forEach(content => content.classList.remove('active', 'show'));
-                
+
+                tabButtons.forEach((btn) => btn.classList.remove('active'));
+                tabContents.forEach((content) => content.classList.remove('active', 'show'));
+
                 this.classList.add('active');
                 const target = this.getAttribute('data-bs-target');
                 const targetContent = document.querySelector(target);
@@ -42,8 +42,8 @@ class BookDetailManager {
 
     initializeTooltips() {
         const confidenceBadges = document.querySelectorAll('.badge.bg-success, .badge.bg-warning, .badge.bg-danger');
-        
-        confidenceBadges.forEach(badge => {
+
+        confidenceBadges.forEach((badge) => {
             const confidence = parseFloat(badge.textContent.trim());
             if (!isNaN(confidence)) {
                 let tooltipText = '';
@@ -54,15 +54,15 @@ class BookDetailManager {
                 } else {
                     tooltipText = 'Low confidence (<0.5) - This value is uncertain';
                 }
-                
+
                 badge.setAttribute('title', tooltipText);
                 badge.setAttribute('data-bs-toggle', 'tooltip');
             }
         });
-        
+
         if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
             const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-            tooltipTriggerList.forEach(tooltipTriggerEl => {
+            tooltipTriggerList.forEach((tooltipTriggerEl) => {
                 new bootstrap.Tooltip(tooltipTriggerEl, { placement: 'top', trigger: 'hover focus' });
             });
         }
@@ -75,19 +75,21 @@ class BookDetailManager {
             nextBook: document.querySelector('a[href*="/books/"][title*="Next Book"]'),
             nextUnreviewed: document.querySelector('a[href*="/books/"][title*="Next Unreviewed"]'),
             nextAuthor: document.querySelector('a[href*="/books/"][title*="Next by"]'),
-            nextSeries: document.querySelector('a[href*="/books/"][title*="Next in"]')
+            nextSeries: document.querySelector('a[href*="/books/"][title*="Next in"]'),
         };
 
         // Add keyboard event listener
         document.addEventListener('keydown', (e) => {
             // Only trigger if no input field is focused
-            if (document.activeElement.tagName === 'INPUT' || 
-                document.activeElement.tagName === 'TEXTAREA' || 
-                document.activeElement.tagName === 'SELECT') {
+            if (
+                document.activeElement.tagName === 'INPUT' ||
+                document.activeElement.tagName === 'TEXTAREA' ||
+                document.activeElement.tagName === 'SELECT'
+            ) {
                 return;
             }
 
-            switch(e.key) {
+            switch (e.key) {
                 case 'ArrowLeft':
                     if (navigationLinks.prevBook) {
                         e.preventDefault();
@@ -139,7 +141,7 @@ class BookDetailManager {
                     ← Prev • → Next • U Unreviewed • A Author • S Series
                 </div>
             `;
-            
+
             // Add to the first navigation card only
             const firstCard = navigationCards[0];
             const cardBody = firstCard.querySelector('.card-body');
@@ -156,16 +158,19 @@ class BookDetailManager {
 
     handleGlobalClick(e) {
         console.log('Global click detected on:', e.target);
-        
+
         // Check if clicked element or its parent is a trash button
         let removeBtn = null;
-        
+
         // First check if the clicked element itself is a button with delete attributes
         if (e.target.matches('button[data-type][data-id], button[data-meta-type][data-meta-id]')) {
             removeBtn = e.target;
         }
         // Then check if we clicked on an icon inside such a button
-        else if (e.target.matches('i.fa-trash') && e.target.parentElement.matches('button[data-type][data-id], button[data-meta-type][data-meta-id]')) {
+        else if (
+            e.target.matches('i.fa-trash') &&
+            e.target.parentElement.matches('button[data-type][data-id], button[data-meta-type][data-meta-id]')
+        ) {
             removeBtn = e.target.parentElement;
         }
         // Finally use closest as fallback
@@ -177,12 +182,12 @@ class BookDetailManager {
             console.log('Remove button found:', removeBtn);
             e.preventDefault();
             e.stopPropagation();
-            
+
             const type = removeBtn.dataset.type || removeBtn.dataset.metaType;
             const id = removeBtn.dataset.id || removeBtn.dataset.metaId;
-            
+
             console.log('Delete button clicked:', { type, id, element: removeBtn });
-            
+
             if (type && id) {
                 this.metadataManager.removeMetadata(type, id);
             } else {
@@ -193,14 +198,20 @@ class BookDetailManager {
 
         // Cover actions - check for both button clicks and icon clicks inside buttons
         let coverBtn = null;
-        
+
+        if (!e.target) {
+            return;
+        }
+
         if (e.target.matches('button[data-action^="select-cover"], button[data-action^="remove-cover"]')) {
             coverBtn = e.target;
-        }
-        else if (e.target.matches('i') && e.target.parentElement.matches('button[data-action^="select-cover"], button[data-action^="remove-cover"]')) {
+        } else if (
+            e.target.matches('i') &&
+            e.target.parentElement &&
+            e.target.parentElement.matches('button[data-action^="select-cover"], button[data-action^="remove-cover"]')
+        ) {
             coverBtn = e.target.parentElement;
-        }
-        else {
+        } else {
             coverBtn = e.target.closest('button[data-action^="select-cover"], button[data-action^="remove-cover"]');
         }
 
@@ -211,14 +222,14 @@ class BookDetailManager {
             this.coversManager.handleCoverAction(coverBtn);
             return;
         }
-        
+
         // Handle refresh page button
         if (e.target.closest('.refresh-page-btn')) {
             e.preventDefault();
             refreshPageHandler();
             return;
         }
-        
+
         // Handle view metadata tab button
         if (e.target.closest('.view-metadata-tab-btn')) {
             e.preventDefault();
@@ -238,29 +249,29 @@ class MetadataTabManager {
 
     async removeMetadata(type, id) {
         console.log('MetadataTabManager.removeMetadata called:', { type, id });
-        
-        if (!confirm("Remove this metadata entry? This action cannot be undone.")) {
+
+        if (!confirm('Remove this metadata entry? This action cannot be undone.')) {
             return;
         }
 
         try {
             const response = await this.makeRequest('/ajax/book/' + this.bookId + '/remove_metadata/', {
                 type: type,
-                id: id
+                id: id,
             });
 
             console.log('Remove metadata response:', response);
 
             if (response.status === 'success') {
-                Utils.showToast("Metadata removed successfully.", "success");
+                Utils.showToast('Metadata removed successfully.', 'success');
                 this.removeMetadataElement(id);
                 this.updateMetadataCounts();
             } else {
-                Utils.showToast(response.message || "Failed to remove metadata.", "danger");
+                Utils.showToast(response.message || 'Failed to remove metadata.', 'danger');
             }
         } catch (error) {
-            console.error("Error removing metadata:", error);
-            Utils.showToast("An error occurred while removing metadata.", "danger");
+            console.error('Error removing metadata:', error);
+            Utils.showToast('An error occurred while removing metadata.', 'danger');
         }
     }
 
@@ -271,7 +282,7 @@ class MetadataTabManager {
             `[data-meta-id="${id}"]`,
             `.metadata-item[data-id="${id}"]`,
             `button[data-id="${id}"]`,
-            `button[data-meta-id="${id}"]`
+            `button[data-meta-id="${id}"]`,
         ];
 
         let metadataItem = null;
@@ -294,9 +305,9 @@ class MetadataTabManager {
 
     updateMetadataCounts() {
         const sections = ['titles', 'authors', 'series', 'genres', 'publishers'];
-        sections.forEach(section => {
+        sections.forEach((section) => {
             const targetLabel = section.charAt(0).toUpperCase() + section.slice(1);
-            const card = Array.from(document.querySelectorAll('.card')).find(card => {
+            const card = Array.from(document.querySelectorAll('.card')).find((card) => {
                 const header = card.querySelector('h5');
                 return header && header.textContent.includes(targetLabel);
             });
@@ -313,7 +324,7 @@ class MetadataTabManager {
 
     async makeRequest(url, data) {
         console.log('Making request to:', url, 'with data:', data);
-        
+
         const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -356,59 +367,59 @@ class CoversTabManager {
 
     async selectCover(coverPath, sourceName) {
         if (!coverPath) {
-            Utils.showToast("Invalid cover path.", "danger");
+            Utils.showToast('Invalid cover path.', 'danger');
             return;
         }
 
         try {
             const response = await this.makeCoverRequest('select', coverPath, sourceName);
-            
+
             if (response.success) {
-                Utils.showToast("Cover selected successfully.", "success");
+                Utils.showToast('Cover selected successfully.', 'success');
                 this.updateCoverSelection(coverPath);
-                
+
                 setTimeout(() => {
-                    if (confirm("Cover updated. Reload page to see changes?")) {
+                    if (confirm('Cover updated. Reload page to see changes?')) {
                         location.reload();
                     }
                 }, 1500);
             } else {
-                Utils.showToast(response.message || "Failed to select cover.", "danger");
+                Utils.showToast(response.message || 'Failed to select cover.', 'danger');
             }
         } catch (error) {
-            console.error("Error selecting cover:", error);
-            Utils.showToast("An error occurred while selecting cover.", "danger");
+            console.error('Error selecting cover:', error);
+            Utils.showToast('An error occurred while selecting cover.', 'danger');
         }
     }
 
     async removeCover(coverPath, sourceName) {
-        if (!confirm("Remove this cover? This action cannot be undone.")) return;
+        if (!confirm('Remove this cover? This action cannot be undone.')) return;
 
         try {
             const response = await this.makeCoverRequest('remove', coverPath, sourceName);
-            
+
             if (response.success) {
-                Utils.showToast("Cover removed successfully.", "success");
+                Utils.showToast('Cover removed successfully.', 'success');
                 this.removeCoverElement(coverPath);
-                
+
                 // Check if a new cover was automatically selected (fallback logic)
                 if (response.new_cover_path) {
-                    Utils.showToast(`Switched to next best cover: ${response.new_cover_path}`, "info");
+                    Utils.showToast(`Switched to next best cover: ${response.new_cover_path}`, 'info');
                     this.updateCoverSelection(response.new_cover_path);
-                    
+
                     // Suggest page reload to see the updated cover
                     setTimeout(() => {
-                        if (confirm("Cover updated. Reload page to see changes?")) {
+                        if (confirm('Cover updated. Reload page to see changes?')) {
                             location.reload();
                         }
                     }, 2000);
                 }
             } else {
-                Utils.showToast(response.message || "Failed to remove cover.", "danger");
+                Utils.showToast(response.message || 'Failed to remove cover.', 'danger');
             }
         } catch (error) {
-            console.error("Error removing cover:", error);
-            Utils.showToast("An error occurred while removing cover.", "danger");
+            console.error('Error removing cover:', error);
+            Utils.showToast('An error occurred while removing cover.', 'danger');
         }
     }
 
@@ -422,7 +433,7 @@ class CoversTabManager {
             body: JSON.stringify({
                 action: action,
                 cover_path: coverPath,
-                source: sourceName
+                source: sourceName,
             }),
         });
 
@@ -435,17 +446,17 @@ class CoversTabManager {
 
     updateCoverSelection(selectedCoverPath) {
         // Remove existing selected badges
-        document.querySelectorAll('#covers .badge.bg-primary').forEach(badge => {
+        document.querySelectorAll('#covers .badge.bg-primary').forEach((badge) => {
             if (badge.textContent.trim() === 'Selected') {
                 badge.remove();
             }
         });
 
         // Add selected badge to new cover and hide select button
-        document.querySelectorAll('#covers .col-md-6.col-lg-4').forEach(card => {
+        document.querySelectorAll('#covers .col-md-6.col-lg-4').forEach((card) => {
             const img = card.querySelector('img');
             const selectBtn = card.querySelector('[data-action="select-cover"]');
-            
+
             if (img && img.src.includes(selectedCoverPath)) {
                 const badgeContainer = card.querySelector('.card-header > div');
                 if (badgeContainer) {
@@ -463,7 +474,7 @@ class CoversTabManager {
 
     removeCoverElement(coverPath) {
         const coverCards = document.querySelectorAll('#covers .col-md-6.col-lg-4');
-        coverCards.forEach(card => {
+        coverCards.forEach((card) => {
             const img = card.querySelector('img');
             if (img && img.src.includes(coverPath)) {
                 card.classList.add('scale-down');
@@ -482,7 +493,7 @@ class CoversTabManager {
 
         // Add hover effects
         const coverImages = document.querySelectorAll('#covers .img-thumbnail');
-        coverImages.forEach(img => {
+        coverImages.forEach((img) => {
             img.classList.add('cover-hover-effect');
         });
     }
@@ -546,8 +557,8 @@ class EditFormManager {
 
     initializeDropdownHandlers() {
         const dropdowns = document.querySelectorAll('select[data-field]');
-        
-        dropdowns.forEach(dropdown => {
+
+        dropdowns.forEach((dropdown) => {
             dropdown.addEventListener('change', (e) => {
                 this.handleDropdownChange(e.target);
             });
@@ -558,7 +569,7 @@ class EditFormManager {
         const fieldName = dropdown.dataset.field;
         const selectedValue = dropdown.value;
         const targetInput = this.getTargetInput(fieldName);
-        
+
         if (!targetInput) return;
 
         if (selectedValue === '__manual__') {
@@ -569,10 +580,10 @@ class EditFormManager {
             const selectedOption = dropdown.options[dropdown.selectedIndex];
             const source = selectedOption.dataset.source;
             const confidence = selectedOption.dataset.confidence;
-            
+
             targetInput.value = selectedValue;
             this.updateFieldInfo(fieldName, source, confidence, false);
-            
+
             // Handle series number special case
             if (fieldName === 'final_series') {
                 const seriesNumber = selectedOption.dataset.number;
@@ -591,12 +602,12 @@ class EditFormManager {
 
     getTargetInput(fieldName) {
         const fieldMap = {
-            'language': 'id_language',
-            'publication_year': 'id_publication_year',
-            'isbn': 'id_isbn',
-            'description': 'id_description'
+            language: 'id_language',
+            publication_year: 'id_publication_year',
+            isbn: 'id_isbn',
+            description: 'id_description',
         };
-        
+
         const inputId = fieldMap[fieldName] || 'id_' + fieldName;
         return document.getElementById(inputId);
     }
@@ -604,7 +615,7 @@ class EditFormManager {
     updateFieldInfo(fieldName, source, confidence, isManual) {
         const badge = document.getElementById(fieldName + '_badge');
         if (!badge) return;
-        
+
         if (isManual) {
             badge.textContent = 'Manual';
             badge.className = 'badge bg-info';
@@ -621,12 +632,12 @@ class EditFormManager {
         const coverDropdown = document.getElementById('cover_dropdown');
         const coverUploadSection = document.getElementById('coverUploadSection');
         const hiddenCoverPath = document.getElementById('id_final_cover_path');
-        
+
         if (!coverDropdown) return;
-        
+
         coverDropdown.addEventListener('change', (e) => {
             const selectedValue = e.target.value;
-            
+
             if (selectedValue === '__manual__') {
                 coverUploadSection.classList.remove('d-hidden');
                 hiddenCoverPath.value = '';
@@ -637,7 +648,7 @@ class EditFormManager {
                 this.updateCoverPreview(selectedValue);
             }
         });
-        
+
         // Handle file upload preview
         const fileInput = document.getElementById('id_new_cover_upload');
         if (fileInput) {
@@ -655,9 +666,9 @@ class EditFormManager {
     updateCoverPreview(src, isUpload = false) {
         const coverPreview = document.getElementById('coverPreview');
         const coverImage = document.getElementById('coverImage');
-        
+
         if (!coverPreview) return;
-        
+
         if (src && src.trim() !== '') {
             if (coverImage) {
                 coverImage.src = src;
@@ -679,7 +690,7 @@ class EditFormManager {
                 e.preventDefault();
                 return;
             }
-            
+
             this.addManualEntryFlags();
             this.showLoadingState(e.submitter);
         });
@@ -688,38 +699,49 @@ class EditFormManager {
     validateForm(form) {
         const titleField = document.getElementById('id_final_title');
         const authorField = document.getElementById('id_final_author');
-        
+
         if (!titleField.value.trim()) {
             titleField.focus();
             Utils.showValidationError('Title is required');
             return false;
         }
-        
+
         if (!authorField.value.trim()) {
             authorField.focus();
             Utils.showValidationError('Author is required');
             return false;
         }
-        
+
         return true;
     }
 
     addManualEntryFlags() {
         const manualFields = [
-            'final_title', 'final_author', 'final_series',
-            'final_publisher', 'publication_year', 'description',
-            'isbn', 'language'
+            'final_title',
+            'final_author',
+            'final_series',
+            'final_publisher',
+            'publication_year',
+            'description',
+            'isbn',
+            'language',
         ];
 
         const form = document.getElementById('metadataUpdateForm');
 
-        manualFields.forEach(fieldName => {
-            const dropdownId = fieldName === 'publication_year' ? 'year_dropdown' :
-                            fieldName === 'final_title' ? 'title_dropdown' :
-                            fieldName === 'final_author' ? 'author_dropdown' :
-                            fieldName === 'final_series' ? 'series_dropdown' :
-                            fieldName === 'final_publisher' ? 'publisher_dropdown' :
-                            `${fieldName}_dropdown`;
+        manualFields.forEach((fieldName) => {
+            const dropdownId =
+                fieldName === 'publication_year'
+                    ? 'year_dropdown'
+                    : fieldName === 'final_title'
+                      ? 'title_dropdown'
+                      : fieldName === 'final_author'
+                        ? 'author_dropdown'
+                        : fieldName === 'final_series'
+                          ? 'series_dropdown'
+                          : fieldName === 'final_publisher'
+                            ? 'publisher_dropdown'
+                            : `${fieldName}_dropdown`;
 
             const dropdown = document.getElementById(dropdownId);
             const textInput = this.getTargetInput(fieldName);
@@ -738,7 +760,7 @@ class EditFormManager {
             // 2. No dropdown exists but text input has a value
             // 3. Dropdown exists but is empty/unselected, and text input has a value
             let shouldBeManual = false;
-            
+
             if (dropdown && dropdown.value === '__manual__') {
                 // Explicitly selected manual entry
                 shouldBeManual = true;
@@ -751,12 +773,14 @@ class EditFormManager {
             }
 
             hiddenInput.value = shouldBeManual ? 'true' : 'false';
-            
+
             // Debug logging
-            console.log(`Field ${fieldName}: dropdown=${dropdown ? 'exists' : 'none'}, ` +
+            console.log(
+                `Field ${fieldName}: dropdown=${dropdown ? 'exists' : 'none'}, ` +
                     `dropdownValue=${dropdown ? dropdown.value : 'n/a'}, ` +
                     `textValue='${textInput ? textInput.value : 'n/a'}', ` +
-                    `manual=${shouldBeManual}`);
+                    `manual=${shouldBeManual}`
+            );
         });
 
         // Handle cover separately
@@ -768,25 +792,36 @@ class EditFormManager {
             coverInput.name = 'manual_entry_final_cover_path';
             form.appendChild(coverInput);
         }
-        coverInput.value = (coverDropdown && coverDropdown.value === '__manual__') ? 'true' : 'false';
+        coverInput.value = coverDropdown && coverDropdown.value === '__manual__' ? 'true' : 'false';
     }
 
     initializeManualEntryDetection() {
         const manualFields = [
-            'final_title', 'final_author', 'final_series',
-            'final_publisher', 'publication_year', 'description',
-            'isbn', 'language'
+            'final_title',
+            'final_author',
+            'final_series',
+            'final_publisher',
+            'publication_year',
+            'description',
+            'isbn',
+            'language',
         ];
 
-        manualFields.forEach(fieldName => {
+        manualFields.forEach((fieldName) => {
             const textInput = this.getTargetInput(fieldName);
-            const dropdownId = fieldName === 'publication_year' ? 'year_dropdown' :
-                            fieldName === 'final_title' ? 'title_dropdown' :
-                            fieldName === 'final_author' ? 'author_dropdown' :
-                            fieldName === 'final_series' ? 'series_dropdown' :
-                            fieldName === 'final_publisher' ? 'publisher_dropdown' :
-                            `${fieldName}_dropdown`;
-            
+            const dropdownId =
+                fieldName === 'publication_year'
+                    ? 'year_dropdown'
+                    : fieldName === 'final_title'
+                      ? 'title_dropdown'
+                      : fieldName === 'final_author'
+                        ? 'author_dropdown'
+                        : fieldName === 'final_series'
+                          ? 'series_dropdown'
+                          : fieldName === 'final_publisher'
+                            ? 'publisher_dropdown'
+                            : `${fieldName}_dropdown`;
+
             const dropdown = document.getElementById(dropdownId);
 
             if (textInput) {
@@ -794,7 +829,7 @@ class EditFormManager {
                 textInput.addEventListener('input', () => {
                     this.updateManualEntryStatus(fieldName, textInput, dropdown);
                 });
-                
+
                 textInput.addEventListener('blur', () => {
                     this.updateManualEntryStatus(fieldName, textInput, dropdown);
                 });
@@ -805,11 +840,11 @@ class EditFormManager {
     updateManualEntryStatus(fieldName, textInput, dropdown) {
         const hasValue = textInput.value.trim() !== '';
         const dropdownHasNoValue = !dropdown || !dropdown.value || dropdown.value === '';
-        
+
         if (hasValue && (dropdownHasNoValue || dropdown.value === '__manual__')) {
             // This looks like manual entry - update the info display
             this.updateFieldInfo(fieldName, 'Manual Entry', null, true);
-            
+
             // Also set a data attribute for later reference
             textInput.setAttribute('data-is-manual', 'true');
         } else if (hasValue && dropdown && dropdown.value && dropdown.value !== '__manual__') {
@@ -827,14 +862,14 @@ class EditFormManager {
 
     showLoadingState(submitButton) {
         if (!submitButton) return;
-        
+
         const originalContent = submitButton.innerHTML;
         submitButton.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
         submitButton.disabled = true;
-        
+
         const form = document.getElementById('metadataUpdateForm');
         const allSubmitButtons = form.querySelectorAll('button[type="submit"]');
-        allSubmitButtons.forEach(btn => {
+        allSubmitButtons.forEach((btn) => {
             if (btn !== submitButton) {
                 btn.disabled = true;
             }
@@ -844,9 +879,11 @@ class EditFormManager {
     initializeResetButton() {
         const resetButton = document.getElementById('resetAllBtn');
         if (!resetButton) return;
-        
+
         resetButton.addEventListener('click', () => {
-            if (!confirm('Reset all fields to their current final metadata values? This will undo any unsaved changes.')) {
+            if (
+                !confirm('Reset all fields to their current final metadata values? This will undo any unsaved changes.')
+            ) {
                 return;
             }
             this.resetAllFields();
@@ -855,25 +892,29 @@ class EditFormManager {
 
     resetAllFields() {
         // Reset dropdowns
-        document.querySelectorAll('select[data-field]').forEach(dropdown => {
+        document.querySelectorAll('select[data-field]').forEach((dropdown) => {
             dropdown.selectedIndex = 0;
         });
-        
+
         // Reset input fields
-        document.querySelectorAll('#metadataUpdateForm input[type="text"], #metadataUpdateForm input[type="number"], #metadataUpdateForm textarea').forEach(input => {
-            const originalValue = input.getAttribute('value') || input.defaultValue || '';
-            input.value = originalValue;
-        });
-        
+        document
+            .querySelectorAll(
+                '#metadataUpdateForm input[type="text"], #metadataUpdateForm input[type="number"], #metadataUpdateForm textarea'
+            )
+            .forEach((input) => {
+                const originalValue = input.getAttribute('value') || input.defaultValue || '';
+                input.value = originalValue;
+            });
+
         // Reset cover selection and other specific fields
         this.resetSpecificFields();
-        
+
         // Reset all badges
-        document.querySelectorAll('[id$="_badge"]').forEach(badge => {
+        document.querySelectorAll('[id$="_badge"]').forEach((badge) => {
             badge.textContent = 'Final';
             badge.className = 'badge bg-primary';
         });
-        
+
         // Hide cover upload section
         const coverUploadSection = document.getElementById('coverUploadSection');
         if (coverUploadSection) {
@@ -894,8 +935,9 @@ class EditFormManager {
 // =============================================================================
 class Utils {
     static getCookie(name) {
-        const cookieValue = document.cookie.split('; ')
-            .find(row => row.startsWith(name + '='))
+        const cookieValue = document.cookie
+            .split('; ')
+            .find((row) => row.startsWith(name + '='))
             ?.split('=')[1];
         return decodeURIComponent(cookieValue || '');
     }
@@ -908,12 +950,13 @@ class Utils {
         }
 
         const toast = document.createElement('div');
-        const typeClass = {
-            'danger': 'bg-danger text-white',
-            'success': 'bg-success text-white',
-            'warning': 'bg-warning text-dark',
-            'info': 'bg-info text-white'
-        }[type] || 'bg-info text-white';
+        const typeClass =
+            {
+                danger: 'bg-danger text-white',
+                success: 'bg-success text-white',
+                warning: 'bg-warning text-dark',
+                info: 'bg-info text-white',
+            }[type] || 'bg-info text-white';
 
         toast.className = `toast ${typeClass} border-0 mb-2`;
         toast.role = 'alert';
@@ -925,7 +968,7 @@ class Utils {
         `;
 
         container.appendChild(toast);
-        
+
         if (typeof bootstrap !== 'undefined' && bootstrap.Toast) {
             new bootstrap.Toast(toast, { delay: 4000 }).show();
         } else {
@@ -943,7 +986,7 @@ class Utils {
             <strong>Validation Error:</strong> ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
-        
+
         const form = document.getElementById('metadataUpdateForm');
         if (form) {
             form.insertBefore(alert, form.firstChild);
@@ -959,22 +1002,22 @@ class Utils {
 // =============================================================================
 // INITIALIZATION
 // =============================================================================
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     console.log('DOM loaded, initializing BookDetailManager');
-    
+
     // Get book ID from a data attribute or window variable
     const bookId = document.body.dataset.bookId || window.bookId;
-    
+
     if (!bookId) {
         console.error('Book ID not found. Make sure to set data-book-id on body or window.bookId');
         return;
     }
-    
+
     console.log('Initializing with book ID:', bookId);
-    
+
     // Initialize the main manager
     window.bookDetailManager = new BookDetailManager(bookId);
-    
+
     console.log('BookDetailManager initialized successfully');
 });
 
@@ -1008,17 +1051,17 @@ class RescanTabManager {
 
     previewSearchTerms() {
         const searchTerms = this.getSearchTerms();
-        
+
         let message = 'The following search terms will be used for the rescan:\n\n';
         if (searchTerms.title) message += `Title: "${searchTerms.title}"\n`;
         if (searchTerms.author) message += `Author: "${searchTerms.author}"\n`;
         if (searchTerms.isbn) message += `ISBN: "${searchTerms.isbn}"\n`;
         if (searchTerms.series) message += `Series: "${searchTerms.series}"\n`;
-        
+
         if (!searchTerms.title && !searchTerms.author && !searchTerms.isbn) {
             message = 'No search terms available. Please provide at least a title, author, or ISBN.';
         }
-        
+
         alert(message);
     }
 
@@ -1027,21 +1070,21 @@ class RescanTabManager {
             title: document.getElementById('rescan_title').value.trim(),
             author: document.getElementById('rescan_author').value.trim(),
             isbn: document.getElementById('rescan_isbn').value.trim(),
-            series: document.getElementById('rescan_series').value.trim()
+            series: document.getElementById('rescan_series').value.trim(),
         };
     }
 
     getSelectedSources() {
         const sources = [];
         const checkboxes = document.querySelectorAll('input[name="sources"]:checked');
-        checkboxes.forEach(cb => sources.push(cb.value));
+        checkboxes.forEach((cb) => sources.push(cb.value));
         return sources;
     }
 
     getOptions() {
         return {
             clearExisting: document.getElementById('rescan_clear_existing').checked,
-            forceRefresh: document.getElementById('rescan_force_refresh').checked
+            forceRefresh: document.getElementById('rescan_force_refresh').checked,
         };
     }
 
@@ -1063,7 +1106,7 @@ class RescanTabManager {
 
         // Show progress section
         this.showProgress();
-        
+
         // Disable rescan button
         const rescanBtn = document.getElementById('rescanBtn');
         rescanBtn.disabled = true;
@@ -1072,20 +1115,20 @@ class RescanTabManager {
         try {
             // Prepare form data
             const formData = new FormData();
-            
+
             // Add search terms
             formData.append('title_override', searchTerms.title);
             formData.append('author_override', searchTerms.author);
             formData.append('isbn_override', searchTerms.isbn);
             formData.append('series_override', searchTerms.series);
-            
+
             // Add sources
-            sources.forEach(source => formData.append('sources[]', source));
-            
+            sources.forEach((source) => formData.append('sources[]', source));
+
             // Add options
             formData.append('clear_existing', options.clearExisting);
             formData.append('force_refresh', options.forceRefresh);
-            
+
             // Add CSRF token
             const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
             formData.append('csrfmiddlewaretoken', csrfToken);
@@ -1096,7 +1139,7 @@ class RescanTabManager {
             // Send request
             const response = await fetch(`/book/${this.bookId}/rescan/`, {
                 method: 'POST',
-                body: formData
+                body: formData,
             });
 
             this.updateProgress(50, 'Processing response...');
@@ -1109,7 +1152,6 @@ class RescanTabManager {
             } else {
                 throw new Error(result.error || 'Unknown error occurred');
             }
-
         } catch (error) {
             console.error('Rescan error:', error);
             this.showError(error.message);
@@ -1123,10 +1165,10 @@ class RescanTabManager {
     showProgress() {
         const progressSection = document.getElementById('rescanProgress');
         const resultsSection = document.getElementById('rescanResults');
-        
+
         progressSection.classList.remove('d-hidden');
         resultsSection.classList.add('d-hidden');
-        
+
         this.updateProgress(0, 'Initializing rescan...');
     }
 
@@ -1134,11 +1176,11 @@ class RescanTabManager {
         const progressBar = document.getElementById('rescanProgressBar');
         const statusText = document.getElementById('rescanStatus');
         const logText = document.getElementById('rescanLog');
-        
+
         progressBar.style.width = percentage + '%';
         progressBar.setAttribute('aria-valuenow', percentage);
         statusText.textContent = status;
-        
+
         // Add to log
         const timestamp = new Date().toLocaleTimeString();
         logText.innerHTML += `<div>${timestamp}: ${status}</div>`;
@@ -1149,52 +1191,53 @@ class RescanTabManager {
         const progressSection = document.getElementById('rescanProgress');
         const resultsSection = document.getElementById('rescanResults');
         const summaryDiv = document.getElementById('rescanSummary');
-        
+
         progressSection.classList.add('d-hidden');
         resultsSection.classList.remove('d-hidden');
-        
+
         // Build summary HTML
         let summaryHtml = '<h6>Rescan Summary:</h6>';
-        summaryHtml += `<p><strong>Search Terms Used:</strong></p><ul>`;
-        if (result.search_terms.title) summaryHtml += `<li>Title: "${result.search_terms.title}"</li>`;
-        if (result.search_terms.author) summaryHtml += `<li>Author: "${result.search_terms.author}"</li>`;
-        if (result.search_terms.isbn) summaryHtml += `<li>ISBN: "${result.search_terms.isbn}"</li>`;
-        if (result.search_terms.series) summaryHtml += `<li>Series: "${result.search_terms.series}"</li>`;
-        summaryHtml += '</ul>';
-        
-        summaryHtml += '<p><strong>Sources Queried:</strong> ' + result.sources_queried.join(', ') + '</p>';
-        
-        summaryHtml += '<p><strong>New Metadata Added:</strong></p><ul>';
-        for (const [key, count] of Object.entries(result.added_counts)) {
-            if (count > 0) {
-                summaryHtml += `<li>${key.charAt(0).toUpperCase() + key.slice(1)}: ${count} new entries</li>`;
-            }
+        summaryHtml += `<p class="alert alert-success"><i class="fas fa-check-circle me-2"></i>${result.message}</p>`;
+
+        summaryHtml += '<p><strong>Metadata Changes:</strong></p><ul>';
+        summaryHtml += `<li>Metadata entries: ${result.before_counts.metadata} → ${result.after_counts.metadata} `;
+        if (result.added_counts.metadata > 0) {
+            summaryHtml += `<span class="badge bg-success">+${result.added_counts.metadata}</span>`;
         }
+        summaryHtml += '</li>';
+        summaryHtml += `<li>Cover images: ${result.before_counts.covers} → ${result.after_counts.covers} `;
+        if (result.added_counts.covers > 0) {
+            summaryHtml += `<span class="badge bg-success">+${result.added_counts.covers}</span>`;
+        }
+        summaryHtml += '</li>';
         summaryHtml += '</ul>';
-        
-        const totalAdded = Object.values(result.added_counts).reduce((sum, count) => sum + count, 0);
+
+        const totalAdded = result.added_counts.metadata + result.added_counts.covers;
         if (totalAdded === 0) {
-            summaryHtml += '<p class="text-muted">No new metadata was found.</p>';
+            summaryHtml +=
+                '<p class="text-muted"><i class="fas fa-info-circle me-2"></i>No new metadata was found.</p>';
         } else {
-            summaryHtml += `<p class="text-success"><strong>Total: ${totalAdded} new metadata entries added</strong></p>`;
+            summaryHtml += `<p class="text-success"><i class="fas fa-sparkles me-2"></i><strong>Total: ${totalAdded} new entries added</strong></p>`;
+            summaryHtml +=
+                '<p class="mt-3"><button class="btn btn-primary" onclick="location.reload()"><i class="fas fa-sync me-2"></i>Reload Page to See Changes</button></p>';
         }
-        
+
         summaryDiv.innerHTML = summaryHtml;
     }
 
     showError(errorMessage) {
         const progressSection = document.getElementById('rescanProgress');
         const resultsSection = document.getElementById('rescanResults');
-        
+
         progressSection.classList.add('d-hidden');
-        
+
         // Show error in results section
         const resultsDiv = document.querySelector('#rescanResults .card-header');
         const resultsBody = document.querySelector('#rescanResults .card-body');
-        
+
         resultsDiv.className = 'card-header bg-danger text-white';
         resultsDiv.innerHTML = '<h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Rescan Failed</h6>';
-        
+
         resultsBody.innerHTML = `
             <div class="alert alert-danger">
                 <strong>Error:</strong> ${errorMessage}
@@ -1203,7 +1246,7 @@ class RescanTabManager {
                 <i class="fas fa-refresh me-2"></i>Refresh Page
             </button>
         `;
-        
+
         resultsSection.style.display = 'block';
     }
 }

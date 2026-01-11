@@ -11,11 +11,11 @@ function initializeDashboardProgressBars() {
         { selector: '.progress-bar-comic', cssProperty: '--comic-width' },
         { selector: '.progress-bar-audiobook', cssProperty: '--audiobook-width' },
         { selector: '.progress-bar-series', cssProperty: '--series-width' },
-        { selector: '.progress-bar-author', cssProperty: '--author-width' }
+        { selector: '.progress-bar-author', cssProperty: '--author-width' },
     ];
 
     // Set progress bar widths using CSS custom properties for stat cards
-    progressBarConfigs.forEach(config => {
+    progressBarConfigs.forEach((config) => {
         const bar = document.querySelector(config.selector);
         if (bar) {
             const width = bar.getAttribute('data-width');
@@ -28,10 +28,10 @@ function initializeDashboardProgressBars() {
     // Set progress bar widths for quality metrics
     const qualityMetrics = [
         { selector: '.progress-bar-confidence', cssProperty: '--confidence-width' },
-        { selector: '.progress-bar-completeness', cssProperty: '--completeness-width' }
+        { selector: '.progress-bar-completeness', cssProperty: '--completeness-width' },
     ];
 
-    qualityMetrics.forEach(metric => {
+    qualityMetrics.forEach((metric) => {
         const bar = document.querySelector(metric.selector);
         if (bar) {
             const width = bar.getAttribute('data-width');
@@ -43,7 +43,7 @@ function initializeDashboardProgressBars() {
 
     // Set format progress bars
     const formatBars = document.querySelectorAll('.progress-bar-format');
-    formatBars.forEach(bar => {
+    formatBars.forEach((bar) => {
         const width = bar.getAttribute('data-width');
         if (width) {
             bar.style.setProperty('--format-width', width + '%');
@@ -52,7 +52,7 @@ function initializeDashboardProgressBars() {
 
     // Set dynamic progress bars (used for quality metrics and other dynamic content)
     const dynamicBars = document.querySelectorAll('.progress-bar-dynamic');
-    dynamicBars.forEach(bar => {
+    dynamicBars.forEach((bar) => {
         const width = bar.getAttribute('data-width');
         if (width) {
             bar.style.setProperty('--progress-width', width);
@@ -63,7 +63,7 @@ function initializeDashboardProgressBars() {
 // Dashboard navigation functions - will be populated with URLs via data attributes
 const DashboardNavigation = {
     // Initialize navigation with URL data attributes
-    init: function() {
+    init: function () {
         // Get navigation URLs from data attributes on the dashboard container
         const dashboard = document.querySelector('[data-urls]');
         if (dashboard) {
@@ -76,44 +76,44 @@ const DashboardNavigation = {
         }
     },
 
-    navigateToBooks: function() {
+    navigateToBooks: function () {
         if (this.urls.book_list) {
             window.location.href = this.urls.book_list;
         }
     },
 
-    navigateToEbooks: function() {
+    navigateToEbooks: function () {
         if (this.urls.ebooks_main) {
             window.location.href = this.urls.ebooks_main;
         }
     },
 
-    navigateToComics: function() {
+    navigateToComics: function () {
         if (this.urls.comics_main) {
             window.location.href = this.urls.comics_main;
         }
     },
 
-    navigateToAudiobooks: function() {
+    navigateToAudiobooks: function () {
         if (this.urls.audiobooks_main) {
             window.location.href = this.urls.audiobooks_main;
         }
     },
 
-    navigateToSeries: function() {
+    navigateToSeries: function () {
         if (this.urls.series_main) {
             window.location.href = this.urls.series_main;
         }
     },
 
-    navigateToAuthors: function() {
+    navigateToAuthors: function () {
         if (this.urls.author_list) {
             window.location.href = this.urls.author_list;
         }
     },
 
     // Handle navigation based on data attribute
-    handleNavigation: function(navType) {
+    handleNavigation: function (navType) {
         switch (navType) {
             case 'books':
                 this.navigateToBooks();
@@ -136,13 +136,13 @@ const DashboardNavigation = {
             default:
                 console.warn('Unknown navigation type:', navType);
         }
-    }
+    },
 };
 
 // Dashboard functionality
 const DashboardMain = {
     // Initialize dashboard components
-    init: function() {
+    init: function () {
         this.initializeProgressBars();
         this.initializeNavigation();
         this.initializeRefreshButton();
@@ -150,25 +150,25 @@ const DashboardMain = {
     },
 
     // Initialize progress bars
-    initializeProgressBars: function() {
+    initializeProgressBars: function () {
         initializeDashboardProgressBars();
     },
 
     // Initialize navigation system
-    initializeNavigation: function() {
+    initializeNavigation: function () {
         DashboardNavigation.init();
-        
+
         // Set up event delegation for navigation cards
-        document.addEventListener('click', function(e) {
+        document.addEventListener('click', function (e) {
             const navCard = e.target.closest('.nav-card');
             if (navCard) {
                 const navType = navCard.getAttribute('data-nav');
                 DashboardNavigation.handleNavigation(navType);
             }
         });
-        
+
         // Set up keyboard navigation for nav cards
-        document.addEventListener('keydown', function(e) {
+        document.addEventListener('keydown', function (e) {
             const navCard = e.target.closest('.nav-card');
             if (navCard && (e.key === 'Enter' || e.key === ' ')) {
                 e.preventDefault();
@@ -176,7 +176,7 @@ const DashboardMain = {
                 DashboardNavigation.handleNavigation(navType);
             }
         });
-        
+
         // Bind navigation functions to window for legacy onclick handlers (if any remain)
         window.navigateToBooks = () => DashboardNavigation.navigateToBooks();
         window.navigateToEbooks = () => DashboardNavigation.navigateToEbooks();
@@ -187,30 +187,43 @@ const DashboardMain = {
     },
 
     // Initialize refresh button
-    initializeRefreshButton: function() {
+    initializeRefreshButton: function () {
         const refreshBtn = document.getElementById('refreshDashboard');
         if (refreshBtn) {
-            refreshBtn.addEventListener('click', function() {
+            refreshBtn.addEventListener('click', function () {
                 location.reload();
             });
         }
     },
 
     // Initialize filter form handling
-    initializeFilters: function() {
+    initializeFilters: function () {
         const filterForm = document.getElementById('dashboardFilters');
         if (filterForm) {
-            filterForm.addEventListener('submit', function(e) {
+            filterForm.addEventListener('submit', function (e) {
                 e.preventDefault();
-                // In future implementation, update dashboard with filters via AJAX
-                console.log('Filters applied:', new FormData(this));
+
+                // Get form data
+                const formData = new FormData(this);
+                const contentType = formData.get('content_type');
+                const reviewStatus = formData.get('review_status');
+
+                // Build URL with query parameters
+                const params = new URLSearchParams();
+                if (contentType) params.append('content_type', contentType);
+                if (reviewStatus) params.append('review_status', reviewStatus);
+
+                // Reload dashboard with filters
+                const baseUrl = window.location.pathname;
+                const queryString = params.toString();
+                window.location.href = queryString ? `${baseUrl}?${queryString}` : baseUrl;
             });
         }
-    }
+    },
 };
 
 // Initialize dashboard when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     DashboardMain.init();
 });
 

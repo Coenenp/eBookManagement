@@ -40,24 +40,46 @@
         </p>
         {% endif %}
 
-        <!-- File Info -->
+        <!-- Metadata Info -->
         <div class="small text-muted mb-3">
-            <div class="d-flex justify-content-between">
-                <span>
-                    <i class="fas fa-file-alt me-1" aria-hidden="true"></i>
-                    {{ book.file_format|upper|default:"Unknown" }}
-                </span>
-                <span>{{ book.file_size|filesizeformat|default:"Unknown" }}</span>
+            {% if book.finalmetadata.final_publisher %}
+            <div class="mt-1">
+                <i class="fas fa-building me-1" aria-hidden="true"></i>
+                {{ book.finalmetadata.final_publisher|truncatechars:30 }}
             </div>
+            {% endif %}
+            {% if book.finalmetadata.publication_year %}
+            <div class="mt-1">
+                <i class="fas fa-calendar me-1" aria-hidden="true"></i>
+                {{ book.finalmetadata.publication_year }}
+            </div>
+            {% endif %}
             {% if book.finalmetadata.language %}
             <div class="mt-1">
                 <i class="fas fa-language me-1" aria-hidden="true"></i>
                 {{ book.finalmetadata.language }}
             </div>
             {% endif %}
+            <div class="d-flex justify-content-between mt-1">
+                <span>
+                    <i class="fas fa-file-alt me-1" aria-hidden="true"></i>
+                    <span class="badge {{ book.file_format|format_color }}">{{ book.file_format|upper|default:"Unknown" }}</span>
+                </span>
+                <span>{{ book.file_size|filesizeformat|default:"Unknown" }}</span>
+            </div>
+            {% if book.finalmetadata.isbn %}
+            <div class="mt-1">
+                <i class="fas fa-barcode me-1" aria-hidden="true"></i>
+                {{ book.finalmetadata.isbn }}
+            </div>
+            {% endif %}
             {% if book.scan_folder %}
             <div class="mt-1">
-                <i class="fas fa-calendar me-1" aria-hidden="true"></i>
+                <i class="fas fa-hdd me-1" aria-hidden="true"></i>
+                <a href="{% url 'books:edit_scan_folder' book.scan_folder.id %}" class="text-muted text-decoration-none">{{ book.scan_folder.name|truncatechars:25 }}</a>
+            </div>
+            <div class="mt-1">
+                <i class="fas fa-clock me-1" aria-hidden="true"></i>
                 <time datetime="{{ book.last_scanned|date:'c' }}">
                     {{ book.last_scanned|date:"M d, Y" }}
                 </time>

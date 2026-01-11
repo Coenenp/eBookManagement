@@ -7,13 +7,13 @@
 <style>
     .completeness-bar {
         height: 20px;
-        background: #e9ecef;
+        background: var(--bs-secondary-bg);
         border-radius: 4px;
         overflow: hidden;
     }
     .completeness-fill {
         height: 100%;
-        background: linear-gradient(90deg, #dc3545 0%, #ffc107 50%, #28a745 100%);
+        background: linear-gradient(90deg, var(--bs-danger) 0%, var(--bs-warning) 50%, var(--bs-success) 100%);
         transition: width 0.3s ease;
     }
     .api-badge {
@@ -21,13 +21,13 @@
         padding: 0.25rem 0.5rem;
     }
     .book-row:hover {
-        background-color: #f8f9fa;
+        background-color: var(--bs-light);
     }
     .priority-high {
-        border-left: 4px solid #dc3545;
+        border-left: 4px solid var(--bs-danger);
     }
     .priority-medium {
-        border-left: 4px solid #ffc107;
+        border-left: 4px solid var(--bs-warning);
     }
     .priority-low {
         border-left: 4px solid #17a2b8;

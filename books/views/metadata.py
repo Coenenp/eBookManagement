@@ -6,13 +6,14 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404, redirect, render, reverse
 from django.views.generic import DetailView, ListView, View
 
 from books.book_utils import CoverManager, GenreManager
 from books.constants import PAGINATION
 from books.mixins import MetadataContextMixin, SimpleNavigationMixin
-from books.models import Author, Book, BookAuthor, BookMetadata, BookPublisher, BookSeries, BookTitle, DataSource, FinalMetadata, Publisher, Series
+from books.models import Author, Book, BookAuthor, BookCover, BookFile, BookGenre, BookMetadata, BookPublisher, BookSeries, BookTitle, DataSource, FinalMetadata, Publisher, Series
 
 logger = logging.getLogger("books.scanner")
 
@@ -39,6 +40,22 @@ class BookMetadataView(LoginRequiredMixin, DetailView, SimpleNavigationMixin, Me
     model = Book
     template_name = "books/book_metadata.html"
     context_object_name = "book"
+
+    def get_object(self):
+        """Optimize by prefetching all relationships needed for metadata display"""
+        return get_object_or_404(
+            Book.objects.select_related("finalmetadata", "scan_folder").prefetch_related(
+                Prefetch("titles", queryset=BookTitle.objects.filter(is_active=True).select_related("source").order_by("-confidence")),
+                Prefetch("author_relationships", queryset=BookAuthor.objects.filter(is_active=True).select_related("author", "source").order_by("-confidence", "-is_main_author")),
+                Prefetch("genre_relationships", queryset=BookGenre.objects.filter(is_active=True).select_related("genre", "source").order_by("-confidence")),
+                Prefetch("series_relationships", queryset=BookSeries.objects.filter(is_active=True).select_related("series", "source").order_by("-confidence")),
+                Prefetch("publisher_relationships", queryset=BookPublisher.objects.filter(is_active=True).select_related("publisher", "source").order_by("-confidence")),
+                Prefetch("covers", queryset=BookCover.objects.filter(is_active=True).select_related("source").order_by("-confidence", "-is_high_resolution")),
+                Prefetch("metadata", queryset=BookMetadata.objects.filter(is_active=True).select_related("source").order_by("-confidence")),
+                Prefetch("files", queryset=BookFile.objects.order_by("id"), to_attr="prefetched_files"),
+            ),
+            pk=self.kwargs["pk"],
+        )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

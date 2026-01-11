@@ -3,6 +3,7 @@
 This module provides functions for parsing, normalizing, and handling
 author names including split operations and database lookups.
 """
+
 import logging
 
 from django.db import models
@@ -39,22 +40,20 @@ def attach_authors(book, raw_names, source, confidence=0.8):
         name_normalized = normalize_author_name(f"{first} {last}")
 
         # Try to match by normalized name or by first+last directly
-        author = Author.objects.filter(
-            models.Q(name_normalized=name_normalized) |
-            models.Q(first_name__iexact=first.strip(), last_name__iexact=last.strip())
-        ).first()
+        author = Author.objects.filter(models.Q(name_normalized=name_normalized) | models.Q(first_name__iexact=first.strip(), last_name__iexact=last.strip())).first()
 
         if not author:
             author = Author(name=raw_name, first_name=first.strip(), last_name=last.strip())
             author.save()
             logger.info(f"[AUTHOR CREATED] {raw_name} , normalized as '{author.name_normalized}'")
 
-        BookAuthor.objects.get_or_create(
+        BookAuthor.objects.update_or_create(
             book=book,
             author=author,
             source=source,
             defaults={
                 "confidence": confidence,
                 "is_main_author": i == 0,
-            }
+                "is_active": True,
+            },
         )

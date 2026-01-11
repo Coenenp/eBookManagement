@@ -3,6 +3,7 @@
 This module provides template filters for mathematical operations,
 text processing, and data formatting in Django templates.
 """
+
 import logging
 import os
 import urllib.parse
@@ -10,7 +11,7 @@ import urllib.parse
 import bleach
 from django import template
 
-logger = logging.getLogger('books.scanner')
+logger = logging.getLogger("books.scanner")
 register = template.Library()
 
 # Store built-in hash function before defining template filter
@@ -38,20 +39,20 @@ def div(value, arg):
 
 @register.filter
 def field_label(value):
-    return value.replace('_', ' ').title()
+    return value.replace("_", " ").title()
 
 
 @register.filter
 def dict_get(d, key):
     if isinstance(d, dict):
-        return d.get(key, '')
-    return ''  # Fallback if d isn't a dict
+        return d.get(key, "")
+    return ""  # Fallback if d isn't a dict
 
 
 @register.filter
 def getattr_safe(obj, attr_name):
     """Gets an attribute from an object by name. Returns '' if not found."""
-    return getattr(obj, attr_name, '')
+    return getattr(obj, attr_name, "")
 
 
 @register.filter
@@ -76,44 +77,44 @@ def querystring(querydict, key, value):
 
 @register.filter
 def prettify_field_name(value):
-    return value.replace('_', ' ').title()
+    return value.replace("_", " ").title()
 
 
 @register.filter
 def get_display_title(book):
     """Return the best available title for a book."""
     try:
-        if hasattr(book, 'finalmetadata') and book.finalmetadata:
-            final_title = getattr(book.finalmetadata, 'final_title', None)
+        if hasattr(book, "finalmetadata") and book.finalmetadata:
+            final_title = getattr(book.finalmetadata, "final_title", None)
             if final_title:
                 return final_title
 
         # Try to get first title
-        if hasattr(book, 'titles'):
+        if hasattr(book, "titles"):
             first_title = book.titles.first()
-            if first_title and hasattr(first_title, 'title'):
+            if first_title and hasattr(first_title, "title"):
                 return first_title.title
 
         # Fallback to filename without extension from primary file
-        if hasattr(book, 'primary_file') and book.primary_file and hasattr(book.primary_file, 'filename'):
+        if hasattr(book, "primary_file") and book.primary_file and hasattr(book.primary_file, "filename"):
             return os.path.splitext(book.primary_file.filename)[0]
 
-        return 'Unknown Title'
+        return "Unknown Title"
     except Exception as e:
         logger.error(f"Error getting display title for book {getattr(book, 'id', 'unknown')}: {e}")
-        return 'Unknown Title'
+        return "Unknown Title"
 
 
 @register.filter
 def get_display_author(book):
     """Return the best available author for a book."""
     try:
-        if hasattr(book, 'finalmetadata') and book.finalmetadata.final_author:
+        if hasattr(book, "finalmetadata") and book.finalmetadata.final_author:
             return book.finalmetadata.final_author
         first_author = book.author_relationships.first()
-        return first_author.author.name if first_author and first_author.author else 'Unknown Author'
+        return first_author.author.name if first_author and first_author.author else "Unknown Author"
     except Exception:
-        return 'Unknown Author'
+        return "Unknown Author"
 
 
 @register.filter
@@ -131,16 +132,17 @@ def safe_confidence_format(confidence):
 def sanitize_html(text):
     """Sanitize HTML content, allowing only safe tags."""
     if not text:
-        return ''
+        return ""
 
     # First remove dangerous tags and their content entirely
     import re
-    # Remove script tags and all their content
-    text = re.sub(r'<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>', '', text, flags=re.IGNORECASE)
-    # Remove style tags and all their content
-    text = re.sub(r'<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>', '', text, flags=re.IGNORECASE)
 
-    allowed_tags = ['b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'ol', 'li']
+    # Remove script tags and all their content
+    text = re.sub(r"<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>", "", text, flags=re.IGNORECASE)
+    # Remove style tags and all their content
+    text = re.sub(r"<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>", "", text, flags=re.IGNORECASE)
+
+    allowed_tags = ["b", "i", "em", "strong", "p", "br", "ul", "ol", "li"]
     allowed_attributes = {}  # No attributes allowed for safety
     return bleach.clean(text, tags=allowed_tags, attributes=allowed_attributes, strip=True)
 
@@ -149,32 +151,32 @@ def sanitize_html(text):
 def sanitize_description(text):
     """Sanitize description content, handling HTML properly and cleaning up common issues."""
     if not text:
-        return ''
+        return ""
 
     # Remove unwanted HTML class attributes and clean up common external content
     import re
 
     # Remove class attributes from p tags and other elements
-    text = re.sub(r'<([^>]+)\s+class="[^"]*"([^>]*)>', r'<\1\2>', text)
+    text = re.sub(r'<([^>]+)\s+class="[^"]*"([^>]*)>', r"<\1\2>", text)
 
     # Convert common HTML entities and encoding issues
     # Do specific pattern replacements in correct order
-    text = text.replace('â€œ', '"')    # Left double quote
-    text = text.replace('â€™', "'")    # Right single quote (do before â€)
-    text = text.replace('â€˜', "'")    # Left single quote (do before â€)
-    text = text.replace('â€', '"')     # Right double quote (do last)
+    text = text.replace("â€œ", '"')  # Left double quote
+    text = text.replace("â€™", "'")  # Right single quote (do before â€)
+    text = text.replace("â€˜", "'")  # Left single quote (do before â€)
+    text = text.replace("â€", '"')  # Right double quote (do last)
 
     # Clean up excessive line breaks
-    text = re.sub(r'<br\s*/?>\s*<br\s*/?>\s*<br\s*/?>', '<br><br>', text)
+    text = re.sub(r"<br\s*/?>\s*<br\s*/?>\s*<br\s*/?>", "<br><br>", text)
 
     # Allow description-appropriate tags
-    allowed_tags = ['b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'ol', 'li']
+    allowed_tags = ["b", "i", "em", "strong", "p", "br", "ul", "ol", "li"]
     allowed_attributes = {}  # No attributes for safety
 
     cleaned_text = bleach.clean(text, tags=allowed_tags, attributes=allowed_attributes, strip=True)
 
     # Clean up source citations at the end
-    cleaned_text = re.sub(r'\s*\(source:\s*[^)]+\)\s*$', '', cleaned_text, flags=re.IGNORECASE)
+    cleaned_text = re.sub(r"\s*\(source:\s*[^)]+\)\s*$", "", cleaned_text, flags=re.IGNORECASE)
 
     return cleaned_text
 
@@ -183,13 +185,14 @@ def sanitize_description(text):
 def language_name(language_code):
     """Convert language code to readable name."""
     from books.utils.language_manager import LanguageManager
+
     return LanguageManager.get_language_name(language_code)
 
 
 @register.simple_tag(takes_context=True)
 def url_replace(context, **kwargs):
     """Replace query parameters in current URL."""
-    request = context['request']
+    request = context["request"]
     query = request.GET.copy()
     for key, value in kwargs.items():
         query[key] = value
@@ -203,7 +206,7 @@ def is_valid_isbn(isbn):
         return False
 
     # Remove any formatting
-    clean_isbn = isbn.replace('-', '').replace(' ', '')
+    clean_isbn = isbn.replace("-", "").replace(" ", "")
 
     # Check if it's a valid length (10 or 13 digits)
     if len(clean_isbn) not in [10, 13]:
@@ -211,7 +214,7 @@ def is_valid_isbn(isbn):
 
     # Check if it contains only digits (and possibly 'X' for ISBN-10)
     if len(clean_isbn) == 10:
-        return clean_isbn[:-1].isdigit() and (clean_isbn[-1].isdigit() or clean_isbn[-1].upper() == 'X')
+        return clean_isbn[:-1].isdigit() and (clean_isbn[-1].isdigit() or clean_isbn[-1].upper() == "X")
     else:  # 13 digits
         return clean_isbn.isdigit()
 
@@ -222,10 +225,10 @@ def isbn_type(isbn):
     if not isbn:
         return "No ISBN"
 
-    clean_isbn = isbn.replace('-', '').replace(' ', '')
+    clean_isbn = isbn.replace("-", "").replace(" ", "")
 
     if len(clean_isbn) == 10:
-        if clean_isbn[:-1].isdigit() and (clean_isbn[-1].isdigit() or clean_isbn[-1].upper() == 'X'):
+        if clean_isbn[:-1].isdigit() and (clean_isbn[-1].isdigit() or clean_isbn[-1].upper() == "X"):
             return "ISBN-10"
     elif len(clean_isbn) == 13:
         if clean_isbn.isdigit():
@@ -238,3 +241,61 @@ def isbn_type(isbn):
 def hash(value):
     """Return a hash of the given value, useful for creating unique IDs."""
     return str(abs(builtin_hash(str(value))))
+
+
+@register.filter
+def format_color(file_format):
+    """Return Bootstrap color class for file format badge."""
+    if not file_format:
+        return "bg-secondary"
+
+    fmt = file_format.upper()
+
+    # eBook formats
+    if fmt == "EPUB":
+        return "bg-primary"  # Blue - most common standard
+    if fmt == "PDF":
+        return "bg-danger"  # Red - fixed layout
+    if fmt in ["MOBI", "AZW", "AZW3"]:
+        return "bg-success"  # Green - Kindle formats
+
+    # Comic formats
+    if fmt in ["CBZ", "CBR", "CB7", "CBT"]:
+        return "bg-warning"  # Yellow - comic archives
+
+    # Audio formats
+    if fmt in ["MP3", "M4A", "M4B", "AAC", "OGG", "FLAC"]:
+        return "bg-info"  # Cyan - audio files
+
+    return "bg-secondary"  # Gray - unknown/other
+
+
+@register.filter
+def source_icon(source_name):
+    """Return Font Awesome icon class for data source."""
+    if not source_name:
+        return "fa-question"
+
+    src = source_name.lower()
+
+    # AI sources
+    if any(keyword in src for keyword in ["ai", "gpt", "gemini", "claude"]):
+        return "fa-robot"
+
+    # Filename parsing
+    if any(keyword in src for keyword in ["filename", "file"]):
+        return "fa-file"
+
+    # Embedded metadata
+    if any(keyword in src for keyword in ["embedded", "metadata", "epub", "pdf"]):
+        return "fa-book-open"
+
+    # API sources
+    if any(keyword in src for keyword in ["google", "openlibrary", "api", "books", "comicvine"]):
+        return "fa-cloud"
+
+    # Manual entry
+    if any(keyword in src for keyword in ["manual", "user", "edit"]):
+        return "fa-user"
+
+    return "fa-database"  # Default database icon

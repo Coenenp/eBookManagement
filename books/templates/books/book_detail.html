@@ -45,12 +45,12 @@
                         <div class="btn-group btn-group-sm nav-author" role="group" aria-label="Author navigation">
                             {% if prev_same_author %}
                                 <a href="{% url 'books:book_detail' prev_same_author.id %}" class="btn btn-outline-info" title="Previous by {{ book.finalmetadata.final_author }}">
-                                    <i class="fas fa-user"></i><span class="d-none d-md-inline"> Prev Author</span>
+                                    <i class="fas fa-chevron-left"></i><span class="d-none d-md-inline"> Prev (Same Author)</span>
                                 </a>
                             {% endif %}
                             {% if next_same_author %}
                                 <a href="{% url 'books:book_detail' next_same_author.id %}" class="btn btn-outline-info" title="Next by {{ book.finalmetadata.final_author }}">
-                                    <span class="d-none d-md-inline">Next Author </span><i class="fas fa-user"></i>
+                                    <span class="d-none d-md-inline">Next (Same Author) </span><i class="fas fa-chevron-right"></i>
                                 </a>
                             {% endif %}
                         </div>
@@ -61,12 +61,12 @@
                         <div class="btn-group btn-group-sm nav-series" role="group" aria-label="Series navigation">
                             {% if prev_same_series %}
                                 <a href="{% url 'books:book_detail' prev_same_series.id %}" class="btn btn-outline-success" title="Previous in {{ book.finalmetadata.final_series }}">
-                                    <i class="fas fa-book-open"></i><span class="d-none d-lg-inline"> Prev Series</span>
+                                    <i class="fas fa-chevron-left"></i><span class="d-none d-lg-inline"> Prev (Same Series)</span>
                                 </a>
                             {% endif %}
                             {% if next_same_series %}
                                 <a href="{% url 'books:book_detail' next_same_series.id %}" class="btn btn-outline-success" title="Next in {{ book.finalmetadata.final_series }}">
-                                    <span class="d-none d-lg-inline">Next Series </span><i class="fas fa-book-open"></i>
+                                    <span class="d-none d-lg-inline">Next (Same Series) </span><i class="fas fa-chevron-right"></i>
                                 </a>
                             {% endif %}
                         </div>
@@ -74,19 +74,24 @@
 
                         <!-- Review Status Navigation -->
                         <div class="btn-group btn-group-sm nav-review" role="group" aria-label="Review status navigation">
+                            {% if prev_unreviewed %}
+                                <a href="{% url 'books:book_detail' prev_unreviewed.id %}" class="btn btn-outline-warning" title="Previous Unreviewed Book">
+                                    <i class="fas fa-chevron-left"></i><span class="d-none d-xl-inline"> Prev Unreviewed</span>
+                                </a>
+                            {% endif %}
                             {% if next_unreviewed %}
                                 <a href="{% url 'books:book_detail' next_unreviewed.id %}" class="btn btn-outline-warning" title="Next Unreviewed Book">
-                                    <i class="fas fa-exclamation-triangle"></i><span class="d-none d-xl-inline"> Unreviewed</span>
+                                    <span class="d-none d-xl-inline">Next Unreviewed </span><i class="fas fa-chevron-right"></i>
+                                </a>
+                            {% endif %}
+                            {% if prev_reviewed %}
+                                <a href="{% url 'books:book_detail' prev_reviewed.id %}" class="btn btn-outline-success" title="Previous Reviewed Book">
+                                    <i class="fas fa-chevron-left"></i><span class="d-none d-xl-inline"> Prev Reviewed</span>
                                 </a>
                             {% endif %}
                             {% if next_reviewed %}
-                                <a href="{% url 'books:book_detail' next_reviewed.id %}" class="btn btn-outline-secondary" title="Next Reviewed Book">
-                                    <i class="fas fa-check"></i><span class="d-none d-xl-inline"> Reviewed</span>
-                                </a>
-                            {% endif %}
-                            {% if next_needs_review %}
-                                <a href="{% url 'books:book_detail' next_needs_review.id %}" class="btn btn-outline-danger" title="Next Book Needing Review">
-                                    <i class="fas fa-flag"></i><span class="d-none d-xl-inline"> Needs Review</span>
+                                <a href="{% url 'books:book_detail' next_reviewed.id %}" class="btn btn-outline-success" title="Next Reviewed Book">
+                                    <span class="d-none d-xl-inline">Next Reviewed </span><i class="fas fa-chevron-right"></i>
                                 </a>
                             {% endif %}
                         </div>
@@ -139,33 +144,78 @@
                     <h1 class="mb-3">{{ book.title }}</h1>
                     <div class="row">
                         <div class="col-md-6">
+                            {% if book.finalmetadata.final_publisher %}
                             <div class="mb-2">
-                                <i class="fas fa-file-alt me-2 text-primary"></i>
-                                <strong>Filename:</strong>
-                                <span class="text-muted">{{ book.filename }}</span>
+                                <i class="fas fa-building me-2 text-muted"></i>
+                                <strong>Publisher:</strong>
+                                <span class="text-muted">{{ book.finalmetadata.final_publisher }}</span>
                             </div>
+                            {% endif %}
+                            {% if book.finalmetadata.publication_year %}
                             <div class="mb-2">
-                                <i class="fas fa-folder me-2 text-primary"></i>
-                                <strong>Full Path:</strong>
-                                <span class="text-muted">{{ book.relative_path }}</span>
+                                <i class="fas fa-calendar me-2 text-muted"></i>
+                                <strong>Year:</strong>
+                                <span class="text-muted">{{ book.finalmetadata.publication_year }}</span>
                             </div>
+                            {% endif %}
+                            {% if book.finalmetadata.language %}
+                            <div class="mb-2">
+                                <i class="fas fa-language me-2 text-muted"></i>
+                                <strong>Language:</strong>
+                                <span class="text-muted">{{ book.finalmetadata.language|language_name }}</span>
+                            </div>
+                            {% endif %}
+                            <div class="mb-2">
+                                <i class="fas fa-file-alt me-2 text-muted"></i>
+                                <strong>Format & Size:</strong>
+                                <span class="badge {{ book.file_format|format_color }}">{{ book.file_format|upper|default:"Unknown" }}</span>
+                                <span class="text-muted">   {{ book.file_size|filesizeformat|default:"Unknown" }}</span>
+                            </div>
+                            {% if book.finalmetadata.isbn %}
+                            <div class="mb-2">
+                                <i class="fas fa-barcode me-2 text-muted"></i>
+                                <strong>ISBN:</strong>
+                                <span class="text-muted">{{ book.finalmetadata.isbn }}</span>
+                            </div>
+                            {% endif %}
                         </div>
                         <div class="col-md-6">
+                            {% if book.scan_folder %}
                             <div class="mb-2">
-                                <i class="fas fa-hdd me-2 text-primary"></i>
-                                <strong>File Size:</strong>
-                                <span class="text-muted">{{ book.file_size|filesizeformat|default:"Unknown size" }}</span>
+                                <i class="fas fa-hdd me-2 text-muted"></i>
+                                <strong>Scan Folder:</strong>
+                                <a href="{% url 'books:edit_scan_folder' book.scan_folder.id %}" class="text-decoration-none">{{ book.scan_folder.name }}</a>
+                            </div>
+                            {% endif %}
+                            <div class="mb-2">
+                                <i class="fas fa-folder me-2 text-muted"></i>
+                                <strong>Path:</strong>
+                                <code class="small text-muted">{{ book.relative_path }}</code>
+                            </div>
+                            <div class="mb-2">
+                                <i class="fas fa-file me-2 text-muted"></i>
+                                <strong>Filename:</strong>
+                                <code class="small text-muted">{{ book.filename }}</code>
                             </div>
                             {% if book.scan_folder %}
                             <div class="mb-2">
-                                <i class="fas fa-folder me-2 text-primary"></i>
-                                <strong>Scan Folder:</strong>
-                                <span class="text-muted">{{ book.scan_folder.path }}</span>
-                            </div>
-                            <div class="mb-2">
-                                <i class="fas fa-clock me-2 text-primary"></i>
+                                <i class="fas fa-clock me-2 text-muted"></i>
                                 <strong>Last Scanned:</strong>
                                 <span class="text-muted">{{ book.last_scanned|date:"M d, Y" }}</span>
+                            </div>
+                            {% endif %}
+                            {% if book.finalmetadata %}
+                            <div class="mb-2">
+                                <strong>Confidence:</strong>
+                                <span class="badge {% if book.finalmetadata.overall_confidence >= 0.8 %}bg-success{% elif book.finalmetadata.overall_confidence >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
+                                    {{ book.finalmetadata.overall_confidence|mul:100|floatformat:0 }}%
+                                </span>
+                            </div>
+                            <div class="mb-2">
+                                <strong>Completeness:</strong>
+                                <span class="badge {% if book.finalmetadata.completeness_score >= 0.8 %}bg-success{% elif book.finalmetadata.completeness_score >= 0.5 %}bg-warning{% else %}bg-danger{% endif %}">
+                                    {{ book.finalmetadata.completeness_score|mul:100|floatformat:0 }}%
+                                </span>
                             </div>
                             {% endif %}
                         </div>
@@ -514,10 +564,22 @@
                                 <div class="card-body">
                                     <div class="row">
                                         {% for field_name, metadata_entries in metadata_by_field.items %}
+                                            {# Skip description - it has its own dedicated section #}
+                                            {% if field_name != 'description' %}
                                             <div class="col-md-6 col-lg-4 mb-3">
                                                 <div class="card h-100">
                                                     <div class="card-header d-flex justify-content-between align-items-center">
-                                                        <h6 class="mb-0 text-primary">{{ field_name|prettify_field_name }}</h6>
+                                                        <h6 class="mb-0 text-primary">
+                                                            {% if field_name == 'isbn' %}
+                                                                <i class="fas fa-barcode me-2"></i>ISBN
+                                                            {% elif field_name == 'publication_year' %}
+                                                                <i class="fas fa-calendar me-2"></i>Publication Year
+                                                            {% elif field_name == 'language' %}
+                                                                <i class="fas fa-language me-2"></i>Language
+                                                            {% else %}
+                                                                <i class="fas fa-tag me-2"></i>{{ field_name|prettify_field_name }}
+                                                            {% endif %}
+                                                        </h6>
                                                         <span class="badge bg-secondary">{{ metadata_entries|length }}</span>
                                                     </div>
                                                     <div class="card-body p-2">
@@ -531,7 +593,11 @@
                                                                     <div class="d-flex justify-content-between align-items-start">
                                                                         <div class="flex-grow-1">
                                                                             <strong class="d-block">
-                                                                                {{ metadata.field_value }}
+                                                                                {% if field_name == 'language' %}
+                                                                                    {{ metadata.field_value|language_name }}
+                                                                                {% else %}
+                                                                                    {{ metadata.field_value }}
+                                                                                {% endif %}
                                                                                 {% if is_final %}
                                                                                     <span class="badge bg-primary ms-1">Selected as Final</span>
                                                                                 {% elif is_top %}
@@ -564,6 +630,7 @@
                                                     </div>
                                                 </div>
                                             </div>
+                                            {% endif %}
                                         {% endfor %}
                                     </div>
                                 </div>
@@ -572,8 +639,8 @@
                         {% endif %}
 
                         <!-- Description Section -->
-                        {% if book.finalmetadata.description %}
-                        <div class="col-12">
+                        {% if metadata_by_field.description %}
+                        <div class="col-12 mt-3">
                             <div class="card">
                                 <div class="card-header">
                                     <h5 class="mb-0">
@@ -581,9 +648,46 @@
                                     </h5>
                                 </div>
                                 <div class="card-body">
-                                    <div class="description-content">
-                                        {{ book.finalmetadata.description|sanitize_description|safe }}
-                                    </div>
+                                    {% for entry in metadata_by_field.description %}
+                                        {% with metadata=entry.instance is_final=entry.is_final_selected is_top=entry.is_top_choice %}
+                                            <div class="mb-3 p-3 rounded border 
+                                                {% if metadata.confidence >= 0.8 %}border-success bg-success bg-opacity-10
+                                                {% elif metadata.confidence >= 0.5 %}border-warning bg-warning bg-opacity-10
+                                                {% else %}border-danger bg-danger bg-opacity-10{% endif %}"
+                                                data-id="{{ metadata.id }}">
+                                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                                    <div>
+                                                        <small class="text-muted">
+                                                            <i class="fas fa-database me-1"></i>{{ metadata.source.name }}
+                                                        </small>
+                                                        {% if is_final %}
+                                                            <span class="badge bg-primary ms-2">Selected as Final</span>
+                                                        {% elif is_top %}
+                                                            <span class="badge bg-info ms-2">Top Choice</span>
+                                                        {% endif %}
+                                                    </div>
+                                                    <div class="d-flex gap-2 align-items-center">
+                                                        <span class="badge 
+                                                            {% if metadata.confidence >= 0.8 %}bg-success
+                                                            {% elif metadata.confidence >= 0.5 %}bg-warning
+                                                            {% else %}bg-danger{% endif %}">
+                                                            {{ metadata.confidence|floatformat:2 }}
+                                                        </span>
+                                                        <button class="btn btn-sm btn-outline-danger"
+                                                            data-type="metadata"
+                                                            data-id="{{ metadata.id }}"
+                                                            aria-label="Delete metadata"
+                                                            title="Delete this metadata entry">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div class="description-content">
+                                                    {{ metadata.field_value|sanitize_description|safe }}
+                                                </div>
+                                            </div>
+                                        {% endwith %}
+                                    {% endfor %}
                                 </div>
                             </div>
                         </div>
@@ -1023,7 +1127,7 @@
                                     </div>
                                     
                                     <!-- Upload New Cover (hidden by default) -->
-                                    <div id="coverUploadSection" class="mt-2 d-hidden">>
+                                    <div id="coverUploadSection" class="mt-2 d-none">
                                         <label for="id_new_cover_upload" class="form-label">Upload New Cover Image</label>
                                         <input type="file" name="new_cover_upload" class="form-control" id="id_new_cover_upload" accept="image/*">
                                         {% if form.new_cover_upload.errors %}
@@ -1298,7 +1402,7 @@
                             </div>
 
                             <!-- Progress Section (Initially Hidden) -->
-                            <div id="rescanProgress" class="mt-4 d-hidden">>
+                            <div id="rescanProgress" class="mt-4 d-none">
                                 <div class="card border-info">
                                     <div class="card-header bg-info text-white">
                                         <h6 class="mb-0">
@@ -1307,7 +1411,7 @@
                                     </div>
                                     <div class="card-body">
                                         <div class="progress mb-3">
-                                            <div id="rescanProgressBar" class="progress-bar progress-bar-striped progress-bar-animated progress-bar-width-0" role="progressbar" aria-label="Book rescan progress">></div>
+                                            <div id="rescanProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-label="Book rescan progress"></div>
                                         </div>
                                         <div id="rescanStatus" class="text-muted">Initializing rescan...</div>
                                         <div id="rescanLog" class="mt-3 small text-muted"></div>
@@ -1316,7 +1420,7 @@
                             </div>
 
                             <!-- Results Section (Initially Hidden) -->
-                            <div id="rescanResults" class="mt-4 d-hidden">>
+                            <div id="rescanResults" class="mt-4 d-none">
                                 <div class="card border-success">
                                     <div class="card-header bg-success text-white">
                                         <h6 class="mb-0">
@@ -1381,12 +1485,12 @@
                         <div class="btn-group btn-group-sm nav-author" role="group" aria-label="Author navigation">
                             {% if prev_same_author %}
                                 <a href="{% url 'books:book_detail' prev_same_author.id %}" class="btn btn-outline-info" title="Previous by {{ book.finalmetadata.final_author }}">
-                                    <i class="fas fa-user"></i><span class="d-none d-md-inline"> Prev Author</span>
+                                    <i class="fas fa-chevron-left"></i><span class="d-none d-md-inline"> Prev (Same Author)</span>
                                 </a>
                             {% endif %}
                             {% if next_same_author %}
                                 <a href="{% url 'books:book_detail' next_same_author.id %}" class="btn btn-outline-info" title="Next by {{ book.finalmetadata.final_author }}">
-                                    <span class="d-none d-md-inline">Next Author </span><i class="fas fa-user"></i>
+                                    <span class="d-none d-md-inline">Next (Same Author) </span><i class="fas fa-chevron-right"></i>
                                 </a>
                             {% endif %}
                         </div>
@@ -1397,12 +1501,12 @@
                         <div class="btn-group btn-group-sm nav-series" role="group" aria-label="Series navigation">
                             {% if prev_same_series %}
                                 <a href="{% url 'books:book_detail' prev_same_series.id %}" class="btn btn-outline-success" title="Previous in {{ book.finalmetadata.final_series }}">
-                                    <i class="fas fa-book-open"></i><span class="d-none d-lg-inline"> Prev Series</span>
+                                    <i class="fas fa-chevron-left"></i><span class="d-none d-lg-inline"> Prev (Same Series)</span>
                                 </a>
                             {% endif %}
                             {% if next_same_series %}
                                 <a href="{% url 'books:book_detail' next_same_series.id %}" class="btn btn-outline-success" title="Next in {{ book.finalmetadata.final_series }}">
-                                    <span class="d-none d-lg-inline">Next Series </span><i class="fas fa-book-open"></i>
+                                    <span class="d-none d-lg-inline">Next (Same Series) </span><i class="fas fa-chevron-right"></i>
                                 </a>
                             {% endif %}
                         </div>
@@ -1410,19 +1514,24 @@
 
                         <!-- Review Status Navigation -->
                         <div class="btn-group btn-group-sm nav-review" role="group" aria-label="Review status navigation">
+                            {% if prev_unreviewed %}
+                                <a href="{% url 'books:book_detail' prev_unreviewed.id %}" class="btn btn-outline-warning" title="Previous Unreviewed Book">
+                                    <i class="fas fa-chevron-left"></i><span class="d-none d-xl-inline"> Prev Unreviewed</span>
+                                </a>
+                            {% endif %}
                             {% if next_unreviewed %}
                                 <a href="{% url 'books:book_detail' next_unreviewed.id %}" class="btn btn-outline-warning" title="Next Unreviewed Book">
-                                    <i class="fas fa-exclamation-triangle"></i><span class="d-none d-xl-inline"> Unreviewed</span>
+                                    <span class="d-none d-xl-inline">Next Unreviewed </span><i class="fas fa-chevron-right"></i>
+                                </a>
+                            {% endif %}
+                            {% if prev_reviewed %}
+                                <a href="{% url 'books:book_detail' prev_reviewed.id %}" class="btn btn-outline-success" title="Previous Reviewed Book">
+                                    <i class="fas fa-chevron-left"></i><span class="d-none d-xl-inline"> Prev Reviewed</span>
                                 </a>
                             {% endif %}
                             {% if next_reviewed %}
-                                <a href="{% url 'books:book_detail' next_reviewed.id %}" class="btn btn-outline-secondary" title="Next Reviewed Book">
-                                    <i class="fas fa-check"></i><span class="d-none d-xl-inline"> Reviewed</span>
-                                </a>
-                            {% endif %}
-                            {% if next_needs_review %}
-                                <a href="{% url 'books:book_detail' next_needs_review.id %}" class="btn btn-outline-danger" title="Next Book Needing Review">
-                                    <i class="fas fa-flag"></i><span class="d-none d-xl-inline"> Needs Review</span>
+                                <a href="{% url 'books:book_detail' next_reviewed.id %}" class="btn btn-outline-success" title="Next Reviewed Book">
+                                    <span class="d-none d-xl-inline">Next Reviewed </span><i class="fas fa-chevron-right"></i>
                                 </a>
                             {% endif %}
                         </div>

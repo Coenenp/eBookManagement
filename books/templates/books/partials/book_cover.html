@@ -9,11 +9,19 @@
            class="cover-image"
            decoding="async">
     {% elif is_url %}
-      <img src="{{ cover_path }}"
+      {% if 'google.com' in cover_path %}
+      <img src="{{ cover_path|safe }}"
            alt="Cover for {{ book|get_display_title }}"
            class="cover-image"
-           loading="lazy"
-           decoding="async">
+           decoding="async"
+           referrerpolicy="no-referrer">
+      {% else %}
+      <img src="{{ cover_path|safe }}"
+           alt="Cover for {{ book|get_display_title }}"
+           class="cover-image"
+           decoding="async"
+           crossorigin="anonymous">
+      {% endif %}
     {% elif cover_path %}
       {% if "/media/" in cover_path %}
         <img src="{{ cover_path }}"
@@ -24,7 +32,6 @@
         <img src="{% static cover_path %}"
              alt="Cover for {{ book|get_display_title }}"
              class="cover-image"
-             loading="lazy"
              decoding="async">
       {% endif %}
     {% else %}

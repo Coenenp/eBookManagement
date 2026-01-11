@@ -17,7 +17,11 @@
                 Trigger Scan
             </h2>
             <p class="unified-table-subtitle">
-                Start scanning "{{ scan_folder.name }}"
+                {% if scan_folder %}
+                    Start scanning "{{ scan_folder.name }}"
+                {% else %}
+                    Select scan folders to scan
+                {% endif %}
             </p>
         </div>
         <div class="unified-table-actions">
@@ -36,30 +40,51 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <!-- Folder information -->
-                    <div class="alert alert-primary">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <strong>Folder:</strong> {{ scan_folder.name }}<br>
-                                <strong>Path:</strong> <code>{{ scan_folder.path }}</code>
-                            </div>
-                            <div class="col-md-6">
-                                <strong>Content Type:</strong> {{ scan_folder.get_content_type_display }}<br>
-                                <strong>Language:</strong> {{ scan_folder.get_language_display }}
+                    {% if scan_folder %}
+                        <!-- Single folder scan -->
+                        <div class="alert alert-primary">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>Folder:</strong> {{ scan_folder.name }}<br>
+                                    <strong>Path:</strong> <code>{{ scan_folder.path }}</code>
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>Content Type:</strong> {{ scan_folder.get_content_type_display }}<br>
+                                    <strong>Language:</strong> {{ scan_folder.get_language_display }}
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    {% if not scan_folder.is_active %}
-                        <div class="alert alert-warning">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            <strong>Warning:</strong> This folder is currently inactive. You may want to activate it before scanning.
+                        {% if not scan_folder.is_active %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <strong>Warning:</strong> This folder is currently inactive. You may want to activate it before scanning.
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <!-- Multiple folders scan -->
+                        <div class="alert alert-primary">
+                            <h6><i class="fas fa-folder-open me-2"></i>Active Scan Folders</h6>
+                            {% if scan_folders %}
+                                <ul class="mb-0">
+                                    {% for folder in scan_folders %}
+                                        <li>
+                                            <strong>{{ folder.name }}</strong> 
+                                            <code class="ms-2">{{ folder.path }}</code>
+                                            <span class="badge bg-info ms-2">{{ folder.get_content_type_display }}</span>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p class="mb-0 text-muted">No active scan folders found.</p>
+                            {% endif %}
                         </div>
                     {% endif %}
 
                     <form method="post" novalidate>
                         {% csrf_token %}
                         
+                        {% if form %}
                         <div class="mb-4">
                             <label class="form-label">
                                 <i class="fas fa-cogs me-1"></i>Scan Options
@@ -85,6 +110,7 @@
                                 </div>
                             </div>
                         </div>
+                        {% endif %}
 
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle me-2"></i>
@@ -98,9 +124,15 @@
                         </div>
 
                         <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-success">
-                                <i class="fas fa-play me-2"></i>Start Scan
-                            </button>
+                            {% if scan_folders or scan_folder %}
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-play me-2"></i>Start Scan{% if not scan_folder %} All{% endif %}
+                                </button>
+                            {% else %}
+                                <button type="button" class="btn btn-success" disabled>
+                                    <i class="fas fa-play me-2"></i>No Folders Available
+                                </button>
+                            {% endif %}
                             <a href="{% url 'books:scan_folder_list' %}" class="btn btn-secondary">
                                 <i class="fas fa-times me-2"></i>Cancel
                             </a>

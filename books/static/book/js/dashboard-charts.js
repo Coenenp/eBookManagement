@@ -3,18 +3,42 @@
  * Handles Chart.js initialization for the dashboard page
  */
 
-// Bootstrap-themed color palette (vibrant and varied)
+/**
+ * Get computed Bootstrap color from CSS variables
+ */
+function getBootstrapColor(variableName, opacity = 0.8) {
+    const color = getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
+    // If it's already an rgb/rgba, parse and add opacity
+    if (color.startsWith('rgb')) {
+        const match = color.match(/\d+/g);
+        if (match && match.length >= 3) {
+            return `rgba(${match[0]}, ${match[1]}, ${match[2]}, ${opacity})`;
+        }
+    }
+    // If it's a hex color, convert to rgba
+    if (color.startsWith('#')) {
+        const hex = color.replace('#', '');
+        const r = parseInt(hex.substr(0, 2), 16);
+        const g = parseInt(hex.substr(2, 2), 16);
+        const b = parseInt(hex.substr(4, 2), 16);
+        return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    }
+    // Fallback
+    return color;
+}
+
+// Bootstrap-themed color palette using CSS variables
 const BOOTSTRAP_COLORS = [
-    'rgba(13, 110, 253, 0.8)', // Primary Blue
-    'rgba(25, 135, 84, 0.8)', // Success Green
-    'rgba(220, 53, 69, 0.8)', // Danger Red
-    'rgba(255, 193, 7, 0.8)', // Warning Yellow
-    'rgba(13, 202, 240, 0.8)', // Info Cyan
-    'rgba(111, 66, 193, 0.8)', // Purple
-    'rgba(214, 51, 132, 0.8)', // Pink
-    'rgba(253, 126, 20, 0.8)', // Orange
-    'rgba(32, 201, 151, 0.8)', // Teal
-    'rgba(102, 16, 242, 0.8)', // Indigo
+    () => getBootstrapColor('--bs-primary', 0.8),
+    () => getBootstrapColor('--bs-success', 0.8),
+    () => getBootstrapColor('--bs-danger', 0.8),
+    () => getBootstrapColor('--bs-warning', 0.8),
+    () => getBootstrapColor('--bs-info', 0.8),
+    () => getBootstrapColor('--bs-purple', 0.8),
+    () => getBootstrapColor('--bs-pink', 0.8),
+    () => getBootstrapColor('--bs-orange', 0.8),
+    () => getBootstrapColor('--bs-teal', 0.8),
+    () => getBootstrapColor('--bs-indigo', 0.8),
 ];
 
 /**
@@ -35,8 +59,11 @@ function initializeFormatChart(chartData) {
 
     const formatCtx = document.getElementById('formatChart').getContext('2d');
 
-    // Generate vibrant colors for each format
-    const colors = chartData.format_labels.map((_, index) => BOOTSTRAP_COLORS[index % BOOTSTRAP_COLORS.length]);
+    // Generate vibrant colors for each format using Bootstrap theme colors
+    const colors = chartData.format_labels.map((_, index) => BOOTSTRAP_COLORS[index % BOOTSTRAP_COLORS.length]());
+
+    // Get border color from body background
+    const borderColor = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-bg').trim() || 'white';
 
     new Chart(formatCtx, {
         type: 'pie',
@@ -47,7 +74,7 @@ function initializeFormatChart(chartData) {
                     data: chartData.format_data,
                     backgroundColor: colors,
                     borderWidth: 2,
-                    borderColor: '#fff',
+                    borderColor: borderColor,
                     hoverOffset: 10,
                 },
             ],
@@ -90,6 +117,15 @@ function initializeMetadataChart(chartData) {
     }
 
     const metadataCtx = document.getElementById('metadataChart').getContext('2d');
+
+    // Use Bootstrap theme colors for the chart
+    const successColor = getBootstrapColor('--bs-success', 0.8);
+    const warningColor = getBootstrapColor('--bs-warning', 0.8);
+    const dangerColor = getBootstrapColor('--bs-danger', 0.8);
+    const successBorder = getBootstrapColor('--bs-success', 1);
+    const warningBorder = getBootstrapColor('--bs-warning', 1);
+    const dangerBorder = getBootstrapColor('--bs-danger', 1);
+
     new Chart(metadataCtx, {
         type: 'bar',
         data: {
@@ -98,12 +134,8 @@ function initializeMetadataChart(chartData) {
                 {
                     label: 'Books',
                     data: chartData.completeness_data,
-                    backgroundColor: [
-                        'rgba(40, 167, 69, 0.8)', // Complete - green
-                        'rgba(255, 193, 7, 0.8)', // Partial - yellow
-                        'rgba(220, 53, 69, 0.8)', // Missing - red
-                    ],
-                    borderColor: ['rgba(40, 167, 69, 1)', 'rgba(255, 193, 7, 1)', 'rgba(220, 53, 69, 1)'],
+                    backgroundColor: [successColor, warningColor, dangerColor],
+                    borderColor: [successBorder, warningBorder, dangerBorder],
                     borderWidth: 2,
                 },
             ],

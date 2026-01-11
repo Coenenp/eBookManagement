@@ -5,27 +5,30 @@
 
 /* Core layout container */
 .container-fluid.h-100 {
-    height: calc(100vh - 100px); /* Adjusted for navbar + margins */
-    min-height: 500px; /* Ensure minimum usable height */
+    height: calc(100vh - 60px); /* Reduced from 100px for more compact view */
+    min-height: 400px; /* Reduced from 500px */
     overflow: hidden;
     /* Use theme background instead of custom gradient */
     background-color: var(--bs-body-bg);
     display: flex;
     flex-direction: column;
+    font-size: 0.85rem; /* Smaller base font for app-like feel */
 }
 
 /* Ensure the row takes full height */
 .container-fluid.h-100 > .row {
     flex: 1;
     min-height: 0; /* Important for flexbox scrolling */
+    flex-wrap: nowrap !important; /* Prevent panels from wrapping */
+    overflow: hidden;
 }
 
 /* List & detail panels - let Bootstrap classes handle backgrounds */
 #list-panel {
-    min-width: 250px;
-    max-width: 600px;
+    min-width: 10%; /* Dynamic minimum based on container */
+    max-width: 90%; /* Dynamic maximum based on container */
     overflow: hidden;
-    transition: width 0.3s ease;
+    transition: none; /* Disable transition during resize */
     /* Remove custom background - let bg-light from template work */
     border-right: 1px solid var(--bs-border-color);
     /* Use subtle theme-aware shadow */
@@ -33,48 +36,55 @@
     display: flex;
     flex-direction: column;
     height: 100%;
+    flex-shrink: 0; /* Prevent shrinking */
+    position: relative;
 }
 
 #detail-panel {
-    flex: 1;
-    min-width: 300px;
+    flex: 1 1 auto; /* Grow to fill remaining space */
+    min-width: 10%; /* Dynamic minimum */
+    max-width: 90%; /* Dynamic maximum */
     /* Remove custom background - let Bootstrap handle it */
     overflow: hidden;
     display: flex;
     flex-direction: column;
     height: 100%;
+    flex-shrink: 1; /* Allow shrinking */
+    position: relative;
 }
 
 /* Scrollable areas configuration */
-#items-list { 
-    flex: 1; 
-    overflow-y: auto; 
-    overflow-x: hidden; 
-    padding: 0; 
+#items-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.25rem; /* Reduced padding */
     /* Use theme background color */
     background-color: var(--bs-body-bg);
     min-height: 0; /* Critical for flexbox scrolling */
 }
-#detail-panel > .flex-grow-1 { 
-    flex: 1; 
-    overflow-y: auto; 
-    overflow-x: hidden; 
+#detail-panel > .flex-grow-1 {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.75rem; /* Reduced padding */
     min-height: 0; /* Critical for flexbox scrolling */
 }
-.detail-content, .tab-content { 
-    overflow-y: auto; 
+.detail-content,
+.tab-content {
+    overflow-y: auto;
     /* Use theme background color */
     background-color: var(--bs-body-bg);
 }
-.tab-pane { 
-    overflow-y: auto; 
-    max-height: calc(100vh - 250px); 
+.tab-pane {
+    overflow-y: auto;
+    max-height: calc(100vh - 250px);
 }
-.detail-tabs-container { 
-    overflow: hidden; 
-    display: flex; 
-    flex-direction: column; 
-    min-height: 0; 
+.detail-tabs-container {
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 /* Condensed list items for high-density display */
@@ -95,17 +105,31 @@
     will-change: background-color;
     contain: layout style;
 }
-.list-item::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--bs-primary); opacity: 0; transition: opacity 0.2s ease; }
-.list-item:hover { 
+.list-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--bs-primary);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.list-item:hover {
     background-color: var(--bs-primary-bg-subtle);
 }
-.list-item:hover::before { opacity: 1; }
-.list-item.selected { 
-    background-color: var(--bs-primary-bg-subtle); 
-    border-left: 3px solid var(--bs-primary); 
-    font-weight: 500; 
+.list-item:hover::before {
+    opacity: 1;
 }
-.list-item.selected::before { opacity: 1; }
+.list-item.selected {
+    background-color: var(--bs-primary-bg-subtle);
+    border-left: 3px solid var(--bs-primary);
+    font-weight: 500;
+}
+.list-item.selected::before {
+    opacity: 1;
+}
 
 /* Grid items should not have fixed height */
 .grid-item.list-item {
@@ -116,20 +140,20 @@
 }
 
 /* Alternating row styling */
-.list-item:nth-child(even) { 
-    background-color: var(--bs-secondary-bg-subtle); 
+.list-item:nth-child(even) {
+    background-color: var(--bs-secondary-bg-subtle);
 }
-.list-item:nth-child(odd) { 
-    background-color: var(--bs-body-bg); 
+.list-item:nth-child(odd) {
+    background-color: var(--bs-body-bg);
 }
 .list-item:nth-child(even):hover,
-.list-item:nth-child(odd):hover { 
+.list-item:nth-child(odd):hover {
     background-color: var(--bs-primary-bg-subtle);
 }
 
 /* List item content components */
 .item-title {
-    font-size: 0.85rem;
+    font-size: 0.8rem; /* Reduced from 0.85rem */
     font-weight: 600;
     color: var(--bs-body-color);
     margin: 0;
@@ -163,7 +187,7 @@
 }
 
 .item-subtitle {
-    font-size: 0.75rem;
+    font-size: 0.7rem; /* Reduced from 0.75rem */
     color: var(--bs-secondary);
     margin: 0;
     font-weight: 400;
@@ -183,13 +207,18 @@
     width: 100px;
     min-width: 100px; /* Keep full width - don't allow shrinking */
     flex-shrink: 0; /* Don't shrink - always maintain width */
-    font-size: 0.75rem;
+    font-size: 0.7rem; /* Reduced from 0.75rem */
     color: var(--bs-light);
     white-space: nowrap;
 }
-.item-badges { display: flex; gap: 3px; flex-wrap: nowrap; justify-content: flex-end; }
+.item-badges {
+    display: flex;
+    gap: 3px;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+}
 .item-badges .badge {
-    font-size: 0.65rem;
+    font-size: 0.6rem; /* Reduced from 0.65rem */
     padding: 2px 6px;
     border-radius: 4px;
     font-weight: 500;
@@ -197,7 +226,11 @@
     letter-spacing: 0.3px;
     white-space: nowrap;
 }
-.item-info .text-muted { font-size: 0.65rem; white-space: nowrap; text-align: right; }
+.item-info .text-muted {
+    font-size: 0.65rem;
+    white-space: nowrap;
+    text-align: right;
+}
 
 /* Tiny cover thumbnails for list view */
 .item-cover-tiny {
@@ -209,7 +242,11 @@
     margin-right: 8px;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
-.item-cover-tiny img { width: 100%; height: 100%; object-fit: cover; }
+.item-cover-tiny img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
 .item-cover-tiny .placeholder-cover {
     width: 100%;
     height: 100%;
@@ -240,30 +277,47 @@
     min-height: 32px;
 }
 /* Header columns - spacer accounts for cover + chevron, columns flex naturally with gap */
-.list-header-spacer { width: 56px; flex-shrink: 0; } /* cover(24px) + gap(10px) + chevron(14px) + margin(8px) */
-.list-header-title { flex: 1 1 auto; min-width: 150px; } /* Match item-title flex properties */
-.list-header-author { width: 120px; min-width: 80px; flex-shrink: 1; } /* Match item-subtitle */
-.list-header-info { width: 100px; min-width: 100px; flex-shrink: 0; text-align: right; } /* Match item-info - keep full width */
+.list-header-spacer {
+    width: 56px;
+    flex-shrink: 0;
+} /* cover(24px) + gap(10px) + chevron(14px) + margin(8px) */
+.list-header-title {
+    flex: 1 1 auto;
+    min-width: 150px;
+} /* Match item-title flex properties */
+.list-header-author {
+    width: 120px;
+    min-width: 80px;
+    flex-shrink: 1;
+} /* Match item-subtitle */
+.list-header-info {
+    width: 100px;
+    min-width: 100px;
+    flex-shrink: 0;
+    text-align: right;
+} /* Match item-info - keep full width */
 
 /* Optimized scrollbar styling */
-#items-list::-webkit-scrollbar { width: 6px; }
-#items-list::-webkit-scrollbar-track { 
-    background-color: var(--bs-secondary-bg-subtle); 
-    border-radius: 3px; 
+#items-list::-webkit-scrollbar {
+    width: 6px;
 }
-#items-list::-webkit-scrollbar-thumb { 
-    background-color: var(--bs-secondary-border-subtle); 
-    border-radius: 3px; 
-    transition: all 0.3s ease; 
+#items-list::-webkit-scrollbar-track {
+    background-color: var(--bs-secondary-bg-subtle);
+    border-radius: 3px;
 }
-#items-list::-webkit-scrollbar-thumb:hover { 
-    background-color: var(--bs-primary); 
+#items-list::-webkit-scrollbar-thumb {
+    background-color: var(--bs-secondary-border-subtle);
+    border-radius: 3px;
+    transition: all 0.3s ease;
+}
+#items-list::-webkit-scrollbar-thumb:hover {
+    background-color: var(--bs-primary);
 }
 
 @supports (scrollbar-width: thin) {
-    #items-list { 
-        scrollbar-width: thin; 
-        scrollbar-color: var(--bs-secondary-border-subtle) var(--bs-secondary-bg-subtle); 
+    #items-list {
+        scrollbar-width: thin;
+        scrollbar-color: var(--bs-secondary-border-subtle) var(--bs-secondary-bg-subtle);
     }
 }
 
@@ -323,7 +377,7 @@
         max-height: none;
         height: auto;
     }
-    
+
     #list-panel {
         min-width: 100%;
         max-width: 100%;
@@ -331,14 +385,337 @@
         resize: vertical;
         border-radius: 0;
         border-right: none;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        border-bottom: 1px solid var(--bs-border-color-translucent);
     }
-    
+
     #detail-panel {
         border-radius: 0;
     }
-    
+
     .resize-handle {
         display: none;
     }
+}
+
+/* ======================================
+   📊 Condensed Table View (Calibre-style)
+   High-density table with many columns
+========================================= */
+
+/* Table container with horizontal scroll */
+.condensed-table-container {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
+    font-size: 0.8rem;
+}
+
+/* Table styling */
+.condensed-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: auto;
+    margin: 0;
+}
+
+/* Table header */
+.condensed-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: var(--bs-light);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.condensed-table th {
+    padding: 6px 8px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.75rem;
+    color: var(--bs-body-color);
+    border-bottom: 2px solid var(--bs-border-color);
+    background-color: var(--bs-light);
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s;
+}
+
+.condensed-table th:hover {
+    background-color: var(--bs-secondary-bg);
+}
+
+.condensed-table th .sort-icon {
+    margin-left: 4px;
+    font-size: 0.7rem;
+    opacity: 0.5;
+}
+
+.condensed-table th.sorted .sort-icon {
+    opacity: 1;
+}
+
+/* Table body rows */
+.condensed-table tbody tr {
+    cursor: pointer;
+    transition: background-color 0.15s;
+    border-bottom: 1px solid var(--bs-border-color-translucent);
+}
+
+.condensed-table tbody tr:hover {
+    background-color: var(--bs-primary-bg-subtle);
+}
+
+.condensed-table tbody tr.selected {
+    background-color: var(--bs-primary-bg-subtle);
+    border-left: 3px solid var(--bs-primary);
+    font-weight: 500;
+}
+
+.condensed-table tbody tr:nth-child(even) {
+    background-color: rgba(var(--bs-secondary-bg-rgb), 0.3);
+}
+
+/* Table cells */
+.condensed-table td {
+    padding: 0.3rem 0.5rem; /* Reduced from 4px 8px */
+    font-size: 0.7rem; /* Reduced from 0.75rem */
+    color: var(--bs-body-color);
+    border-bottom: 1px solid var(--bs-border-color-translucent);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 250px;
+}
+
+/* Column-specific widths */
+.condensed-table .col-title {
+    min-width: 200px;
+    max-width: 300px;
+    font-weight: 500;
+}
+
+.condensed-table .col-author {
+    min-width: 120px;
+    max-width: 180px;
+}
+
+.condensed-table .col-series {
+    min-width: 120px;
+    max-width: 180px;
+}
+
+.condensed-table .col-publisher {
+    min-width: 100px;
+    max-width: 150px;
+}
+
+.condensed-table .col-format {
+    width: 60px;
+    text-align: center;
+}
+
+.condensed-table .col-size {
+    width: 80px;
+    text-align: right;
+}
+
+.condensed-table .col-year {
+    width: 60px;
+    text-align: center;
+}
+
+.condensed-table .col-language {
+    width: 60px;
+    text-align: center;
+}
+
+.condensed-table .col-path {
+    min-width: 200px;
+    max-width: 300px;
+    font-family: monospace;
+    font-size: 0.7rem;
+}
+
+.condensed-table .col-status {
+    width: 70px;
+    text-align: center;
+}
+
+/* Badge styles within table */
+.condensed-table .badge {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    font-weight: 500;
+}
+
+/* Text truncation for long content */
+.condensed-table .truncate {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Path cell special styling */
+.condensed-table td.col-path {
+    color: var(--bs-secondary);
+    font-style: italic;
+}
+
+/* Title cell with icon */
+.condensed-table .col-title .file-icon {
+    margin-right: 6px;
+    font-size: 0.75rem; /* Reduced icon size */
+    color: var(--bs-primary);
+}
+
+/* App-like compact styling - scoped to split pane sections only */
+#list-panel h5,
+#detail-panel h5,
+#list-panel .h5,
+#detail-panel .h5 {
+    font-size: 0.95rem; /* Reduced from default 1.25rem */
+    margin-bottom: 0.5rem;
+}
+
+#list-panel h6,
+#detail-panel h6,
+#list-panel .h6,
+#detail-panel .h6 {
+    font-size: 0.85rem; /* Reduced from default 1rem */
+    margin-bottom: 0.35rem;
+}
+
+#detail-panel p {
+    font-size: 0.8rem; /* Reduced paragraph size */
+    margin-bottom: 0.5rem;
+}
+
+#detail-panel .text-muted {
+    font-size: 0.75rem; /* Smaller muted text */
+}
+
+/* Compact badges within sections */
+#list-panel .badge,
+#detail-panel .badge,
+.condensed-table .badge {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.35rem;
+}
+
+/* Compact buttons within sections */
+#list-panel .btn-sm,
+#detail-panel .btn-sm {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Compact form controls within sections */
+#list-panel .form-control-sm,
+#list-panel .form-select-sm,
+#detail-panel .form-control-sm,
+#detail-panel .form-select-sm {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Reduce padding within panels only */
+#list-panel .p-3,
+#detail-panel .p-3 {
+    padding: 0.75rem;
+}
+
+#list-panel .mb-3,
+#detail-panel .mb-3 {
+    margin-bottom: 0.75rem;
+}
+
+/* Compact companion and series rows */
+.companion-row td,
+.series-book-row td {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+}
+
+/* Compact icons */
+.condensed-table .expand-icon,
+.list-item .expand-icon {
+    font-size: 0.7rem;
+}
+
+.condensed-table .sort-icon {
+    font-size: 0.65rem;
+}
+
+/* Condensed tabs in detail panel */
+#detail-panel .nav-tabs .nav-link,
+#detail-panel .nav-tabs-enhanced .nav-link {
+    padding: 0.35rem 0.5rem; /* Further reduced from 0.4rem 0.75rem */
+    margin: 0 0.05rem;
+    font-size: 0.75rem; /* Smaller from 0.8rem */
+    border: none;
+    transition: all 0.2s ease;
+}
+
+#detail-panel .nav-tabs .nav-link i {
+    font-size: 0.7rem; /* Smaller icons in tabs */
+    margin-right: 0.25rem; /* Reduced spacing */
+}
+
+#detail-panel .nav-tabs .nav-link:hover {
+    background-color: rgba(var(--bs-primary-rgb), 0.1);
+}
+
+#detail-panel .nav-tabs .nav-link.active {
+    font-weight: 600;
+    border-bottom: 2px solid var(--bs-primary);
+}
+
+/* Condensed tab content */
+#detail-panel .tab-content {
+    padding: 0; /* No padding on container */
+    overflow: visible; /* Don't create scroll context */
+    height: auto; /* Let it flow naturally */
+}
+
+#detail-panel .tab-pane {
+    font-size: 0.8rem;
+    padding: 0.5rem; /* Move padding here */
+    overflow: visible; /* Don't create scroll context */
+    height: auto; /* Let content determine height */
+    max-height: none; /* Remove height restriction */
+}
+
+/* Ensure detail panel scrolls, not individual tabs */
+#detail-panel > .flex-grow-1 {
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Remove h-100 conflicts */
+#detail-panel .ebook-detail-wrapper,
+#detail-panel .detail-content {
+    height: auto !important; /* Override inline h-100 */
+}
+
+#detail-panel .tab-content.h-100,
+#detail-panel .tab-pane.h-100 {
+    height: auto !important; /* Override h-100 class */
+}
+
+/* Condensed detail content sections */
+#detail-panel .detail-section {
+    margin-bottom: 0.75rem; /* Reduced spacing */
+}
+
+#detail-panel .detail-section h6 {
+    font-size: 0.8rem;
+    margin-bottom: 0.35rem;
+    font-weight: 600;
+}
+
+#detail-panel .list-group-item {
+    padding: 0.4rem 0.6rem; /* Reduced from default */
+    font-size: 0.75rem;
 }

@@ -118,6 +118,7 @@ class EditScanFolderView(LoginRequiredMixin, BookNavigationMixin, UpdateView):
     template_name = "books/scan_folder/edit_scan_folder.html"
     form_class = ScanFolderEditForm
     success_url = reverse_lazy("books:scan_folder_list")
+    context_object_name = "scan_folder"
 
     def get_model(self):
         return get_model("ScanFolder")

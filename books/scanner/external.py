@@ -42,52 +42,55 @@ def query_metadata_and_covers(book):
         title = _get_best_title(book)
         author = _get_best_author(book)
 
-        logger.info(
-            f"Retrieving metadata and covers for {title or 'Unknown'} ({author or 'Unknown'})..."
-        )
+        logger.info(f"Retrieving metadata and covers for {title or 'Unknown'} ({author or 'Unknown'})...")
         logger.info(f"[DEBUG] Title resolved: {title}, Author resolved: {author}")
         logger.info(f"[EXTERNAL PARSE] Book ID: {book.id}")
 
         if title or author:
             logger.info(f"[OPEN LIBRARY COMBINED] Title: {title}, Author: {author}")
-            _query_open_library_combined(
-                book, title, author, None
-            )  # No ISBN available in this context
+            _query_open_library_combined(book, title, author, None)  # No ISBN available in this context
 
             logger.info(f"[GOOGLE BOOKS COMBINED] Title: {title}, Author: {author}")
-            _query_google_books_combined(
-                book, title, author, None
-            )  # No ISBN available in this context
+            _query_google_books_combined(book, title, author, None)  # No ISBN available in this context
 
             logger.info(f"[GOODREADS COMBINED] Title: {title}, Author: {author}")
             _query_goodreads_combined(book, title, author)
         else:
-            logger.warning(
-                f"[QUERY SKIPPED] No usable title or author found for book ID {book.id}"
-            )
+            logger.warning(f"[QUERY SKIPPED] No usable title or author found for book ID {book.id}")
     except Exception as e:
         logger.error(f"[QUERY_METADATA_AND_COVERS EXCEPTION] {e}")
         traceback.print_exc()
 
 
-def query_metadata_and_covers_with_terms(
-    book, search_title=None, search_author=None, search_isbn=None
-):
-    """Query external metadata using specific search terms instead of book's existing metadata"""
+def query_metadata_and_covers_with_terms(book, search_title=None, search_author=None, search_isbn=None, sources=None, force_refresh=False):
+    """Query external metadata using specific search terms instead of book's existing metadata
+
+    Args:
+        book: Book object to query metadata for
+        search_title: Override title to search for
+        search_author: Override author to search for
+        search_isbn: Override ISBN to search for
+        sources: List of sources to query (e.g., ['google', 'openlibrary', 'goodreads']). If None, queries all.
+        force_refresh: If True, bypass any caching mechanisms
+    """
     metadata_list = []
     covers_list = []
+
+    # Default to all sources if none specified
+    if sources is None:
+        sources = ["google", "openlibrary", "goodreads"]
+
+    # Normalize source names to lowercase
+    sources = [s.lower() for s in sources]
 
     try:
         # Use provided search terms, fall back to existing metadata
         title = search_title or _get_best_title(book)
         author = search_author or _get_best_author(book)
 
-        logger.info(
-            f"Retrieving metadata and covers with custom terms for book {book.id}"
-        )
-        logger.info(
-            f"Search terms - Title: '{title}', Author: '{author}', ISBN: '{search_isbn}'"
-        )
+        logger.info(f"Retrieving metadata and covers with custom terms for book {book.id}")
+        logger.info(f"Search terms - Title: '{title}', Author: '{author}', ISBN: '{search_isbn}'")
+        logger.info(f"Selected sources: {sources}, Force refresh: {force_refresh}")
 
         if title or author or search_isbn:
             # Count metadata and covers before queries
@@ -96,22 +99,28 @@ def query_metadata_and_covers_with_terms(
 
             # Try ISBN search first if provided
             if search_isbn:
-                logger.info(
-                    f"[ISBN SEARCH] Using ISBN for enhanced searches: {search_isbn}"
-                )
+                logger.info(f"[ISBN SEARCH] Using ISBN for enhanced searches: {search_isbn}")
 
-            logger.info(
-                f"[OPEN LIBRARY COMBINED] Title: {title}, Author: {author}, ISBN: {search_isbn}"
-            )
-            _query_open_library_combined(book, title, author, search_isbn)
+            # Query Open Library if selected
+            if "openlibrary" in sources:
+                logger.info(f"[OPEN LIBRARY COMBINED] Title: {title}, Author: {author}, ISBN: {search_isbn}")
+                _query_open_library_combined(book, title, author, search_isbn)
+            else:
+                logger.info("[OPEN LIBRARY SKIPPED] Not selected by user")
 
-            logger.info(
-                f"[GOOGLE BOOKS COMBINED] Title: {title}, Author: {author}, ISBN: {search_isbn}"
-            )
-            _query_google_books_combined(book, title, author, search_isbn)
+            # Query Google Books if selected
+            if "google" in sources:
+                logger.info(f"[GOOGLE BOOKS COMBINED] Title: {title}, Author: {author}, ISBN: {search_isbn}")
+                _query_google_books_combined(book, title, author, search_isbn)
+            else:
+                logger.info("[GOOGLE BOOKS SKIPPED] Not selected by user")
 
-            logger.info(f"[GOODREADS COMBINED] Title: {title}, Author: {author}")
-            _query_goodreads_combined(book, title, author)
+            # Query Goodreads if selected
+            if "goodreads" in sources:
+                logger.info(f"[GOODREADS COMBINED] Title: {title}, Author: {author}")
+                _query_goodreads_combined(book, title, author)
+            else:
+                logger.info("[GOODREADS SKIPPED] Not selected by user")
 
             # Collect new metadata and covers that were added
             final_metadata_count = BookMetadata.objects.filter(book=book).count()
@@ -119,18 +128,14 @@ def query_metadata_and_covers_with_terms(
 
             # Get the newly added metadata and covers
             if final_metadata_count > initial_metadata_count:
-                new_metadata = BookMetadata.objects.filter(book=book)[
-                    initial_metadata_count:
-                ]
+                new_metadata = BookMetadata.objects.filter(book=book)[initial_metadata_count:]
                 metadata_list.extend(list(new_metadata))
 
             if final_covers_count > initial_covers_count:
                 new_covers = BookCover.objects.filter(book=book)[initial_covers_count:]
                 covers_list.extend(list(new_covers))
         else:
-            logger.warning(
-                f"[QUERY SKIPPED] No usable search terms provided for book ID {book.id}"
-            )
+            logger.warning(f"[QUERY SKIPPED] No usable search terms provided for book ID {book.id}")
 
     except Exception as e:
         logger.error(f"[QUERY_METADATA_AND_COVERS_WITH_TERMS EXCEPTION] {e}")
@@ -149,23 +154,16 @@ def _get_best_author(book):
     return best.author.name if best else None
 
 
-def _calculate_match_confidence(
-    query_title, query_author, result_title, result_authors
-):
+def _calculate_match_confidence(query_title, query_author, result_title, result_authors):
     """Calculate match confidence based on title and author similarity"""
     title_score = 0.0
     author_score = 0.0
 
     if query_title and result_title:
-        title_score = SequenceMatcher(
-            None, query_title.lower(), result_title.lower()
-        ).ratio()
+        title_score = SequenceMatcher(None, query_title.lower(), result_title.lower()).ratio()
 
     if query_author and result_authors:
-        author_score = max(
-            SequenceMatcher(None, query_author.lower(), a.lower()).ratio()
-            for a in result_authors
-        )
+        author_score = max(SequenceMatcher(None, query_author.lower(), a.lower()).ratio() for a in result_authors)
 
     # Weighted average: title 60%, author 40%
     if query_title and query_author:
@@ -202,9 +200,7 @@ def _safe_google_request(url, cache_key=None, retries=3):
         base_url = url
         params = {}
 
-    return google_client.make_request(
-        base_url, params=params, cache_key=cache_key, cache_timeout=10800  # 3 hours
-    )
+    return google_client.make_request(base_url, params=params, cache_key=cache_key, cache_timeout=10800)  # 3 hours
 
 
 def _safe_apify_request(actor_name, input_payload, cache_key, token, timeout=3600):
@@ -237,12 +233,8 @@ def get_image_metadata(url):
 def _query_open_library_combined(book, title, author, isbn=None):
     """Combined Open Library query for both metadata and covers"""
     try:
-        metadata_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.OPEN_LIBRARY, defaults={"trust_level": 0.8}
-        )
-        cover_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.OPEN_LIBRARY_COVERS, defaults={"trust_level": 0.7}
-        )
+        metadata_source, _ = DataSource.objects.get_or_create(name=DataSource.OPEN_LIBRARY, defaults={"trust_level": 0.8})
+        cover_source, _ = DataSource.objects.get_or_create(name=DataSource.OPEN_LIBRARY_COVERS, defaults={"trust_level": 0.7})
 
         # Build query - prefer ISBN if available
         if isbn:
@@ -259,9 +251,7 @@ def _query_open_library_combined(book, title, author, isbn=None):
                 return
             qstring = " AND ".join(query)
             cache_key = f"openlib_combined:{make_cache_key(title, author)}"
-            logger.info(
-                f"[OPEN LIBRARY TITLE/AUTHOR SEARCH] Title: {title}, Author: {author}"
-            )
+            logger.info(f"[OPEN LIBRARY TITLE/AUTHOR SEARCH] Title: {title}, Author: {author}")
 
         url = "https://openlibrary.org/search.json"
         params = {"q": qstring, "limit": 5}
@@ -272,9 +262,7 @@ def _query_open_library_combined(book, title, author, isbn=None):
             logger.error("Open Library API client not available")
             return
 
-        data = open_library_client.make_request(
-            url, params=params, cache_key=cache_key, cache_timeout=3600  # 1 hour
-        )
+        data = open_library_client.make_request(url, params=params, cache_key=cache_key, cache_timeout=3600)  # 1 hour
 
         if not data:
             logger.info(f"[OPEN LIBRARY] No response for query: {qstring}")
@@ -300,12 +288,8 @@ def _query_open_library_combined(book, title, author, isbn=None):
             )
 
         if match_confidence > 0.5:
-            metadata_confidence = _calculate_final_confidence(
-                metadata_source, match_confidence
-            )
-            _process_open_library_metadata(
-                book, metadata_source, best_match, metadata_confidence
-            )
+            metadata_confidence = _calculate_final_confidence(metadata_source, match_confidence)
+            _process_open_library_metadata(book, metadata_source, best_match, metadata_confidence)
 
         # Process covers from all results
         for doc in docs:
@@ -314,22 +298,14 @@ def _query_open_library_combined(book, title, author, isbn=None):
                     # High confidence for ISBN-based cover matches
                     doc_match_confidence = 0.9
                 else:
-                    doc_match_confidence = _calculate_match_confidence(
-                        title, author, doc.get("title", ""), doc.get("author_name", [])
-                    )
+                    doc_match_confidence = _calculate_match_confidence(title, author, doc.get("title", ""), doc.get("author_name", []))
 
                 if doc_match_confidence > 0.3:  # Lower threshold for covers
-                    cover_confidence = _calculate_final_confidence(
-                        cover_source, doc_match_confidence
-                    )
-                    _process_open_library_cover(
-                        book, cover_source, doc, cover_confidence
-                    )
+                    cover_confidence = _calculate_final_confidence(cover_source, doc_match_confidence)
+                    _process_open_library_cover(book, cover_source, doc, cover_confidence)
 
     except Exception as e:
-        logger.warning(
-            f"Open Library combined query failed for {book.file_path}: {str(e)}"
-        )
+        logger.warning(f"Open Library combined query failed for {book.file_path}: {str(e)}")
 
 
 def _query_google_books_combined(book, title, author, isbn=None):
@@ -338,12 +314,8 @@ def _query_google_books_combined(book, title, author, isbn=None):
         if not settings.GOOGLE_BOOKS_API_KEY or not (title or author or isbn):
             return
 
-        metadata_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.GOOGLE_BOOKS, defaults={"trust_level": 0.85}
-        )
-        cover_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.GOOGLE_BOOKS_COVERS, defaults={"trust_level": 0.8}
-        )
+        metadata_source, _ = DataSource.objects.get_or_create(name=DataSource.GOOGLE_BOOKS, defaults={"trust_level": 0.85})
+        cover_source, _ = DataSource.objects.get_or_create(name=DataSource.GOOGLE_BOOKS_COVERS, defaults={"trust_level": 0.8})
 
         # Build query - prefer ISBN if available, otherwise use title/author
         if isbn:
@@ -351,15 +323,9 @@ def _query_google_books_combined(book, title, author, isbn=None):
             cache_key = f"gbooks_combined_isbn:{make_cache_key(isbn)}"
             logger.info(f"[GOOGLE BOOKS ISBN SEARCH] Using ISBN: {isbn}")
         else:
-            query = "+".join(
-                f'{param}:"{value}"'
-                for param, value in [("intitle", title), ("inauthor", author)]
-                if value
-            )
+            query = "+".join(f'{param}:"{value}"' for param, value in [("intitle", title), ("inauthor", author)] if value)
             cache_key = f"gbooks_combined:{make_cache_key(title, author)}"
-            logger.info(
-                f"[GOOGLE BOOKS TITLE/AUTHOR SEARCH] Title: {title}, Author: {author}"
-            )
+            logger.info(f"[GOOGLE BOOKS TITLE/AUTHOR SEARCH] Title: {title}, Author: {author}")
 
         url = "https://www.googleapis.com/books/v1/volumes"
         params = {"q": query, "maxResults": 5, "key": settings.GOOGLE_BOOKS_API_KEY}
@@ -370,9 +336,7 @@ def _query_google_books_combined(book, title, author, isbn=None):
             logger.error("Google Books API client not available")
             return
 
-        data = google_client.make_request(
-            url, params=params, cache_key=cache_key, cache_timeout=10800  # 3 hours
-        )
+        data = google_client.make_request(url, params=params, cache_key=cache_key, cache_timeout=10800)  # 3 hours
 
         if not data:
             logger.info(f"[GOOGLE BOOKS] No response for query: {query}")
@@ -391,17 +355,11 @@ def _query_google_books_combined(book, title, author, isbn=None):
         if isbn:
             match_confidence = 0.95  # High confidence for ISBN matches
         else:
-            match_confidence = _calculate_match_confidence(
-                title, author, best.get("title", ""), best.get("authors", [])
-            )
+            match_confidence = _calculate_match_confidence(title, author, best.get("title", ""), best.get("authors", []))
 
         if match_confidence > 0.5:
-            metadata_confidence = _calculate_final_confidence(
-                metadata_source, match_confidence
-            )
-            _process_google_books_metadata(
-                book, metadata_source, best, metadata_confidence
-            )
+            metadata_confidence = _calculate_final_confidence(metadata_source, match_confidence)
+            _process_google_books_metadata(book, metadata_source, best, metadata_confidence)
 
         # Process covers from all results
         for item in items:
@@ -413,22 +371,14 @@ def _query_google_books_combined(book, title, author, isbn=None):
                     # High confidence for ISBN-based cover matches
                     item_match_confidence = 0.9
                 else:
-                    item_match_confidence = _calculate_match_confidence(
-                        title, author, info.get("title", ""), info.get("authors", [])
-                    )
+                    item_match_confidence = _calculate_match_confidence(title, author, info.get("title", ""), info.get("authors", []))
 
                 if item_match_confidence > 0.3:  # Lower threshold for covers
-                    cover_confidence = _calculate_final_confidence(
-                        cover_source, item_match_confidence
-                    )
-                    _process_google_books_cover(
-                        book, cover_source, info, cover_confidence
-                    )
+                    cover_confidence = _calculate_final_confidence(cover_source, item_match_confidence)
+                    _process_google_books_cover(book, cover_source, info, cover_confidence)
 
     except Exception as e:
-        logger.warning(
-            f"Google Books combined query failed for {book.file_path}: {str(e)}"
-        )
+        logger.warning(f"Google Books combined query failed for {book.file_path}: {str(e)}")
 
 
 def _query_goodreads_combined(book, title, author):
@@ -438,12 +388,8 @@ def _query_goodreads_combined(book, title, author):
         if not token or not (title or author):
             return
 
-        metadata_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.GOODREADS, defaults={"trust_level": 0.75}
-        )
-        cover_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.GOODREADS_COVERS, defaults={"trust_level": 0.7}
-        )
+        metadata_source, _ = DataSource.objects.get_or_create(name=DataSource.GOODREADS, defaults={"trust_level": 0.75})
+        cover_source, _ = DataSource.objects.get_or_create(name=DataSource.GOODREADS_COVERS, defaults={"trust_level": 0.7})
 
         search_query = f"{title} {author}".strip()
         cache_key = f"goodreads_combined:{make_cache_key(title, author)}"
@@ -456,26 +402,18 @@ def _query_goodreads_combined(book, title, author):
             "proxy": {"useApifyProxy": True},
         }
 
-        data = _safe_apify_request(
-            "epctex/goodreads-scraper", input_payload, cache_key, token
-        )
+        data = _safe_apify_request("epctex/goodreads-scraper", input_payload, cache_key, token)
 
         if not data:
             return
 
         # Process metadata from best match
         best = data[0]
-        match_confidence = _calculate_match_confidence(
-            title, author, best.get("title", ""), [best.get("authorName", "")]
-        )
+        match_confidence = _calculate_match_confidence(title, author, best.get("title", ""), [best.get("authorName", "")])
 
         if match_confidence > 0.5:
-            metadata_confidence = _calculate_final_confidence(
-                metadata_source, match_confidence
-            )
-            _process_goodreads_metadata(
-                book, metadata_source, best, metadata_confidence
-            )
+            metadata_confidence = _calculate_final_confidence(metadata_source, match_confidence)
+            _process_goodreads_metadata(book, metadata_source, best, metadata_confidence)
 
         # Process covers from all results
         for item in data:
@@ -488,25 +426,21 @@ def _query_goodreads_combined(book, title, author):
                 )
 
                 if item_match_confidence > 0.3:  # Lower threshold for covers
-                    cover_confidence = _calculate_final_confidence(
-                        cover_source, item_match_confidence
-                    )
+                    cover_confidence = _calculate_final_confidence(cover_source, item_match_confidence)
                     _process_goodreads_cover(book, cover_source, item, cover_confidence)
 
     except Exception as e:
-        logger.warning(
-            f"Goodreads combined query failed for {book.file_path}: {str(e)}"
-        )
+        logger.warning(f"Goodreads combined query failed for {book.file_path}: {str(e)}")
 
 
 # Metadata processing functions
 def _process_open_library_metadata(book, source, result, confidence):
     if result.get("title"):
-        BookTitle.objects.get_or_create(
+        BookTitle.objects.update_or_create(
             book=book,
             title=result["title"],
             source=source,
-            defaults={"confidence": confidence},
+            defaults={"confidence": confidence, "is_active": True},
         )
 
     raw_names = result.get("author_name", [])[:3]
@@ -523,33 +457,27 @@ def _process_open_library_metadata(book, source, result, confidence):
         )
 
     if result.get("language"):
-        lang = normalize_language(
-            result["language"][0]
-            if isinstance(result["language"], list)
-            else result["language"]
-        )
+        lang = normalize_language(result["language"][0] if isinstance(result["language"], list) else result["language"])
         if lang:  # Only save if we got a valid language code
-            BookMetadata.objects.get_or_create(
+            BookMetadata.objects.update_or_create(
                 book=book,
                 field_name="language",
                 source=source,
-                defaults={"field_value": lang, "confidence": confidence},
+                defaults={"field_value": lang, "confidence": confidence, "is_active": True},
             )
 
     if result.get("first_publish_year"):
         year = result["first_publish_year"]
         try:
             year_int = int(str(year)[:4])  # Ensure 4-digit year
-            BookMetadata.objects.get_or_create(
+            BookMetadata.objects.update_or_create(
                 book=book,
                 field_name="publication_year",
                 source=source,
-                defaults={"field_value": str(year_int), "confidence": confidence},
+                defaults={"field_value": str(year_int), "confidence": confidence, "is_active": True},
             )
         except ValueError:
-            logger.debug(
-                f"No 4-digit year extracted from: {result['first_publish_year']}"
-            )
+            logger.debug(f"No 4-digit year extracted from: {result['first_publish_year']}")
             pass  # Silently skip invalid year
 
     if result.get("publisher"):
@@ -557,21 +485,21 @@ def _process_open_library_metadata(book, source, result, confidence):
         if pub_name:
             existing_pub = Publisher.objects.filter(name__iexact=pub_name).first()
             pub_obj = existing_pub or Publisher.objects.create(name=pub_name)
-            BookPublisher.objects.get_or_create(
+            BookPublisher.objects.update_or_create(
                 book=book,
                 publisher=pub_obj,
                 source=source,
-                defaults={"confidence": confidence},
+                defaults={"confidence": confidence, "is_active": True},
             )
 
 
 def _process_google_books_metadata(book, source, result, confidence):
     if result.get("title"):
-        BookTitle.objects.get_or_create(
+        BookTitle.objects.update_or_create(
             book=book,
             title=result["title"],
             source=source,
-            defaults={"confidence": confidence},
+            defaults={"confidence": confidence, "is_active": True},
         )
 
     raw_names = result.get("authors", [])[:3]
@@ -579,11 +507,11 @@ def _process_google_books_metadata(book, source, result, confidence):
 
     if result.get("language"):
         lang = normalize_language(result["language"])
-        BookMetadata.objects.get_or_create(
+        BookMetadata.objects.update_or_create(
             book=book,
             field_name="language",
             source=source,
-            defaults={"field_value": lang, "confidence": confidence},
+            defaults={"field_value": lang, "confidence": confidence, "is_active": True},
         )
 
     if result.get("publisher"):
@@ -591,33 +519,34 @@ def _process_google_books_metadata(book, source, result, confidence):
         if pub_name:
             existing_pub = Publisher.objects.filter(name__iexact=pub_name).first()
             pub_obj = existing_pub or Publisher.objects.create(name=pub_name)
-            BookPublisher.objects.get_or_create(
+            BookPublisher.objects.update_or_create(
                 book=book,
                 publisher=pub_obj,
                 source=source,
-                defaults={"confidence": confidence},
+                defaults={"confidence": confidence, "is_active": True},
             )
 
     if result.get("publishedDate"):
         match = re.search(r"\d{4}", result["publishedDate"])
         if match:
-            BookMetadata.objects.get_or_create(
+            BookMetadata.objects.update_or_create(
                 book=book,
                 field_name="publication_year",
                 source=source,
-                defaults={"field_value": match.group(), "confidence": confidence},
+                defaults={"field_value": match.group(), "confidence": confidence, "is_active": True},
             )
         else:
             logger.debug(f"No 4-digit year extracted from: {result['publishedDate']}")
 
     if result.get("description"):
-        BookMetadata.objects.get_or_create(
+        BookMetadata.objects.update_or_create(
             book=book,
             field_name="description",
             source=source,
             defaults={
                 "field_value": result["description"][:1000],
                 "confidence": confidence,
+                "is_active": True,
             },
         )
 
@@ -635,22 +564,22 @@ def _process_google_books_metadata(book, source, result, confidence):
         if identifier.get("type") in ["ISBN_13", "ISBN_10"]:
             isbn = normalize_isbn(identifier["identifier"])
             if isbn:
-                BookMetadata.objects.get_or_create(
+                BookMetadata.objects.update_or_create(
                     book=book,
                     field_name="isbn",
                     source=source,
-                    defaults={"field_value": isbn, "confidence": confidence},
+                    defaults={"field_value": isbn, "confidence": confidence, "is_active": True},
                 )
                 break
 
 
 def _process_goodreads_metadata(book, source, result, confidence):
     if result.get("title"):
-        BookTitle.objects.get_or_create(
+        BookTitle.objects.update_or_create(
             book=book,
             title=result["title"].strip(),
             source=source,
-            defaults={"confidence": confidence},
+            defaults={"confidence": confidence, "is_active": True},
         )
 
     raw_names = [result.get("authorName")] if result.get("authorName") else []
@@ -669,11 +598,11 @@ def _process_goodreads_metadata(book, source, result, confidence):
 
     if result.get("language"):
         lang = normalize_language(result["language"])
-        BookMetadata.objects.get_or_create(
+        BookMetadata.objects.update_or_create(
             book=book,
             field_name="language",
             source=source,
-            defaults={"field_value": lang, "confidence": confidence},
+            defaults={"field_value": lang, "confidence": confidence, "is_active": True},
         )
 
     if result.get("publishedDate"):
@@ -681,40 +610,41 @@ def _process_goodreads_metadata(book, source, result, confidence):
         match = re.search(r"\d{4}", str(raw_year))
         if match:
             year_val = match.group()
-            BookMetadata.objects.get_or_create(
+            BookMetadata.objects.update_or_create(
                 book=book,
                 field_name="publication_year",
                 source=source,
-                defaults={"field_value": year_val, "confidence": confidence},
+                defaults={"field_value": year_val, "confidence": confidence, "is_active": True},
             )
         else:
             logger.debug(f"[YEAR] No valid 4-digit year in '{raw_year}'")
 
     if result.get("ISBN"):
-        BookMetadata.objects.get_or_create(
+        BookMetadata.objects.update_or_create(
             book=book,
             field_name="isbn",
             source=source,
-            defaults={"field_value": result["ISBN"].strip(), "confidence": confidence},
+            defaults={"field_value": result["ISBN"].strip(), "confidence": confidence, "is_active": True},
         )
 
     if result.get("description"):
-        BookMetadata.objects.get_or_create(
+        BookMetadata.objects.update_or_create(
             book=book,
             field_name="description",
             source=source,
             defaults={
                 "field_value": result["description"].strip(),
                 "confidence": confidence,
+                "is_active": True,
             },
         )
 
     if result.get("rating"):
-        BookMetadata.objects.get_or_create(
+        BookMetadata.objects.update_or_create(
             book=book,
             field_name="rating",
             source=source,
-            defaults={"field_value": str(result["rating"]), "confidence": confidence},
+            defaults={"field_value": str(result["rating"]), "confidence": confidence, "is_active": True},
         )
 
     # Publisher handling
@@ -727,11 +657,11 @@ def _process_goodreads_metadata(book, source, result, confidence):
     if pub_name:
         existing_pub = Publisher.objects.filter(name__iexact=pub_name).first()
         pub_obj = existing_pub or Publisher.objects.create(name=pub_name)
-        BookPublisher.objects.get_or_create(
+        BookPublisher.objects.update_or_create(
             book=book,
             publisher=pub_obj,
             source=source,
-            defaults={"confidence": confidence},
+            defaults={"confidence": confidence, "is_active": True},
         )
 
 
@@ -743,7 +673,7 @@ def _process_open_library_cover(book, source, doc, confidence):
 
         if format:  # Only proceed if we got valid image metadata
             try:
-                BookCover.objects.get_or_create(
+                BookCover.objects.update_or_create(
                     book=book,
                     cover_path=image_url,
                     source=source,
@@ -753,12 +683,11 @@ def _process_open_library_cover(book, source, doc, confidence):
                         "height": height,
                         "file_size": file_size,
                         "format": format,
+                        "is_active": True,
                     },
                 )
             except Exception as e:
-                logger.warning(
-                    f"Failed to store Open Library cover: {image_url}, error: {str(e)}"
-                )
+                logger.warning(f"Failed to store Open Library cover: {image_url}, error: {str(e)}")
 
 
 def _process_google_books_cover(book, source, info, confidence):
@@ -769,7 +698,7 @@ def _process_google_books_cover(book, source, info, confidence):
 
         if format:  # Only proceed if we got valid image metadata
             try:
-                BookCover.objects.get_or_create(
+                BookCover.objects.update_or_create(
                     book=book,
                     cover_path=image_url,
                     source=source,
@@ -779,12 +708,11 @@ def _process_google_books_cover(book, source, info, confidence):
                         "height": height,
                         "file_size": file_size,
                         "format": format,
+                        "is_active": True,
                     },
                 )
             except Exception as e:
-                logger.warning(
-                    f"Failed to store Google Books cover: {image_url}, error: {str(e)}"
-                )
+                logger.warning(f"Failed to store Google Books cover: {image_url}, error: {str(e)}")
 
 
 def _process_goodreads_cover(book, source, item, confidence):
@@ -794,7 +722,7 @@ def _process_goodreads_cover(book, source, item, confidence):
 
         if format:  # Only proceed if we got valid image metadata
             try:
-                BookCover.objects.get_or_create(
+                BookCover.objects.update_or_create(
                     book=book,
                     cover_path=image_url,
                     source=source,
@@ -804,12 +732,11 @@ def _process_goodreads_cover(book, source, item, confidence):
                         "height": height,
                         "file_size": file_size,
                         "format": format,
+                        "is_active": True,
                     },
                 )
             except Exception as e:
-                logger.warning(
-                    f"Failed to store Goodreads cover: {image_url}, error: {str(e)}"
-                )
+                logger.warning(f"Failed to store Goodreads cover: {image_url}, error: {str(e)}")
 
 
 # Mock API client for testing
