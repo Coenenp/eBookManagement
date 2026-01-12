@@ -28,9 +28,7 @@ def resolve_title_author_ambiguity(part1: str, part2: str) -> Tuple[str, List[st
 
     # Check if either part contains multiple authors (comma-separated)
     def contains_multiple_authors(text: str) -> bool:
-        return (
-            "," in text and len([p.strip() for p in text.split(",") if p.strip()]) > 1
-        )
+        return "," in text and len([p.strip() for p in text.split(",") if p.strip()]) > 1
 
     # Check if text looks like author names (including multiple authors)
     def looks_like_authors(text: str) -> bool:
@@ -98,9 +96,7 @@ def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
 
         # Intelligent resolution
         if "title" in groups and "author" in groups:
-            title, authors = resolve_title_author_ambiguity(
-                groups["title"], groups["author"]
-            )
+            title, authors = resolve_title_author_ambiguity(groups["title"], groups["author"])
             metadata["title"] = title
             metadata["authors"] = authors
         elif "author" in groups:
@@ -109,9 +105,7 @@ def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
             # Handle "Last, First - Title" format correctly
             # Pattern captures: author_last="Doe", author_first="John" from "Doe, John - Title"
             # So we need to put first name first: "John Doe"
-            full_name = (
-                f"{groups['author_first'].strip()} {groups['author_last'].strip()}"
-            )
+            full_name = f"{groups['author_first'].strip()} {groups['author_last'].strip()}"
             metadata["authors"] = [full_name]
             if "title" in groups:
                 metadata["title"] = groups["title"].strip()
@@ -140,9 +134,7 @@ def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
 
     # Series number extraction from title
     if metadata["title"]:
-        metadata["title"], series_number = clean_title_and_extract_series_number(
-            metadata["title"]
-        )
+        metadata["title"], series_number = clean_title_and_extract_series_number(metadata["title"])
         if series_number is not None:
             metadata["series_number"] = series_number
 
@@ -251,9 +243,7 @@ def _extract_comic_author_from_folders(path: Path) -> List[str]:
     return []
 
 
-def parse_path_metadata_with_ai(
-    file_path: str, ai_recognizer=None
-) -> Dict[str, Optional[str]]:
+def parse_path_metadata_with_ai(file_path: str, ai_recognizer=None) -> Dict[str, Optional[str]]:
     """Enhanced parsing that combines traditional pattern matching with AI predictions."""
     # Get traditional parsing results
     traditional_metadata = parse_path_metadata(file_path)
@@ -285,16 +275,12 @@ def parse_path_metadata_with_ai(
 
                 # Use AI prediction if confident and traditional method didn't find anything
                 # or if AI is highly confident (> 0.8)
-                should_use_ai = confidence >= ai_recognizer.confidence_threshold and (
-                    not enhanced_metadata.get(metadata_key) or confidence > 0.8
-                )
+                should_use_ai = confidence >= ai_recognizer.confidence_threshold and (not enhanced_metadata.get(metadata_key) or confidence > 0.8)
 
                 if should_use_ai and ai_value.strip():
                     if metadata_key == "authors":
                         # Handle authors specially - split and normalize
-                        enhanced_metadata[metadata_key] = normalize_surnames(
-                            split_authors(ai_value)
-                        )
+                        enhanced_metadata[metadata_key] = normalize_surnames(split_authors(ai_value))
                     else:
                         enhanced_metadata[metadata_key] = ai_value.strip()
 

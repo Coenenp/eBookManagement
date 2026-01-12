@@ -16,9 +16,7 @@ class TestMetadataFormDebug(TestCase):
         self.client.force_login(self.create_user())
 
         # Create test data
-        self.scan_folder = ScanFolder.objects.create(
-            name="Test Library", path="/test/library", is_active=True
-        )
+        self.scan_folder = ScanFolder.objects.create(name="Test Library", path="/test/library", is_active=True)
 
         self.book = Book.objects.create(scan_folder=self.scan_folder)
 
@@ -49,9 +47,7 @@ class TestMetadataFormDebug(TestCase):
             "language": "English",
             "description": "Updated description",
         }
-        form = MetadataReviewForm(
-            data=form_data, instance=self.final_metadata, book=self.book
-        )
+        form = MetadataReviewForm(data=form_data, instance=self.final_metadata, book=self.book)
         print(f"\nForm is_valid: {form.is_valid()}")
         print(f"Form errors: {form.errors}")
         if form.is_valid():
@@ -71,9 +67,7 @@ class TestMetadataFormDebug(TestCase):
             "language": "en",
             "description": "Updated description",
         }
-        form = MetadataReviewForm(
-            data=form_data, instance=self.final_metadata, book=self.book
-        )
+        form = MetadataReviewForm(data=form_data, instance=self.final_metadata, book=self.book)
         print(f"\nComplete form is_valid: {form.is_valid()}")
         print(f"Complete form errors: {form.errors}")
         self.assertTrue(form.is_valid())

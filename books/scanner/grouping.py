@@ -203,9 +203,7 @@ class AudiobookFileGrouper:
                 break
 
         # Look for disc number
-        disc_match = re.search(
-            r"(?:CD|Disc|Disk)\s*(\d+)", name_without_ext, re.IGNORECASE
-        )
+        disc_match = re.search(r"(?:CD|Disc|Disk)\s*(\d+)", name_without_ext, re.IGNORECASE)
         if disc_match:
             info["disc_number"] = int(disc_match.group(1))
 
@@ -230,9 +228,7 @@ class AudiobookFileGrouper:
         return name
 
 
-def group_files_by_content_type(
-    file_paths: List[str], content_type: str
-) -> Dict[str, List[str]]:
+def group_files_by_content_type(file_paths: List[str], content_type: str) -> Dict[str, List[str]]:
     """
     Main function to group files based on content type
     """

@@ -186,6 +186,10 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+    // Set default template key for JavaScript to use
+    window.defaultTemplateKey = "{{ default_template_key|default:'' }}";
+</script>
 <script src="{% static 'book/js/metadata.js' %}"></script>
 {% endblock %}
 

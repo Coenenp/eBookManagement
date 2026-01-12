@@ -11,7 +11,7 @@ from django.contrib.auth.models import User
 from django.test.client import Client
 
 # Setup Django environment
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ebook_manager.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ebook_manager.settings")
 django.setup()
 
 
@@ -27,11 +27,7 @@ def test_ebooks_ajax():
         user = User.objects.first()
         if not user:
             print("No users found in database. Creating test user...")
-            user = User.objects.create_user(
-                username='testuser',
-                password='testpass123',
-                email='test@example.com'
-            )
+            user = User.objects.create_user(username="testuser", password="testpass123", email="test@example.com")
             print(f"Created test user: {user.username}")
         else:
             print(f"Using existing user: {user.username}")
@@ -41,7 +37,7 @@ def test_ebooks_ajax():
         print("User logged in successfully")
 
         # Test the main ebooks view
-        response = client.get('/ebooks/')
+        response = client.get("/ebooks/")
         print(f"Main ebooks view status: {response.status_code}")
         if response.status_code == 200:
             print("✓ Main ebooks page loads successfully")
@@ -50,7 +46,7 @@ def test_ebooks_ajax():
             return
 
         # Test the AJAX list endpoint
-        response = client.get('/ebooks/ajax/list/')
+        response = client.get("/ebooks/ajax/list/")
         print(f"AJAX list endpoint status: {response.status_code}")
 
         if response.status_code == 200:
@@ -59,15 +55,15 @@ def test_ebooks_ajax():
                 print("✓ AJAX endpoint returns JSON data")
                 print(f"Response keys: {list(data.keys())}")
 
-                if 'success' in data and data['success']:
+                if "success" in data and data["success"]:
                     print("✓ AJAX response indicates success")
-                    ebooks_count = len(data.get('ebooks', []))
+                    ebooks_count = len(data.get("ebooks", []))
                     print(f"✓ Found {ebooks_count} ebooks in response")
 
                     # Show first few ebooks for verification
                     if ebooks_count > 0:
                         print("\nFirst few ebooks:")
-                        for i, ebook in enumerate(data['ebooks'][:3]):
+                        for i, ebook in enumerate(data["ebooks"][:3]):
                             print(f"  {i+1}. {ebook.get('title', 'No title')} by {ebook.get('author_display', 'Unknown')}")
 
                 else:
@@ -84,10 +80,11 @@ def test_ebooks_ajax():
     except Exception as e:
         print(f"Error during testing: {e}")
         import traceback
+
         traceback.print_exc()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("Testing ebooks AJAX functionality...")
     print("=" * 50)
     test_ebooks_ajax()

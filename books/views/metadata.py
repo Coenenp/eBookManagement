@@ -127,8 +127,20 @@ class BookMetadataView(LoginRequiredMixin, DetailView, SimpleNavigationMixin, Me
 
         # Get user's saved templates from UserProfile
         rename_templates = []
+        default_folder_pattern = "${author.sortname}"
+        default_filename_pattern = "${title}.${ext}"
+        include_companion_files = True  # Default value
+        default_template_key = None
+
         if self.request.user.is_authenticated:
             profile = UserProfile.get_or_create_for_user(self.request.user)
+
+            # Get user's default patterns
+            if profile.default_folder_pattern:
+                default_folder_pattern = profile.default_folder_pattern
+            if profile.default_filename_pattern:
+                default_filename_pattern = profile.default_filename_pattern
+            include_companion_files = profile.include_companion_files
 
             # Add user's saved custom patterns
             for pattern in profile.saved_patterns:
@@ -154,13 +166,15 @@ class BookMetadataView(LoginRequiredMixin, DetailView, SimpleNavigationMixin, Me
                 }
             )
 
-        # Default patterns (first template or predefined)
-        if rename_templates:
-            folder_pattern = rename_templates[0]["folder"]
-            filename_pattern = rename_templates[0]["filename"]
-        else:
-            folder_pattern = "${author.sortname}"
-            filename_pattern = "${title}.${ext}"
+        # Use user's default patterns
+        folder_pattern = default_folder_pattern
+        filename_pattern = default_filename_pattern
+
+        # Determine default template key by matching patterns
+        for key, pattern in PREDEFINED_PATTERNS.items():
+            if pattern["folder"] == default_folder_pattern and pattern["filename"] == default_filename_pattern:
+                default_template_key = f"system-{key}"
+                break
 
         # Generate preview with default pattern
         preview_path = "No file path available"
@@ -181,6 +195,8 @@ class BookMetadataView(LoginRequiredMixin, DetailView, SimpleNavigationMixin, Me
             "filename_pattern": filename_pattern,
             "rename_templates": rename_templates,
             "preview_path": preview_path,
+            "include_companion_files": include_companion_files,
+            "default_template_key": default_template_key,
         }
 
     def _get_duplicates_context(self, book):

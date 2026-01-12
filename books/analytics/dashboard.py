@@ -65,9 +65,7 @@ class DashboardAnalytics:
     def get_format_distribution_data():
         """Get file format distribution for pie chart."""
         format_data = (
-            Book.objects.exclude(
-                Q(is_placeholder=True) | Q(is_duplicate=True) | Q(is_corrupted=True)
-            )
+            Book.objects.exclude(Q(is_placeholder=True) | Q(is_duplicate=True) | Q(is_corrupted=True))
             .values("files__file_format")
             .annotate(count=Count("id"))
             .filter(files__file_format__isnull=False)
@@ -103,9 +101,7 @@ class DashboardAnalytics:
     @staticmethod
     def get_metadata_completeness_data():
         """Get metadata completeness statistics for bar chart."""
-        total_books = Book.objects.exclude(
-            Q(is_placeholder=True) | Q(is_duplicate=True) | Q(is_corrupted=True)
-        ).count()
+        total_books = Book.objects.exclude(Q(is_placeholder=True) | Q(is_duplicate=True) | Q(is_corrupted=True)).count()
 
         if total_books == 0:
             return {
@@ -170,9 +166,7 @@ class DashboardAnalytics:
         start_date = end_date - timedelta(days=days)
 
         # Check if we have real AI feedback data
-        feedback_exists = AIFeedback.objects.filter(
-            created_at__date__gte=start_date
-        ).exists()
+        feedback_exists = AIFeedback.objects.filter(created_at__date__gte=start_date).exists()
 
         if feedback_exists:
             # Use real data
@@ -268,9 +262,7 @@ class DashboardAnalytics:
             book__is_corrupted=False,
         ).aggregate(
             high=Count("id", filter=Q(overall_confidence__gte=0.8)),
-            medium=Count(
-                "id", filter=Q(overall_confidence__gte=0.5, overall_confidence__lt=0.8)
-            ),
+            medium=Count("id", filter=Q(overall_confidence__gte=0.5, overall_confidence__lt=0.8)),
             low=Count("id", filter=Q(overall_confidence__lt=0.5)),
         )
 
@@ -335,9 +327,7 @@ class DashboardAnalytics:
         labels = []
         cumulative_data = []
         daily_data = []
-        cumulative_total = Book.objects.filter(
-            first_scanned__date__lt=start_date, is_placeholder=False, is_duplicate=False
-        ).count()
+        cumulative_total = Book.objects.filter(first_scanned__date__lt=start_date, is_placeholder=False, is_duplicate=False).count()
 
         for item in growth_data:
             labels.append(item["day"].strftime("%m/%d"))
@@ -396,9 +386,7 @@ class LibraryHealth:
     @staticmethod
     def get_health_score():
         """Calculate overall library health score (0-100)."""
-        total_books = Book.objects.exclude(
-            Q(is_placeholder=True) | Q(is_duplicate=True) | Q(is_corrupted=True)
-        ).count()
+        total_books = Book.objects.exclude(Q(is_placeholder=True) | Q(is_duplicate=True) | Q(is_corrupted=True)).count()
 
         if total_books == 0:
             return 100
@@ -408,14 +396,8 @@ class LibraryHealth:
         confidence_data = DashboardAnalytics.get_confidence_distribution()
 
         # Calculate weighted score
-        completeness_score = sum(metadata_completeness["percentages"]) / len(
-            metadata_completeness["percentages"]
-        )
-        confidence_score = (
-            (confidence_data["high_percent"] * 1.0)
-            + (confidence_data["medium_percent"] * 0.7)
-            + (confidence_data["low_percent"] * 0.3)
-        )
+        completeness_score = sum(metadata_completeness["percentages"]) / len(metadata_completeness["percentages"])
+        confidence_score = (confidence_data["high_percent"] * 1.0) + (confidence_data["medium_percent"] * 0.7) + (confidence_data["low_percent"] * 0.3)
 
         # Weight: 60% completeness, 40% confidence
         health_score = (completeness_score * 0.6) + (confidence_score * 0.4)
@@ -459,9 +441,7 @@ class LibraryHealth:
             )
 
         # Check for low confidence items
-        low_confidence = FinalMetadata.objects.filter(
-            overall_confidence__lt=0.5
-        ).count()
+        low_confidence = FinalMetadata.objects.filter(overall_confidence__lt=0.5).count()
         if low_confidence > 0:
             issues.append(
                 {

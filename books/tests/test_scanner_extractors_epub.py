@@ -1,6 +1,7 @@
 """
 Test cases for EPUB Scanner Extractor
 """
+
 import os
 import shutil
 import tempfile
@@ -21,36 +22,26 @@ class EPUBExtractorTests(TestCase):
         # Create temporary directory for testing
         self.temp_dir = tempfile.mkdtemp()
 
-        self.scan_folder = ScanFolder.objects.create(
-            path=self.temp_dir,
-            name="Test Scan Folder"
-        )
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir, name="Test Scan Folder")
 
         self.book = create_test_book_with_file(
-            file_path=os.path.join(self.temp_dir, "test.epub"),
-            file_format="epub",
-            file_size=1024000,
-            scan_folder=self.scan_folder,
-            title=None  # Don't auto-create title
+            file_path=os.path.join(self.temp_dir, "test.epub"), file_format="epub", file_size=1024000, scan_folder=self.scan_folder, title=None  # Don't auto-create title
         )
 
         # Ensure EPUB_INTERNAL data source exists
-        self.epub_source, created = DataSource.objects.get_or_create(
-            name=DataSource.EPUB_INTERNAL,
-            defaults={'trust_level': 0.9}
-        )
+        self.epub_source, created = DataSource.objects.get_or_create(name=DataSource.EPUB_INTERNAL, defaults={"trust_level": 0.9})
 
     def tearDown(self):
         """Clean up temporary directories"""
         if os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
-    @patch('books.scanner.extractors.epub.epub.read_epub')
+    @patch("books.scanner.extractors.epub.epub.read_epub")
     def test_extract_title_success(self, mock_read_epub):
         """Test successful title extraction from EPUB"""
         # Mock EPUB book
         mock_epub_book = MagicMock()
-        mock_epub_book.get_metadata.return_value = [('Test Book Title', {})]
+        mock_epub_book.get_metadata.return_value = [("Test Book Title", {})]
         mock_read_epub.return_value = mock_epub_book
 
         extract(self.book)
@@ -60,19 +51,16 @@ class EPUBExtractorTests(TestCase):
         self.assertEqual(epub_titles.count(), 1)
 
         book_title = epub_titles.first()
-        self.assertEqual(book_title.title, 'Test Book Title')
+        self.assertEqual(book_title.title, "Test Book Title")
         self.assertEqual(book_title.source, self.epub_source)
         self.assertEqual(book_title.confidence, self.epub_source.trust_level)
 
-    @patch('books.scanner.extractors.epub.epub.read_epub')
+    @patch("books.scanner.extractors.epub.epub.read_epub")
     def test_extract_authors_success(self, mock_read_epub):
         """Test successful author extraction from EPUB"""
         # Mock EPUB book
         mock_epub_book = MagicMock()
-        mock_epub_book.get_metadata.side_effect = lambda dc, field: {
-            'title': [('Test Book', {})],
-            'creator': [('John Doe', {}), ('Jane Smith', {})]
-        }.get(field, [])
+        mock_epub_book.get_metadata.side_effect = lambda dc, field: {"title": [("Test Book", {})], "creator": [("John Doe", {}), ("Jane Smith", {})]}.get(field, [])
         mock_read_epub.return_value = mock_epub_book
 
         extract(self.book)
@@ -82,39 +70,33 @@ class EPUBExtractorTests(TestCase):
         self.assertEqual(book_authors.count(), 2)
 
         author_names = [ba.author.name for ba in book_authors]
-        self.assertIn('John Doe', author_names)
-        self.assertIn('Jane Smith', author_names)
+        self.assertIn("John Doe", author_names)
+        self.assertIn("Jane Smith", author_names)
 
-    @patch('books.scanner.extractors.epub.epub.read_epub')
+    @patch("books.scanner.extractors.epub.epub.read_epub")
     def test_extract_publisher_success(self, mock_read_epub):
         """Test successful publisher extraction from EPUB"""
         # Mock EPUB book
         mock_epub_book = MagicMock()
-        mock_epub_book.get_metadata.side_effect = lambda dc, field: {
-            'title': [('Test Book', {})],
-            'publisher': [('Test Publisher', {})]
-        }.get(field, [])
+        mock_epub_book.get_metadata.side_effect = lambda dc, field: {"title": [("Test Book", {})], "publisher": [("Test Publisher", {})]}.get(field, [])
         mock_read_epub.return_value = mock_epub_book
 
         extract(self.book)
 
         # Verify publisher was created
         book_publisher = BookPublisher.objects.get(book=self.book)
-        self.assertEqual(book_publisher.publisher.name, 'Test Publisher')
+        self.assertEqual(book_publisher.publisher.name, "Test Publisher")
         self.assertEqual(book_publisher.source, self.epub_source)
 
-    @patch('books.scanner.extractors.epub.epub.read_epub')
+    @patch("books.scanner.extractors.epub.epub.read_epub")
     def test_extract_existing_publisher_reuse(self, mock_read_epub):
         """Test that existing publishers are reused"""
         # Create existing publisher
-        existing_publisher = Publisher.objects.create(name='Test Publisher')
+        existing_publisher = Publisher.objects.create(name="Test Publisher")
 
         # Mock EPUB book
         mock_epub_book = MagicMock()
-        mock_epub_book.get_metadata.side_effect = lambda dc, field: {
-            'title': [('Test Book', {})],
-            'publisher': [('test publisher', {})]  # Different case
-        }.get(field, [])
+        mock_epub_book.get_metadata.side_effect = lambda dc, field: {"title": [("Test Book", {})], "publisher": [("test publisher", {})]}.get(field, [])  # Different case
         mock_read_epub.return_value = mock_epub_book
 
         extract(self.book)
@@ -126,95 +108,71 @@ class EPUBExtractorTests(TestCase):
         # Should only have one publisher in database
         self.assertEqual(Publisher.objects.count(), 1)
 
-    @patch('books.scanner.extractors.epub.epub.read_epub')
+    @patch("books.scanner.extractors.epub.epub.read_epub")
     def test_extract_language_success(self, mock_read_epub):
         """Test successful language extraction from EPUB"""
         # Mock EPUB book
         mock_epub_book = MagicMock()
-        mock_epub_book.get_metadata.side_effect = lambda dc, field: {
-            'title': [('Test Book', {})],
-            'language': [('en-US', {})]
-        }.get(field, [])
+        mock_epub_book.get_metadata.side_effect = lambda dc, field: {"title": [("Test Book", {})], "language": [("en-US", {})]}.get(field, [])
         mock_read_epub.return_value = mock_epub_book
 
         extract(self.book)
 
         # Verify language metadata was created
-        language_metadata = BookMetadata.objects.get(
-            book=self.book,
-            field_name='language'
-        )
-        self.assertEqual(language_metadata.field_value, 'en')  # Normalized
+        language_metadata = BookMetadata.objects.get(book=self.book, field_name="language")
+        self.assertEqual(language_metadata.field_value, "en")  # Normalized
         self.assertEqual(language_metadata.source, self.epub_source)
 
-    @patch('books.scanner.extractors.epub.epub.read_epub')
+    @patch("books.scanner.extractors.epub.epub.read_epub")
     def test_extract_isbn_success(self, mock_read_epub):
         """Test successful ISBN extraction from EPUB"""
         # Mock EPUB book
         mock_epub_book = MagicMock()
-        mock_epub_book.get_metadata.side_effect = lambda dc, field: {
-            'title': [('Test Book', {})],
-            'identifier': [('978-0-13-468599-1', {})]
-        }.get(field, [])
+        mock_epub_book.get_metadata.side_effect = lambda dc, field: {"title": [("Test Book", {})], "identifier": [("978-0-13-468599-1", {})]}.get(field, [])
         mock_read_epub.return_value = mock_epub_book
 
         extract(self.book)
 
         # Verify ISBN metadata was created
-        isbn_metadata = BookMetadata.objects.get(
-            book=self.book,
-            field_name='isbn'
-        )
-        self.assertEqual(isbn_metadata.field_value, '9780134685991')  # Normalized
+        isbn_metadata = BookMetadata.objects.get(book=self.book, field_name="isbn")
+        self.assertEqual(isbn_metadata.field_value, "9780134685991")  # Normalized
         self.assertEqual(isbn_metadata.source, self.epub_source)
 
-    @patch('books.scanner.extractors.epub.epub.read_epub')
+    @patch("books.scanner.extractors.epub.epub.read_epub")
     def test_extract_description_success(self, mock_read_epub):
         """Test successful description extraction from EPUB"""
         test_description = "This is a test book description."
 
         # Mock EPUB book
         mock_epub_book = MagicMock()
-        mock_epub_book.get_metadata.side_effect = lambda dc, field: {
-            'title': [('Test Book', {})],
-            'description': [(test_description, {})]
-        }.get(field, [])
+        mock_epub_book.get_metadata.side_effect = lambda dc, field: {"title": [("Test Book", {})], "description": [(test_description, {})]}.get(field, [])
         mock_read_epub.return_value = mock_epub_book
 
         extract(self.book)
 
         # Verify description metadata was created
-        desc_metadata = BookMetadata.objects.get(
-            book=self.book,
-            field_name='description'
-        )
+        desc_metadata = BookMetadata.objects.get(book=self.book, field_name="description")
         self.assertEqual(desc_metadata.field_value, test_description)
         self.assertEqual(desc_metadata.source, self.epub_source)
 
-    @patch('books.scanner.extractors.epub.epub.read_epub')
+    @patch("books.scanner.extractors.epub.epub.read_epub")
     def test_extract_description_truncation(self, mock_read_epub):
         """Test description truncation for long descriptions"""
         long_description = "A" * 1500  # Longer than 1000 chars
 
         # Mock EPUB book
         mock_epub_book = MagicMock()
-        mock_epub_book.get_metadata.side_effect = lambda dc, field: {
-            'title': [('Test Book', {})],
-            'description': [(long_description, {})]
-        }.get(field, [])
+        mock_epub_book.get_metadata.side_effect = lambda dc, field: {"title": [("Test Book", {})], "description": [(long_description, {})]}.get(field, [])
         mock_read_epub.return_value = mock_epub_book
 
         extract(self.book)
 
         # Verify description was truncated
-        desc_metadata = BookMetadata.objects.get(
-            book=self.book,
-            field_name='description'
-        )
+        desc_metadata = BookMetadata.objects.get(book=self.book, field_name="description")
         self.assertEqual(len(desc_metadata.field_value), 1000)
         self.assertEqual(desc_metadata.field_value, "A" * 1000)
 
-    @patch('books.scanner.extractors.epub.epub.read_epub')
+    @patch("books.scanner.extractors.epub.epub.read_epub")
     def test_extract_no_metadata(self, mock_read_epub):
         """Test extraction when EPUB has no metadata"""
         # Mock EPUB book with no metadata
@@ -230,47 +188,35 @@ class EPUBExtractorTests(TestCase):
         self.assertEqual(BookPublisher.objects.filter(book=self.book).count(), 0)
         self.assertEqual(BookMetadata.objects.filter(book=self.book).count(), 0)
 
-    @patch('books.scanner.extractors.epub.epub.read_epub')
+    @patch("books.scanner.extractors.epub.epub.read_epub")
     def test_extract_invalid_language_skipped(self, mock_read_epub):
         """Test that invalid language codes are skipped"""
         # Mock EPUB book
         mock_epub_book = MagicMock()
-        mock_epub_book.get_metadata.side_effect = lambda dc, field: {
-            'title': [('Test Book', {})],
-            'language': [('invalid-lang', {})]
-        }.get(field, [])
+        mock_epub_book.get_metadata.side_effect = lambda dc, field: {"title": [("Test Book", {})], "language": [("invalid-lang", {})]}.get(field, [])
         mock_read_epub.return_value = mock_epub_book
 
         extract(self.book)
 
         # Should not create language metadata for invalid language
-        language_metadata = BookMetadata.objects.filter(
-            book=self.book,
-            field_name='language'
-        )
+        language_metadata = BookMetadata.objects.filter(book=self.book, field_name="language")
         self.assertEqual(language_metadata.count(), 0)
 
-    @patch('books.scanner.extractors.epub.epub.read_epub')
+    @patch("books.scanner.extractors.epub.epub.read_epub")
     def test_extract_invalid_isbn_skipped(self, mock_read_epub):
         """Test that invalid ISBNs are skipped"""
         # Mock EPUB book
         mock_epub_book = MagicMock()
-        mock_epub_book.get_metadata.side_effect = lambda dc, field: {
-            'title': [('Test Book', {})],
-            'identifier': [('invalid-isbn', {})]
-        }.get(field, [])
+        mock_epub_book.get_metadata.side_effect = lambda dc, field: {"title": [("Test Book", {})], "identifier": [("invalid-isbn", {})]}.get(field, [])
         mock_read_epub.return_value = mock_epub_book
 
         extract(self.book)
 
         # Should not create ISBN metadata for invalid ISBN
-        isbn_metadata = BookMetadata.objects.filter(
-            book=self.book,
-            field_name='isbn'
-        )
+        isbn_metadata = BookMetadata.objects.filter(book=self.book, field_name="isbn")
         self.assertEqual(isbn_metadata.count(), 0)
 
-    @patch('books.scanner.extractors.epub.epub.read_epub')
+    @patch("books.scanner.extractors.epub.epub.read_epub")
     def test_extract_file_read_error(self, mock_read_epub):
         """Test extraction with file read error"""
         # Mock file read error
@@ -282,16 +228,16 @@ class EPUBExtractorTests(TestCase):
         # Should not create any metadata
         self.assertEqual(BookTitle.objects.filter(book=self.book).count(), 0)
 
-    @patch('books.scanner.extractors.epub.epub.read_epub')
+    @patch("books.scanner.extractors.epub.epub.read_epub")
     def test_extract_empty_values_skipped(self, mock_read_epub):
         """Test that empty metadata values are properly skipped"""
         # Mock EPUB book with empty values
         mock_epub_book = MagicMock()
         mock_epub_book.get_metadata.side_effect = lambda dc, field: {
-            'title': [('', {})],  # Empty title
-            'creator': [('', {})],  # Empty creator
-            'publisher': [('   ', {})],  # Whitespace only
-            'language': [('', {})],  # Empty language
+            "title": [("", {})],  # Empty title
+            "creator": [("", {})],  # Empty creator
+            "publisher": [("   ", {})],  # Whitespace only
+            "language": [("", {})],  # Empty language
         }.get(field, [])
         mock_read_epub.return_value = mock_epub_book
 

@@ -36,7 +36,7 @@ class FileCountingTests(TestCase):
                 "book2_cover.png",
                 # Non-relevant files
                 "readme.txt",
-                "data.xml"
+                "data.xml",
             ]
 
             for filename in test_files:
@@ -44,8 +44,8 @@ class FileCountingTests(TestCase):
                 file_path.write_text("test content")
 
             # Test file collection
-            ebook_extensions = {'.epub', '.mobi', '.pdf', '.azw', '.azw3', '.cbr', '.cbz'}
-            cover_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+            ebook_extensions = {".epub", ".mobi", ".pdf", ".azw", ".azw3", ".cbr", ".cbz"}
+            cover_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 
             ebook_files, cover_files, opf_files = _collect_files(temp_dir, ebook_extensions, cover_extensions)
 
@@ -59,10 +59,7 @@ class FileCountingTests(TestCase):
             standalone_opf_files = []
             for opf_path in opf_files:
                 opf_base = os.path.splitext(opf_path)[0]
-                has_matching_ebook = any(
-                    os.path.splitext(ebook_path)[0] == opf_base
-                    for ebook_path in ebook_files
-                )
+                has_matching_ebook = any(os.path.splitext(ebook_path)[0] == opf_base for ebook_path in ebook_files)
                 if not has_matching_ebook:
                     standalone_opf_count += 1
                     standalone_opf_files.append(os.path.basename(opf_path))
@@ -80,8 +77,8 @@ class FileCountingTests(TestCase):
     def test_empty_directory(self):
         """Test file collection in empty directory."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            ebook_extensions = {'.epub', '.mobi', '.pdf', '.azw', '.azw3', '.cbr', '.cbz'}
-            cover_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+            ebook_extensions = {".epub", ".mobi", ".pdf", ".azw", ".azw3", ".cbr", ".cbz"}
+            cover_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 
             ebook_files, cover_files, opf_files = _collect_files(temp_dir, ebook_extensions, cover_extensions)
 
@@ -99,8 +96,8 @@ class FileCountingTests(TestCase):
                 file_path = Path(temp_dir) / filename
                 file_path.write_text("test content")
 
-            ebook_extensions = {'.epub', '.mobi', '.pdf', '.azw', '.azw3', '.cbr', '.cbz'}
-            cover_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+            ebook_extensions = {".epub", ".mobi", ".pdf", ".azw", ".azw3", ".cbr", ".cbz"}
+            cover_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 
             ebook_files, cover_files, opf_files = _collect_files(temp_dir, ebook_extensions, cover_extensions)
 
@@ -122,8 +119,8 @@ class FileCountingTests(TestCase):
             (subdir1 / "book2.mobi").write_text("content")
             (subdir2 / "book3.pdf").write_text("content")
 
-            ebook_extensions = {'.epub', '.mobi', '.pdf', '.azw', '.azw3', '.cbr', '.cbz'}
-            cover_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+            ebook_extensions = {".epub", ".mobi", ".pdf", ".azw", ".azw3", ".cbr", ".cbz"}
+            cover_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 
             ebook_files, cover_files, opf_files = _collect_files(temp_dir, ebook_extensions, cover_extensions)
 
@@ -145,8 +142,8 @@ class FileCountingTests(TestCase):
                 file_path = Path(temp_dir) / filename
                 file_path.write_text("test content")
 
-            ebook_extensions = {'.epub', '.mobi', '.pdf', '.azw', '.azw3', '.cbr', '.cbz'}
-            cover_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+            ebook_extensions = {".epub", ".mobi", ".pdf", ".azw", ".azw3", ".cbr", ".cbz"}
+            cover_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 
             ebook_files, cover_files, opf_files = _collect_files(temp_dir, ebook_extensions, cover_extensions)
 
@@ -164,15 +161,15 @@ class FileCountingTests(TestCase):
                 "book[with]brackets.azw3",
                 "book(with)parentheses.cbz",
                 "book&with&ampersands.epub",
-                "book with spaces cover.jpg"
+                "book with spaces cover.jpg",
             ]
 
             for filename in test_files:
                 file_path = Path(temp_dir) / filename
                 file_path.write_text("test content")
 
-            ebook_extensions = {'.epub', '.mobi', '.pdf', '.azw', '.azw3', '.cbr', '.cbz'}
-            cover_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+            ebook_extensions = {".epub", ".mobi", ".pdf", ".azw", ".azw3", ".cbr", ".cbz"}
+            cover_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 
             ebook_files, cover_files, opf_files = _collect_files(temp_dir, ebook_extensions, cover_extensions)
 
@@ -190,15 +187,15 @@ class FileCountingTests(TestCase):
                 "book2.opf",  # Matching OPF
                 "orphan1.opf",  # Standalone OPF
                 "orphan2.opf",  # Standalone OPF
-                "metadata.opf"  # Standalone OPF with different name pattern
+                "metadata.opf",  # Standalone OPF with different name pattern
             ]
 
             for filename in test_files:
                 file_path = Path(temp_dir) / filename
                 file_path.write_text("test content")
 
-            ebook_extensions = {'.epub', '.mobi', '.pdf', '.azw', '.azw3', '.cbr', '.cbz'}
-            cover_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+            ebook_extensions = {".epub", ".mobi", ".pdf", ".azw", ".azw3", ".cbr", ".cbz"}
+            cover_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
 
             ebook_files, cover_files, opf_files = _collect_files(temp_dir, ebook_extensions, cover_extensions)
 
@@ -209,10 +206,7 @@ class FileCountingTests(TestCase):
             standalone_opf_count = 0
             for opf_path in opf_files:
                 opf_base = os.path.splitext(opf_path)[0]
-                has_matching_ebook = any(
-                    os.path.splitext(ebook_path)[0] == opf_base
-                    for ebook_path in ebook_files
-                )
+                has_matching_ebook = any(os.path.splitext(ebook_path)[0] == opf_base for ebook_path in ebook_files)
                 if not has_matching_ebook:
                     standalone_opf_count += 1
 

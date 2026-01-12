@@ -6,6 +6,7 @@ metadata files from FinalMetadata objects. The generated OPF files contain
 all curated metadata in a standards-compliant format that can be read by
 other ebook management tools.
 """
+
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -28,11 +29,7 @@ def generate_opf_from_final_metadata(final_metadata, ebook_filename=None):
     """
     try:
         # Define namespace map for clean prefix output
-        nsmap = {
-            "opf": "http://www.idpf.org/2007/opf",
-            "dc": "http://purl.org/dc/elements/1.1/",
-            "dcterms": "http://purl.org/dc/terms/"
-        }
+        nsmap = {"opf": "http://www.idpf.org/2007/opf", "dc": "http://purl.org/dc/elements/1.1/", "dcterms": "http://purl.org/dc/terms/"}
 
         # Register namespace prefixes for clean output
         ET.register_namespace("opf", "http://www.idpf.org/2007/opf")
@@ -40,12 +37,7 @@ def generate_opf_from_final_metadata(final_metadata, ebook_filename=None):
         ET.register_namespace("dcterms", "http://purl.org/dc/terms/")
 
         # Create root element with namespaces
-        root = ET.Element("{http://www.idpf.org/2007/opf}package",
-                          attrib={
-                              "version": "2.0",
-                              "unique-identifier": "BookId"
-                          },
-                          nsmap=nsmap)
+        root = ET.Element("{http://www.idpf.org/2007/opf}package", attrib={"version": "2.0", "unique-identifier": "BookId"}, nsmap=nsmap)
 
         # The namespace declarations are automatically handled by nsmap
 
@@ -53,23 +45,20 @@ def generate_opf_from_final_metadata(final_metadata, ebook_filename=None):
         metadata = ET.SubElement(root, "{http://www.idpf.org/2007/opf}metadata")
 
         # Required Dublin Core elements
-        _add_dc_element(metadata, "identifier",
-                        final_metadata.isbn or f"ebook-manager-{final_metadata.book.id}",
-                        attrib={"id": "BookId"})
+        _add_dc_element(metadata, "identifier", final_metadata.isbn or f"ebook-manager-{final_metadata.book.id}", attrib={"id": "BookId"})
 
         _add_dc_element(metadata, "title", final_metadata.final_title or "Unknown Title")
-        _add_dc_element(metadata, "creator", final_metadata.final_author or "Unknown Author",
-                        attrib={"{http://www.idpf.org/2007/opf}role": "aut"})
+        _add_dc_element(metadata, "creator", final_metadata.final_author or "Unknown Author", attrib={"{http://www.idpf.org/2007/opf}role": "aut"})
         _add_dc_element(metadata, "language", final_metadata.language or "en")
 
         # Optional Dublin Core elements
         if final_metadata.final_publisher:
             _add_dc_element(metadata, "publisher", final_metadata.final_publisher)
 
-        if hasattr(final_metadata, 'description') and final_metadata.description:
+        if hasattr(final_metadata, "description") and final_metadata.description:
             _add_dc_element(metadata, "description", final_metadata.description)
 
-        if hasattr(final_metadata, 'publication_year') and final_metadata.publication_year:
+        if hasattr(final_metadata, "publication_year") and final_metadata.publication_year:
             try:
                 # Format as ISO date
                 year = int(final_metadata.publication_year)
@@ -79,7 +68,7 @@ def generate_opf_from_final_metadata(final_metadata, ebook_filename=None):
                 pass
 
         # Add genres as subjects
-        if hasattr(final_metadata, 'final_genres') and final_metadata.final_genres:
+        if hasattr(final_metadata, "final_genres") and final_metadata.final_genres:
             for genre in final_metadata.final_genres.all():
                 _add_dc_element(metadata, "subject", genre.name)
 
@@ -95,12 +84,9 @@ def generate_opf_from_final_metadata(final_metadata, ebook_filename=None):
                     pass
 
         # Additional metadata from ebook library manager
-        _add_opf_meta(metadata, "ebook-manager:reviewed",
-                      "true" if final_metadata.is_reviewed else "false")
-        _add_opf_meta(metadata, "ebook-manager:confidence",
-                      f"{final_metadata.overall_confidence:.2f}")
-        _add_opf_meta(metadata, "ebook-manager:generated",
-                      datetime.now().isoformat())
+        _add_opf_meta(metadata, "ebook-manager:reviewed", "true" if final_metadata.is_reviewed else "false")
+        _add_opf_meta(metadata, "ebook-manager:confidence", f"{final_metadata.overall_confidence:.2f}")
+        _add_opf_meta(metadata, "ebook-manager:generated", datetime.now().isoformat())
 
         # Manifest section (simplified - just reference the ebook file if provided)
         manifest = ET.SubElement(root, "{http://www.idpf.org/2007/opf}manifest")
@@ -113,21 +99,16 @@ def generate_opf_from_final_metadata(final_metadata, ebook_filename=None):
             # Determine media type based on file extension
             file_ext = Path(ebook_filename).suffix.lower()
             media_type_map = {
-                '.epub': 'application/epub+zip',
-                '.pdf': 'application/pdf',
-                '.mobi': 'application/x-mobipocket-ebook',
-                '.azw': 'application/vnd.amazon.ebook',
-                '.azw3': 'application/vnd.amazon.ebook',
-                '.txt': 'text/plain'
+                ".epub": "application/epub+zip",
+                ".pdf": "application/pdf",
+                ".mobi": "application/x-mobipocket-ebook",
+                ".azw": "application/vnd.amazon.ebook",
+                ".azw3": "application/vnd.amazon.ebook",
+                ".txt": "text/plain",
             }
-            media_type = media_type_map.get(file_ext, 'application/octet-stream')
+            media_type = media_type_map.get(file_ext, "application/octet-stream")
 
-            ET.SubElement(manifest, "{http://www.idpf.org/2007/opf}item",
-                          attrib={
-                              "id": "main-content",
-                              "href": ebook_filename,
-                              "media-type": media_type
-                          })
+            ET.SubElement(manifest, "{http://www.idpf.org/2007/opf}item", attrib={"id": "main-content", "href": ebook_filename, "media-type": media_type})
 
         # Spine section (simplified)
         spine = ET.SubElement(root, "{http://www.idpf.org/2007/opf}spine")
@@ -137,15 +118,13 @@ def generate_opf_from_final_metadata(final_metadata, ebook_filename=None):
             spine.text = ""  # Add empty text to prevent self-closing tag
 
         if ebook_filename:
-            ET.SubElement(spine, "{http://www.idpf.org/2007/opf}itemref",
-                          attrib={"idref": "main-content"})
+            ET.SubElement(spine, "{http://www.idpf.org/2007/opf}itemref", attrib={"idref": "main-content"})
 
         # Format XML with proper indentation
         ET.indent(root, space="  ")
 
         # Generate XML string with declaration
-        xml_str = ET.tostring(root, encoding='utf-8', xml_declaration=True,
-                              pretty_print=True).decode('utf-8')
+        xml_str = ET.tostring(root, encoding="utf-8", xml_declaration=True, pretty_print=True).decode("utf-8")
 
         return xml_str
 
@@ -167,8 +146,7 @@ def _add_dc_element(parent, name, value, attrib=None):
 def _add_opf_meta(parent, name, content):
     """Add an OPF meta element."""
     if content is not None:
-        ET.SubElement(parent, "{http://www.idpf.org/2007/opf}meta",
-                      attrib={"name": name, "content": str(content)})
+        ET.SubElement(parent, "{http://www.idpf.org/2007/opf}meta", attrib={"name": name, "content": str(content)})
 
 
 def save_opf_file(final_metadata, opf_path, ebook_filename=None):
@@ -190,7 +168,7 @@ def save_opf_file(final_metadata, opf_path, ebook_filename=None):
             Path(opf_path).parent.mkdir(parents=True, exist_ok=True)
 
             # Write OPF file
-            with open(opf_path, 'w', encoding='utf-8') as f:
+            with open(opf_path, "w", encoding="utf-8") as f:
                 f.write(opf_content)
 
             logger.info(f"Generated OPF file: {opf_path}")
@@ -214,4 +192,4 @@ def get_opf_filename(book_filename):
     Returns:
         str: OPF filename (same base name with .opf extension)
     """
-    return Path(book_filename).with_suffix('.opf').name
+    return Path(book_filename).with_suffix(".opf").name

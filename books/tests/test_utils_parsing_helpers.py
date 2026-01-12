@@ -1,6 +1,7 @@
 """
 Test cases for Parsing Helper utilities
 """
+
 from pathlib import Path
 
 from django.test import TestCase

@@ -128,9 +128,7 @@ class RateLimitTracker:
 
             if daily_count >= self.config["daily_limit"]:
                 result["allowed"] = False
-                result["reason"] = (
-                    f"Daily limit exceeded ({daily_count}/{self.config['daily_limit']})"
-                )
+                result["reason"] = f"Daily limit exceeded ({daily_count}/{self.config['daily_limit']})"
                 result["retry_after"] = self._seconds_until_next_period("daily")
                 return result
 
@@ -141,9 +139,7 @@ class RateLimitTracker:
 
             if hourly_count >= self.config["hourly_limit"]:
                 result["allowed"] = False
-                result["reason"] = (
-                    f"Hourly limit exceeded ({hourly_count}/{self.config['hourly_limit']})"
-                )
+                result["reason"] = f"Hourly limit exceeded ({hourly_count}/{self.config['hourly_limit']})"
                 result["retry_after"] = self._seconds_until_next_period("hourly")
                 return result
 
@@ -154,9 +150,7 @@ class RateLimitTracker:
 
             if minute_count >= self.config["minute_limit"]:
                 result["allowed"] = False
-                result["reason"] = (
-                    f"Per-minute limit exceeded ({minute_count}/{self.config['minute_limit']})"
-                )
+                result["reason"] = f"Per-minute limit exceeded ({minute_count}/{self.config['minute_limit']})"
                 result["retry_after"] = self._seconds_until_next_period("minute")
                 return result
 
@@ -167,13 +161,9 @@ class RateLimitTracker:
         now = datetime.now()
 
         if period == "daily":
-            next_period = (now + timedelta(days=1)).replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
+            next_period = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         elif period == "hourly":
-            next_period = (now + timedelta(hours=1)).replace(
-                minute=0, second=0, microsecond=0
-            )
+            next_period = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
         elif period == "minute":
             next_period = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
         else:
@@ -252,14 +242,10 @@ class CircuitBreaker:
         state["last_failure"] = time.time()
         cache.set(self.cache_key, state, self.timeout * 2)
 
-        logger.warning(
-            f"[CIRCUIT BREAKER] {self.api_name} failure #{state['failures']}"
-        )
+        logger.warning(f"[CIRCUIT BREAKER] {self.api_name} failure #{state['failures']}")
 
         if state["failures"] >= self.failure_threshold:
-            logger.error(
-                f"[CIRCUIT BREAKER] {self.api_name} circuit opened after {state['failures']} failures"
-            )
+            logger.error(f"[CIRCUIT BREAKER] {self.api_name} circuit opened after {state['failures']} failures")
 
     def reset(self):
         """Reset the circuit breaker."""
@@ -320,13 +306,9 @@ class RateLimitedAPIClient:
         # Check rate limits
         limit_check = self.rate_tracker.check_limits()
         if not limit_check["allowed"]:
-            logger.warning(
-                f"[{self.api_name}] Rate limit exceeded: {limit_check['reason']}"
-            )
+            logger.warning(f"[{self.api_name}] Rate limit exceeded: {limit_check['reason']}")
             if limit_check["retry_after"] < 3600:  # Only wait if it's less than an hour
-                logger.info(
-                    f"[{self.api_name}] Waiting {limit_check['retry_after']}s for rate limit reset"
-                )
+                logger.info(f"[{self.api_name}] Waiting {limit_check['retry_after']}s for rate limit reset")
                 time.sleep(limit_check["retry_after"])
             else:
                 return None
@@ -338,20 +320,14 @@ class RateLimitedAPIClient:
             logger.debug(f"[{self.api_name}] Making request to {url}")
 
             # Make the request
-            response = requests.get(
-                url, params=params, headers=headers, timeout=timeout
-            )
+            response = requests.get(url, params=params, headers=headers, timeout=timeout)
 
             # Handle rate limiting responses
             if response.status_code == 429:
                 retry_after = int(response.headers.get("Retry-After", 60))
-                logger.warning(
-                    f"[{self.api_name}] 429 rate limit, waiting {retry_after}s"
-                )
+                logger.warning(f"[{self.api_name}] 429 rate limit, waiting {retry_after}s")
                 time.sleep(retry_after)
-                return self.make_request(
-                    url, params, headers, timeout, cache_key, cache_timeout
-                )
+                return self.make_request(url, params, headers, timeout, cache_key, cache_timeout)
 
             response.raise_for_status()
             data = response.json()
@@ -391,15 +367,9 @@ class APIManager:
 
     def __init__(self):
         self.clients = {
-            "google_books": RateLimitedAPIClient(
-                "Google Books", RateLimitConfig.GOOGLE_BOOKS
-            ),
-            "comic_vine": RateLimitedAPIClient(
-                "Comic Vine", RateLimitConfig.COMIC_VINE
-            ),
-            "open_library": RateLimitedAPIClient(
-                "Open Library", RateLimitConfig.OPEN_LIBRARY
-            ),
+            "google_books": RateLimitedAPIClient("Google Books", RateLimitConfig.GOOGLE_BOOKS),
+            "comic_vine": RateLimitedAPIClient("Comic Vine", RateLimitConfig.COMIC_VINE),
+            "open_library": RateLimitedAPIClient("Open Library", RateLimitConfig.OPEN_LIBRARY),
         }
 
     def get_client(self, api_name: str) -> Optional[RateLimitedAPIClient]:
@@ -412,10 +382,7 @@ class APIManager:
 
     def check_api_health(self) -> Dict[str, bool]:
         """Check health status of all APIs."""
-        return {
-            name: not client.circuit_breaker.is_open()
-            for name, client in self.clients.items()
-        }
+        return {name: not client.circuit_breaker.is_open() for name, client in self.clients.items()}
 
 
 # Global API manager instance

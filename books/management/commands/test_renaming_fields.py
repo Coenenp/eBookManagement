@@ -15,16 +15,10 @@ class Command(BaseCommand):
         if user:
             profile = UserProfile.get_or_create_for_user(user)
             self.stdout.write("UserProfile fields test:")
-            self.stdout.write(
-                f"  Default folder pattern: {repr(profile.default_folder_pattern)}"
-            )
-            self.stdout.write(
-                f"  Default filename pattern: {repr(profile.default_filename_pattern)}"
-            )
+            self.stdout.write(f"  Default folder pattern: {repr(profile.default_folder_pattern)}")
+            self.stdout.write(f"  Default filename pattern: {repr(profile.default_filename_pattern)}")
             self.stdout.write(f"  Saved patterns: {profile.saved_patterns}")
-            self.stdout.write(
-                f"  Include companion files: {profile.include_companion_files}"
-            )
+            self.stdout.write(f"  Include companion files: {profile.include_companion_files}")
 
             # Test pattern saving
             profile.save_pattern(

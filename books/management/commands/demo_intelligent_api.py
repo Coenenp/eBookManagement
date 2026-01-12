@@ -50,9 +50,7 @@ class Command(BaseCommand):
         # Get some existing books
         books = Book.objects.available()[:5]
         if not books:
-            self.stdout.write(
-                self.style.ERROR("No books found. Please run a scan first.")
-            )
+            self.stdout.write(self.style.ERROR("No books found. Please run a scan first."))
             return
 
         # Get API data sources
@@ -91,9 +89,7 @@ class Command(BaseCommand):
                         data_source=open_library,
                         defaults={"status": APIAccessLog.RATE_LIMITED},
                     )
-                    log.record_attempt(
-                        success=False, error_message="Rate limit exceeded"
-                    )
+                    log.record_attempt(success=False, error_message="Rate limit exceeded")
                 else:
                     # Failed API call
                     log, created = APIAccessLog.objects.get_or_create(
@@ -143,9 +139,7 @@ class Command(BaseCommand):
             ],
         )
 
-        self.stdout.write(
-            self.style.SUCCESS(f"Demo data created for {len(books)} books")
-        )
+        self.stdout.write(self.style.SUCCESS(f"Demo data created for {len(books)} books"))
         self.stdout.write(f"Session created: {session.session_id}")
 
     def simulate_api_interactions(self):
@@ -153,16 +147,10 @@ class Command(BaseCommand):
         self.stdout.write("Simulating intelligent API interactions...")
 
         # Get books that need external data
-        books_needing_scan = BookAPICompleteness.objects.filter(
-            needs_external_scan=True
-        )[:3]
+        books_needing_scan = BookAPICompleteness.objects.filter(needs_external_scan=True)[:3]
 
         if not books_needing_scan:
-            self.stdout.write(
-                self.style.WARNING(
-                    "No books need external scanning. Run --setup-demo first."
-                )
-            )
+            self.stdout.write(self.style.WARNING("No books need external scanning. Run --setup-demo first."))
             return
 
         google_books = DataSource.objects.filter(name=DataSource.GOOGLE_BOOKS).first()
@@ -190,11 +178,7 @@ class Command(BaseCommand):
                 completeness.mark_source_complete("Google Books")
                 self.stdout.write("  📚 Metadata retrieved successfully!")
             else:
-                next_retry = (
-                    log.next_retry_after.strftime("%Y-%m-%d %H:%M")
-                    if log.next_retry_after
-                    else "N/A"
-                )
+                next_retry = log.next_retry_after.strftime("%Y-%m-%d %H:%M") if log.next_retry_after else "N/A"
                 self.stdout.write(f"  ⏳ API not available (next retry: {next_retry})")
 
         self.stdout.write(self.style.SUCCESS("\nAPI interaction simulation complete!"))
@@ -211,9 +195,7 @@ class Command(BaseCommand):
         self.stdout.write("  • ScanSession: Manages scan sessions and resumption")
         self.stdout.write("  • BookAPICompleteness: Optimizes future scans")
         self.stdout.write("  • IntelligentAPIScanner: Graceful degradation logic")
-        self.stdout.write(
-            "  • BackgroundScanner: Integrated intelligent API management"
-        )
+        self.stdout.write("  • BackgroundScanner: Integrated intelligent API management")
 
         # Current state
         total_books = Book.objects.count()
@@ -239,9 +221,7 @@ class Command(BaseCommand):
         # Usage examples
         self.stdout.write("\n USAGE EXAMPLES:")
         self.stdout.write("  python manage.py demo_intelligent_api --setup-demo")
-        self.stdout.write(
-            "  python manage.py demo_intelligent_api --simulate-api-calls"
-        )
+        self.stdout.write("  python manage.py demo_intelligent_api --simulate-api-calls")
         self.stdout.write("  python manage.py test_intelligent_scan --show-stats")
 
         # Integration points

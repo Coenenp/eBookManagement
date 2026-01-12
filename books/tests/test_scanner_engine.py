@@ -22,10 +22,7 @@ class EbookScannerTests(TestCase):
     def setUp(self):
         """Set up test data."""
         # Create or get data sources
-        self.data_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.INITIAL_SCAN,
-            defaults={'trust_level': 0.2}
-        )
+        self.data_source, _ = DataSource.objects.get_or_create(name=DataSource.INITIAL_SCAN, defaults={"trust_level": 0.2})
 
     def test_init_default_settings(self):
         """Test scanner initialization with default settings."""
@@ -37,13 +34,14 @@ class EbookScannerTests(TestCase):
 
         # Test that scanner uses centralized extensions from models
         from books.models import AUDIOBOOK_FORMATS, COMIC_FORMATS, EBOOK_FORMATS
+
         expected_extensions = set()
         for fmt in EBOOK_FORMATS:
-            expected_extensions.add(f'.{fmt}')
+            expected_extensions.add(f".{fmt}")
         for fmt in COMIC_FORMATS:
-            expected_extensions.add(f'.{fmt}')
+            expected_extensions.add(f".{fmt}")
         for fmt in AUDIOBOOK_FORMATS:
-            expected_extensions.add(f'.{fmt}')
+            expected_extensions.add(f".{fmt}")
 
         self.assertEqual(scanner.ebook_extensions, expected_extensions)
 
@@ -54,9 +52,9 @@ class EbookScannerTests(TestCase):
         self.assertTrue(scanner.rescan)
         self.assertTrue(scanner.resume)
 
-    @patch('books.scanner.scanner_engine.scan_directory')
-    @patch('os.path.isdir')
-    @patch('os.access')
+    @patch("books.scanner.scanner_engine.scan_directory")
+    @patch("os.path.isdir")
+    @patch("os.access")
     def test_run_with_valid_folder_path(self, mock_access, mock_isdir, mock_scan_dir):
         """Test running scanner with a valid folder path."""
         mock_isdir.return_value = True
@@ -74,9 +72,9 @@ class EbookScannerTests(TestCase):
         self.assertEqual(status.status, "Completed")
         self.assertEqual(status.progress, 100)
 
-    @patch('books.scanner.scanner_engine.scan_directory')
-    @patch('os.path.isdir')
-    @patch('os.access')
+    @patch("books.scanner.scanner_engine.scan_directory")
+    @patch("os.path.isdir")
+    @patch("os.access")
     def test_run_with_invalid_folder_path(self, mock_access, mock_isdir, mock_scan_dir):
         """Test running scanner with an invalid folder path."""
         mock_isdir.return_value = False
@@ -94,12 +92,11 @@ class EbookScannerTests(TestCase):
         # scan_directory should not have been called
         mock_scan_dir.assert_not_called()
 
-    @patch('books.scanner.scanner_engine.scan_directory')
+    @patch("books.scanner.scanner_engine.scan_directory")
     def test_run_with_active_scan_folders(self, mock_scan_dir):
         """Test running scanner with active scan folders."""
         # Create test scan folders
-        with tempfile.TemporaryDirectory() as temp_dir1, \
-             tempfile.TemporaryDirectory() as temp_dir2:
+        with tempfile.TemporaryDirectory() as temp_dir1, tempfile.TemporaryDirectory() as temp_dir2:
 
             ScanFolder.objects.create(path=temp_dir1, is_active=True)
             ScanFolder.objects.create(path=temp_dir2, is_active=True)
@@ -115,7 +112,7 @@ class EbookScannerTests(TestCase):
             status = ScanStatus.objects.first()
             self.assertEqual(status.status, "Completed")
 
-    @patch('books.scanner.scanner_engine.scan_directory')
+    @patch("books.scanner.scanner_engine.scan_directory")
     def test_run_with_scan_directory_exception(self, mock_scan_dir):
         """Test handling of exceptions during scan_directory."""
         mock_scan_dir.side_effect = Exception("Test error")
@@ -135,7 +132,7 @@ class EbookScannerTests(TestCase):
         """Test that resume mode calls _resume_scan."""
         scanner = EbookScanner(resume=True)
 
-        with patch.object(scanner, '_resume_scan') as mock_resume:
+        with patch.object(scanner, "_resume_scan") as mock_resume:
             scanner.run("/test/path")
             mock_resume.assert_called_once_with("/test/path")
 
@@ -143,7 +140,7 @@ class EbookScannerTests(TestCase):
         """Test resume behavior when no interrupted scan exists."""
         scanner = EbookScanner(resume=True)
 
-        with patch.object(scanner, 'run') as mock_run:
+        with patch.object(scanner, "run") as mock_run:
             scanner._resume_scan("/test/path")
 
             # Should call regular run with resume=False
@@ -154,18 +151,16 @@ class EbookScannerTests(TestCase):
         """Test resume behavior with an interrupted scan."""
         # Create an interrupted scan status
         folders_to_scan = ["/test/folder1", "/test/folder2"]
-        status = ScanStatus.objects.create(
-            status="Running",
-            scan_folders=json.dumps(folders_to_scan),
-            last_processed_file="/test/folder1/book.epub"
-        )
+        status = ScanStatus.objects.create(status="Running", scan_folders=json.dumps(folders_to_scan), last_processed_file="/test/folder1/book.epub")
 
         scanner = EbookScanner(resume=True)
 
-        with patch.object(scanner, '_handle_metadata_completion') as mock_metadata, \
-             patch('books.scanner.scanner_engine.scan_directory') as mock_scan_dir, \
-             patch('os.path.isdir', return_value=True), \
-             patch('os.access', return_value=True):
+        with (
+            patch.object(scanner, "_handle_metadata_completion") as mock_metadata,
+            patch("books.scanner.scanner_engine.scan_directory") as mock_scan_dir,
+            patch("os.path.isdir", return_value=True),
+            patch("os.access", return_value=True),
+        ):
 
             scanner._resume_scan()
 
@@ -183,10 +178,7 @@ class EbookScannerTests(TestCase):
     def test_resume_scan_invalid_json(self):
         """Test resume behavior with invalid JSON in scan_folders."""
         # Create an interrupted scan with invalid JSON
-        status = ScanStatus.objects.create(
-            status="Running",
-            scan_folders="invalid json"
-        )
+        status = ScanStatus.objects.create(status="Running", scan_folders="invalid json")
 
         # Verify the status was created with invalid JSON
         self.assertEqual(status.status, "Running")
@@ -194,27 +186,21 @@ class EbookScannerTests(TestCase):
 
         scanner = EbookScanner(resume=True)
 
-        with patch.object(scanner, 'run') as mock_run:
+        with patch.object(scanner, "run") as mock_run:
             scanner._resume_scan("/test/path")
 
             # Should fall back to regular run
             self.assertFalse(scanner.resume)
             mock_run.assert_called_once_with("/test/path")
 
-    @patch('books.scanner.folder.query_metadata_and_covers')
-    @patch('books.scanner.folder.resolve_final_metadata')
+    @patch("books.scanner.folder.query_metadata_and_covers")
+    @patch("books.scanner.folder.resolve_final_metadata")
     def test_handle_metadata_completion(self, mock_resolve, mock_query):
         """Test metadata completion for incomplete books."""
         # Create a scan folder and book without FinalMetadata
         with tempfile.TemporaryDirectory() as temp_dir:
             scan_folder = ScanFolder.objects.create(path=temp_dir, is_active=True)
-            book = create_test_book_with_file(
-                file_path=os.path.join(temp_dir, "test.epub"),
-                file_format="epub",
-                file_size=1000,
-                scan_folder=scan_folder,
-                content_type='ebook'
-            )
+            book = create_test_book_with_file(file_path=os.path.join(temp_dir, "test.epub"), file_format="epub", file_size=1000, scan_folder=scan_folder, content_type="ebook")
 
             status = ScanStatus.objects.create(status="Running")
             scanner = EbookScanner()
@@ -229,20 +215,14 @@ class EbookScannerTests(TestCase):
         """Test that books with FinalMetadata are excluded from completion."""
         with tempfile.TemporaryDirectory() as temp_dir:
             scan_folder = ScanFolder.objects.create(path=temp_dir, is_active=True)
-            book = create_test_book_with_file(
-                file_path=os.path.join(temp_dir, "test.epub"),
-                file_format="epub",
-                file_size=1000,
-                scan_folder=scan_folder,
-                content_type='ebook'
-            )
+            book = create_test_book_with_file(file_path=os.path.join(temp_dir, "test.epub"), file_format="epub", file_size=1000, scan_folder=scan_folder, content_type="ebook")
             # Create FinalMetadata for the book
             FinalMetadata.objects.create(book=book)
 
             status = ScanStatus.objects.create(status="Running")
             scanner = EbookScanner()
 
-            with patch('books.scanner.folder.query_metadata_and_covers') as mock_query:
+            with patch("books.scanner.folder.query_metadata_and_covers") as mock_query:
                 scanner._handle_metadata_completion(status, [temp_dir])
 
                 # Should not call metadata functions for complete books
@@ -253,12 +233,7 @@ class EbookScannerTests(TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             scan_folder = ScanFolder.objects.create(path=temp_dir, is_active=True)
             book = create_test_book_with_file(
-                file_path=os.path.join(temp_dir, "test.epub"),
-                file_format="epub",
-                file_size=1000,
-                scan_folder=scan_folder,
-                content_type='ebook',
-                is_corrupted=True
+                file_path=os.path.join(temp_dir, "test.epub"), file_format="epub", file_size=1000, scan_folder=scan_folder, content_type="ebook", is_corrupted=True
             )
 
             # Verify the corrupted book was created
@@ -267,26 +242,20 @@ class EbookScannerTests(TestCase):
             status = ScanStatus.objects.create(status="Running")
             scanner = EbookScanner()
 
-            with patch('books.scanner.folder.query_metadata_and_covers') as mock_query:
+            with patch("books.scanner.folder.query_metadata_and_covers") as mock_query:
                 scanner._handle_metadata_completion(status, [temp_dir])
 
                 # Should not process corrupted books
                 mock_query.assert_not_called()
 
-    @patch('books.scanner.folder.query_metadata_and_covers')
+    @patch("books.scanner.folder.query_metadata_and_covers")
     def test_handle_metadata_completion_exception_handling(self, mock_query):
         """Test exception handling during metadata completion."""
         mock_query.side_effect = Exception("Metadata error")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             scan_folder = ScanFolder.objects.create(path=temp_dir, is_active=True)
-            book = create_test_book_with_file(
-                file_path=os.path.join(temp_dir, "test.epub"),
-                file_format="epub",
-                file_size=1000,
-                scan_folder=scan_folder,
-                content_type='ebook'
-            )
+            book = create_test_book_with_file(file_path=os.path.join(temp_dir, "test.epub"), file_format="epub", file_size=1000, scan_folder=scan_folder, content_type="ebook")
 
             status = ScanStatus.objects.create(status="Running")
             scanner = EbookScanner()
@@ -298,15 +267,14 @@ class EbookScannerTests(TestCase):
 
     def test_scan_status_progress_tracking(self):
         """Test that scan status is properly updated during scanning."""
-        with tempfile.TemporaryDirectory() as temp_dir1, \
-             tempfile.TemporaryDirectory() as temp_dir2:
+        with tempfile.TemporaryDirectory() as temp_dir1, tempfile.TemporaryDirectory() as temp_dir2:
 
             ScanFolder.objects.create(path=temp_dir1, is_active=True)
             ScanFolder.objects.create(path=temp_dir2, is_active=True)
 
             scanner = EbookScanner()
 
-            with patch('books.scanner.scanner_engine.scan_directory') as mock_scan_dir:
+            with patch("books.scanner.scanner_engine.scan_directory") as mock_scan_dir:
                 scanner.run()
 
                 # Check that scan_directory was called for each folder
@@ -321,15 +289,11 @@ class EbookScannerTests(TestCase):
     def test_existing_scan_status_reuse(self):
         """Test that existing completed scan status is reused."""
         # Create an existing completed scan
-        existing_status = ScanStatus.objects.create(
-            status="Completed",
-            progress=100,
-            message="Previous scan complete"
-        )
+        existing_status = ScanStatus.objects.create(status="Completed", progress=100, message="Previous scan complete")
 
         scanner = EbookScanner()
 
-        with patch('books.scanner.scanner_engine.scan_directory'):
+        with patch("books.scanner.scanner_engine.scan_directory"):
             scanner.run()
 
             # Should create a new status since the old one was completed
@@ -337,21 +301,17 @@ class EbookScannerTests(TestCase):
             self.assertEqual(len(statuses), 2)
 
             # Latest status should be the new one
-            latest_status = ScanStatus.objects.order_by('-started').first()
+            latest_status = ScanStatus.objects.order_by("-started").first()
             self.assertNotEqual(latest_status.id, existing_status.id)
 
     def test_existing_running_scan_status_reuse(self):
         """Test that existing running scan status is reused."""
         # Create an existing running scan
-        existing_status = ScanStatus.objects.create(
-            status="Running",
-            progress=50,
-            message="Previous scan running"
-        )
+        existing_status = ScanStatus.objects.create(status="Running", progress=50, message="Previous scan running")
 
         scanner = EbookScanner()
 
-        with patch('books.scanner.scanner_engine.scan_directory'):
+        with patch("books.scanner.scanner_engine.scan_directory"):
             scanner.run()
 
             # Should reuse the existing status
@@ -363,15 +323,14 @@ class EbookScannerTests(TestCase):
 
     def test_scan_folders_json_storage(self):
         """Test that scan folders are properly stored as JSON."""
-        with tempfile.TemporaryDirectory() as temp_dir1, \
-             tempfile.TemporaryDirectory() as temp_dir2:
+        with tempfile.TemporaryDirectory() as temp_dir1, tempfile.TemporaryDirectory() as temp_dir2:
 
             ScanFolder.objects.create(path=temp_dir1, is_active=True)
             ScanFolder.objects.create(path=temp_dir2, is_active=True)
 
             scanner = EbookScanner()
 
-            with patch('books.scanner.scanner_engine.scan_directory'):
+            with patch("books.scanner.scanner_engine.scan_directory"):
                 scanner.run()
 
                 status = ScanStatus.objects.first()

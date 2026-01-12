@@ -27,9 +27,7 @@ logger = logging.getLogger("books.scanner")
 
 def _get_opf_file_source():
     """Get or create the OPF File DataSource."""
-    source, created = DataSource.objects.get_or_create(
-        name=DataSource.OPF_FILE, defaults={"trust_level": 0.9}
-    )
+    source, created = DataSource.objects.get_or_create(name=DataSource.OPF_FILE, defaults={"trust_level": 0.9})
     return source
 
 

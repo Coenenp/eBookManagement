@@ -57,9 +57,7 @@ class IntelligentAPIScanner:
             )
 
             if created:
-                logger.info(
-                    f"[INTELLIGENT SCAN] Created new session: {self.session_id}"
-                )
+                logger.info(f"[INTELLIGENT SCAN] Created new session: {self.session_id}")
             else:
                 logger.info(f"[INTELLIGENT SCAN] Resumed session: {self.session_id}")
 
@@ -100,22 +98,14 @@ class IntelligentAPIScanner:
             availability[api_name] = is_available
 
         # Update internal tracking
-        self.available_apis = {
-            name for name, available in availability.items() if available
-        }
-        self.failed_apis = {
-            name for name, available in availability.items() if not available
-        }
+        self.available_apis = {name for name, available in availability.items() if available}
+        self.failed_apis = {name for name, available in availability.items() if not available}
 
-        logger.info(
-            f"[API AVAILABILITY] Available: {self.available_apis}, Unavailable: {self.failed_apis}"
-        )
+        logger.info(f"[API AVAILABILITY] Available: {self.available_apis}, Unavailable: {self.failed_apis}")
 
         return availability
 
-    def scan_book_with_intelligence(
-        self, book: Book, force_all_apis: bool = False
-    ) -> Dict[str, any]:
+    def scan_book_with_intelligence(self, book: Book, force_all_apis: bool = False) -> Dict[str, any]:
         """
         Scan a book with intelligent API management
 
@@ -151,17 +141,13 @@ class IntelligentAPIScanner:
             api_availability = self.check_api_availability()
 
             # Determine which APIs to attempt
-            apis_to_attempt = self._determine_apis_to_attempt(
-                book, completeness, api_availability, force_all_apis
-            )
+            apis_to_attempt = self._determine_apis_to_attempt(book, completeness, api_availability, force_all_apis)
 
             if not apis_to_attempt:
                 logger.info(f"[INTELLIGENT SCAN] No APIs to attempt for book {book.id}")
                 return results
 
-            logger.info(
-                f"[INTELLIGENT SCAN] Book {book.id}: Attempting APIs: {apis_to_attempt}"
-            )
+            logger.info(f"[INTELLIGENT SCAN] Book {book.id}: Attempting APIs: {apis_to_attempt}")
 
             # Attempt each API
             for api_name in apis_to_attempt:
@@ -191,15 +177,9 @@ class IntelligentAPIScanner:
             self.session.processed_books += 1
             if results["apis_succeeded"]:
                 self.session.books_with_external_data += 1
-            self.session.save(
-                update_fields=["processed_books", "books_with_external_data"]
-            )
+            self.session.save(update_fields=["processed_books", "books_with_external_data"])
 
-            logger.info(
-                f"[INTELLIGENT SCAN] Book {book.id} completed: "
-                f"APIs succeeded: {results['apis_succeeded']}, "
-                f"APIs failed: {results['apis_failed']}"
-            )
+            logger.info(f"[INTELLIGENT SCAN] Book {book.id} completed: " f"APIs succeeded: {results['apis_succeeded']}, " f"APIs failed: {results['apis_failed']}")
 
         except Exception as e:
             logger.error(f"[INTELLIGENT SCAN] Error scanning book {book.id}: {e}")
@@ -227,9 +207,7 @@ class IntelligentAPIScanner:
             source_complete_field = f"{api_name.lower().replace(' ', '_')}_complete"
             if hasattr(completeness, source_complete_field):
                 if getattr(completeness, source_complete_field) and not force_all:
-                    logger.debug(
-                        f"[API SELECTION] Skipping {api_name} - already complete"
-                    )
+                    logger.debug(f"[API SELECTION] Skipping {api_name} - already complete")
                     continue
 
             # Check API access log for this book/source
@@ -243,16 +221,12 @@ class IntelligentAPIScanner:
 
                 # Skip if API is unhealthy for this book and not forcing
                 if not force_all and not access_log.is_healthy:
-                    logger.debug(
-                        f"[API SELECTION] Skipping {api_name} - unhealthy for book"
-                    )
+                    logger.debug(f"[API SELECTION] Skipping {api_name} - unhealthy for book")
                     continue
 
                 # Skip if we can't retry yet (rate limited)
                 if not access_log.can_retry_now:
-                    logger.debug(
-                        f"[API SELECTION] Skipping {api_name} - can't retry yet"
-                    )
+                    logger.debug(f"[API SELECTION] Skipping {api_name} - can't retry yet")
                     continue
 
             except DataSource.DoesNotExist:
@@ -326,10 +300,7 @@ class IntelligentAPIScanner:
                     }
                 )
 
-                logger.info(
-                    f"[API SUCCESS] {api_name} for book {book.id}: "
-                    f"{metadata_added} metadata, {covers_added} covers"
-                )
+                logger.info(f"[API SUCCESS] {api_name} for book {book.id}: " f"{metadata_added} metadata, {covers_added} covers")
 
             else:
                 # API call didn't return data (but didn't error)
@@ -363,8 +334,7 @@ class IntelligentAPIScanner:
             result.update(
                 {
                     "error": error_msg,
-                    "should_retry": "rate limit"
-                    not in error_msg.lower(),  # Don't retry rate limits immediately
+                    "should_retry": "rate limit" not in error_msg.lower(),  # Don't retry rate limits immediately
                 }
             )
 
@@ -390,9 +360,7 @@ class IntelligentAPIScanner:
             if hasattr(book, "finalmetadata") and book.finalmetadata:
                 isbn = book.finalmetadata.isbn
 
-            logger.info(
-                f"[API CALL] {api_name} for book {book.id} - Title: {title}, Author: {author}, ISBN: {isbn}"
-            )
+            logger.info(f"[API CALL] {api_name} for book {book.id} - Title: {title}, Author: {author}, ISBN: {isbn}")
 
             # Call the appropriate API based on the name
             if api_name == DataSource.GOOGLE_BOOKS or api_name == "Google Books":
@@ -439,12 +407,8 @@ class IntelligentAPIScanner:
             "metadata",
         ]:
             if hasattr(book, relation_name):
-                queryset = getattr(book, relation_name).filter(
-                    source=source, is_active=True
-                )
-                avg_conf = queryset.aggregate(avg_confidence=Avg("confidence"))[
-                    "avg_confidence"
-                ]
+                queryset = getattr(book, relation_name).filter(source=source, is_active=True)
+                avg_conf = queryset.aggregate(avg_confidence=Avg("confidence"))["avg_confidence"]
                 if avg_conf:
                     confidences.append(avg_conf)
 
@@ -462,9 +426,7 @@ class IntelligentAPIScanner:
         try:
             # Check current API availability
             api_availability = self.check_api_availability()
-            recovered_apis = [
-                name for name, available in api_availability.items() if available
-            ]
+            recovered_apis = [name for name, available in api_availability.items() if available]
             resume_results["apis_recovered"] = recovered_apis
 
             if not recovered_apis:
@@ -474,11 +436,7 @@ class IntelligentAPIScanner:
             logger.info(f"[RESUME] APIs recovered: {recovered_apis}")
 
             # Find sessions that can be resumed
-            resumable_sessions = ScanSession.objects.filter(
-                can_resume=True, is_active=True
-            ).order_by("-created_at")[
-                :5
-            ]  # Limit to recent sessions
+            resumable_sessions = ScanSession.objects.filter(can_resume=True, is_active=True).order_by("-created_at")[:5]  # Limit to recent sessions
 
             for session in resumable_sessions:
                 logger.info(f"[RESUME] Processing session {session.session_id}")
@@ -494,38 +452,26 @@ class IntelligentAPIScanner:
                         book = Book.objects.get(id=book_id)
 
                         # Check which missing sources are now available
-                        available_missing = [
-                            source
-                            for source in missing_sources
-                            if source in recovered_apis
-                        ]
+                        available_missing = [source for source in missing_sources if source in recovered_apis]
 
                         if available_missing:
-                            logger.info(
-                                f"[RESUME] Resuming book {book_id} for APIs: {available_missing}"
-                            )
+                            logger.info(f"[RESUME] Resuming book {book_id} for APIs: {available_missing}")
 
                             # Scan with only the recovered APIs
                             scanner = IntelligentAPIScanner(session.session_id)
                             scanner.available_apis = set(available_missing)
 
-                            result = scanner.scan_book_with_intelligence(
-                                book, force_all_apis=False
-                            )
+                            result = scanner.scan_book_with_intelligence(book, force_all_apis=False)
 
                             if result["apis_succeeded"]:
                                 books_completed_this_session += 1
                                 session.remove_book_from_resume_queue(book_id)
 
                         else:
-                            logger.debug(
-                                f"[RESUME] No recovered APIs for book {book_id}"
-                            )
+                            logger.debug(f"[RESUME] No recovered APIs for book {book_id}")
 
                     except Book.DoesNotExist:
-                        logger.warning(
-                            f"[RESUME] Book {book_id} not found, removing from queue"
-                        )
+                        logger.warning(f"[RESUME] Book {book_id} not found, removing from queue")
                         session.remove_book_from_resume_queue(book_id)
 
                     except Exception as e:
@@ -548,9 +494,7 @@ class IntelligentAPIScanner:
 
         return resume_results
 
-    def get_scanning_recommendations(
-        self, scan_folder_id: Optional[int] = None
-    ) -> Dict[str, any]:
+    def get_scanning_recommendations(self, scan_folder_id: Optional[int] = None) -> Dict[str, any]:
         """Get recommendations for optimal scanning based on current API status"""
         recommendations = {
             "api_status": {},
@@ -565,12 +509,8 @@ class IntelligentAPIScanner:
             # Check API availability
             api_availability = self.check_api_availability()
             recommendations["api_status"] = api_availability
-            recommendations["available_apis"] = [
-                name for name, avail in api_availability.items() if avail
-            ]
-            recommendations["unavailable_apis"] = [
-                name for name, avail in api_availability.items() if not avail
-            ]
+            recommendations["available_apis"] = [name for name, avail in api_availability.items() if avail]
+            recommendations["unavailable_apis"] = [name for name, avail in api_availability.items() if not avail]
 
             # Determine recommended scanning mode
             available_count = len(recommendations["available_apis"])
@@ -584,12 +524,7 @@ class IntelligentAPIScanner:
                 recommendations["recommended_mode"] = "full_external"
 
             # Count books that need retrying
-            books_needing_retry = (
-                APIAccessLog.objects.filter(should_retry=True, can_retry_now=True)
-                .values("book")
-                .distinct()
-                .count()
-            )
+            books_needing_retry = APIAccessLog.objects.filter(should_retry=True, can_retry_now=True).values("book").distinct().count()
 
             recommendations["books_needing_retry"] = books_needing_retry
 
@@ -610,9 +545,7 @@ class IntelligentAPIScanner:
                         ).count()
 
                         completion_pct = (complete_books / total_books) * 100
-                        recommendations["estimated_completion"] = (
-                            f"{completion_pct:.1f}%"
-                        )
+                        recommendations["estimated_completion"] = f"{completion_pct:.1f}%"
 
                 except ScanFolder.DoesNotExist:
                     pass

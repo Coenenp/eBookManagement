@@ -246,8 +246,6 @@ class AuthorManagementViewTests(TestCase):
 
     def test_author_delete_view_successful_deletion(self):
         """Test successful author deletion"""
-        author_name = self.unreviewed_author1.name
-
         response = self.client.post(reverse("books:author_delete", kwargs={"pk": self.unreviewed_author1.pk}))
 
         # Should redirect to author list
@@ -458,8 +456,6 @@ class GenreManagementViewTests(TestCase):
 
     def test_genre_delete_view_successful_deletion(self):
         """Test successful genre deletion"""
-        genre_name = self.unreviewed_genre1.name
-
         response = self.client.post(reverse("books:genre_delete", kwargs={"pk": self.unreviewed_genre1.pk}))
 
         # Should redirect to genre list

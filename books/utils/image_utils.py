@@ -3,6 +3,7 @@
 This module provides functions for downloading, processing, and encoding
 book cover images for display and storage operations.
 """
+
 import base64
 import os
 
@@ -19,10 +20,10 @@ def download_and_store_cover(candidate):
     primary_file = candidate.book.primary_file
     book_filename = primary_file.filename if primary_file else f"book_{candidate.book.id}"
     filename = f"{slugify(book_filename)}_cover.jpg"
-    relative_path = os.path.join('covers', filename)
+    relative_path = os.path.join("covers", filename)
     absolute_path = os.path.join(settings.MEDIA_ROOT, relative_path)
 
-    with open(absolute_path, 'wb') as f:
+    with open(absolute_path, "wb") as f:
         f.write(response.content)
 
     return os.path.join(settings.MEDIA_URL, relative_path)

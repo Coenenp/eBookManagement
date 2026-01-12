@@ -25,9 +25,7 @@ logger = logging.getLogger("books.scanner")
 
 def _get_file_scanner_source():
     """Get or create the file_scanner DataSource object"""
-    source, _ = DataSource.objects.get_or_create(
-        name="file_scanner", defaults={"priority": 1}
-    )
+    source, _ = DataSource.objects.get_or_create(name="file_scanner", defaults={"priority": 1})
     return source
 
 
@@ -49,15 +47,11 @@ def process_files_by_content_type(
     if content_type == "comics":
         _process_comic_files(file_paths, scan_folder, cover_files, opf_files, rescan)
     elif content_type == "audiobooks":
-        _process_audiobook_files(
-            file_paths, scan_folder, cover_files, opf_files, rescan
-        )
+        _process_audiobook_files(file_paths, scan_folder, cover_files, opf_files, rescan)
     else:
         # For ebooks, process individually (existing behavior)
         for file_path in file_paths:
-            _process_individual_ebook(
-                file_path, scan_folder, cover_files, opf_files, rescan
-            )
+            _process_individual_ebook(file_path, scan_folder, cover_files, opf_files, rescan)
 
 
 def _process_comic_files(
@@ -76,9 +70,7 @@ def _process_comic_files(
     logger.info(f"Found {len(comic_groups)} comic series in {len(file_paths)} files")
 
     for series_name, issue_files in comic_groups.items():
-        logger.info(
-            f"Processing comic series: {series_name} ({len(issue_files)} issues)"
-        )
+        logger.info(f"Processing comic series: {series_name} ({len(issue_files)} issues)")
 
         # Process each issue file as a separate Book (content_type='comic')
         for issue_file in issue_files:
@@ -239,9 +231,7 @@ def _process_audiobook_files(
         total_duration = 0
         total_size = 0
         for audio_file in audio_files:
-            duration, size = _process_audiobook_file(
-                audio_file, book, audiobook_grouper, cover_files, opf_files, rescan
-            )
+            duration, size = _process_audiobook_file(audio_file, book, audiobook_grouper, cover_files, opf_files, rescan)
             total_duration += duration or 0
             total_size += size or 0
 
@@ -276,24 +266,19 @@ def _process_audiobook_file(
             "file_size": os.path.getsize(file_path),
             "chapter_number": file_info.get("chapter_number"),
             "track_number": file_info.get("track_number"),
-            "chapter_title": file_info.get("chapter_title")
-            or f'Chapter {file_info.get("chapter_number", "")}',
+            "chapter_title": file_info.get("chapter_title") or f'Chapter {file_info.get("chapter_number", "")}',
             "duration_seconds": 0,  # Will be extracted from file metadata
         },
     )
 
     if created:
-        logger.info(
-            f"Created audiobook file: {book.title} - Chapter {file_info.get('chapter_number', 'Unknown')}"
-        )
+        logger.info(f"Created audiobook file: {book.title} - Chapter {file_info.get('chapter_number', 'Unknown')}")
     elif rescan:
         # Update file info on rescan
         book_file.file_size = os.path.getsize(file_path)
         book_file.file_format = get_file_format(file_path)
         book_file.save()
-        logger.info(
-            f"Updated audiobook file: {book.title} - Chapter {file_info.get('chapter_number', 'Unknown')}"
-        )
+        logger.info(f"Updated audiobook file: {book.title} - Chapter {file_info.get('chapter_number', 'Unknown')}")
 
     # Try to extract duration from audio metadata
     try:
@@ -413,29 +398,21 @@ def process_files_by_type(
     # Check if scan_folder has a specific content_type set
     if scan_folder.content_type and scan_folder.content_type != "ebooks":
         # Use content-type specific processing
-        process_files_by_content_type(
-            file_paths, scan_folder, cover_files, opf_files, rescan
-        )
+        process_files_by_content_type(file_paths, scan_folder, cover_files, opf_files, rescan)
     else:
         # Auto-detect or fall back to individual processing
         detected_type = detect_content_type_from_files(file_paths)
 
         if detected_type == "comics":
             logger.info(f"Auto-detected comics in folder {scan_folder.path}")
-            _process_comic_files(
-                file_paths, scan_folder, cover_files, opf_files, rescan
-            )
+            _process_comic_files(file_paths, scan_folder, cover_files, opf_files, rescan)
         elif detected_type == "audiobooks":
             logger.info(f"Auto-detected audiobooks in folder {scan_folder.path}")
-            _process_audiobook_files(
-                file_paths, scan_folder, cover_files, opf_files, rescan
-            )
+            _process_audiobook_files(file_paths, scan_folder, cover_files, opf_files, rescan)
         else:
             # Process as individual ebooks
             for file_path in file_paths:
-                _process_individual_ebook(
-                    file_path, scan_folder, cover_files, opf_files, rescan
-                )
+                _process_individual_ebook(file_path, scan_folder, cover_files, opf_files, rescan)
 
 
 def _query_audiobook_external_metadata(book):
@@ -443,9 +420,7 @@ def _query_audiobook_external_metadata(book):
     try:
         # Skip if no title available
         if not book.title or book.title.strip() == "":
-            logger.info(
-                f"[AUDIOBOOK EXTERNAL] Skipping external query - no title: {book.id}"
-            )
+            logger.info(f"[AUDIOBOOK EXTERNAL] Skipping external query - no title: {book.id}")
             return
 
         # Get author from book metadata if available
@@ -468,9 +443,7 @@ def _query_audiobook_external_metadata(book):
             logger.info(f"[AUDIOBOOK EXTERNAL] Cache hit for: {book.title}")
             return
 
-        logger.info(
-            f"[AUDIOBOOK EXTERNAL] Querying external metadata for: {book.title} by {author or 'unknown'}"
-        )
+        logger.info(f"[AUDIOBOOK EXTERNAL] Querying external metadata for: {book.title} by {author or 'unknown'}")
 
         # Query external APIs using the book's title and author
         from books.scanner.external import query_metadata_and_covers_with_terms
@@ -478,21 +451,15 @@ def _query_audiobook_external_metadata(book):
         # Get ISBN from book metadata if available
         isbn = None
         try:
-            isbn_metadata = book.bookmetadata.filter(
-                field_name="isbn", is_active=True
-            ).first()
+            isbn_metadata = book.bookmetadata.filter(field_name="isbn", is_active=True).first()
             if isbn_metadata:
                 isbn = isbn_metadata.field_value
         except Exception:
             isbn = None
 
-        query_metadata_and_covers_with_terms(
-            book, search_title=book.title, search_author=author, search_isbn=isbn
-        )
+        query_metadata_and_covers_with_terms(book, search_title=book.title, search_author=author, search_isbn=isbn)
 
-        logger.info(
-            f"[AUDIOBOOK EXTERNAL] Completed external metadata query for: {book.title}"
-        )
+        logger.info(f"[AUDIOBOOK EXTERNAL] Completed external metadata query for: {book.title}")
 
         # Cache that we've processed this audiobook to prevent duplicates
         cache.set(cache_key, True, timeout=3600 * 24)  # Cache for 24 hours

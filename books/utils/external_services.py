@@ -32,12 +32,7 @@ class FallbackISBNService(ISBNService):
     def lookup_isbn(self, isbn: str) -> Dict[str, Any]:
         """Look up ISBN from fallback service."""
         # Simulate successful fallback lookup
-        return {
-            'title': 'Fallback Title',
-            'author': 'Fallback Author',
-            'publisher': 'Fallback Publisher',
-            'year': '2023'
-        }
+        return {"title": "Fallback Title", "author": "Fallback Author", "publisher": "Fallback Publisher", "year": "2023"}
 
 
 class OpenLibraryClient:

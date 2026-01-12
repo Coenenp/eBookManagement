@@ -15,38 +15,39 @@ class LanguageManager:
         try:
             # Import the LANGUAGE_CHOICES from models
             from books.models import LANGUAGE_CHOICES
+
             return LANGUAGE_CHOICES
         except ImportError:
             # Fallback if import fails
             return [
-                ('en', 'English'),
-                ('fr', 'French'),
-                ('de', 'German'),
-                ('nl', 'Dutch'),
-                ('es', 'Spanish'),
-                ('it', 'Italian'),
-                ('pt', 'Portuguese'),
-                ('ja', 'Japanese'),
-                ('ko', 'Korean'),
-                ('zh', 'Chinese'),
-                ('ru', 'Russian'),
-                ('pl', 'Polish'),
-                ('he', 'Hebrew'),
-                ('hu', 'Hungarian'),
-                ('tr', 'Turkish'),
-                ('ca', 'Catalan'),
-                ('id', 'Indonesian'),
+                ("en", "English"),
+                ("fr", "French"),
+                ("de", "German"),
+                ("nl", "Dutch"),
+                ("es", "Spanish"),
+                ("it", "Italian"),
+                ("pt", "Portuguese"),
+                ("ja", "Japanese"),
+                ("ko", "Korean"),
+                ("zh", "Chinese"),
+                ("ru", "Russian"),
+                ("pl", "Polish"),
+                ("he", "Hebrew"),
+                ("hu", "Hungarian"),
+                ("tr", "Turkish"),
+                ("ca", "Catalan"),
+                ("id", "Indonesian"),
             ]
 
     @classmethod
-    def get_language_choices_with_empty(cls, empty_label='Select language'):
+    def get_language_choices_with_empty(cls, empty_label="Select language"):
         """Get language choices with an empty option."""
-        return [('', empty_label)] + cls.get_language_choices()
+        return [("", empty_label)] + cls.get_language_choices()
 
     @classmethod
-    def get_language_choices_with_all(cls, all_label='All Languages'):
+    def get_language_choices_with_all(cls, all_label="All Languages"):
         """Get language choices with an 'all' option."""
-        return [('', all_label)] + cls.get_language_choices()
+        return [("", all_label)] + cls.get_language_choices()
 
     @classmethod
     def get_language_dict(cls):
@@ -72,7 +73,7 @@ class LanguageManager:
     @classmethod
     def get_default_language(cls):
         """Get the default language code."""
-        return 'en'
+        return "en"
 
     @classmethod
     def normalize_language_code(cls, code):
@@ -89,41 +90,41 @@ class LanguageManager:
 
         # Try to map common variations
         language_mappings = {
-            'eng': 'en',
-            'english': 'en',
-            'fra': 'fr',
-            'french': 'fr',
-            'deu': 'de',
-            'ger': 'de',
-            'german': 'de',
-            'spa': 'es',
-            'spanish': 'es',
-            'ita': 'it',
-            'italian': 'it',
-            'por': 'pt',
-            'portuguese': 'pt',
-            'jpn': 'ja',
-            'japanese': 'ja',
-            'kor': 'ko',
-            'korean': 'ko',
-            'chi': 'zh',
-            'chinese': 'zh',
-            'rus': 'ru',
-            'russian': 'ru',
-            'pol': 'pl',
-            'polish': 'pl',
-            'heb': 'he',
-            'hebrew': 'he',
-            'hun': 'hu',
-            'hungarian': 'hu',
-            'tur': 'tr',
-            'turkish': 'tr',
-            'cat': 'ca',
-            'catalan': 'ca',
-            'ind': 'id',
-            'indonesian': 'id',
-            'dut': 'nl',
-            'dutch': 'nl',
+            "eng": "en",
+            "english": "en",
+            "fra": "fr",
+            "french": "fr",
+            "deu": "de",
+            "ger": "de",
+            "german": "de",
+            "spa": "es",
+            "spanish": "es",
+            "ita": "it",
+            "italian": "it",
+            "por": "pt",
+            "portuguese": "pt",
+            "jpn": "ja",
+            "japanese": "ja",
+            "kor": "ko",
+            "korean": "ko",
+            "chi": "zh",
+            "chinese": "zh",
+            "rus": "ru",
+            "russian": "ru",
+            "pol": "pl",
+            "polish": "pl",
+            "heb": "he",
+            "hebrew": "he",
+            "hun": "hu",
+            "hungarian": "hu",
+            "tur": "tr",
+            "turkish": "tr",
+            "cat": "ca",
+            "catalan": "ca",
+            "ind": "id",
+            "indonesian": "id",
+            "dut": "nl",
+            "dutch": "nl",
         }
 
         mapped_code = language_mappings.get(code)
@@ -140,12 +141,12 @@ def get_language_choices():
     return LanguageManager.get_language_choices()
 
 
-def get_language_choices_with_empty(empty_label='Select language'):
+def get_language_choices_with_empty(empty_label="Select language"):
     """Get language choices with an empty option."""
     return LanguageManager.get_language_choices_with_empty(empty_label)
 
 
-def get_language_choices_with_all(all_label='All Languages'):
+def get_language_choices_with_all(all_label="All Languages"):
     """Get language choices with an 'all' option."""
     return LanguageManager.get_language_choices_with_all(all_label)
 

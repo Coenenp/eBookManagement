@@ -303,20 +303,6 @@ class DataSourceListView(LoginRequiredMixin, BookNavigationMixin, ListView):
         return context
 
 
-class DataSourceCreateView(LoginRequiredMixin, BookNavigationMixin, CreateView):
-    """Create a new data source."""
-
-    template_name = "books/data_source/create.html"
-    form_class = DataSourceForm
-    success_url = reverse_lazy("books:data_source_list")
-
-    def get_model(self):
-        return get_model("DataSource")
-
-    def get_queryset(self):
-        return self.get_model().objects.all()
-
-
 class DataSourceUpdateView(LoginRequiredMixin, BookNavigationMixin, UpdateView):
     """Update an existing data source."""
 

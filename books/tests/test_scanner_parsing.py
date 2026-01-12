@@ -1,6 +1,7 @@
 """
 Test cases for Scanner Parsing
 """
+
 from django.test import TestCase
 
 from books.scanner.parsing import parse_path_metadata, resolve_title_author_ambiguity
@@ -185,7 +186,7 @@ class ScannerParsingTests(TestCase):
             ("Smith, Jane - The Great Adventure.epub", "Jane Smith", "The Great Adventure"),
             ("Doe, John - Book Title.epub", "John Doe", "Book Title"),
             ("Wilson, Robert - Another Story.pdf", "Robert Wilson", "Another Story"),
-            ("Johnson, Mary Ann - Complex Title With Words.epub", "Mary Ann Johnson", "Complex Title With Words")
+            ("Johnson, Mary Ann - Complex Title With Words.epub", "Mary Ann Johnson", "Complex Title With Words"),
         ]
 
         for filename, expected_author, expected_title in test_cases:
@@ -203,7 +204,6 @@ class ScannerParsingTests(TestCase):
             ("Vanden Brande, Karel - Mystery Novel.epub", ["Karel Vanden Brande"], "Mystery Novel"),
             ("Van den Bossche, Peter - History Book.epub", ["Peter Van den Bossche"], "History Book"),
             ("Dela Paz, Maria - Romance Story.epub", ["Maria Dela Paz"], "Romance Story"),
-
             # Multiple authors with prefixes (simple comma format)
             ("Book Title - Vincent van Gogh, John Doe.epub", ["Vincent van Gogh", "John Doe"], "Book Title"),
             ("Story Collection - Peter Van den Bossche, Maria Dela Paz.epub", ["Peter Van den Bossche", "Maria Dela Paz"], "Story Collection"),

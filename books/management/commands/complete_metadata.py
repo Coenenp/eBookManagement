@@ -60,9 +60,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS("No incomplete books found!"))
             return
 
-        self.stdout.write(
-            f"Found {len(incomplete_books)} books needing metadata completion"
-        )
+        self.stdout.write(f"Found {len(incomplete_books)} books needing metadata completion")
 
         if options["dry_run"]:
             self.stdout.write("\nBooks that would be processed:")
@@ -86,9 +84,7 @@ class Command(BaseCommand):
 
         for i, book in enumerate(incomplete_books, 1):
             try:
-                self.stdout.write(
-                    f"Processing book {book.id} ({i}/{len(incomplete_books)}): {book.file_path}"
-                )
+                self.stdout.write(f"Processing book {book.id} ({i}/{len(incomplete_books)}): {book.file_path}")
 
                 # Skip the file creation part, book already exists
                 # Go straight to metadata collection steps
@@ -102,14 +98,7 @@ class Command(BaseCommand):
 
             except Exception as e:
                 error_count += 1
-                self.stdout.write(
-                    self.style.ERROR(f"Error processing book {book.id}: {str(e)}")
-                )
+                self.stdout.write(self.style.ERROR(f"Error processing book {book.id}: {str(e)}"))
                 logger.error(f"Error completing metadata for book {book.id}: {e}")
 
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Metadata completion finished. "
-                f"Success: {success_count}, Errors: {error_count}"
-            )
-        )
+        self.stdout.write(self.style.SUCCESS(f"Metadata completion finished. " f"Success: {success_count}, Errors: {error_count}"))

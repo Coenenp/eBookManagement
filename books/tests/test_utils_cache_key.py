@@ -1,6 +1,7 @@
 """
 Test cases for Cache Key utilities
 """
+
 from django.test import TestCase
 
 from books.utils.cache_key import make_cache_key
@@ -15,7 +16,7 @@ class CacheKeyUtilsTests(TestCase):
 
         # Should return a SHA1 hash
         self.assertEqual(len(result), 40)  # SHA1 produces 40-character hex
-        self.assertTrue(all(c in '0123456789abcdef' for c in result))
+        self.assertTrue(all(c in "0123456789abcdef" for c in result))
 
     def test_make_cache_key_multiple_args(self):
         """Test cache key generation with multiple arguments"""
@@ -23,7 +24,7 @@ class CacheKeyUtilsTests(TestCase):
 
         # Should return a SHA1 hash
         self.assertEqual(len(result), 40)
-        self.assertTrue(all(c in '0123456789abcdef' for c in result))
+        self.assertTrue(all(c in "0123456789abcdef" for c in result))
 
     def test_make_cache_key_consistency(self):
         """Test that same arguments produce same cache key"""
@@ -45,7 +46,7 @@ class CacheKeyUtilsTests(TestCase):
 
         # Should handle None values gracefully
         self.assertEqual(len(result), 40)
-        self.assertTrue(all(c in '0123456789abcdef' for c in result))
+        self.assertTrue(all(c in "0123456789abcdef" for c in result))
 
     def test_make_cache_key_empty_string(self):
         """Test cache key generation with empty string"""
@@ -67,7 +68,7 @@ class CacheKeyUtilsTests(TestCase):
 
         # Should handle unicode properly
         self.assertEqual(len(result), 40)
-        self.assertTrue(all(c in '0123456789abcdef' for c in result))
+        self.assertTrue(all(c in "0123456789abcdef" for c in result))
 
     def test_make_cache_key_numeric_args(self):
         """Test cache key generation with numeric arguments"""

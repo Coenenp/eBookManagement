@@ -29,9 +29,7 @@ class FinalMetadataSyncMixin:
         best available metadata.
         """
         if not hasattr(self, "book"):
-            logger.warning(
-                f"{self.__class__.__name__} has no 'book' attribute for sync"
-            )
+            logger.warning(f"{self.__class__.__name__} has no 'book' attribute for sync")
             return
 
         if not self.book:
@@ -62,9 +60,7 @@ class FinalMetadataSyncMixin:
                         extra={"book_id": self.book.id},
                     )
             else:
-                logger.debug(
-                    f"No FinalMetadata exists for book {self.book.id} - skipping sync"
-                )
+                logger.debug(f"No FinalMetadata exists for book {self.book.id} - skipping sync")
 
         except Exception as e:
             logger.error(

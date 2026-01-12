@@ -31,9 +31,7 @@ class Command(BaseCommand):
             default="testpass123",
             help="Password for the superuser (default: testpass123)",
         )
-        parser.add_argument(
-            "--force", action="store_true", help="Delete existing user if it exists"
-        )
+        parser.add_argument("--force", action="store_true", help="Delete existing user if it exists")
 
     def handle(self, *args, **options):
         username = options["username"]
@@ -45,15 +43,9 @@ class Command(BaseCommand):
         if User.objects.filter(username=username).exists():
             if force:
                 User.objects.filter(username=username).delete()
-                self.stdout.write(
-                    self.style.WARNING(f"Deleted existing user: {username}")
-                )
+                self.stdout.write(self.style.WARNING(f"Deleted existing user: {username}"))
             else:
-                self.stdout.write(
-                    self.style.ERROR(
-                        f"User {username} already exists. Use --force to replace."
-                    )
-                )
+                self.stdout.write(self.style.ERROR(f"User {username} already exists. Use --force to replace."))
                 return
 
         # Create superuser

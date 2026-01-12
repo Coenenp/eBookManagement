@@ -12,7 +12,7 @@ from django.shortcuts import redirect
 from django.views.decorators.http import require_POST
 from django.views.generic import TemplateView
 
-from books.constants import DEFAULT_USER_ITEMS_PER_PAGE, DEFAULT_THEME
+from books.constants import DEFAULT_THEME, DEFAULT_USER_ITEMS_PER_PAGE
 from books.forms import UserProfileForm
 from books.models import UserProfile
 
@@ -31,12 +31,59 @@ class UserSettingsView(LoginRequiredMixin, TemplateView):
         # Create form with current profile data
         form = UserProfileForm(instance=profile)
 
+        # Get predefined and user templates for renaming
+        from books.utils.renaming_engine import PREDEFINED_PATTERNS
+
+        # Convert PREDEFINED_PATTERNS to list format for template
+        system_templates = [
+            {"key": key, "name": data["name"], "folder": data["folder"], "filename": data["filename"], "description": data.get("description", ""), "is_system": True}
+            for key, data in PREDEFINED_PATTERNS.items()
+        ]
+
+        # Get user templates
+        user_templates = [
+            {
+                "key": f"user-{template['name']}",
+                "name": template["name"],
+                "folder": template["folder"],
+                "filename": template["filename"],
+                "description": template.get("description", ""),
+                "is_system": False,
+            }
+            for template in profile.saved_patterns
+        ]
+
+        # Find default template by matching patterns
+        default_template_key = None
+        for template in user_templates + system_templates:
+            if template["folder"] == profile.default_folder_pattern and template["filename"] == profile.default_filename_pattern:
+                default_template_key = template["key"]
+                break
+
+        # Fall back to 'comprehensive' if no match found
+        if not default_template_key:
+            default_template_key = "comprehensive"
+
+        # Select a few system templates to show as examples (using actual template data)
+        example_template_keys = ["simple_author_title", "category_author", "series_aware"]
+        pattern_examples = []
+        for key in example_template_keys:
+            if key in PREDEFINED_PATTERNS:
+                template = PREDEFINED_PATTERNS[key]
+                # Generate a sample result for display
+                sample_result = self._generate_sample_result(template["folder"], template["filename"])
+                pattern_examples.append({"name": template["name"], "folder": template["folder"], "filename": template["filename"], "result": sample_result})
+
         context.update(
             {
                 "user": self.request.user,
                 "profile": profile,
                 "form": form,
                 "current_theme": profile.theme,
+                "system_templates": system_templates,
+                "user_templates": user_templates,
+                "default_template_key": default_template_key,
+                "pattern_examples": pattern_examples,
                 "settings": {
                     "theme": profile.theme,
                     "books_per_page": profile.items_per_page,
@@ -45,6 +92,31 @@ class UserSettingsView(LoginRequiredMixin, TemplateView):
             }
         )
         return context
+
+    def _generate_sample_result(self, folder_pattern, filename_pattern):
+        """Generate a sample file path from patterns for preview."""
+        # Sample replacements for common tokens
+        replacements = {
+            "${language}": "English",
+            "${author.sortname}": "Asimov, Isaac",
+            "${author}": "Isaac Asimov",
+            "${title}": "Foundation",
+            "${category}": "Fiction",
+            "${bookseries.title}": "Foundation Series",
+            "${bookseries.number}": "01",
+            "${format}": "ebook",
+            "${ext}": "epub",
+        }
+
+        folder = folder_pattern
+        filename = filename_pattern
+
+        # Replace all tokens
+        for token, value in replacements.items():
+            folder = folder.replace(token, value)
+            filename = filename.replace(token, value)
+
+        return f"{folder}/{filename}"
 
     def post(self, request, *args, **kwargs):
         """Handle user settings updates."""
@@ -180,3 +252,32 @@ def reset_to_defaults(request):
     else:
         messages.success(request, "Settings reset to default values!")
         return redirect("books:user_settings")
+
+
+@login_required
+@require_POST
+def save_default_template(request):
+    """Save selected template as user's default."""
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "POST method required"}, status=405)
+
+    template_key = request.POST.get("template_key")
+    folder_pattern = request.POST.get("folder_pattern")
+    filename_pattern = request.POST.get("filename_pattern")
+
+    if not template_key or not folder_pattern or not filename_pattern:
+        return JsonResponse({"success": False, "error": "Missing required parameters"})
+
+    try:
+        # Get or create user profile
+        profile = UserProfile.get_or_create_for_user(request.user)
+
+        # Update default patterns
+        profile.default_folder_pattern = folder_pattern
+        profile.default_filename_pattern = filename_pattern
+        profile.save()
+
+        return JsonResponse({"success": True, "message": "Template saved as default", "folder_pattern": folder_pattern, "filename_pattern": filename_pattern})
+
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)})

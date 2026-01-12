@@ -43,9 +43,7 @@ class Command(BaseCommand):
             action="store_true",
             help="Only scan books that have no ISBN metadata at all",
         )
-        parser.add_argument(
-            "--limit", type=int, help="Limit number of books to process"
-        )
+        parser.add_argument("--limit", type=int, help="Limit number of books to process")
         parser.add_argument(
             "--file-type",
             choices=["epub", "pdf", "mobi"],
@@ -71,16 +69,12 @@ class Command(BaseCommand):
 
         if options["missing_isbn_only"]:
             # Only books with no ISBN metadata at all
-            books_with_isbn = BookMetadata.objects.filter(
-                field_name="isbn"
-            ).values_list("book_id", flat=True)
+            books_with_isbn = BookMetadata.objects.filter(field_name="isbn").values_list("book_id", flat=True)
             queryset = queryset.exclude(id__in=books_with_isbn)
 
         if not options["force"]:
             # Exclude books that already have content-scanned ISBNs
-            books_with_content_isbn = BookMetadata.objects.filter(
-                field_name="isbn", source__name="content_scan"
-            ).values_list("book_id", flat=True)
+            books_with_content_isbn = BookMetadata.objects.filter(field_name="isbn", source__name="content_scan").values_list("book_id", flat=True)
             queryset = queryset.exclude(id__in=books_with_content_isbn)
 
         if options["limit"]:
@@ -94,9 +88,7 @@ class Command(BaseCommand):
             total_books = len(list(queryset))
 
         if total_books == 0:
-            self.stdout.write(
-                self.style.WARNING("No books match the specified criteria.")
-            )
+            self.stdout.write(self.style.WARNING("No books match the specified criteria."))
             return
 
         self.stdout.write(f"Scanning {total_books} books for content ISBNs...")
@@ -109,14 +101,10 @@ class Command(BaseCommand):
                 save_content_isbns(book)
 
                 # Check results
-                content_isbns = BookMetadata.objects.filter(
-                    book=book, field_name="isbn", source__name="content_scan"
-                ).count()
+                content_isbns = BookMetadata.objects.filter(book=book, field_name="isbn", source__name="content_scan").count()
 
                 if content_isbns > 0:
-                    self.stdout.write(
-                        self.style.SUCCESS(f"Found {content_isbns} ISBN(s) in content")
-                    )
+                    self.stdout.write(self.style.SUCCESS(f"Found {content_isbns} ISBN(s) in content"))
                 else:
                     self.stdout.write(self.style.WARNING("No ISBNs found in content"))
 
@@ -125,9 +113,7 @@ class Command(BaseCommand):
 
         else:
             # Bulk scan
-            stats = bulk_scan_content_isbns(
-                books_queryset=queryset, page_limit=options["pages"]
-            )
+            stats = bulk_scan_content_isbns(books_queryset=queryset, page_limit=options["pages"])
 
             # Report results
             self.stdout.write(
@@ -141,8 +127,4 @@ class Command(BaseCommand):
             )
 
             if stats["errors"] > 0:
-                self.stdout.write(
-                    self.style.WARNING(
-                        f"There were {stats['errors']} errors. Check the logs for details."
-                    )
-                )
+                self.stdout.write(self.style.WARNING(f"There were {stats['errors']} errors. Check the logs for details."))

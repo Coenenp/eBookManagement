@@ -27,28 +27,19 @@ class DatabaseQueryPerformanceTests(TestCase):
 
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.client.login(username='testuser', password='testpass123')
+        self.user = User.objects.create_user(username="testuser", password="testpass123")
+        self.client.login(username="testuser", password="testpass123")
 
         # Create test data source using get_or_create to avoid uniqueness issues
-        self.data_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.MANUAL,
-            defaults={'trust_level': 0.8}
-        )
+        self.data_source, _ = DataSource.objects.get_or_create(name=DataSource.MANUAL, defaults={"trust_level": 0.8})
 
         # Create test scan folder with temporary directory
         self.temp_dir = tempfile.mkdtemp()
-        self.scan_folder = ScanFolder.objects.create(
-            path=self.temp_dir,
-            name='Performance Test Folder'
-        )
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir, name="Performance Test Folder")
 
     def tearDown(self):
         # Clean up temporary directory
-        if hasattr(self, 'temp_dir'):
+        if hasattr(self, "temp_dir"):
             shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_book_list_query_count(self):
@@ -56,67 +47,42 @@ class DatabaseQueryPerformanceTests(TestCase):
         # Create test books
         books = []
         for i in range(100):
-            book = create_test_book_with_file(
-                file_path=f"/library/perf_test_{i}.epub",
-                file_format="epub",
-                file_size=1024 * 1024,  # 1MB
-                scan_folder=self.scan_folder
-            )
+            book = create_test_book_with_file(file_path=f"/library/perf_test_{i}.epub", file_format="epub", file_size=1024 * 1024, scan_folder=self.scan_folder)  # 1MB
             books.append(book)
 
             # Add final metadata
-            FinalMetadata.objects.create(
-                book=book,
-                final_title=f"Performance Test Book {i}",
-                final_author=f"Author {i}",
-                overall_confidence=0.8
-            )
+            FinalMetadata.objects.create(book=book, final_title=f"Performance Test Book {i}", final_author=f"Author {i}", overall_confidence=0.8)
 
             books.append(book)
 
         # Test query count
         with self.assertNumQueries(26):  # Should use reasonable number of queries
-            response = self.client.get(reverse('books:book_list'))
+            response = self.client.get(reverse("books:book_list"))
             self.assertEqual(response.status_code, 200)
 
     def test_book_detail_query_efficiency(self):
         """Test book detail view query efficiency."""
         # Create book with related data
-        book = create_test_book_with_file(
-            file_path="/library/detail_test.epub",
-            file_format="epub",
-            scan_folder=self.scan_folder
-        )
+        book = create_test_book_with_file(file_path="/library/detail_test.epub", file_format="epub", scan_folder=self.scan_folder)
 
         # Add metadata entries
         for i in range(10):
-            BookMetadata.objects.create(
-                book=book,
-                source=self.data_source,
-                field_name=f'test_field_{i}',
-                field_value=f'test_value_{i}',
-                confidence=0.8,
-                is_active=True
-            )
+            BookMetadata.objects.create(book=book, source=self.data_source, field_name=f"test_field_{i}", field_value=f"test_value_{i}", confidence=0.8, is_active=True)
 
         # Test with limited queries
         with self.assertNumQueries(40):  # Should use select_related/prefetch_related
-            response = self.client.get(reverse('books:book_detail', kwargs={'pk': book.pk}))
+            response = self.client.get(reverse("books:book_detail", kwargs={"pk": book.pk}))
             self.assertEqual(response.status_code, 200)
 
     def test_search_query_performance(self):
         """Test search functionality performance."""
         # Create many books for search testing
         for i in range(500):
-            create_test_book_with_file(
-                file_path=f"/library/search_{i}.epub",
-                file_format="epub",
-                scan_folder=self.scan_folder
-            )
+            create_test_book_with_file(file_path=f"/library/search_{i}.epub", file_format="epub", scan_folder=self.scan_folder)
 
         # Test search performance
         start_time = time.time()
-        response = self.client.get(reverse('books:book_list'), {'search': 'Search Test'})
+        response = self.client.get(reverse("books:book_list"), {"search": "Search Test"})
         end_time = time.time()
 
         search_time = end_time - start_time
@@ -128,22 +94,15 @@ class DatabaseQueryPerformanceTests(TestCase):
         # Create books for bulk testing
         book_ids = []
         for i in range(200):
-            book = create_test_book_with_file(
-                file_path=f"/library/bulk_{i}.epub",
-                file_format="epub",
-                scan_folder=self.scan_folder
-            )
+            book = create_test_book_with_file(file_path=f"/library/bulk_{i}.epub", file_format="epub", scan_folder=self.scan_folder)
             book_ids.append(book.id)
 
         # Test bulk update performance
         start_time = time.time()
         response = self.client.post(
-            reverse('books:ajax_bulk_update_books'),
-            data=json.dumps({
-                'book_ids': book_ids[:50],  # Update 50 books
-                'updates': {'genre': 'Performance Test Genre'}
-            }),
-            content_type='application/json'
+            reverse("books:ajax_bulk_update_books"),
+            data=json.dumps({"book_ids": book_ids[:50], "updates": {"genre": "Performance Test Genre"}}),  # Update 50 books
+            content_type="application/json",
         )
         end_time = time.time()
 
@@ -160,21 +119,14 @@ class DatabaseQueryPerformanceTests(TestCase):
         # Create books with metadata for aggregation
         for i in range(300):
             book = create_test_book_with_file(
-                file_path=f"/library/agg_{i}.epub",
-                file_format="epub",
-                file_size=(i + 1) * 1024 * 1024,  # Varying sizes
-                scan_folder=self.scan_folder
+                file_path=f"/library/agg_{i}.epub", file_format="epub", file_size=(i + 1) * 1024 * 1024, scan_folder=self.scan_folder  # Varying sizes
             )
 
-            FinalMetadata.objects.create(
-                book=book,
-                final_title=f"Aggregation Test Book {i}",
-                overall_confidence=0.5 + (i % 50) / 100.0  # Varying confidence
-            )
+            FinalMetadata.objects.create(book=book, final_title=f"Aggregation Test Book {i}", overall_confidence=0.5 + (i % 50) / 100.0)  # Varying confidence
 
         # Test dashboard statistics performance
         start_time = time.time()
-        response = self.client.get(reverse('books:dashboard'))
+        response = self.client.get(reverse("books:dashboard"))
         end_time = time.time()
 
         dashboard_time = end_time - start_time
@@ -185,20 +137,19 @@ class DatabaseQueryPerformanceTests(TestCase):
         """Test that database indexes are being used effectively."""
         # Create books to test index usage
         for i in range(100):
-            create_test_book_with_file(
-                file_path=f"/library/index_{i}.epub",
-                file_format="epub",
-                scan_folder=self.scan_folder
-            )
+            create_test_book_with_file(file_path=f"/library/index_{i}.epub", file_format="epub", scan_folder=self.scan_folder)
 
         # Test query that should use indexes
         with connection.cursor() as cursor:
             # Run a query that should use indexes on file_path
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT COUNT(*) FROM books_bookfile bf
                 JOIN books_book b ON bf.book_id = b.id
                 WHERE bf.file_path LIKE %s
-            """, ['/library/index_%'])
+            """,
+                ["/library/index_%"],
+            )
 
             result = cursor.fetchone()
             self.assertGreater(result[0], 0)
@@ -209,51 +160,37 @@ class CachingPerformanceTests(TestCase):
 
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.client.login(username='testuser', password='testpass123')
+        self.user = User.objects.create_user(username="testuser", password="testpass123")
+        self.client.login(username="testuser", password="testpass123")
 
         # Create test infrastructure
-        self.datasource, _ = DataSource.objects.get_or_create(
-            name='filesystem',
-            defaults={'is_active': True}
-        )
+        self.datasource, _ = DataSource.objects.get_or_create(name="filesystem", defaults={"is_active": True})
         # Create test scan folder with temporary directory
         self.temp_dir = tempfile.mkdtemp()
-        self.scan_folder = ScanFolder.objects.create(
-            name="Test Library",
-            path=self.temp_dir,
-            content_type="ebooks"
-        )
+        self.scan_folder = ScanFolder.objects.create(name="Test Library", path=self.temp_dir, content_type="ebooks")
 
         # Clear cache before each test
         cache.clear()
 
     def tearDown(self):
         # Clean up temporary directory
-        if hasattr(self, 'temp_dir'):
+        if hasattr(self, "temp_dir"):
             shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_view_caching_effectiveness(self):
         """Test that view caching improves performance."""
         # Create test data
         for i in range(50):
-            create_test_book_with_file(
-                file_path=f"/library/cache_{i}.epub",
-                file_format="epub",
-                scan_folder=self.scan_folder
-            )
+            create_test_book_with_file(file_path=f"/library/cache_{i}.epub", file_format="epub", scan_folder=self.scan_folder)
 
         # First request (no cache)
         start_time = time.time()
-        response1 = self.client.get(reverse('books:book_list'))
+        response1 = self.client.get(reverse("books:book_list"))
         first_request_time = time.time() - start_time
 
         # Second request (should use cache if implemented)
         start_time = time.time()
-        response2 = self.client.get(reverse('books:book_list'))
+        response2 = self.client.get(reverse("books:book_list"))
         second_request_time = time.time() - start_time
 
         self.assertEqual(response1.status_code, 200)
@@ -265,17 +202,13 @@ class CachingPerformanceTests(TestCase):
 
     def test_cache_hit_ratio_tracking(self):
         """Test cache hit ratio for frequently accessed data."""
-        book = create_test_book_with_file(
-            file_path="/library/cache_hit.epub",
-            file_format="epub",
-            scan_folder=self.scan_folder
-        )
+        book = create_test_book_with_file(file_path="/library/cache_hit.epub", file_format="epub", scan_folder=self.scan_folder)
 
         # Access the same book multiple times
         hit_times = []
         for i in range(10):
             start_time = time.time()
-            response = self.client.get(reverse('books:book_detail', kwargs={'pk': book.pk}))
+            response = self.client.get(reverse("books:book_detail", kwargs={"pk": book.pk}))
             end_time = time.time()
 
             hit_times.append(end_time - start_time)
@@ -292,42 +225,34 @@ class CachingPerformanceTests(TestCase):
         """Test performance of cache invalidation."""
         # Create cached data
         for i in range(20):
-            book = create_test_book_with_file(
-                file_path=f"/library/invalidation_{i}.epub",
-                file_format="epub",
-                scan_folder=self.scan_folder
-            )
+            book = create_test_book_with_file(file_path=f"/library/invalidation_{i}.epub", file_format="epub", scan_folder=self.scan_folder)
 
             # Access to potentially cache
-            self.client.get(reverse('books:book_detail', kwargs={'pk': book.pk}))
+            self.client.get(reverse("books:book_detail", kwargs={"pk": book.pk}))
 
         # Test cache invalidation performance
         start_time = time.time()
-        response = self.client.get(reverse('books:book_list'))
+        response = self.client.get(reverse("books:book_list"))
         end_time = time.time()
 
         invalidation_time = end_time - start_time
         self.assertLess(invalidation_time, 1.0)  # Should be fast
         self.assertEqual(response.status_code, 200)
 
-    @patch('django.core.cache.cache.get')
-    @patch('django.core.cache.cache.set')
+    @patch("django.core.cache.cache.get")
+    @patch("django.core.cache.cache.set")
     def test_cache_memory_usage(self, mock_set, mock_get):
         """Test cache memory usage patterns."""
         # Create enough books for multiple pages
         for i in range(50):
-            create_test_book_with_file(
-                file_path=f"/library/cache_test_{i}.epub",
-                file_format="epub",
-                scan_folder=self.scan_folder
-            )
+            create_test_book_with_file(file_path=f"/library/cache_test_{i}.epub", file_format="epub", scan_folder=self.scan_folder)
 
         # Simulate cache operations
         mock_get.return_value = None  # Cache miss
 
         # Access multiple pages (limit to realistic page numbers)
         for i in range(3):  # Test first 3 pages only
-            response = self.client.get(reverse('books:book_list'), {'page': i + 1})
+            response = self.client.get(reverse("books:book_list"), {"page": i + 1})
             # Allow both 200 (valid page) and 404 (no more pages)
             self.assertIn(response.status_code, [200, 404])
 
@@ -339,26 +264,18 @@ class CachingPerformanceTests(TestCase):
         """Test caching of expensive query results."""
         # Create data for expensive query
         for i in range(100):
-            book = create_test_book_with_file(
-                file_path=f"/library/query_cache_{i}.epub",
-                file_format="epub",
-                scan_folder=self.scan_folder
-            )
+            book = create_test_book_with_file(file_path=f"/library/query_cache_{i}.epub", file_format="epub", scan_folder=self.scan_folder)
 
-            FinalMetadata.objects.create(
-                book=book,
-                final_title=f"Query Cache Test Book {i}",
-                overall_confidence=0.5 + (i % 50) / 100.0
-            )
+            FinalMetadata.objects.create(book=book, final_title=f"Query Cache Test Book {i}", overall_confidence=0.5 + (i % 50) / 100.0)
 
         # Test expensive query (e.g., statistics calculation)
         start_time = time.time()
-        response1 = self.client.get(reverse('books:ebooks_ajax_list'))
+        response1 = self.client.get(reverse("books:ebooks_ajax_list"))
         first_query_time = time.time() - start_time
 
         # Second identical request
         start_time = time.time()
-        response2 = self.client.get(reverse('books:ebooks_ajax_list'))
+        response2 = self.client.get(reverse("books:ebooks_ajax_list"))
         second_query_time = time.time() - start_time
 
         self.assertEqual(response1.status_code, 200)
@@ -373,28 +290,18 @@ class PaginationPerformanceTests(TestCase):
 
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.client.login(username='testuser', password='testpass123')
+        self.user = User.objects.create_user(username="testuser", password="testpass123")
+        self.client.login(username="testuser", password="testpass123")
 
         # Create test infrastructure
-        self.datasource, _ = DataSource.objects.get_or_create(
-            name='filesystem',
-            defaults={'is_active': True}
-        )
+        self.datasource, _ = DataSource.objects.get_or_create(name="filesystem", defaults={"is_active": True})
         # Create test scan folder with temporary directory
         self.temp_dir = tempfile.mkdtemp()
-        self.scan_folder = ScanFolder.objects.create(
-            name="Test Library",
-            path=self.temp_dir,
-            content_type="ebooks"
-        )
+        self.scan_folder = ScanFolder.objects.create(name="Test Library", path=self.temp_dir, content_type="ebooks")
 
     def tearDown(self):
         # Clean up temporary directory
-        if hasattr(self, 'temp_dir'):
+        if hasattr(self, "temp_dir"):
             shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_large_dataset_pagination(self):
@@ -402,26 +309,22 @@ class PaginationPerformanceTests(TestCase):
         # Create large dataset
         books = []
         for i in range(1000):  # 1000 books
-            book = create_test_book_with_file(
-                file_path=f"/library/pagination_{i:04d}.epub",
-                file_format="epub",
-                scan_folder=self.scan_folder
-            )
+            book = create_test_book_with_file(file_path=f"/library/pagination_{i:04d}.epub", file_format="epub", scan_folder=self.scan_folder)
             books.append(book)
 
         # Test first page performance
         start_time = time.time()
-        response = self.client.get(reverse('books:book_list'))
+        response = self.client.get(reverse("books:book_list"))
         first_page_time = time.time() - start_time
 
         # Test middle page performance
         start_time = time.time()
-        response = self.client.get(reverse('books:book_list'), {'page': 10})
+        response = self.client.get(reverse("books:book_list"), {"page": 10})
         middle_page_time = time.time() - start_time
 
         # Test last page performance
         start_time = time.time()
-        response = self.client.get(reverse('books:book_list'), {'page': 20})
+        response = self.client.get(reverse("books:book_list"), {"page": 20})
         last_page_time = time.time() - start_time
         self.assertEqual(response.status_code, 200)
 
@@ -441,18 +344,14 @@ class PaginationPerformanceTests(TestCase):
 
         # Create test data
         for i in range(500):
-            create_test_book_with_file(
-                file_path=f"/library/memory_{i}.epub",
-                file_format="epub",
-                scan_folder=self.scan_folder
-            )
+            create_test_book_with_file(file_path=f"/library/memory_{i}.epub", file_format="epub", scan_folder=self.scan_folder)
 
         # Start memory tracking
         tracemalloc.start()
 
         # Load multiple pages
         for page in range(1, 6):  # First 5 pages
-            response = self.client.get(reverse('books:book_list'), {'page': page})
+            response = self.client.get(reverse("books:book_list"), {"page": page})
             self.assertEqual(response.status_code, 200)
 
         # Get memory usage
@@ -466,18 +365,11 @@ class PaginationPerformanceTests(TestCase):
         """Test pagination performance with search results."""
         # Create searchable books
         for i in range(200):
-            create_test_book_with_file(
-                file_path=f"/library/searchable_{i:03d}.epub",
-                file_format="epub",
-                scan_folder=self.scan_folder
-            )
+            create_test_book_with_file(file_path=f"/library/searchable_{i:03d}.epub", file_format="epub", scan_folder=self.scan_folder)
 
         # Test search with pagination
         start_time = time.time()
-        response = self.client.get(reverse('books:book_list'), {
-            'search': 'Searchable',
-            'page': 1
-        })
+        response = self.client.get(reverse("books:book_list"), {"search": "Searchable", "page": 1})
         search_time = time.time() - start_time
 
         self.assertLess(search_time, 2.0)
@@ -487,20 +379,14 @@ class PaginationPerformanceTests(TestCase):
         """Test performance with different page sizes."""
         # Create test books
         for i in range(300):
-            create_test_book_with_file(
-                file_path=f"/library/pagesize_{i}.epub",
-                file_format="epub",
-                scan_folder=self.scan_folder
-            )
+            create_test_book_with_file(file_path=f"/library/pagesize_{i}.epub", file_format="epub", scan_folder=self.scan_folder)
 
         page_sizes = [10, 25, 50, 100]
 
         for page_size in page_sizes:
             with self.subTest(page_size=page_size):
                 start_time = time.time()
-                response = self.client.get(reverse('books:book_list'), {
-                    'per_page': page_size
-                })
+                response = self.client.get(reverse("books:book_list"), {"per_page": page_size})
                 load_time = time.time() - start_time
 
                 # Should handle different page sizes efficiently
@@ -513,52 +399,38 @@ class ResponseTimeOptimizationTests(TestCase):
 
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.client.login(username='testuser', password='testpass123')
+        self.user = User.objects.create_user(username="testuser", password="testpass123")
+        self.client.login(username="testuser", password="testpass123")
 
         # Create test infrastructure
-        self.datasource, _ = DataSource.objects.get_or_create(
-            name='filesystem',
-            defaults={'is_active': True}
-        )
+        self.datasource, _ = DataSource.objects.get_or_create(name="filesystem", defaults={"is_active": True})
         # Create test scan folder with temporary directory
         self.temp_dir = tempfile.mkdtemp()
-        self.scan_folder = ScanFolder.objects.create(
-            name="Test Library",
-            path=self.temp_dir,
-            content_type="ebooks"
-        )
+        self.scan_folder = ScanFolder.objects.create(name="Test Library", path=self.temp_dir, content_type="ebooks")
 
     def tearDown(self):
         # Clean up temporary directory
-        if hasattr(self, 'temp_dir'):
+        if hasattr(self, "temp_dir"):
             shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_ajax_endpoint_response_times(self):
         """Test response times of AJAX endpoints."""
         # Create test book
-        book = create_test_book_with_file(
-            file_path="/library/response_test.epub",
-            file_format="epub",
-            scan_folder=self.scan_folder
-        )
+        book = create_test_book_with_file(file_path="/library/response_test.epub", file_format="epub", scan_folder=self.scan_folder)
 
         ajax_endpoints = [
-            ('books:ebooks_ajax_detail', {'book_id': book.id}, book.id),
-            ('books:ajax_update_book', {'book_id': book.id}, None),
-            ('books:ebooks_ajax_list', {}, None),
+            ("books:ebooks_ajax_detail", {"book_id": book.id}, book.id),
+            ("books:ajax_update_book", {"book_id": book.id}, None),
+            ("books:ebooks_ajax_list", {}, None),
         ]
 
         for endpoint, data, url_arg in ajax_endpoints:
             with self.subTest(endpoint=endpoint):
                 start_time = time.time()
-                if 'ajax_list' in endpoint:
+                if "ajax_list" in endpoint:
                     response = self.client.get(reverse(endpoint), data)
                 elif url_arg:
-                    response = self.client.post(reverse(endpoint, kwargs={'book_id': url_arg}), data)
+                    response = self.client.post(reverse(endpoint, kwargs={"book_id": url_arg}), data)
                 else:
                     response = self.client.post(reverse(endpoint), data)
                 response_time = time.time() - start_time
@@ -571,15 +443,11 @@ class ResponseTimeOptimizationTests(TestCase):
         """Test impact of static assets on page load times."""
         # Create test data
         for i in range(20):
-            create_test_book_with_file(
-                file_path=f"/library/asset_{i}.epub",
-                file_format="epub",
-                scan_folder=self.scan_folder
-            )
+            create_test_book_with_file(file_path=f"/library/asset_{i}.epub", file_format="epub", scan_folder=self.scan_folder)
 
         # Test page load time
         start_time = time.time()
-        response = self.client.get(reverse('books:book_list'))
+        response = self.client.get(reverse("books:book_list"))
         load_time = time.time() - start_time
 
         self.assertLess(load_time, 2.0)
@@ -589,17 +457,13 @@ class ResponseTimeOptimizationTests(TestCase):
         """Test handling of concurrent requests."""
         # Create test data
         for i in range(50):
-            create_test_book_with_file(
-                file_path=f"/library/concurrent_{i}.epub",
-                file_format="epub",
-                scan_folder=self.scan_folder
-            )
+            create_test_book_with_file(file_path=f"/library/concurrent_{i}.epub", file_format="epub", scan_folder=self.scan_folder)
 
         # Simulate concurrent requests sequentially (threading causes DB locks in tests)
         response_times = []
         for i in range(10):  # 10 sequential requests to simulate concurrent load
             start_time = time.time()
-            response = self.client.get(reverse('books:book_list'))
+            response = self.client.get(reverse("books:book_list"))
             end_time = time.time()
 
             self.assertEqual(response.status_code, 200)
@@ -618,16 +482,10 @@ class ResponseTimeOptimizationTests(TestCase):
 
         # Create and process many books
         for i in range(100):
-            book = create_test_book_with_file(
-                file_path=f"/library/memory_opt_{i}.epub",
-                file_format="epub",
-                scan_folder=self.scan_folder
-            )
+            book = create_test_book_with_file(file_path=f"/library/memory_opt_{i}.epub", file_format="epub", scan_folder=self.scan_folder)
 
             # Simulate metadata processing
-            self.client.post(reverse('books:ajax_process_book'), {
-                'book_id': book.id
-            })
+            self.client.post(reverse("books:ajax_process_book"), {"book_id": book.id})
 
         # Get memory usage
         current, peak = tracemalloc.get_traced_memory()
@@ -648,31 +506,21 @@ class LargeDatasetHandlingTests(TransactionTestCase):
         DataSource.objects.all().delete()
 
         self.client = Client()
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.client.login(username='testuser', password='testpass123')
+        self.user = User.objects.create_user(username="testuser", password="testpass123")
+        self.client.login(username="testuser", password="testpass123")
 
         # Create test infrastructure
-        self.datasource, _ = DataSource.objects.get_or_create(
-            name='filesystem',
-            defaults={'is_active': True}
-        )
+        self.datasource, _ = DataSource.objects.get_or_create(name="filesystem", defaults={"is_active": True})
         # Create test scan folder with temporary directory
         self.temp_dir = tempfile.mkdtemp()
-        self.scan_folder = ScanFolder.objects.create(
-            name="Test Library",
-            path=self.temp_dir,
-            content_type="ebooks"
-        )
+        self.scan_folder = ScanFolder.objects.create(name="Test Library", path=self.temp_dir, content_type="ebooks")
 
     def tearDown(self):
         # Clean up after each test
         Book.objects.all().delete()
         FinalMetadata.objects.all().delete()
         # Clean up temporary directory
-        if hasattr(self, 'temp_dir'):
+        if hasattr(self, "temp_dir"):
             shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_very_large_library_performance(self):
@@ -683,10 +531,7 @@ class LargeDatasetHandlingTests(TransactionTestCase):
             books_to_create = []
             for i in range(batch_size):
                 # Create unsaved Book object
-                book = Book(
-                    content_type='ebooks',
-                    scan_folder=self.scan_folder
-                )
+                book = Book(content_type="ebooks", scan_folder=self.scan_folder)
                 books_to_create.append(book)
 
             # Bulk create for efficiency
@@ -694,7 +539,7 @@ class LargeDatasetHandlingTests(TransactionTestCase):
 
         # Test library browsing performance
         start_time = time.time()
-        response = self.client.get(reverse('books:book_list'))
+        response = self.client.get(reverse("books:book_list"))
         browse_time = time.time() - start_time
 
         self.assertLess(browse_time, 3.0)  # Should handle large library efficiently
@@ -706,25 +551,17 @@ class LargeDatasetHandlingTests(TransactionTestCase):
         books_to_create = []
         for i in range(5000):  # 5000 books
             # Create unsaved Book object
-            book = Book(
-                content_type='ebooks',
-                scan_folder=self.scan_folder
-            )
+            book = Book(content_type="ebooks", scan_folder=self.scan_folder)
             books_to_create.append(book)
 
         Book.objects.bulk_create(books_to_create, batch_size=1000)
 
         # Test bulk update performance
-        book_ids = list(Book.objects.values_list('id', flat=True)[:1000])
+        book_ids = list(Book.objects.values_list("id", flat=True)[:1000])
 
         start_time = time.time()
         response = self.client.post(
-            reverse('books:ajax_bulk_update_books'),
-            data=json.dumps({
-                'book_ids': book_ids,
-                'updates': {'genre': 'Bulk Updated Genre'}
-            }),
-            content_type='application/json'
+            reverse("books:ajax_bulk_update_books"), data=json.dumps({"book_ids": book_ids, "updates": {"genre": "Bulk Updated Genre"}}), content_type="application/json"
         )
         bulk_time = time.time() - start_time
 
@@ -737,26 +574,18 @@ class LargeDatasetHandlingTests(TransactionTestCase):
         books_to_create = []
         for i in range(2000):  # 2000 books
             # Create unsaved Book object
-            book = Book(
-                content_type='ebooks',
-                scan_folder=self.scan_folder
-            )
+            book = Book(content_type="ebooks", scan_folder=self.scan_folder)
             books_to_create.append(book)
 
         Book.objects.bulk_create(books_to_create, batch_size=500)
 
         # Test search performance
-        search_queries = [
-            'Search Performance',
-            'Book 0001',
-            'Book 1999',
-            'Performance'
-        ]
+        search_queries = ["Search Performance", "Book 0001", "Book 1999", "Performance"]
 
         for query in search_queries:
             with self.subTest(query=query):
                 start_time = time.time()
-                response = self.client.get(reverse('books:book_list'), {'search': query})
+                response = self.client.get(reverse("books:book_list"), {"search": query})
                 search_time = time.time() - start_time
 
                 self.assertLess(search_time, 2.0)
@@ -769,44 +598,30 @@ class ProductionPerformanceTests(TestCase):
 
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.client.login(username='testuser', password='testpass123')
+        self.user = User.objects.create_user(username="testuser", password="testpass123")
+        self.client.login(username="testuser", password="testpass123")
 
         # Create test infrastructure
-        self.datasource, _ = DataSource.objects.get_or_create(
-            name='filesystem',
-            defaults={'is_active': True}
-        )
+        self.datasource, _ = DataSource.objects.get_or_create(name="filesystem", defaults={"is_active": True})
         # Create test scan folder with temporary directory
         self.temp_dir = tempfile.mkdtemp()
-        self.scan_folder = ScanFolder.objects.create(
-            name="Test Library",
-            path=self.temp_dir,
-            content_type="ebooks"
-        )
+        self.scan_folder = ScanFolder.objects.create(name="Test Library", path=self.temp_dir, content_type="ebooks")
 
     def tearDown(self):
         # Clean up temporary directory
-        if hasattr(self, 'temp_dir'):
+        if hasattr(self, "temp_dir"):
             shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_production_response_times(self):
         """Test response times in production mode (DEBUG=False)."""
         # Create test data
         for i in range(100):
-            create_test_book_with_file(
-                file_path=f"/library/production_{i}.epub",
-                file_format="epub",
-                scan_folder=self.scan_folder
-            )
+            create_test_book_with_file(file_path=f"/library/production_{i}.epub", file_format="epub", scan_folder=self.scan_folder)
 
         # Test critical pages
         critical_pages = [
-            reverse('books:book_list'),
-            reverse('books:dashboard'),
+            reverse("books:book_list"),
+            reverse("books:dashboard"),
         ]
 
         for page in critical_pages:
@@ -829,11 +644,11 @@ class ProductionPerformanceTests(TestCase):
         # Simulate production workload
         for i in range(10):
             # Access various pages
-            self.client.get(reverse('books:book_list'))
-            self.client.get(reverse('books:dashboard'))
+            self.client.get(reverse("books:book_list"))
+            self.client.get(reverse("books:dashboard"))
 
             # Make AJAX requests
-            self.client.get(reverse('books:ebooks_ajax_list'), {'q': f'test {i}'})
+            self.client.get(reverse("books:ebooks_ajax_list"), {"q": f"test {i}"})
 
         # Get memory usage
         current, peak = tracemalloc.get_traced_memory()
@@ -848,45 +663,31 @@ class PerformanceRegressionTests(TestCase):
 
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.client.login(username='testuser', password='testpass123')
+        self.user = User.objects.create_user(username="testuser", password="testpass123")
+        self.client.login(username="testuser", password="testpass123")
 
         # Create test infrastructure
-        self.datasource, _ = DataSource.objects.get_or_create(
-            name='filesystem',
-            defaults={'is_active': True}
-        )
+        self.datasource, _ = DataSource.objects.get_or_create(name="filesystem", defaults={"is_active": True})
         # Create test scan folder with temporary directory
         self.temp_dir = tempfile.mkdtemp()
-        self.scan_folder = ScanFolder.objects.create(
-            name="Test Library",
-            path=self.temp_dir,
-            content_type="ebooks"
-        )
+        self.scan_folder = ScanFolder.objects.create(name="Test Library", path=self.temp_dir, content_type="ebooks")
 
     def tearDown(self):
         # Clean up temporary directory
-        if hasattr(self, 'temp_dir'):
+        if hasattr(self, "temp_dir"):
             shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_baseline_performance_metrics(self):
         """Test baseline performance metrics for comparison."""
         # Create standard test dataset
         for i in range(200):
-            create_test_book_with_file(
-                file_path=f"/library/baseline_{i}.epub",
-                file_format="epub",
-                scan_folder=self.scan_folder
-            )
+            create_test_book_with_file(file_path=f"/library/baseline_{i}.epub", file_format="epub", scan_folder=self.scan_folder)
 
         # Measure baseline operations
         operations = {
-            'list_view': lambda: self.client.get(reverse('books:book_list')),
-            'search': lambda: self.client.get(reverse('books:book_list'), {'search': 'Baseline'}),
-            'ajax_search': lambda: self.client.get(reverse('books:ebooks_ajax_list'), {'q': 'Test'}),
+            "list_view": lambda: self.client.get(reverse("books:book_list")),
+            "search": lambda: self.client.get(reverse("books:book_list"), {"search": "Baseline"}),
+            "ajax_search": lambda: self.client.get(reverse("books:ebooks_ajax_list"), {"q": "Test"}),
         }
 
         performance_metrics = {}
@@ -905,9 +706,9 @@ class PerformanceRegressionTests(TestCase):
             print(f"{operation}: {timing:.3f} seconds")
 
             # Set reasonable upper bounds
-            if operation == 'list_view':
+            if operation == "list_view":
                 self.assertLess(timing, 2.0)
-            elif operation == 'search':
+            elif operation == "search":
                 self.assertLess(timing, 3.0)
-            elif operation == 'ajax_search':
+            elif operation == "ajax_search":
                 self.assertLess(timing, 1.0)

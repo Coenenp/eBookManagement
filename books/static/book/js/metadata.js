@@ -15,7 +15,51 @@ $(document).ready(function () {
 
     // Form submission handling
     initializeFormSubmission();
+
+    // Load default template if available
+    loadDefaultTemplate();
 });
+
+/**
+ * Load default template from window.defaultTemplateKey
+ */
+function loadDefaultTemplate() {
+    const select = $('#pattern_preset');
+    if (!select.length || !window.defaultTemplateKey) {
+        return;
+    }
+
+    // Try to find option by value matching the template key
+    const options = select.find('option');
+    let foundIndex = -1;
+
+    options.each(function (index) {
+        const $option = $(this);
+        const optionValue = $option.val();
+
+        // For system templates, the template key might be "system-comprehensive"
+        // and we need to match it to the right index
+        // Since rename_templates has custom templates first, then system templates,
+        // we need to match by comparing the data attributes
+        if (optionValue !== '') {
+            const folderPattern = $option.attr('data-folder');
+            const filenamePattern = $option.attr('data-filename');
+
+            // Get the current input values which should match the default template
+            const currentFolder = $('#folder_pattern').val();
+            const currentFilename = $('#filename_pattern').val();
+
+            if (folderPattern === currentFolder && filenamePattern === currentFilename) {
+                foundIndex = index;
+                return false; // Break the loop
+            }
+        }
+    });
+
+    if (foundIndex >= 0) {
+        select.prop('selectedIndex', foundIndex);
+    }
+}
 
 /**
  * Cover Selection Grid

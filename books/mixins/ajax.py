@@ -32,9 +32,7 @@ class StandardAjaxResponseMixin:
     @staticmethod
     def not_found_response(item="Item"):
         """Standard not found response"""
-        return JsonResponse(
-            {"success": False, "error": f"{item} not found"}, status=404
-        )
+        return JsonResponse({"success": False, "error": f"{item} not found"}, status=404)
 
     @staticmethod
     def validation_error_response(errors):
@@ -66,11 +64,7 @@ class BookAjaxViewMixin(StandardAjaxResponseMixin):
 
         try:
             result = operation_func(book, *args, **kwargs)
-            return (
-                result
-                if isinstance(result, JsonResponse)
-                else self.success_response(**result)
-            )
+            return result if isinstance(result, JsonResponse) else self.success_response(**result)
         except Exception as e:
             logger.error(f"Error in book operation: {e}")
             return self.error_response(str(e), status=500)
@@ -82,9 +76,7 @@ def ajax_book_operation(operation_func):
     @wraps(operation_func)
     def wrapper(request, book_id, *args, **kwargs):
         mixin = BookAjaxViewMixin()
-        return mixin.handle_book_operation(
-            book_id, operation_func, request, *args, **kwargs
-        )
+        return mixin.handle_book_operation(book_id, operation_func, request, *args, **kwargs)
 
     return wrapper
 
@@ -100,9 +92,7 @@ def standard_ajax_handler(view_func):
                 try:
                     request.json = json.loads(request.body)
                 except json.JSONDecodeError:
-                    return JsonResponse(
-                        {"success": False, "error": "Invalid JSON data"}, status=400
-                    )
+                    return JsonResponse({"success": False, "error": "Invalid JSON data"}, status=400)
 
             result = view_func(request, *args, **kwargs)
 
@@ -117,9 +107,7 @@ def standard_ajax_handler(view_func):
                 status=400,
             )
         except PermissionDenied:
-            return JsonResponse(
-                {"success": False, "error": "Permission denied"}, status=403
-            )
+            return JsonResponse({"success": False, "error": "Permission denied"}, status=403)
         except Exception as e:
             logger.error(f"Error in {view_func.__name__}: {e}")
             return JsonResponse(

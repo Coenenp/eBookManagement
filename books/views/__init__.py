@@ -53,7 +53,6 @@ from .management import (  # noqa: F401
     AuthorListView,
     AuthorMarkReviewedView,
     AuthorUpdateView,
-    DataSourceCreateView,
     DataSourceDeleteView,
     DataSourceListView,
     DataSourceUpdateView,
@@ -91,12 +90,16 @@ from .renaming import (  # noqa: F401
     BookRenamerPreviewView,
     BookRenamerRevertView,
     BookRenamerView,
+    TemplateManagementView,
     bulk_rename_view,
+    delete_rename_template,
     execute_batch_rename,
+    load_rename_templates,
     preview_pattern,
     preview_rename,
     rename_book,
     rename_book_form,
+    save_rename_template,
     validate_pattern,
 )
 
@@ -153,7 +156,7 @@ from .simple import (  # noqa: F401
 )
 
 # User Settings views - COMPLETED
-from .user_settings import UserSettingsView, clear_theme_preview, preview_theme, reset_to_defaults  # noqa: F401
+from .user_settings import UserSettingsView, clear_theme_preview, preview_theme, reset_to_defaults, save_default_template  # noqa: F401
 
 # Utility functions - COMPLETED (needed by tests and views)
 from .utilities import (  # noqa: F401
@@ -203,7 +206,6 @@ __all__ = [
     "TriggerScanView",
     "ScanStatusView",
     "DataSourceListView",
-    "DataSourceCreateView",
     "DataSourceUpdateView",
     "DataSourceDeleteView",
     "AuthorListView",
@@ -228,6 +230,7 @@ __all__ = [
     "bulk_management",
     # Book renaming views
     "BookRenamerView",
+    "TemplateManagementView",
     "BookRenamerPreviewView",
     "BookRenamerExecuteView",
     "BookRenamerFileDetailsView",

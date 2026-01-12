@@ -15,10 +15,10 @@ sys.path.insert(0, str(project_root))
 
 # Test configuration
 TEST_CONFIG = {
-    'use_temp_media': True,
-    'cleanup_after_tests': True,
-    'mock_file_operations': True,
-    'test_data_size_limit': 1024 * 1024,  # 1MB limit for test files
+    "use_temp_media": True,
+    "cleanup_after_tests": True,
+    "mock_file_operations": True,
+    "test_data_size_limit": 1024 * 1024,  # 1MB limit for test files
 }
 
 
@@ -75,14 +75,14 @@ class RenamingTestUtils:
         test_case.assertGreater(len(result), 0)
 
         # Path should not contain invalid characters
-        invalid_chars = ['<', '>', ':', '"', '|', '?', '*']
+        invalid_chars = ["<", ">", ":", '"', "|", "?", "*"]
         for char in invalid_chars:
             test_case.assertNotIn(char, result)
 
         # Should not have double slashes or start/end with slash
-        test_case.assertNotIn('//', result)
-        test_case.assertFalse(result.startswith('/'))
-        test_case.assertFalse(result.endswith('/'))
+        test_case.assertNotIn("//", result)
+        test_case.assertFalse(result.startswith("/"))
+        test_case.assertFalse(result.endswith("/"))
 
         # Check expected parts if provided
         if expected_parts:
@@ -105,15 +105,12 @@ class RenamingTestUtils:
         from books.models import Book, BookTitle, Format
 
         # Get or create default format
-        format_obj, _ = Format.objects.get_or_create(
-            name="EPUB",
-            defaults={'extension': '.epub'}
-        )
+        format_obj, _ = Format.objects.get_or_create(name="EPUB", defaults={"extension": ".epub"})
 
         defaults = {
-            'file_path': f'/test/{title}.epub',
-            'file_size': 1024000,
-            'format': format_obj,
+            "file_path": f"/test/{title}.epub",
+            "file_size": 1024000,
+            "format": format_obj,
         }
         defaults.update(kwargs)
 
@@ -135,7 +132,7 @@ class RenamingTestUtils:
             target_dir: Target directory path
             base_name: Base filename without extension
         """
-        companion_extensions = ['.jpg', '.jpeg', '.png', '.opf', '.nfo', '.json']
+        companion_extensions = [".jpg", ".jpeg", ".png", ".opf", ".nfo", ".json"]
 
         for ext in companion_extensions:
             source_file = Path(source_dir) / f"{base_name}{ext}"
@@ -155,31 +152,20 @@ class TestDataGenerator:
         from books.models import Author, Category, Format, Language, Series
 
         # Ensure required objects exist
-        format_obj, _ = Format.objects.get_or_create(
-            name="EPUB", defaults={'extension': '.epub'}
-        )
+        format_obj, _ = Format.objects.get_or_create(name="EPUB", defaults={"extension": ".epub"})
 
-        language_obj, _ = Language.objects.get_or_create(
-            name="English", defaults={'code': 'en'}
-        )
+        language_obj, _ = Language.objects.get_or_create(name="English", defaults={"code": "en"})
 
-        category_obj, _ = Category.objects.get_or_create(
-            name="Fiction"
-        )
+        category_obj, _ = Category.objects.get_or_create(name="Fiction")
 
         authors = []
         for i in range(5):
-            author, _ = Author.objects.get_or_create(
-                name=f"Test Author {i}",
-                defaults={'sort_name': f"Author {i}, Test"}
-            )
+            author, _ = Author.objects.get_or_create(name=f"Test Author {i}", defaults={"sort_name": f"Author {i}, Test"})
             authors.append(author)
 
         series = []
         for i in range(3):
-            series_obj, _ = Series.objects.get_or_create(
-                name=f"Test Series {i}"
-            )
+            series_obj, _ = Series.objects.get_or_create(name=f"Test Series {i}")
             series.append(series_obj)
 
         books = []
@@ -191,7 +177,7 @@ class TestDataGenerator:
                 format=format_obj,
                 language=language_obj,
                 category=category_obj,
-                publication_year=2000 + i
+                publication_year=2000 + i,
             )
 
             # Add random authors and series
@@ -215,13 +201,13 @@ class TestDataGenerator:
         companions = []
 
         # Cover files
-        for ext in ['.jpg', '.jpeg', '.png']:
+        for ext in [".jpg", ".jpeg", ".png"]:
             cover_file = base_dir / f"{base_name}{ext}"
             cover_file.touch()
             companions.append(cover_file)
 
         # Metadata files
-        for ext in ['.opf', '.nfo']:
+        for ext in [".opf", ".nfo"]:
             meta_file = base_dir / f"{base_name}{ext}"
             meta_file.touch()
             companions.append(meta_file)
@@ -229,10 +215,7 @@ class TestDataGenerator:
         # Generic files
         (base_dir / "cover.jpg").touch()
         (base_dir / "metadata.opf").touch()
-        companions.extend([
-            base_dir / "cover.jpg",
-            base_dir / "metadata.opf"
-        ])
+        companions.extend([base_dir / "cover.jpg", base_dir / "metadata.opf"])
 
         return companions
 
@@ -240,97 +223,80 @@ class TestDataGenerator:
 # Pattern test cases
 PATTERN_TEST_CASES = [
     # Basic patterns
+    {"name": "simple_title", "pattern": "${title}.${ext}", "expected_tokens": ["title", "ext"], "should_work_with_minimal": True},
     {
-        'name': 'simple_title',
-        'pattern': '${title}.${ext}',
-        'expected_tokens': ['title', 'ext'],
-        'should_work_with_minimal': True
+        "name": "author_title",
+        "pattern": "${author_sort} - ${title}.${ext}",
+        "expected_tokens": ["author_sort", "title", "ext"],
+        "should_work_with_minimal": False,  # Requires author
     },
-
     {
-        'name': 'author_title',
-        'pattern': '${author_sort} - ${title}.${ext}',
-        'expected_tokens': ['author_sort', 'title', 'ext'],
-        'should_work_with_minimal': False  # Requires author
+        "name": "series_pattern",
+        "pattern": "${series_name} #${series_number} - ${title}.${ext}",
+        "expected_tokens": ["series_name", "series_number", "title", "ext"],
+        "should_work_with_minimal": True,  # Should gracefully omit series
     },
-
-    {
-        'name': 'series_pattern',
-        'pattern': '${series_name} #${series_number} - ${title}.${ext}',
-        'expected_tokens': ['series_name', 'series_number', 'title', 'ext'],
-        'should_work_with_minimal': True  # Should gracefully omit series
-    },
-
     # Folder patterns
     {
-        'name': 'library_structure',
-        'pattern': 'Library/${format}/${language}/${author_sort}/${title}.${ext}',
-        'expected_tokens': ['format', 'language', 'author_sort', 'title', 'ext'],
-        'should_work_with_minimal': False
+        "name": "library_structure",
+        "pattern": "Library/${format}/${language}/${author_sort}/${title}.${ext}",
+        "expected_tokens": ["format", "language", "author_sort", "title", "ext"],
+        "should_work_with_minimal": False,
     },
-
     # Complex patterns
     {
-        'name': 'full_metadata',
-        'pattern': '${category}/${language}/${author_sort}/${series_name}/${title} (${year}).${ext}',
-        'expected_tokens': ['category', 'language', 'author_sort', 'series_name', 'title', 'year', 'ext'],
-        'should_work_with_minimal': True
-    }
+        "name": "full_metadata",
+        "pattern": "${category}/${language}/${author_sort}/${series_name}/${title} (${year}).${ext}",
+        "expected_tokens": ["category", "language", "author_sort", "series_name", "title", "year", "ext"],
+        "should_work_with_minimal": True,
+    },
 ]
 
 # Test scenarios for different book types
 BOOK_TEST_SCENARIOS = [
     {
-        'name': 'complete_metadata',
-        'has_author': True,
-        'has_series': True,
-        'has_year': True,
-        'has_category': True,
-        'has_language': True,
-        'description': 'Book with complete metadata'
+        "name": "complete_metadata",
+        "has_author": True,
+        "has_series": True,
+        "has_year": True,
+        "has_category": True,
+        "has_language": True,
+        "description": "Book with complete metadata",
     },
-
     {
-        'name': 'minimal_metadata',
-        'has_author': False,
-        'has_series': False,
-        'has_year': False,
-        'has_category': False,
-        'has_language': False,
-        'description': 'Book with only title and format'
+        "name": "minimal_metadata",
+        "has_author": False,
+        "has_series": False,
+        "has_year": False,
+        "has_category": False,
+        "has_language": False,
+        "description": "Book with only title and format",
     },
-
     {
-        'name': 'partial_metadata',
-        'has_author': True,
-        'has_series': False,
-        'has_year': True,
-        'has_category': False,
-        'has_language': True,
-        'description': 'Book with partial metadata'
+        "name": "partial_metadata",
+        "has_author": True,
+        "has_series": False,
+        "has_year": True,
+        "has_category": False,
+        "has_language": True,
+        "description": "Book with partial metadata",
     },
-
     {
-        'name': 'series_book',
-        'has_author': True,
-        'has_series': True,
-        'has_year': True,
-        'has_category': True,
-        'has_language': True,
-        'series_number': 5,
-        'description': 'Book that is part of a numbered series'
-    }
+        "name": "series_book",
+        "has_author": True,
+        "has_series": True,
+        "has_year": True,
+        "has_category": True,
+        "has_language": True,
+        "series_number": 5,
+        "description": "Book that is part of a numbered series",
+    },
 ]
 
 
 def discover_renaming_tests():
     """Discover all renaming-related test modules"""
-    test_modules = [
-        'books.tests.test_renaming_engine',
-        'books.tests.test_batch_renamer',
-        'books.tests.test_renaming_views',
-        'books.tests.test_renaming_comprehensive'
-    ]
+    test_modules = ["books.tests.test_renaming_engine", "books.tests.test_batch_renamer", "books.tests.test_renaming_views", "books.tests.test_renaming_comprehensive"]
 
     return test_modules
 
@@ -343,7 +309,7 @@ def run_renaming_test_suite():
 
     # Configure Django settings if not already configured
     if not settings.configured:
-        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ebook_manager.settings')
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ebook_manager.settings")
         django.setup()
 
     # Get test runner
@@ -357,7 +323,7 @@ def run_renaming_test_suite():
     return failures == 0  # True if all tests passed
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     """Run tests when executed directly"""
     success = run_renaming_test_suite()
     sys.exit(0 if success else 1)

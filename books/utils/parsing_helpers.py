@@ -8,7 +8,7 @@ def clean_title_and_extract_series_number(raw_title: str) -> Tuple[str, Optional
     Extract leading series number from title string.
     Example: "02 - Book Title" → ("Book Title", 2.0)
     """
-    match = re.match(r'^(?P<num>\d{1,2}(?:\.\d)?)[.\- ]+(?P<title>.+)$', raw_title.strip())
+    match = re.match(r"^(?P<num>\d{1,2}(?:\.\d)?)[.\- ]+(?P<title>.+)$", raw_title.strip())
     if match:
         title = match.group("title").strip()
         try:
@@ -25,11 +25,11 @@ def clean_author_string(raw: str) -> str:
     Example: "Jane Doe (epub)" → "Jane Doe"
     """
     # Remove format strings in parentheses
-    cleaned = re.sub(r'\s*\([^)]*(?:azw3?|epub|mobi|cbz|cbr|azw|pdf|txt)[^)]*\)', '', raw, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*\([^)]*(?:azw3?|epub|mobi|cbz|cbr|azw|pdf|txt)[^)]*\)", "", raw, flags=re.IGNORECASE)
     # Remove standalone format words
-    cleaned = re.sub(r'\b(azw3?|epub|mobi|cbz|cbr|azw|pdf|txt)\b', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\b(azw3?|epub|mobi|cbz|cbr|azw|pdf|txt)\b", "", cleaned, flags=re.IGNORECASE)
     # Clean up extra whitespace and empty parentheses
-    cleaned = re.sub(r'\s*\(\s*\)', '', cleaned)
+    cleaned = re.sub(r"\s*\(\s*\)", "", cleaned)
     return cleaned.strip()
 
 
@@ -39,7 +39,7 @@ def split_authors(author_str: str) -> List[str]:
     Handles commas, ampersands, and conjunctions.
     """
     cleaned = clean_author_string(author_str)
-    parts = re.split(r'\s*(?:,|&|and|;)\s*', cleaned)
+    parts = re.split(r"\s*(?:,|&|and|;)\s*", cleaned)
     return [p.strip() for p in parts if p]
 
 
@@ -50,9 +50,38 @@ def normalize_surnames(authors: List[str]) -> List[str]:
     """
     # Extended list including multi-word prefixes the user mentioned
     surname_particles = {
-        'de', 'del', 'dela', 'la', 'le', 'von', 'van', 'vanden', 'van den', 'van der', 'van de',
-        'da', 'di', 'o', 'mac', 'mc', 'von der', 'du', 'd', 'lo', 'gel', 'ter',
-        'den', 'der', 'dos', 'das', 'ibn', 'bin', 'ben', 'abd', 'abu', 'al'
+        "de",
+        "del",
+        "dela",
+        "la",
+        "le",
+        "von",
+        "van",
+        "vanden",
+        "van den",
+        "van der",
+        "van de",
+        "da",
+        "di",
+        "o",
+        "mac",
+        "mc",
+        "von der",
+        "du",
+        "d",
+        "lo",
+        "gel",
+        "ter",
+        "den",
+        "der",
+        "dos",
+        "das",
+        "ibn",
+        "bin",
+        "ben",
+        "abd",
+        "abu",
+        "al",
     }
 
     normalized = []
@@ -77,7 +106,7 @@ def normalize_surnames(authors: List[str]) -> List[str]:
                     break
 
             # Join all parts to form the complete name
-            normalized.append(' '.join(combined_parts))
+            normalized.append(" ".join(combined_parts))
         else:
             # Regular token - check if we should combine with following prefix
             if i + 1 < len(authors) and authors[i + 1].lower() in surname_particles:
@@ -95,7 +124,7 @@ def normalize_surnames(authors: List[str]) -> List[str]:
                     if next_token.lower() not in surname_particles:
                         break
 
-                normalized.append(' '.join(combined_parts))
+                normalized.append(" ".join(combined_parts))
             else:
                 # Standalone token
                 normalized.append(current_token)
@@ -116,13 +145,13 @@ def extract_folder_clues(path: Path, max_depth: int = 4) -> Dict[str, Optional[s
         "all_authors": [],
     }
 
-    folders = [p.name.replace('_', ' ').strip() for p in path.parents[:max_depth]]
+    folders = [p.name.replace("_", " ").strip() for p in path.parents[:max_depth]]
 
     for i, folder_name in enumerate(reversed(folders)):  # From deepest upward
         folder_lower = folder_name.lower()
 
         if not clues["series"] and "series" in folder_lower:
-            clues["series"] = re.sub(r'\bseries\b', '', folder_name, flags=re.IGNORECASE).strip()
+            clues["series"] = re.sub(r"\bseries\b", "", folder_name, flags=re.IGNORECASE).strip()
 
         if i == len(folders) - 1 and not clues["likely_author"]:
             if looks_like_author(folder_name):
@@ -138,7 +167,7 @@ def looks_like_author(text: str) -> bool:
         return False
 
     # Allow titles like "Dr." or initials like "J.R.R."
-    valid_parts = re.compile(r'^[A-Z][a-z]*\.?$|^[A-Z]\.?$|^[A-Z][a-z]+$|^[A-Z]\.([A-Z]\.)*[A-Z]?\.?$')
+    valid_parts = re.compile(r"^[A-Z][a-z]*\.?$|^[A-Z]\.?$|^[A-Z][a-z]+$|^[A-Z]\.([A-Z]\.)*[A-Z]?\.?$")
     return all(valid_parts.match(word) for word in words)
 
 
@@ -151,10 +180,31 @@ def is_probable_author(name: str) -> bool:
 
     # Strong title indicators that make it unlikely to be an author
     title_words = {
-        "book", "title", "story", "novel", "guide", "manual", "pdf", "ebook",
-        "history", "complete", "adventures", "mystery", "romance", "fantasy",
-        "science", "collection", "anthology", "tales", "volume", "part",
-        "chapter", "series", "edition", "revised", "updated"
+        "book",
+        "title",
+        "story",
+        "novel",
+        "guide",
+        "manual",
+        "pdf",
+        "ebook",
+        "history",
+        "complete",
+        "adventures",
+        "mystery",
+        "romance",
+        "fantasy",
+        "science",
+        "collection",
+        "anthology",
+        "tales",
+        "volume",
+        "part",
+        "chapter",
+        "series",
+        "edition",
+        "revised",
+        "updated",
     }
 
     # Check if any word is a strong title indicator
@@ -162,14 +212,11 @@ def is_probable_author(name: str) -> bool:
         return False
 
     # If it's 1–3 words and doesn't contain typical title terms, assume it's a name
-    return (
-        1 <= len(words) <= 3
-        or "unknown" in name_lower
-    )
+    return 1 <= len(words) <= 3 or "unknown" in name_lower
 
 
 def extract_number_from_filename(filename: str) -> Optional[float]:
-    match = re.match(r'^(?P<num>\d{1,2}(?:\.\d)?)[.\- ]+', filename)
+    match = re.match(r"^(?P<num>\d{1,2}(?:\.\d)?)[.\- ]+", filename)
     if match:
         try:
             return float(match.group("num"))
@@ -179,7 +226,7 @@ def extract_number_from_filename(filename: str) -> Optional[float]:
 
 
 def fallback_segment_resolution(base_name: str) -> Tuple[Optional[str], List[str]]:
-    tokens = re.split(r'\s*[-–—]\s*', base_name)
+    tokens = re.split(r"\s*[-–—]\s*", base_name)
     if len(tokens) < 2:
         return base_name.strip(), []
 
@@ -199,5 +246,5 @@ def fallback_segment_resolution(base_name: str) -> Tuple[Optional[str], List[str
         author_index = max(scores, key=lambda tup: tup[1])[0]
 
     author_segment = normalize_surnames(split_authors(tokens[author_index]))
-    title_segment = ' - '.join(p for i, p in enumerate(tokens) if i != author_index)
+    title_segment = " - ".join(p for i, p in enumerate(tokens) if i != author_index)
     return title_segment.strip(), author_segment

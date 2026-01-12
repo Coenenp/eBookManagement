@@ -1,14 +1,15 @@
 """
 Context processors for wizard functionality.
 """
+
 from books.models import Book, ScanFolder, SetupWizard
 
 
 def wizard_context(request):
     """Add wizard-related context to all templates."""
     context = {
-        'should_show_wizard_banner': False,
-        'wizard_required': False,
+        "should_show_wizard_banner": False,
+        "wizard_required": False,
     }
 
     if request.user.is_authenticated:
@@ -20,11 +21,11 @@ def wizard_context(request):
 
             # Show banner if wizard is not completed/skipped and we're not already in wizard
             if not wizard.is_completed and not wizard.is_skipped:
-                is_wizard_url = 'wizard' in request.path
+                is_wizard_url = "wizard" in request.path
                 if not is_wizard_url:
-                    context['should_show_wizard_banner'] = True
-                    context['wizard_required'] = True
-                    context['wizard_step_url'] = f'/wizard/{wizard.current_step}/'
+                    context["should_show_wizard_banner"] = True
+                    context["wizard_required"] = True
+                    context["wizard_step_url"] = f"/wizard/{wizard.current_step}/"
 
     return context
 

@@ -2,6 +2,7 @@
 Wizard System Validation Tests
 Final validation tests for complete wizard system functionality.
 """
+
 import shutil
 import tempfile
 from unittest.mock import patch
@@ -18,10 +19,7 @@ class WizardFinalValidationTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(
-            username='testuser_final',
-            password='testpass123'
-        )
+        self.user = User.objects.create_user(username="testuser_final", password="testpass123")
         self.client = Client()
         self.client.force_login(self.user)
         self.temp_dir = tempfile.mkdtemp()
@@ -39,36 +37,27 @@ class WizardFinalValidationTests(TestCase):
         print("=" * 50)
 
         # Test 1: Welcome page loads
-        response = self.client.get(reverse('books:wizard_welcome'))
+        response = self.client.get(reverse("books:wizard_welcome"))
         self.assertEqual(response.status_code, 200)
         print("✅ Welcome view: Loads successfully")
 
         # Test 2: Folders management
-        with patch('os.path.exists', return_value=True):
-            with patch('os.path.isdir', return_value=True):
-                with patch('os.access', return_value=True):
-                    response = self.client.post(reverse('books:wizard_folders'), {
-                        'action': 'add_folder',
-                        'folder_path': self.temp_dir,
-                        'folder_name': 'Final Test Folder'
-                    })
+        with patch("os.path.exists", return_value=True):
+            with patch("os.path.isdir", return_value=True):
+                with patch("os.access", return_value=True):
+                    response = self.client.post(reverse("books:wizard_folders"), {"action": "add_folder", "folder_path": self.temp_dir, "folder_name": "Final Test Folder"})
                     print("✅ Folders view: Folder addition working")
 
         # Test 3: Content types selection
-        response = self.client.post(reverse('books:wizard_content_types'), {
-            'content_type': 'ebooks'
-        })
+        response = self.client.post(reverse("books:wizard_content_types"), {"content_type": "ebooks"})
         print("✅ Content Types view: Selection working")
 
         # Test 4: Scrapers configuration
-        response = self.client.post(reverse('books:wizard_scrapers'), {
-            'google_books': 'test_final_api_key_123456789',
-            'enabled_scrapers': ['google_books']
-        })
+        response = self.client.post(reverse("books:wizard_scrapers"), {"google_books": "test_final_api_key_123456789", "enabled_scrapers": ["google_books"]})
         print("✅ Scrapers view: Configuration working")
 
         # Test 5: Completion page
-        response = self.client.get(reverse('books:wizard_complete'))
+        response = self.client.get(reverse("books:wizard_complete"))
         self.assertEqual(response.status_code, 200)
         print("✅ Complete view: Final page loads")
 
@@ -88,14 +77,10 @@ class WizardFinalValidationTests(TestCase):
         print("\n🎨 Testing CSS Structure")
         print("=" * 30)
 
-        response = self.client.get(reverse('books:wizard_complete'))
-        content = response.content.decode('utf-8')
+        response = self.client.get(reverse("books:wizard_complete"))
+        content = response.content.decode("utf-8")
 
-        css_checks = [
-            ('feature-highlights-row', 'Row class for alignment'),
-            ('wizard-complete-page', 'Page-specific wrapper'),
-            ('fa-spin', 'Spinning icon handling')
-        ]
+        css_checks = [("feature-highlights-row", "Row class for alignment"), ("wizard-complete-page", "Page-specific wrapper"), ("fa-spin", "Spinning icon handling")]
 
         for css_class, description in css_checks:
             if css_class in content:
@@ -111,28 +96,23 @@ class WizardFinalValidationTests(TestCase):
         # Create wizard with existing data
         wizard = SetupWizard.objects.create(
             user=self.user,
-            scraper_config={
-                'google_books': 'validation_test_key_123456789012345',
-                'comic_vine': 'validation_comic_key_123456789012345678901'
-            },
-            folder_content_types={
-                'TestFolder': 'ebooks'
-            }
+            scraper_config={"google_books": "validation_test_key_123456789012345", "comic_vine": "validation_comic_key_123456789012345678901"},
+            folder_content_types={"TestFolder": "ebooks"},
         )
         # Verify wizard was created successfully
         self.assertIsNotNone(wizard.id)
 
         # Test scrapers pre-population
-        response = self.client.get(reverse('books:wizard_scrapers'))
-        content = response.content.decode('utf-8')
+        response = self.client.get(reverse("books:wizard_scrapers"))
+        content = response.content.decode("utf-8")
 
-        if 'value=' in content:
+        if "value=" in content:
             print("✅ Scrapers pre-population: Fields populated")
         else:
             print("❌ Scrapers pre-population: No populated fields found")
 
         # Test content types pre-population
-        response = self.client.get(reverse('books:wizard_content_types'))
+        response = self.client.get(reverse("books:wizard_content_types"))
         self.assertEqual(response.status_code, 200)
         print("✅ Content types pre-population: View loads with data")
 
@@ -142,11 +122,9 @@ class WizardFinalValidationTests(TestCase):
         print("=" * 30)
 
         # Test invalid folder path
-        response = self.client.post(reverse('books:wizard_folders'), {
-            'action': 'add_folder',
-            'folder_path': '/absolutely/nonexistent/path/validation',
-            'folder_name': 'Invalid Folder'
-        })
+        response = self.client.post(
+            reverse("books:wizard_folders"), {"action": "add_folder", "folder_path": "/absolutely/nonexistent/path/validation", "folder_name": "Invalid Folder"}
+        )
 
         if response.status_code in [200, 400]:
             print("✅ Invalid folder handling: Graceful error handling")
@@ -154,11 +132,7 @@ class WizardFinalValidationTests(TestCase):
             print(f"❌ Invalid folder handling: Unexpected status {response.status_code}")
 
         # Test empty form submission
-        response = self.client.post(reverse('books:wizard_folders'), {
-            'action': 'add_folder',
-            'folder_path': '',
-            'folder_name': ''
-        })
+        response = self.client.post(reverse("books:wizard_folders"), {"action": "add_folder", "folder_path": "", "folder_name": ""})
 
         if response.status_code in [200, 400]:
             print("✅ Empty form handling: Validation working")
@@ -172,7 +146,7 @@ class WizardFinalValidationTests(TestCase):
 
         # Test authentication requirement
         self.client.logout()
-        response = self.client.get(reverse('books:wizard_welcome'))
+        response = self.client.get(reverse("books:wizard_welcome"))
 
         if response.status_code == 302:
             print("✅ Authentication required: Redirects unauthenticated users")
@@ -183,10 +157,10 @@ class WizardFinalValidationTests(TestCase):
         self.client.force_login(self.user)
 
         # Test CSRF protection
-        response = self.client.get(reverse('books:wizard_folders'))
-        content = response.content.decode('utf-8')
+        response = self.client.get(reverse("books:wizard_folders"))
+        content = response.content.decode("utf-8")
 
-        if 'csrfmiddlewaretoken' in content:
+        if "csrfmiddlewaretoken" in content:
             print("✅ CSRF protection: Token present in forms")
         else:
             print("❌ CSRF protection: No CSRF token found")
@@ -199,16 +173,11 @@ class WizardFinalValidationTests(TestCase):
         import time
 
         # Test response times
-        endpoints = [
-            ('wizard_welcome', 'Welcome'),
-            ('wizard_folders', 'Folders'),
-            ('wizard_scrapers', 'Scrapers'),
-            ('wizard_complete', 'Complete')
-        ]
+        endpoints = [("wizard_welcome", "Welcome"), ("wizard_folders", "Folders"), ("wizard_scrapers", "Scrapers"), ("wizard_complete", "Complete")]
 
         for endpoint, name in endpoints:
             start_time = time.time()
-            response = self.client.get(reverse(f'books:{endpoint}'))
+            response = self.client.get(reverse(f"books:{endpoint}"))
             end_time = time.time()
 
             load_time = end_time - start_time
@@ -225,15 +194,10 @@ class WizardFinalValidationTests(TestCase):
         print("\n♿ Testing Accessibility")
         print("=" * 25)
 
-        response = self.client.get(reverse('books:wizard_welcome'))
-        content = response.content.decode('utf-8')
+        response = self.client.get(reverse("books:wizard_welcome"))
+        content = response.content.decode("utf-8")
 
-        accessibility_features = [
-            ('aria-', 'ARIA attributes'),
-            ('alt=', 'Alt text for images'),
-            ('label', 'Form labels'),
-            ('<h1>', 'Proper heading structure')
-        ]
+        accessibility_features = [("aria-", "ARIA attributes"), ("alt=", "Alt text for images"), ("label", "Form labels"), ("<h1>", "Proper heading structure")]
 
         for feature, description in accessibility_features:
             if feature in content:
@@ -246,15 +210,10 @@ class WizardFinalValidationTests(TestCase):
         print("\n📱 Testing Responsive Design")
         print("=" * 30)
 
-        response = self.client.get(reverse('books:wizard_welcome'))
-        content = response.content.decode('utf-8')
+        response = self.client.get(reverse("books:wizard_welcome"))
+        content = response.content.decode("utf-8")
 
-        responsive_features = [
-            ('col-', 'Bootstrap grid system'),
-            ('responsive', 'Responsive classes'),
-            ('viewport', 'Viewport meta tag'),
-            ('mobile', 'Mobile-friendly elements')
-        ]
+        responsive_features = [("col-", "Bootstrap grid system"), ("responsive", "Responsive classes"), ("viewport", "Viewport meta tag"), ("mobile", "Mobile-friendly elements")]
 
         for feature, description in responsive_features:
             if feature in content:
@@ -267,15 +226,15 @@ class WizardFinalValidationTests(TestCase):
 
         # Set session data
         session = self.client.session
-        session['wizard_test_data'] = 'test_value'
+        session["wizard_test_data"] = "test_value"
         session.save()
 
         # Navigate through wizard
-        response = self.client.get(reverse('books:wizard_scrapers'))
+        response = self.client.get(reverse("books:wizard_scrapers"))
         self.assertEqual(response.status_code, 200)
 
         # Check session persistence
-        if 'wizard_test_data' in self.client.session:
+        if "wizard_test_data" in self.client.session:
             print("✅ Session persistence: Data maintained across requests")
         else:
             print("❌ Session persistence: Data lost")
@@ -284,10 +243,7 @@ class WizardFinalValidationTests(TestCase):
         initial_wizard_count = SetupWizard.objects.count()
 
         # Create wizard data
-        SetupWizard.objects.create(
-            user=self.user,
-            scraper_config={'test': 'data'}
-        )
+        SetupWizard.objects.create(user=self.user, scraper_config={"test": "data"})
 
         final_wizard_count = SetupWizard.objects.count()
 
@@ -304,14 +260,12 @@ class WizardFinalValidationTests(TestCase):
         # Test wizard affects scan folders
         initial_folder_count = ScanFolder.objects.count()
 
-        with patch('os.path.exists', return_value=True):
-            with patch('os.path.isdir', return_value=True):
-                with patch('os.access', return_value=True):
-                    response = self.client.post(reverse('books:wizard_folders'), {
-                        'action': 'add_folder',
-                        'folder_path': '/integration/test/path',
-                        'folder_name': 'Integration Test Folder'
-                    })
+        with patch("os.path.exists", return_value=True):
+            with patch("os.path.isdir", return_value=True):
+                with patch("os.access", return_value=True):
+                    response = self.client.post(
+                        reverse("books:wizard_folders"), {"action": "add_folder", "folder_path": "/integration/test/path", "folder_name": "Integration Test Folder"}
+                    )
 
         final_folder_count = ScanFolder.objects.count()
 
@@ -321,9 +275,7 @@ class WizardFinalValidationTests(TestCase):
             print("⚠️  Scan folder integration: No new folders created")
 
         # Test wizard completion affects system state
-        response = self.client.post(reverse('books:wizard_complete'), {
-            'action': 'dashboard'
-        })
+        response = self.client.post(reverse("books:wizard_complete"), {"action": "dashboard"})
 
         if response.status_code == 302:
             print("✅ Completion integration: Redirects to dashboard")
@@ -338,31 +290,20 @@ class WizardFinalValidationTests(TestCase):
         # Run complete wizard flow
         try:
             # Welcome
-            self.client.post(reverse('books:wizard_welcome'), {
-                'action': 'continue'
-            })
+            self.client.post(reverse("books:wizard_welcome"), {"action": "continue"})
 
             # Folders
-            with patch('os.path.exists', return_value=True):
-                self.client.post(reverse('books:wizard_folders'), {
-                    'action': 'add_folder',
-                    'folder_path': self.temp_dir,
-                    'folder_name': 'Final State Test'
-                })
+            with patch("os.path.exists", return_value=True):
+                self.client.post(reverse("books:wizard_folders"), {"action": "add_folder", "folder_path": self.temp_dir, "folder_name": "Final State Test"})
 
             # Content types
-            self.client.post(reverse('books:wizard_content_types'), {
-                'content_type': 'ebooks'
-            })
+            self.client.post(reverse("books:wizard_content_types"), {"content_type": "ebooks"})
 
             # Scrapers
-            self.client.post(reverse('books:wizard_scrapers'), {
-                'google_books': 'final_state_test_key',
-                'enabled_scrapers': ['google_books']
-            })
+            self.client.post(reverse("books:wizard_scrapers"), {"google_books": "final_state_test_key", "enabled_scrapers": ["google_books"]})
 
             # Complete
-            self.client.get(reverse('books:wizard_complete'))
+            self.client.get(reverse("books:wizard_complete"))
 
             print("✅ Complete workflow: All steps executed successfully")
 
@@ -389,54 +330,45 @@ class WizardSystemHealthCheck(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(
-            username='testuser_health',
-            password='testpass123'
-        )
+        self.user = User.objects.create_user(username="testuser_health", password="testpass123")
         self.client = Client()
         self.client.force_login(self.user)
 
     def test_wizard_system_health(self):
         """Comprehensive system health check"""
-        health_report = {
-            'endpoints': 0,
-            'database': 0,
-            'templates': 0,
-            'security': 0,
-            'performance': 0
-        }
+        health_report = {"endpoints": 0, "database": 0, "templates": 0, "security": 0, "performance": 0}
 
         # Test endpoints
         try:
-            wizard_endpoints = ['wizard_welcome', 'wizard_folders', 'wizard_content_types', 'wizard_scrapers', 'wizard_complete']
+            wizard_endpoints = ["wizard_welcome", "wizard_folders", "wizard_content_types", "wizard_scrapers", "wizard_complete"]
             for endpoint in wizard_endpoints:
-                response = self.client.get(reverse(f'books:{endpoint}'))
+                response = self.client.get(reverse(f"books:{endpoint}"))
                 if response.status_code == 200:
-                    health_report['endpoints'] += 1
+                    health_report["endpoints"] += 1
         except Exception:
             pass
 
         # Test database operations
         try:
             SetupWizard.objects.create(user=self.user, scraper_config={})
-            health_report['database'] = 1
+            health_report["database"] = 1
         except Exception:
             pass
 
         # Test template rendering
         try:
-            response = self.client.get(reverse('books:wizard_welcome'))
-            if 'wizard' in response.content.decode('utf-8'):
-                health_report['templates'] = 1
+            response = self.client.get(reverse("books:wizard_welcome"))
+            if "wizard" in response.content.decode("utf-8"):
+                health_report["templates"] = 1
         except Exception:
             pass
 
         # Test security (authentication)
         try:
             self.client.logout()
-            response = self.client.get(reverse('books:wizard_welcome'))
+            response = self.client.get(reverse("books:wizard_welcome"))
             if response.status_code == 302:
-                health_report['security'] = 1
+                health_report["security"] = 1
             self.client.force_login(self.user)
         except Exception:
             pass
@@ -444,11 +376,12 @@ class WizardSystemHealthCheck(TestCase):
         # Test performance
         try:
             import time
+
             start_time = time.time()
-            self.client.get(reverse('books:wizard_welcome'))
+            self.client.get(reverse("books:wizard_welcome"))
             end_time = time.time()
             if (end_time - start_time) < 2.0:
-                health_report['performance'] = 1
+                health_report["performance"] = 1
         except Exception:
             pass
 
@@ -474,47 +407,38 @@ class WizardRegressionTests(TestCase):
 
     def setUp(self):
         """Set up test data"""
-        self.user = User.objects.create_user(
-            username='testuser_regression',
-            password='testpass123'
-        )
+        self.user = User.objects.create_user(username="testuser_regression", password="testpass123")
         self.client = Client()
         self.client.force_login(self.user)
 
     def test_wizard_backward_compatibility(self):
         """Test that wizard maintains backward compatibility"""
         # Test old-style wizard data
-        wizard = SetupWizard.objects.create(
-            user=self.user,
-            scraper_config={'old_format': 'data'},  # Old format
-            current_step='welcome'
-        )
+        wizard = SetupWizard.objects.create(user=self.user, scraper_config={"old_format": "data"}, current_step="welcome")  # Old format
         # Verify wizard with old-style data was created
-        self.assertEqual(wizard.current_step, 'welcome')
+        self.assertEqual(wizard.current_step, "welcome")
 
         # Should handle old data gracefully
-        response = self.client.get(reverse('books:wizard_scrapers'))
+        response = self.client.get(reverse("books:wizard_scrapers"))
         self.assertEqual(response.status_code, 200)
 
     def test_wizard_existing_features_intact(self):
         """Test that existing wizard features still work"""
         # Test basic navigation
-        response = self.client.get(reverse('books:wizard_welcome'))
+        response = self.client.get(reverse("books:wizard_welcome"))
         self.assertEqual(response.status_code, 200)
 
         # Test form submission
-        response = self.client.post(reverse('books:wizard_welcome'), {
-            'action': 'continue'
-        })
+        response = self.client.post(reverse("books:wizard_welcome"), {"action": "continue"})
         self.assertIn(response.status_code, [200, 302])
 
     def test_wizard_no_breaking_changes(self):
         """Test that no breaking changes were introduced"""
         # Test core functionality remains
-        endpoints = ['wizard_welcome', 'wizard_folders', 'wizard_content_types', 'wizard_scrapers', 'wizard_complete']
+        endpoints = ["wizard_welcome", "wizard_folders", "wizard_content_types", "wizard_scrapers", "wizard_complete"]
 
         for endpoint in endpoints:
-            response = self.client.get(reverse(f'books:{endpoint}'))
+            response = self.client.get(reverse(f"books:{endpoint}"))
             self.assertEqual(response.status_code, 200, f"Breaking change in {endpoint}")
 
     def test_wizard_data_migration_compatibility(self):
@@ -522,15 +446,15 @@ class WizardRegressionTests(TestCase):
         # Create wizard with various data formats
         test_configs = [
             {},  # Empty config
-            {'google_books': 'key'},  # Simple config
-            {'google_books': '', 'comic_vine': None},  # Mixed empty values
-            {'google_books': 'key', 'unknown_scraper': 'value'}  # Unknown scraper
+            {"google_books": "key"},  # Simple config
+            {"google_books": "", "comic_vine": None},  # Mixed empty values
+            {"google_books": "key", "unknown_scraper": "value"},  # Unknown scraper
         ]
 
         for i, config in enumerate(test_configs):
-            user = User.objects.create_user(f'test_compat_{i}', password='pass')
+            user = User.objects.create_user(f"test_compat_{i}", password="pass")
             SetupWizard.objects.create(user=user, scraper_config=config)
 
         # All should handle gracefully
         for i in range(len(test_configs)):
-            self.assertTrue(SetupWizard.objects.filter(user__username=f'test_compat_{i}').exists())
+            self.assertTrue(SetupWizard.objects.filter(user__username=f"test_compat_{i}").exists())

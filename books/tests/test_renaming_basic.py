@@ -22,30 +22,18 @@ class BasicRenamingEngineTests(TestCase):
     def setUp(self):
         """Set up basic test data"""
         # Create test author
-        self.author = Author.objects.create(
-            name="Isaac Asimov"
-        )
+        self.author = Author.objects.create(name="Isaac Asimov")
 
         # Create test series
-        self.series = Series.objects.create(
-            name="Foundation Series"
-        )
+        self.series = Series.objects.create(name="Foundation Series")
 
         # Create test book using existing model structure
-        self.book = create_test_book_with_file(
-            file_path="/test/Foundation.epub",
-            file_format="epub",
-            file_size=1024000
-        )
+        self.book = create_test_book_with_file(file_path="/test/Foundation.epub", file_format="epub", file_size=1024000)
 
     def test_basic_token_processing_concept(self):
         """Test basic concept of token processing"""
         # Mock token processing logic
-        tokens = {
-            'title': 'Foundation',
-            'author': 'Isaac Asimov',
-            'format': 'epub'
-        }
+        tokens = {"title": "Foundation", "author": "Isaac Asimov", "format": "epub"}
 
         pattern = "${author} - ${title}.${format}"
 
@@ -59,18 +47,13 @@ class BasicRenamingEngineTests(TestCase):
 
     def test_empty_token_handling_concept(self):
         """Test concept of handling empty/missing tokens"""
-        tokens = {
-            'title': 'Foundation',
-            'author': '',  # Empty author
-            'series': '',  # Empty series
-            'format': 'epub'
-        }
+        tokens = {"title": "Foundation", "author": "", "series": "", "format": "epub"}  # Empty author  # Empty series
 
         pattern = "${author} - ${series} - ${title}.${format}"
 
         # Process tokens, omitting empty ones
         result_parts = []
-        pattern_parts = pattern.split(' - ')
+        pattern_parts = pattern.split(" - ")
 
         for part in pattern_parts:
             processed_part = part
@@ -81,7 +64,7 @@ class BasicRenamingEngineTests(TestCase):
             if processed_part and not any(f"${{{token}}}" in processed_part for token in tokens.keys()):
                 result_parts.append(processed_part)
 
-        result = ' - '.join(result_parts)
+        result = " - ".join(result_parts)
         expected = "Foundation.epub"
         self.assertEqual(result, expected)
 
@@ -90,21 +73,17 @@ class BasicRenamingEngineTests(TestCase):
         title = "Harry Potter: The Philosopher's Stone"
 
         # Basic character sanitization
-        sanitized = title.replace(':', '_').replace('/', '_').replace('\\', '_')
+        sanitized = title.replace(":", "_").replace("/", "_").replace("\\", "_")
 
         self.assertEqual(sanitized, "Harry Potter_ The Philosopher's Stone")
-        self.assertNotIn(':', sanitized)
+        self.assertNotIn(":", sanitized)
 
     def test_path_generation_concept(self):
         """Test concept of path generation"""
         folder_pattern = "Library/${format}/${author}"
         filename_pattern = "${title}.${format}"
 
-        tokens = {
-            'format': 'EPUB',
-            'author': 'Asimov, Isaac',
-            'title': 'Foundation'
-        }
+        tokens = {"format": "EPUB", "author": "Asimov, Isaac", "title": "Foundation"}
 
         # Simple token replacement
         folder_result = folder_pattern
@@ -133,23 +112,16 @@ class BasicRenamingViewsTests(TestCase):
 
         # Create test user
         User = get_user_model()
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
+        self.user = User.objects.create_user(username="testuser", password="testpass123")
 
         # Create test book
-        self.book = create_test_book_with_file(
-            file_path="/test/Foundation.epub",
-            file_format="epub",
-            file_size=1024000
-        )
+        self.book = create_test_book_with_file(file_path="/test/Foundation.epub", file_format="epub", file_size=1024000)
 
     def test_renamer_view_authentication_required(self):
         """Test that renamer views require authentication"""
         # This test assumes the renaming views will be created
         try:
-            url = reverse('books:book_renamer_enhanced')
+            url = reverse("books:book_renamer_enhanced")
             response = self.client.get(url)
             # Should redirect to login if not authenticated
             self.assertIn(response.status_code, [302, 404])  # 404 if view not implemented yet
@@ -160,8 +132,8 @@ class BasicRenamingViewsTests(TestCase):
     def test_renamer_view_authenticated_access(self):
         """Test authenticated access to renamer views"""
         try:
-            self.client.login(username='testuser', password='testpass123')
-            url = reverse('books:book_renamer_enhanced')
+            self.client.login(username="testuser", password="testpass123")
+            url = reverse("books:book_renamer_enhanced")
             response = self.client.get(url)
 
             # If view exists and user is authenticated, should not redirect to login
@@ -187,11 +159,7 @@ class BasicBatchOperationsTests(TestCase):
             self.test_files.append(file_path)
 
             # Create corresponding book records
-            create_test_book_with_file(
-                file_path=str(file_path),
-                file_format="epub",
-                file_size=1024000
-            )
+            create_test_book_with_file(file_path=str(file_path), file_format="epub", file_size=1024000)
 
     def tearDown(self):
         """Clean up temporary directory"""
@@ -204,26 +172,16 @@ class BasicBatchOperationsTests(TestCase):
         operations = []
         for book in Book.objects.all():
             source_path = book.file_path
-            target_path = source_path.replace('.epub', '_renamed.epub')
+            target_path = source_path.replace(".epub", "_renamed.epub")
 
-            operations.append({
-                'type': 'move',
-                'source': source_path,
-                'target': target_path,
-                'book_id': book.id
-            })
+            operations.append({"type": "move", "source": source_path, "target": target_path, "book_id": book.id})
 
         # In dry run, no actual file operations
-        dry_run_result = {
-            'success': True,
-            'dry_run': True,
-            'operations': operations,
-            'total_operations': len(operations)
-        }
+        dry_run_result = {"success": True, "dry_run": True, "operations": operations, "total_operations": len(operations)}
 
-        self.assertTrue(dry_run_result['success'])
-        self.assertTrue(dry_run_result['dry_run'])
-        self.assertEqual(dry_run_result['total_operations'], 3)
+        self.assertTrue(dry_run_result["success"])
+        self.assertTrue(dry_run_result["dry_run"])
+        self.assertEqual(dry_run_result["total_operations"], 3)
 
         # Verify files still exist in original location
         for file_path in self.test_files:
@@ -236,14 +194,14 @@ class BasicBatchOperationsTests(TestCase):
         base_name = book_path.stem
 
         companion_files = []
-        for ext in ['.jpg', '.opf', '.nfo']:
+        for ext in [".jpg", ".opf", ".nfo"]:
             companion_path = book_path.parent / f"{base_name}{ext}"
             companion_path.touch()
             companion_files.append(companion_path)
 
         # Generic companion files
         generic_files = []
-        for name in ['cover.jpg', 'metadata.opf']:
+        for name in ["cover.jpg", "metadata.opf"]:
             generic_path = book_path.parent / name
             generic_path.touch()
             generic_files.append(generic_path)
@@ -304,21 +262,12 @@ class BasicIntegrationTests(TestCase):
 
         self.books = []
         for i in range(5):
-            book = create_test_book_with_file(
-                file_path=f"/test/book_{i}.epub",
-                file_format="epub",
-                file_size=1024000 + (i * 1000)
-            )
+            book = create_test_book_with_file(file_path=f"/test/book_{i}.epub", file_format="epub", file_size=1024000 + (i * 1000))
             self.books.append(book)
 
     def test_pattern_validation_concept(self):
         """Test concept of pattern validation"""
-        valid_patterns = [
-            "${title}",
-            "${author} - ${title}",
-            "${author}/${series}/${title}",
-            "Library/${format}/${author}/${title}"
-        ]
+        valid_patterns = ["${title}", "${author} - ${title}", "${author}/${series}/${title}", "Library/${format}/${author}/${title}"]
 
         invalid_patterns = [
             "",  # Empty pattern
@@ -332,13 +281,14 @@ class BasicIntegrationTests(TestCase):
             if not pattern:
                 return False, ["Empty pattern"]
 
-            if pattern.count('${') != pattern.count('}'):
+            if pattern.count("${") != pattern.count("}"):
                 return False, ["Malformed tokens"]
 
             # Extract tokens
             import re
-            tokens = re.findall(r'\$\{([^}]+)\}', pattern)
-            valid_tokens = ['title', 'author', 'series', 'format', 'year']
+
+            tokens = re.findall(r"\$\{([^}]+)\}", pattern)
+            valid_tokens = ["title", "author", "series", "format", "year"]
 
             for token in tokens:
                 if token not in valid_tokens:
@@ -368,7 +318,7 @@ class BasicIntegrationTests(TestCase):
         original_size = primary_file.file_size
 
         # Simulate rename operation (path change only)
-        new_path = original_file_path.replace('book_0', 'renamed_book')
+        new_path = original_file_path.replace("book_0", "renamed_book")
 
         # Mock update operation - update the BookFile, not Book
         primary_file.file_path = new_path
@@ -397,15 +347,9 @@ class BasicIntegrationTests(TestCase):
         for book in self.books:
             primary_file = book.primary_file
             old_path = primary_file.file_path
-            new_path = old_path.replace('.epub', '_renamed.epub')
+            new_path = old_path.replace(".epub", "_renamed.epub")
 
-            rename_operations.append({
-                'book_id': book.id,
-                'file_id': primary_file.id,
-                'old_path': old_path,
-                'new_path': new_path,
-                'operation': 'rename'
-            })
+            rename_operations.append({"book_id": book.id, "file_id": primary_file.id, "old_path": old_path, "new_path": new_path, "operation": "rename"})
 
             # Apply change to BookFile
             primary_file.file_path = new_path
@@ -413,21 +357,22 @@ class BasicIntegrationTests(TestCase):
 
         # Verify changes applied
         from books.models import BookFile
+
         for operation in rename_operations:
-            book_file = BookFile.objects.get(id=operation['file_id'])
-            self.assertIn('_renamed', book_file.file_path)
+            book_file = BookFile.objects.get(id=operation["file_id"])
+            self.assertIn("_renamed", book_file.file_path)
 
         # Simulate rollback
         for operation in reversed(rename_operations):
-            book_file = BookFile.objects.get(id=operation['file_id'])
-            book_file.file_path = operation['old_path']
+            book_file = BookFile.objects.get(id=operation["file_id"])
+            book_file.file_path = operation["old_path"]
             book_file.save()
 
         # Verify rollback successful
         for operation in rename_operations:
-            book_file = BookFile.objects.get(id=operation['file_id'])
-            self.assertEqual(book_file.file_path, operation['old_path'])
-            self.assertNotIn('_renamed', book_file.file_path)
+            book_file = BookFile.objects.get(id=operation["file_id"])
+            self.assertEqual(book_file.file_path, operation["old_path"])
+            self.assertNotIn("_renamed", book_file.file_path)
 
 
 class PredefinedPatternsTests(TestCase):
@@ -437,31 +382,23 @@ class PredefinedPatternsTests(TestCase):
         """Test that predefined patterns have correct structure"""
         # Mock predefined patterns
         mock_patterns = {
-            'author_title': {
-                'folder': '${author}',
-                'filename': '${title}.${format}',
-                'description': 'Organize by author'
-            },
-            'series_organization': {
-                'folder': '${author}/${series}',
-                'filename': '${series} #${number} - ${title}.${format}',
-                'description': 'Organize by series'
-            }
+            "author_title": {"folder": "${author}", "filename": "${title}.${format}", "description": "Organize by author"},
+            "series_organization": {"folder": "${author}/${series}", "filename": "${series} #${number} - ${title}.${format}", "description": "Organize by series"},
         }
 
         # Validate structure
         for name, pattern in mock_patterns.items():
             with self.subTest(pattern=name):
-                self.assertIn('folder', pattern)
-                self.assertIn('filename', pattern)
-                self.assertIn('description', pattern)
+                self.assertIn("folder", pattern)
+                self.assertIn("filename", pattern)
+                self.assertIn("description", pattern)
 
-                self.assertIsInstance(pattern['folder'], str)
-                self.assertIsInstance(pattern['filename'], str)
-                self.assertIsInstance(pattern['description'], str)
+                self.assertIsInstance(pattern["folder"], str)
+                self.assertIsInstance(pattern["filename"], str)
+                self.assertIsInstance(pattern["description"], str)
 
-                self.assertGreater(len(pattern['folder']), 0)
-                self.assertGreater(len(pattern['filename']), 0)
+                self.assertGreater(len(pattern["folder"]), 0)
+                self.assertGreater(len(pattern["filename"]), 0)
 
 
 # Test runner helper
@@ -470,13 +407,7 @@ def run_basic_renaming_tests():
     import unittest
 
     # Create test suite
-    test_classes = [
-        BasicRenamingEngineTests,
-        BasicRenamingViewsTests,
-        BasicBatchOperationsTests,
-        BasicIntegrationTests,
-        PredefinedPatternsTests
-    ]
+    test_classes = [BasicRenamingEngineTests, BasicRenamingViewsTests, BasicBatchOperationsTests, BasicIntegrationTests, PredefinedPatternsTests]
 
     suite = unittest.TestSuite()
     for test_class in test_classes:
@@ -489,5 +420,5 @@ def run_basic_renaming_tests():
     return result.wasSuccessful()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run_basic_renaming_tests()

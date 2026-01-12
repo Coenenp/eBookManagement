@@ -16,9 +16,7 @@ logger = logging.getLogger("books.scanner")
 
 def _get_pdf_internal_source():
     """Get or create the PDF Internal DataSource."""
-    source, created = DataSource.objects.get_or_create(
-        name=DataSource.PDF_INTERNAL, defaults={"trust_level": 0.6}
-    )
+    source, created = DataSource.objects.get_or_create(name=DataSource.PDF_INTERNAL, defaults={"trust_level": 0.6})
     return source
 
 

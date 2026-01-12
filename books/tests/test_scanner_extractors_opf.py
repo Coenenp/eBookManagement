@@ -1,6 +1,7 @@
 """
 Test cases for OPF Scanner Extractor
 """
+
 import os
 import shutil
 import tempfile
@@ -29,14 +30,11 @@ class OPFExtractorTests(TestCase):
             file_size=1024000,
             scan_folder=self.scan_folder,
             opf_path=os.path.join(self.temp_dir, "content.opf"),
-            title=None  # Don't auto-create title, let extractor create it
+            title=None,  # Don't auto-create title, let extractor create it
         )
 
         # Ensure OPF_FILE data source exists
-        self.opf_source, created = DataSource.objects.get_or_create(
-            name=DataSource.OPF_FILE,
-            defaults={'trust_level': 0.9}
-        )
+        self.opf_source, created = DataSource.objects.get_or_create(name=DataSource.OPF_FILE, defaults={"trust_level": 0.9})
 
     def tearDown(self):
         """Clean up temporary directories"""
@@ -54,8 +52,8 @@ class OPFExtractorTests(TestCase):
         # Should not create any metadata
         self.assertEqual(BookTitle.objects.filter(book=self.book).count(), 0)
 
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('books.scanner.extractors.opf.ET.parse')
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("books.scanner.extractors.opf.ET.parse")
     def test_extract_complete_metadata(self, mock_parse, mock_file):
         """Test successful extraction of complete metadata from OPF"""
         # Mock XML structure
@@ -96,26 +94,26 @@ class OPFExtractorTests(TestCase):
 
         # Configure find/findall methods
         def mock_find(xpath, ns=None):
-            if 'dc:title' in xpath:
+            if "dc:title" in xpath:
                 return mock_title
-            elif 'dc:publisher' in xpath:
+            elif "dc:publisher" in xpath:
                 return mock_publisher
             elif 'calibre:series"]' in xpath:
                 return mock_series_name
             elif 'calibre:series_index"]' in xpath:
                 return mock_series_index
-            elif 'dc:language' in xpath:
+            elif "dc:language" in xpath:
                 return mock_language
-            elif 'dc:identifier' in xpath:
+            elif "dc:identifier" in xpath:
                 return mock_isbn
-            elif 'dc:description' in xpath:
+            elif "dc:description" in xpath:
                 return mock_description
-            elif 'dc:date' in xpath:
+            elif "dc:date" in xpath:
                 return mock_date
             return None
 
         def mock_findall(xpath, ns=None):
-            if 'dc:creator' in xpath:
+            if "dc:creator" in xpath:
                 return [mock_author1, mock_author2]
             return []
 
@@ -126,40 +124,40 @@ class OPFExtractorTests(TestCase):
 
         # Verify title was created
         book_title = BookTitle.objects.get(book=self.book)
-        self.assertEqual(book_title.title, 'Test OPF Book')
+        self.assertEqual(book_title.title, "Test OPF Book")
         self.assertEqual(book_title.source, self.opf_source)
 
         # Verify authors were created
         book_authors = BookAuthor.objects.filter(book=self.book)
         self.assertEqual(book_authors.count(), 2)
         author_names = [ba.author.name for ba in book_authors]
-        self.assertIn('John Doe', author_names)
-        self.assertIn('Jane Smith', author_names)
+        self.assertIn("John Doe", author_names)
+        self.assertIn("Jane Smith", author_names)
 
         # Verify publisher was created
         book_publisher = BookPublisher.objects.get(book=self.book)
-        self.assertEqual(book_publisher.publisher.name, 'Test Publisher')
+        self.assertEqual(book_publisher.publisher.name, "Test Publisher")
 
         # Verify series was created
         book_series = BookSeries.objects.get(book=self.book)
-        self.assertEqual(book_series.series.name, 'Test Series')
-        self.assertEqual(book_series.series_number, '1')
+        self.assertEqual(book_series.series.name, "Test Series")
+        self.assertEqual(book_series.series_number, "1")
 
         # Verify metadata was created
-        language_meta = BookMetadata.objects.get(book=self.book, field_name='language')
-        self.assertEqual(language_meta.field_value, 'en')  # Normalized
+        language_meta = BookMetadata.objects.get(book=self.book, field_name="language")
+        self.assertEqual(language_meta.field_value, "en")  # Normalized
 
-        isbn_meta = BookMetadata.objects.get(book=self.book, field_name='isbn')
-        self.assertEqual(isbn_meta.field_value, '9780134685991')  # Normalized
+        isbn_meta = BookMetadata.objects.get(book=self.book, field_name="isbn")
+        self.assertEqual(isbn_meta.field_value, "9780134685991")  # Normalized
 
-        desc_meta = BookMetadata.objects.get(book=self.book, field_name='description')
-        self.assertEqual(desc_meta.field_value, 'Test description')
+        desc_meta = BookMetadata.objects.get(book=self.book, field_name="description")
+        self.assertEqual(desc_meta.field_value, "Test description")
 
-        year_meta = BookMetadata.objects.get(book=self.book, field_name='publication_year')
-        self.assertEqual(year_meta.field_value, '2023')
+        year_meta = BookMetadata.objects.get(book=self.book, field_name="publication_year")
+        self.assertEqual(year_meta.field_value, "2023")
 
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('books.scanner.extractors.opf.ET.parse')
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("books.scanner.extractors.opf.ET.parse")
     def test_extract_title_only(self, mock_parse, mock_file):
         """Test extraction with only title metadata"""
         # Mock XML structure with only title
@@ -172,7 +170,7 @@ class OPFExtractorTests(TestCase):
         mock_title.text = "Title Only Book"
 
         def mock_find(xpath, ns=None):
-            if 'dc:title' in xpath:
+            if "dc:title" in xpath:
                 return mock_title
             return None
 
@@ -191,12 +189,12 @@ class OPFExtractorTests(TestCase):
         self.assertEqual(BookSeries.objects.filter(book=self.book).count(), 0)
         self.assertEqual(BookMetadata.objects.filter(book=self.book).count(), 0)
 
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('books.scanner.extractors.opf.ET.parse')
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("books.scanner.extractors.opf.ET.parse")
     def test_extract_existing_publisher_reuse(self, mock_parse, mock_file):
         """Test that existing publishers are reused"""
         # Create existing publisher
-        existing_publisher = Publisher.objects.create(name='Test Publisher')
+        existing_publisher = Publisher.objects.create(name="Test Publisher")
 
         # Mock XML structure
         mock_root = MagicMock()
@@ -208,7 +206,7 @@ class OPFExtractorTests(TestCase):
         mock_publisher.text = "test publisher"  # Different case
 
         def mock_find(xpath, ns=None):
-            if 'dc:publisher' in xpath:
+            if "dc:publisher" in xpath:
                 return mock_publisher
             return None
 
@@ -224,12 +222,12 @@ class OPFExtractorTests(TestCase):
         # Should only have one publisher in database
         self.assertEqual(Publisher.objects.count(), 1)
 
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('books.scanner.extractors.opf.ET.parse')
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("books.scanner.extractors.opf.ET.parse")
     def test_extract_existing_series_reuse(self, mock_parse, mock_file):
         """Test that existing series are reused"""
         # Create existing series
-        existing_series = Series.objects.create(name='Test Series')
+        existing_series = Series.objects.create(name="Test Series")
 
         # Mock XML structure
         mock_root = MagicMock()
@@ -257,13 +255,13 @@ class OPFExtractorTests(TestCase):
         # Verify existing series was reused
         book_series = BookSeries.objects.get(book=self.book)
         self.assertEqual(book_series.series.id, existing_series.id)
-        self.assertEqual(book_series.series_number, '2')
+        self.assertEqual(book_series.series_number, "2")
 
         # Should only have one series in database
         self.assertEqual(Series.objects.count(), 1)
 
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('books.scanner.extractors.opf.ET.parse')
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("books.scanner.extractors.opf.ET.parse")
     def test_extract_publication_year_extraction(self, mock_parse, mock_file):
         """Test publication year extraction from date field"""
         # Mock XML structure
@@ -273,13 +271,7 @@ class OPFExtractorTests(TestCase):
         mock_parse.return_value = mock_tree
 
         # Test various date formats
-        test_dates = [
-            ("2023-01-01", "2023"),
-            ("Published in 2022", "2022"),
-            ("Copyright 2021 by Publisher", "2021"),
-            ("No year here", None),
-            ("", None)
-        ]
+        test_dates = [("2023-01-01", "2023"), ("Published in 2022", "2022"), ("Copyright 2021 by Publisher", "2021"), ("No year here", None), ("", None)]
 
         for date_text, expected_year in test_dates:
             with self.subTest(date=date_text):
@@ -290,7 +282,7 @@ class OPFExtractorTests(TestCase):
                 mock_date.text = date_text
 
                 def mock_find(xpath, ns=None):
-                    if 'dc:date' in xpath:
+                    if "dc:date" in xpath:
                         return mock_date if date_text else None
                     return None
 
@@ -299,10 +291,7 @@ class OPFExtractorTests(TestCase):
 
                 extract(self.book)
 
-                year_metadata = BookMetadata.objects.filter(
-                    book=self.book,
-                    field_name='publication_year'
-                )
+                year_metadata = BookMetadata.objects.filter(book=self.book, field_name="publication_year")
 
                 if expected_year:
                     self.assertEqual(year_metadata.count(), 1)
@@ -310,8 +299,8 @@ class OPFExtractorTests(TestCase):
                 else:
                     self.assertEqual(year_metadata.count(), 0)
 
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('books.scanner.extractors.opf.ET.parse')
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("books.scanner.extractors.opf.ET.parse")
     def test_extract_empty_values_skipped(self, mock_parse, mock_file):
         """Test that empty metadata values are skipped"""
         # Mock XML structure with empty values
@@ -329,11 +318,11 @@ class OPFExtractorTests(TestCase):
         mock_language.text = None  # None value
 
         def mock_find(xpath, ns=None):
-            if 'dc:title' in xpath:
+            if "dc:title" in xpath:
                 return mock_title
-            elif 'dc:publisher' in xpath:
+            elif "dc:publisher" in xpath:
                 return mock_publisher
-            elif 'dc:language' in xpath:
+            elif "dc:language" in xpath:
                 return mock_language
             return None
 
@@ -347,8 +336,8 @@ class OPFExtractorTests(TestCase):
         self.assertEqual(BookPublisher.objects.filter(book=self.book).count(), 0)
         self.assertEqual(BookMetadata.objects.filter(book=self.book).count(), 0)
 
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('books.scanner.extractors.opf.ET.parse')
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("books.scanner.extractors.opf.ET.parse")
     def test_extract_invalid_language_skipped(self, mock_parse, mock_file):
         """Test that invalid language codes are skipped"""
         # Mock XML structure
@@ -361,7 +350,7 @@ class OPFExtractorTests(TestCase):
         mock_language.text = "invalid-lang"
 
         def mock_find(xpath, ns=None):
-            if 'dc:language' in xpath:
+            if "dc:language" in xpath:
                 return mock_language
             return None
 
@@ -371,14 +360,11 @@ class OPFExtractorTests(TestCase):
         extract(self.book)
 
         # Should not create language metadata for invalid language
-        language_metadata = BookMetadata.objects.filter(
-            book=self.book,
-            field_name='language'
-        )
+        language_metadata = BookMetadata.objects.filter(book=self.book, field_name="language")
         self.assertEqual(language_metadata.count(), 0)
 
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('books.scanner.extractors.opf.ET.parse')
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("books.scanner.extractors.opf.ET.parse")
     def test_extract_invalid_isbn_skipped(self, mock_parse, mock_file):
         """Test that invalid ISBNs are skipped"""
         # Mock XML structure
@@ -391,7 +377,7 @@ class OPFExtractorTests(TestCase):
         mock_isbn.text = "invalid-isbn"
 
         def mock_find(xpath, ns=None):
-            if 'dc:identifier' in xpath:
+            if "dc:identifier" in xpath:
                 return mock_isbn
             return None
 
@@ -401,14 +387,11 @@ class OPFExtractorTests(TestCase):
         extract(self.book)
 
         # Should not create ISBN metadata for invalid ISBN
-        isbn_metadata = BookMetadata.objects.filter(
-            book=self.book,
-            field_name='isbn'
-        )
+        isbn_metadata = BookMetadata.objects.filter(book=self.book, field_name="isbn")
         self.assertEqual(isbn_metadata.count(), 0)
 
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('books.scanner.extractors.opf.ET.parse')
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("books.scanner.extractors.opf.ET.parse")
     def test_extract_file_read_error(self, mock_parse, mock_file):
         """Test extraction with file read error"""
         # Mock file read error
@@ -420,7 +403,7 @@ class OPFExtractorTests(TestCase):
         # Should not create any metadata
         self.assertEqual(BookTitle.objects.filter(book=self.book).count(), 0)
 
-    @patch('builtins.open', new_callable=mock_open)
+    @patch("builtins.open", new_callable=mock_open)
     def test_extract_xml_parse_error(self, mock_file):
         """Test extraction with XML parsing error"""
         # Mock invalid XML content
@@ -432,8 +415,8 @@ class OPFExtractorTests(TestCase):
         # Should not create any metadata
         self.assertEqual(BookTitle.objects.filter(book=self.book).count(), 0)
 
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('books.scanner.extractors.opf.ET.parse')
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("books.scanner.extractors.opf.ET.parse")
     def test_extract_series_without_index(self, mock_parse, mock_file):
         """Test series extraction when only name is provided (no index)"""
         # Mock XML structure
@@ -459,5 +442,5 @@ class OPFExtractorTests(TestCase):
 
         # Verify series was created without volume number
         book_series = BookSeries.objects.get(book=self.book)
-        self.assertEqual(book_series.series.name, 'Test Series')
+        self.assertEqual(book_series.series.name, "Test Series")
         self.assertIsNone(book_series.series_number)

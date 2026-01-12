@@ -24,11 +24,8 @@ def make_request(service_name: str) -> Dict[str, Any]:
     # This is a placeholder implementation for testing
     # In real implementation, this would handle actual network requests
 
-    if service_name == 'test_service':
-        return {
-            'status': 'success',
-            'data': 'retrieved'
-        }
+    if service_name == "test_service":
+        return {"status": "success", "data": "retrieved"}
 
     # Simulate network error for unknown services
     raise Exception(f"Service '{service_name}' not available")

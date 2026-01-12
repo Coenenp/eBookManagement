@@ -9,9 +9,7 @@ from books.models import ScanLog
 
 def log_scan_error(message: str, file_path: str, scan_folder) -> None:
     """Log a scanning error to the database"""
-    ScanLog.objects.create(
-        level="ERROR", message=message, file_path=file_path, scan_folder=scan_folder
-    )
+    ScanLog.objects.create(level="ERROR", message=message, file_path=file_path, scan_folder=scan_folder)
 
 
 def update_scan_progress(status, current: int, total: int, filename: str) -> None:

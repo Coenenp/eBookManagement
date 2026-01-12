@@ -1,4 +1,5 @@
 """Tests for scanner bootstrap functionality."""
+
 from django.test import TestCase
 
 from books.models import DataSource
@@ -12,12 +13,18 @@ class BootstrapTests(TestCase):
         """Test that ensure_data_sources creates all expected data sources."""
         ensure_data_sources()
         expected_sources = [
-            (DataSource.MANUAL, 1.0), (DataSource.OPEN_LIBRARY, 0.95),
-            (DataSource.COMICVINE, 0.9), (DataSource.OPF_FILE, 0.9),
-            (DataSource.CONTENT_SCAN, 0.85), (DataSource.EPUB_INTERNAL, 0.8),
-            (DataSource.MOBI_INTERNAL, 0.75), (DataSource.GOOGLE_BOOKS, 0.7),
-            (DataSource.OPEN_LIBRARY_COVERS, 0.65), (DataSource.PDF_INTERNAL, 0.6),
-            (DataSource.GOOGLE_BOOKS_COVERS, 0.55), (DataSource.INITIAL_SCAN, 0.2),
+            (DataSource.MANUAL, 1.0),
+            (DataSource.OPEN_LIBRARY, 0.95),
+            (DataSource.COMICVINE, 0.9),
+            (DataSource.OPF_FILE, 0.9),
+            (DataSource.CONTENT_SCAN, 0.85),
+            (DataSource.EPUB_INTERNAL, 0.8),
+            (DataSource.MOBI_INTERNAL, 0.75),
+            (DataSource.GOOGLE_BOOKS, 0.7),
+            (DataSource.OPEN_LIBRARY_COVERS, 0.65),
+            (DataSource.PDF_INTERNAL, 0.6),
+            (DataSource.GOOGLE_BOOKS_COVERS, 0.55),
+            (DataSource.INITIAL_SCAN, 0.2),
         ]
         self.assertEqual(DataSource.objects.count(), len(expected_sources))
         for name, expected_trust in expected_sources:
@@ -34,12 +41,20 @@ class BootstrapTests(TestCase):
     def test_trust_level_hierarchy(self):
         """Test that trust levels follow the expected hierarchy."""
         ensure_data_sources()
-        sources = DataSource.objects.order_by('-trust_level')
+        sources = DataSource.objects.order_by("-trust_level")
         expected_order = [
-            DataSource.MANUAL, DataSource.OPEN_LIBRARY, DataSource.COMICVINE,
-            DataSource.OPF_FILE, DataSource.CONTENT_SCAN, DataSource.EPUB_INTERNAL,
-            DataSource.MOBI_INTERNAL, DataSource.GOOGLE_BOOKS, DataSource.OPEN_LIBRARY_COVERS,
-            DataSource.PDF_INTERNAL, DataSource.GOOGLE_BOOKS_COVERS, DataSource.INITIAL_SCAN,
+            DataSource.MANUAL,
+            DataSource.OPEN_LIBRARY,
+            DataSource.COMICVINE,
+            DataSource.OPF_FILE,
+            DataSource.CONTENT_SCAN,
+            DataSource.EPUB_INTERNAL,
+            DataSource.MOBI_INTERNAL,
+            DataSource.GOOGLE_BOOKS,
+            DataSource.OPEN_LIBRARY_COVERS,
+            DataSource.PDF_INTERNAL,
+            DataSource.GOOGLE_BOOKS_COVERS,
+            DataSource.INITIAL_SCAN,
         ]
         actual_order = [source.name for source in sources]
         self.assertEqual(actual_order, expected_order)
@@ -80,9 +95,7 @@ class BootstrapTests(TestCase):
 
     def test_ensure_data_sources_with_existing_source(self):
         """Test that existing sources are not modified."""
-        custom_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.MANUAL, defaults={'trust_level': 0.5}
-        )
+        custom_source, _ = DataSource.objects.get_or_create(name=DataSource.MANUAL, defaults={"trust_level": 0.5})
         if custom_source.trust_level != 0.5:
             custom_source.trust_level = 0.5
             custom_source.save()
@@ -93,10 +106,18 @@ class BootstrapTests(TestCase):
     def test_data_source_constants_exist(self):
         """Test that all expected DataSource constants exist."""
         constants = [
-            'MANUAL', 'OPEN_LIBRARY', 'OPF_FILE', 'CONTENT_SCAN',
-            'EPUB_INTERNAL', 'MOBI_INTERNAL', 'GOOGLE_BOOKS',
-            'OPEN_LIBRARY_COVERS', 'PDF_INTERNAL', 'GOOGLE_BOOKS_COVERS',
-            'COMICVINE', 'INITIAL_SCAN',
+            "MANUAL",
+            "OPEN_LIBRARY",
+            "OPF_FILE",
+            "CONTENT_SCAN",
+            "EPUB_INTERNAL",
+            "MOBI_INTERNAL",
+            "GOOGLE_BOOKS",
+            "OPEN_LIBRARY_COVERS",
+            "PDF_INTERNAL",
+            "GOOGLE_BOOKS_COVERS",
+            "COMICVINE",
+            "INITIAL_SCAN",
         ]
         for constant in constants:
             self.assertTrue(hasattr(DataSource, constant))

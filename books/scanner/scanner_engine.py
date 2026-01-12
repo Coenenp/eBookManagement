@@ -56,9 +56,7 @@ class EbookScanner:
         # Get the latest scan status or create one
         status = ScanStatus.objects.order_by("-started").first()
         if not status or status.status in ["Completed", "Failed"]:
-            status = ScanStatus.objects.create(
-                status="Running", progress=0, message="Initializing scan..."
-            )
+            status = ScanStatus.objects.create(status="Running", progress=0, message="Initializing scan...")
         else:
             status.status = "Running"
             status.progress = 0
@@ -79,11 +77,7 @@ class EbookScanner:
                 return
         else:
             active_folders = ScanFolder.objects.filter(is_active=True)
-            folders_to_scan = [
-                os.path.abspath(folder.path)
-                for folder in active_folders
-                if os.path.isdir(folder.path) and os.access(folder.path, os.R_OK)
-            ]
+            folders_to_scan = [os.path.abspath(folder.path) for folder in active_folders if os.path.isdir(folder.path) and os.access(folder.path, os.R_OK)]
 
         # Store scan configuration for potential resume
         status.scan_folders = json.dumps(folders_to_scan)
@@ -99,21 +93,15 @@ class EbookScanner:
             from books.scanner.folder import _collect_files
 
             # Get the scan folder object to determine content-type specific extensions
-            scan_folder_obj, _ = ScanFolder.objects.get_or_create(
-                path=path, defaults={"is_active": True}
-            )
+            scan_folder_obj, _ = ScanFolder.objects.get_or_create(path=path, defaults={"is_active": True})
             content_specific_extensions = scan_folder_obj.get_extensions()
-            ebook_files, _, _ = _collect_files(
-                path, content_specific_extensions, self.cover_extensions
-            )
+            ebook_files, _, _ = _collect_files(path, content_specific_extensions, self.cover_extensions)
             total_files_across_all_folders += len(ebook_files)
 
         status.total_files = total_files_across_all_folders
         status.save()
 
-        logger.info(
-            f"Total files to process across all folders: {total_files_across_all_folders}"
-        )
+        logger.info(f"Total files to process across all folders: {total_files_across_all_folders}")
 
         # Track if any failures occurred
         has_failures = False
@@ -124,9 +112,7 @@ class EbookScanner:
             status.message = f"Scanning folder {idx}/{total_folders}: {path}"
             status.save()
 
-            scan_folder_obj, _ = ScanFolder.objects.get_or_create(
-                path=path, defaults={"is_active": True}
-            )
+            scan_folder_obj, _ = ScanFolder.objects.get_or_create(path=path, defaults={"is_active": True})
             logger.info(f"Starting scan of folder: {path}")
             scan_folder_obj.last_scanned = timezone.now()
             scan_folder_obj.save()
@@ -163,9 +149,7 @@ class EbookScanner:
     def _resume_scan(self, folder_path=None):
         """Resume an interrupted scan from where it left off"""
         # Find the most recent interrupted scan
-        status = (
-            ScanStatus.objects.filter(status="Running").order_by("-started").first()
-        )
+        status = ScanStatus.objects.filter(status="Running").order_by("-started").first()
 
         if not status:
             logger.info("No interrupted scan found. Starting new scan.")
@@ -189,11 +173,7 @@ class EbookScanner:
                 folders_to_scan = [os.path.abspath(folder_path)]
             else:
                 active_folders = ScanFolder.objects.filter(is_active=True)
-                folders_to_scan = [
-                    os.path.abspath(folder.path)
-                    for folder in active_folders
-                    if os.path.isdir(folder.path) and os.access(folder.path, os.R_OK)
-                ]
+                folders_to_scan = [os.path.abspath(folder.path) for folder in active_folders if os.path.isdir(folder.path) and os.access(folder.path, os.R_OK)]
 
         status.message = "Resuming interrupted scan..."
         status.save()
@@ -206,9 +186,7 @@ class EbookScanner:
             status.message = f"Resuming folder {idx}/{total_folders}: {path}"
             status.save()
 
-            scan_folder_obj, _ = ScanFolder.objects.get_or_create(
-                path=path, defaults={"is_active": True}
-            )
+            scan_folder_obj, _ = ScanFolder.objects.get_or_create(path=path, defaults={"is_active": True})
             logger.info(f"Resuming scan of folder: {path}")
 
             try:
@@ -248,9 +226,7 @@ class EbookScanner:
         for folder_path in folders_to_scan:
             try:
                 # Get or create the scan folder object
-                scan_folder, _ = ScanFolder.objects.get_or_create(
-                    path=folder_path, defaults={"is_active": True}
-                )
+                scan_folder, _ = ScanFolder.objects.get_or_create(path=folder_path, defaults={"is_active": True})
 
                 # Get books in this folder that don't have complete metadata
                 incomplete_books = (
@@ -270,28 +246,20 @@ class EbookScanner:
                 )
 
                 all_incomplete_books.extend(list(incomplete_books))
-                logger.info(
-                    f"Found {incomplete_books.count()} incomplete books in {folder_path}"
-                )
+                logger.info(f"Found {incomplete_books.count()} incomplete books in {folder_path}")
 
             except Exception as e:
                 logger.error(f"Error checking incomplete books in {folder_path}: {e}")
 
         if all_incomplete_books:
-            logger.info(
-                f"Found {len(all_incomplete_books)} total books needing metadata completion"
-            )
+            logger.info(f"Found {len(all_incomplete_books)} total books needing metadata completion")
 
             # Complete metadata for these books
             for i, book in enumerate(all_incomplete_books, 1):
                 try:
                     primary_file = book.primary_file
-                    file_path = (
-                        primary_file.file_path if primary_file else f"Book {book.id}"
-                    )
-                    logger.info(
-                        f"[METADATA COMPLETION] Processing book {book.id}: {file_path}"
-                    )
+                    file_path = primary_file.file_path if primary_file else f"Book {book.id}"
+                    logger.info(f"[METADATA COMPLETION] Processing book {book.id}: {file_path}")
 
                     # Update status to show what we're doing
                     status.message = f"Completing metadata for book {book.id} ({i}/{len(all_incomplete_books)})"
@@ -305,9 +273,7 @@ class EbookScanner:
 
                     # Skip the file creation part, book already exists
                     # Go straight to metadata collection steps
-                    logger.info(
-                        f"[METADATA and COVER CANDIDATES QUERY] Path: {file_path}"
-                    )
+                    logger.info(f"[METADATA and COVER CANDIDATES QUERY] Path: {file_path}")
                     query_metadata_and_covers(book)
 
                     try:
@@ -315,22 +281,16 @@ class EbookScanner:
                         resolve_final_metadata(book)
                         logger.info(f"Completed metadata for book {book.id}")
                     except Exception as e:
-                        logger.error(
-                            f"Final metadata resolution failed for {file_path}: {str(e)}"
-                        )
+                        logger.error(f"Final metadata resolution failed for {file_path}: {str(e)}")
 
                 except Exception as e:
-                    logger.error(
-                        f"[METADATA COMPLETION ERROR] Book {book.id}: {str(e)}"
-                    )
+                    logger.error(f"[METADATA COMPLETION ERROR] Book {book.id}: {str(e)}")
                     import traceback
 
                     traceback.print_exc()
 
                 if i % 10 == 0:  # Log every 10 books
-                    logger.info(
-                        f"Completed metadata for {i}/{len(all_incomplete_books)} books"
-                    )
+                    logger.info(f"Completed metadata for {i}/{len(all_incomplete_books)} books")
         else:
             logger.info("No incomplete metadata books found")
 
@@ -357,10 +317,7 @@ class EbookScanner:
             # Convert to standard format and filter by confidence
             ai_metadata = {}
             for field, (value, confidence) in predictions.items():
-                if (
-                    confidence >= self.ai_recognizer.confidence_threshold
-                    and value.strip()
-                ):
+                if confidence >= self.ai_recognizer.confidence_threshold and value.strip():
                     ai_metadata[field] = {
                         "value": value.strip(),
                         "confidence": confidence,
@@ -368,9 +325,7 @@ class EbookScanner:
                     }
 
             if ai_metadata:
-                logger.info(
-                    f"AI predicted metadata for '{filename}': {list(ai_metadata.keys())}"
-                )
+                logger.info(f"AI predicted metadata for '{filename}': {list(ai_metadata.keys())}")
 
             return ai_metadata
 

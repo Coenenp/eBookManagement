@@ -1,6 +1,7 @@
 """
 Test cases for Scanner File Operations
 """
+
 from pathlib import Path
 
 from django.test import TestCase
@@ -70,11 +71,7 @@ class ScannerFileOpsTests(TestCase):
     def test_find_cover_file_same_directory(self):
         """Test finding cover file in same directory as ebook"""
         ebook_path = "/books/author/book.epub"
-        cover_files = [
-            "/books/author/cover.jpg",
-            "/books/other/cover.jpg",
-            "/books/author/book_cover.png"
-        ]
+        cover_files = ["/books/author/cover.jpg", "/books/other/cover.jpg", "/books/author/book_cover.png"]
 
         result = find_cover_file(ebook_path, cover_files)
         self.assertEqual(result, "/books/author/cover.jpg")
@@ -82,10 +79,7 @@ class ScannerFileOpsTests(TestCase):
     def test_find_cover_file_different_directory(self):
         """Test finding cover file when none in same directory"""
         ebook_path = "/books/author/book.epub"
-        cover_files = [
-            "/books/other/cover.jpg",
-            "/different/path/cover.jpg"
-        ]
+        cover_files = ["/books/other/cover.jpg", "/different/path/cover.jpg"]
 
         result = find_cover_file(ebook_path, cover_files)
         self.assertEqual(result, "")
@@ -101,11 +95,7 @@ class ScannerFileOpsTests(TestCase):
     def test_find_cover_file_multiple_in_same_dir(self):
         """Test finding cover file with multiple covers in same directory"""
         ebook_path = "/books/author/book.epub"
-        cover_files = [
-            "/books/author/cover1.jpg",
-            "/books/author/cover2.jpg",
-            "/books/other/cover.jpg"
-        ]
+        cover_files = ["/books/author/cover1.jpg", "/books/author/cover2.jpg", "/books/other/cover.jpg"]
 
         # Should return first match in same directory
         result = find_cover_file(ebook_path, cover_files)
@@ -114,11 +104,7 @@ class ScannerFileOpsTests(TestCase):
     def test_find_opf_file_same_directory(self):
         """Test finding OPF file in same directory as ebook"""
         ebook_path = "/books/author/book.epub"
-        opf_files = [
-            "/books/author/metadata.opf",
-            "/books/other/metadata.opf",
-            "/books/author/book.opf"
-        ]
+        opf_files = ["/books/author/metadata.opf", "/books/other/metadata.opf", "/books/author/book.opf"]
 
         result = find_opf_file(ebook_path, opf_files)
         self.assertEqual(result, "/books/author/metadata.opf")
@@ -126,10 +112,7 @@ class ScannerFileOpsTests(TestCase):
     def test_find_opf_file_different_directory(self):
         """Test finding OPF file when none in same directory"""
         ebook_path = "/books/author/book.epub"
-        opf_files = [
-            "/books/other/metadata.opf",
-            "/different/path/metadata.opf"
-        ]
+        opf_files = ["/books/other/metadata.opf", "/different/path/metadata.opf"]
 
         result = find_opf_file(ebook_path, opf_files)
         self.assertEqual(result, "")
@@ -145,11 +128,7 @@ class ScannerFileOpsTests(TestCase):
     def test_find_opf_file_multiple_in_same_dir(self):
         """Test finding OPF file with multiple OPF files in same directory"""
         ebook_path = "/books/author/book.epub"
-        opf_files = [
-            "/books/author/content.opf",
-            "/books/author/metadata.opf",
-            "/books/other/metadata.opf"
-        ]
+        opf_files = ["/books/author/content.opf", "/books/author/metadata.opf", "/books/other/metadata.opf"]
 
         # Should return first match in same directory
         result = find_opf_file(ebook_path, opf_files)
@@ -158,10 +137,7 @@ class ScannerFileOpsTests(TestCase):
     def test_find_cover_file_windows_paths(self):
         """Test finding cover file with Windows-style paths"""
         ebook_path = "C:\\Books\\Author\\book.epub"
-        cover_files = [
-            "C:\\Books\\Author\\cover.jpg",
-            "C:\\Books\\Other\\cover.jpg"
-        ]
+        cover_files = ["C:\\Books\\Author\\cover.jpg", "C:\\Books\\Other\\cover.jpg"]
 
         result = find_cover_file(ebook_path, cover_files)
         self.assertEqual(result, "C:\\Books\\Author\\cover.jpg")
@@ -169,10 +145,7 @@ class ScannerFileOpsTests(TestCase):
     def test_find_opf_file_windows_paths(self):
         """Test finding OPF file with Windows-style paths"""
         ebook_path = "C:\\Books\\Author\\book.epub"
-        opf_files = [
-            "C:\\Books\\Author\\metadata.opf",
-            "C:\\Books\\Other\\metadata.opf"
-        ]
+        opf_files = ["C:\\Books\\Author\\metadata.opf", "C:\\Books\\Other\\metadata.opf"]
 
         result = find_opf_file(ebook_path, opf_files)
         self.assertEqual(result, "C:\\Books\\Author\\metadata.opf")

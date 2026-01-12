@@ -47,6 +47,7 @@ urlpatterns = [
     path("settings/preview-theme/", views.preview_theme, name="preview_theme"),
     path("settings/clear-theme-preview/", views.clear_theme_preview, name="clear_theme_preview"),
     path("settings/reset-to-defaults/", views.reset_to_defaults, name="reset_to_defaults"),
+    path("settings/save-default-template/", views.save_default_template, name="save_default_template"),
     # Book management
     path("books/", views.BookListView.as_view(), name="book_list"),
     # Media Type Sections
@@ -96,6 +97,7 @@ urlpatterns = [
     path("genres/<int:pk>/delete/", views.GenreDeleteView.as_view(), name="genre_delete"),
     # Book renaming/organization
     path("rename-books/", views.BookRenamerView.as_view(), name="book_renamer"),
+    path("rename-books/templates/", views.TemplateManagementView.as_view(), name="template_management"),
     # Rename books functionality now integrated into main renamer
     path("rename-books/preview/", views.BookRenamerPreviewView.as_view(), name="book_renamer_preview"),
     path("rename-books/execute/", views.BookRenamerExecuteView.as_view(), name="book_renamer_execute"),
@@ -134,7 +136,6 @@ urlpatterns = [
     path("scan_status/live/", views.current_scan_status, name="live_scan_status"),
     # Data source management
     path("data_sources/", views.DataSourceListView.as_view(), name="data_source_list"),
-    path("data_sources/create/", views.DataSourceCreateView.as_view(), name="data_source_create"),
     path("data_sources/<int:pk>/update/", views.DataSourceUpdateView.as_view(), name="data_source_update"),
     path("data_sources/<int:pk>/delete/", views.DataSourceDeleteView.as_view(), name="data_source_delete"),
     path("data_sources/<int:pk>/update_trust/", views.update_trust, name="update_trust"),
@@ -241,6 +242,9 @@ urlpatterns = [
     path("renamer/preview-pattern/", views.preview_pattern, name="renamer_preview_pattern"),
     path("renamer/execute-batch/", views.execute_batch_rename, name="renamer_execute_batch"),
     path("renamer/validate-pattern/", views.validate_pattern, name="renamer_validate_pattern"),
+    path("renamer/save-template/", views.save_rename_template, name="save_rename_template"),
+    path("renamer/load-templates/", views.load_rename_templates, name="load_rename_templates"),
+    path("renamer/delete-template/", views.delete_rename_template, name="delete_rename_template"),
     # Missing AJAX endpoints for error handling tests
     # path('ajax/create-library-folder/', views.ajax_create_library_folder, name='ajax_create_library_folder'),  # Already defined above
     path("ajax/copy-book-file/", views.ajax_copy_file, name="ajax_copy_book_file"),

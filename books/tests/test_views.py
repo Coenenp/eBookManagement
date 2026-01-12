@@ -165,17 +165,13 @@ class BookDetailViewTests(BaseViewTestCase):
 
     def test_book_detail_view_loads(self):
         """Test that book detail view loads successfully"""
-        response = self.client.get(
-            reverse("books:book_detail", kwargs={"pk": self.book.id})
-        )
+        response = self.client.get(reverse("books:book_detail", kwargs={"pk": self.book.id}))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Test Book")
 
     def test_book_detail_view_context(self):
         """Test book detail view context variables"""
-        response = self.client.get(
-            reverse("books:book_detail", kwargs={"pk": self.book.id})
-        )
+        response = self.client.get(reverse("books:book_detail", kwargs={"pk": self.book.id}))
         self.assertEqual(response.status_code, 200)
 
         # Use helper method to get context data
@@ -196,9 +192,7 @@ class BookDetailViewTests(BaseViewTestCase):
             scan_folder=self.scan_folder,
         )
 
-        response = self.client.get(
-            reverse("books:book_detail", kwargs={"pk": self.book.id})
-        )
+        response = self.client.get(reverse("books:book_detail", kwargs={"pk": self.book.id}))
         self.assertEqual(response.status_code, 200)
 
         # Use helper method to get context data
@@ -270,9 +264,7 @@ class BookSearchViewTests(BaseViewTestCase):
 
     def test_book_search_by_author(self):
         """Test searching books by author"""
-        response = self.client.get(
-            reverse("books:book_list") + "?search_query=Django Author"
-        )
+        response = self.client.get(reverse("books:book_list") + "?search_query=Django Author")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Django Web Framework")
         self.assertNotContains(response, "Python Programming")
@@ -290,9 +282,7 @@ class TriggerScanViewTests(BaseViewTestCase):
 
     def setUp(self):
         """Set up test data."""
-        self.user, created = User.objects.get_or_create(
-            username="testuser_trigger", defaults={"password": "testpass123"}
-        )
+        self.user, created = User.objects.get_or_create(username="testuser_trigger", defaults={"password": "testpass123"})
         if created:
             self.user.set_password("testpass123")
             self.user.save()
@@ -318,15 +308,11 @@ class TriggerScanViewTests(BaseViewTestCase):
         self.scan_folder.is_active = False
         self.scan_folder.save()
 
-        with patch("subprocess.Popen") as mock_popen, patch(
-            "books.views.settings"
-        ) as mock_settings:
+        with patch("subprocess.Popen") as mock_popen, patch("books.views.settings") as mock_settings:
             mock_settings.BASE_DIR = "/project"
             mock_popen.return_value = Mock()
 
-            response = self.client.post(
-                reverse("books:trigger_scan"), {"scan_mode": "normal"}
-            )
+            response = self.client.post(reverse("books:trigger_scan"), {"scan_mode": "normal"})
 
             self.assertEqual(response.status_code, 302)
 
@@ -336,9 +322,7 @@ class ViewFilteringTests(BaseViewTestCase):
 
     def setUp(self):
         """Set up test data."""
-        self.user, created = User.objects.get_or_create(
-            username="testuser_filter", defaults={"password": "testpass123"}
-        )
+        self.user, created = User.objects.get_or_create(username="testuser_filter", defaults={"password": "testpass123"})
         if created:
             self.user.set_password("testpass123")
             self.user.save()
@@ -347,9 +331,7 @@ class ViewFilteringTests(BaseViewTestCase):
 
         from books.models import DataSource
 
-        self.initial_scan_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.INITIAL_SCAN, defaults={"trust_level": 0.2}
-        )
+        self.initial_scan_source, _ = DataSource.objects.get_or_create(name=DataSource.INITIAL_SCAN, defaults={"trust_level": 0.2})
 
         self.scan_folder = create_test_scan_folder(name="Test Folder")
 
@@ -460,9 +442,7 @@ class ViewFilteringTests(BaseViewTestCase):
             scan_folder=self.scan_folder,
         )
 
-        FinalMetadata.objects.create(
-            book=book_complete, final_title="Complete Book", is_reviewed=True
-        )
+        FinalMetadata.objects.create(book=book_complete, final_title="Complete Book", is_reviewed=True)
 
         # Test missing metadata filter
         response = self.client.get(reverse("books:book_list"), {"missing": "metadata"})
@@ -486,9 +466,7 @@ class ViewFilteringTests(BaseViewTestCase):
         )
 
         # Test corrupted filter
-        response = self.client.get(
-            reverse("books:book_list"), {"review_type": "corrupted"}
-        )
+        response = self.client.get(reverse("books:book_list"), {"review_type": "corrupted"})
         self.assertEqual(response.status_code, 200)
         # Verify that corrupted book is in results
         context = self.get_context_from_response(response)
@@ -500,13 +478,9 @@ class ViewFilteringTests(BaseViewTestCase):
         """Test filtering by data source."""
 
         # Create different data sources
-        epub_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.EPUB_INTERNAL, defaults={"trust_level": 0.8}
-        )
+        epub_source, _ = DataSource.objects.get_or_create(name=DataSource.EPUB_INTERNAL, defaults={"trust_level": 0.8})
 
-        initial_scan_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.INITIAL_SCAN, defaults={"trust_level": 0.3}
-        )
+        initial_scan_source, _ = DataSource.objects.get_or_create(name=DataSource.INITIAL_SCAN, defaults={"trust_level": 0.3})
 
         # Create authors
         epub_author = Author.objects.create(name="EPUB Author")
@@ -542,9 +516,7 @@ class ViewFilteringTests(BaseViewTestCase):
             confidence=0.3,
         )
 
-        BookAuthor.objects.create(
-            book=book1, author=epub_author, source=epub_source, confidence=0.8
-        )
+        BookAuthor.objects.create(book=book1, author=epub_author, source=epub_source, confidence=0.8)
 
         BookAuthor.objects.create(
             book=book2,
@@ -554,9 +526,7 @@ class ViewFilteringTests(BaseViewTestCase):
         )
 
         # Test filtering by EPUB metadata source
-        response = self.client.get(
-            reverse("books:book_list"), {"datasource": str(epub_source.id)}
-        )
+        response = self.client.get(reverse("books:book_list"), {"datasource": str(epub_source.id)})
         self.assertEqual(response.status_code, 200)
         context = self.get_context_from_response(response)
         books = context["books"] if "books" in context else context["page_obj"]
@@ -565,9 +535,7 @@ class ViewFilteringTests(BaseViewTestCase):
         self.assertNotIn(book2.id, book_ids)
 
         # Test filtering by initial scan source
-        response = self.client.get(
-            reverse("books:book_list"), {"datasource": str(initial_scan_source.id)}
-        )
+        response = self.client.get(reverse("books:book_list"), {"datasource": str(initial_scan_source.id)})
         self.assertEqual(response.status_code, 200)
         context = self.get_context_from_response(response)
         books = context["books"] if "books" in context else context["page_obj"]
@@ -596,9 +564,7 @@ class ViewFilteringTests(BaseViewTestCase):
         )
 
         # Test filtering by first scan folder
-        response = self.client.get(
-            reverse("books:book_list"), {"scan_folder": str(self.scan_folder.id)}
-        )
+        response = self.client.get(reverse("books:book_list"), {"scan_folder": str(self.scan_folder.id)})
         self.assertEqual(response.status_code, 200)
         context = self.get_context_from_response(response)
         books = context["books"] if "books" in context else context["page_obj"]
@@ -607,9 +573,7 @@ class ViewFilteringTests(BaseViewTestCase):
         self.assertNotIn(book2.id, book_ids)
 
         # Test filtering by second scan folder
-        response = self.client.get(
-            reverse("books:book_list"), {"scan_folder": str(scan_folder2.id)}
-        )
+        response = self.client.get(reverse("books:book_list"), {"scan_folder": str(scan_folder2.id)})
         self.assertEqual(response.status_code, 200)
         context = self.get_context_from_response(response)
         books = context["books"] if "books" in context else context["page_obj"]
@@ -625,9 +589,7 @@ class ViewFilteringTests(BaseViewTestCase):
         scan_folder2 = create_test_scan_folder(name="Test Folder 2")
 
         # Create data source
-        epub_source, _ = DataSource.objects.get_or_create(
-            name=DataSource.EPUB_INTERNAL, defaults={"trust_level": 0.8}
-        )
+        epub_source, _ = DataSource.objects.get_or_create(name=DataSource.EPUB_INTERNAL, defaults={"trust_level": 0.8})
 
         # Create books
         book1 = create_test_book_with_file(
@@ -645,13 +607,9 @@ class ViewFilteringTests(BaseViewTestCase):
         )
 
         # Both books have same data source
-        BookTitle.objects.create(
-            book=book1, title="Book 1", source=epub_source, confidence=0.8
-        )
+        BookTitle.objects.create(book=book1, title="Book 1", source=epub_source, confidence=0.8)
 
-        BookTitle.objects.create(
-            book=book2, title="Book 2", source=epub_source, confidence=0.8
-        )
+        BookTitle.objects.create(book=book2, title="Book 2", source=epub_source, confidence=0.8)
 
         # Test combined filters - should only return book1
         response = self.client.get(
@@ -674,9 +632,7 @@ class ViewEdgeCaseTests(BaseViewTestCase):
 
     def setUp(self):
         """Set up test data."""
-        self.user, created = User.objects.get_or_create(
-            username="testuser_edge", defaults={"password": "testpass123"}
-        )
+        self.user, created = User.objects.get_or_create(username="testuser_edge", defaults={"password": "testpass123"})
         if created:
             self.user.set_password("testpass123")
             self.user.save()
@@ -694,17 +650,13 @@ class ViewEdgeCaseTests(BaseViewTestCase):
 
     def test_search_with_unicode_characters(self):
         """Test search with unicode characters."""
-        response = self.client.get(
-            reverse("books:book_list"), {"search_query": "Café Français 中文 العربية"}
-        )
+        response = self.client.get(reverse("books:book_list"), {"search_query": "Café Français 中文 العربية"})
         self.assertEqual(response.status_code, 200)
 
     def test_view_with_very_long_search_query(self):
         """Test search with extremely long query."""
         long_query = "a" * 1000
-        response = self.client.get(
-            reverse("books:book_list"), {"search_query": long_query}
-        )
+        response = self.client.get(reverse("books:book_list"), {"search_query": long_query})
         self.assertEqual(response.status_code, 200)
 
     def test_book_list_with_empty_database(self):
@@ -722,9 +674,7 @@ class ViewEdgeCaseTests(BaseViewTestCase):
     def test_book_list_sorting_edge_cases(self):
         """Test sorting with edge cases."""
         # Test with invalid sort field
-        response = self.client.get(
-            reverse("books:book_list"), {"sort": "invalid_field"}
-        )
+        response = self.client.get(reverse("books:book_list"), {"sort": "invalid_field"})
         self.assertEqual(response.status_code, 200)
         # Should fall back to default sorting
 
@@ -808,9 +758,7 @@ class BookDetailNavigationTestCase(BaseViewTestCase):
     def setUp(self):
         """Set up test data."""
         self.client = Client()
-        self.user, created = User.objects.get_or_create(
-            username="testuser_nav", defaults={"password": "testpass"}
-        )
+        self.user, created = User.objects.get_or_create(username="testuser_nav", defaults={"password": "testpass"})
         if created:
             self.user.set_password("testpass")
             self.user.save()
@@ -1182,9 +1130,7 @@ class DashboardViewTests(BaseViewTestCase):
         context = self.get_context_from_response(response)
 
         format_stats = context["format_stats"]
-        format_counts = {
-            item["files__file_format"]: item["count"] for item in format_stats
-        }
+        format_counts = {item["files__file_format"]: item["count"] for item in format_stats}
 
         self.assertEqual(format_counts.get("epub", 0), 1)
         self.assertEqual(format_counts.get("pdf", 0), 1)
@@ -1343,18 +1289,14 @@ class BookMetadataViewTests(BaseViewTestCase):
 
     def test_book_metadata_view_loads(self):
         """Test that book metadata view loads successfully"""
-        response = self.client.get(
-            reverse("books:book_metadata", kwargs={"pk": self.book.id})
-        )
+        response = self.client.get(reverse("books:book_metadata", kwargs={"pk": self.book.id}))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Original Title")
 
     def test_book_metadata_view_anonymous_user(self):
         """Test that anonymous users are redirected to login"""
         self.client.logout()
-        response = self.client.get(
-            reverse("books:book_metadata", kwargs={"pk": self.book.id})
-        )
+        response = self.client.get(reverse("books:book_metadata", kwargs={"pk": self.book.id}))
         self.assertEqual(response.status_code, 302)
         self.assertIn("/login/", response.url)
 
@@ -1438,18 +1380,14 @@ class AjaxViewTests(BaseViewTestCase):
     def test_ajax_update_book_status_anonymous(self):
         """Test AJAX book status update requires authentication"""
         self.client.logout()
-        response = self.client.post(
-            reverse("books:ajax_update_book_status", kwargs={"book_id": self.book.id})
-        )
+        response = self.client.post(reverse("books:ajax_update_book_status", kwargs={"book_id": self.book.id}))
         self.assertEqual(response.status_code, 302)
 
     def test_ajax_update_book_status_invalid_book(self):
         """Test AJAX book status update with invalid book ID"""
         import json
 
-        response = self.client.post(
-            reverse("books:ajax_update_book_status", kwargs={"book_id": 99999})
-        )
+        response = self.client.post(reverse("books:ajax_update_book_status", kwargs={"book_id": 99999}))
         # Function catches exceptions and returns error in JSON format
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
@@ -1468,9 +1406,7 @@ class AjaxViewTests(BaseViewTestCase):
 
         response = self.client.post(
             reverse("books:ajax_trigger_scan"),
-            data=json.dumps(
-                {"folder_id": self.scan_folder.id, "use_external_apis": True}
-            ),
+            data=json.dumps({"folder_id": self.scan_folder.id, "use_external_apis": True}),
             content_type="application/json",
         )
 
@@ -1480,9 +1416,7 @@ class AjaxViewTests(BaseViewTestCase):
 
     def test_isbn_lookup_valid(self):
         """Test ISBN lookup with valid ISBN"""
-        with patch(
-            "books.utils.external_services.PrimaryISBNService.lookup_isbn"
-        ) as mock_lookup:
+        with patch("books.utils.external_services.PrimaryISBNService.lookup_isbn") as mock_lookup:
             mock_lookup.return_value = {
                 "title": "Test Book",
                 "author": "Test Author",
@@ -1490,9 +1424,7 @@ class AjaxViewTests(BaseViewTestCase):
                 "description": "Test description",
             }
 
-            response = self.client.get(
-                reverse("books:isbn_lookup", kwargs={"isbn": "9781234567890"})
-            )
+            response = self.client.get(reverse("books:isbn_lookup", kwargs={"isbn": "9781234567890"}))
 
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response["Content-Type"], "application/json")
@@ -1501,9 +1433,7 @@ class AjaxViewTests(BaseViewTestCase):
         """Test ISBN lookup with invalid ISBN"""
         import json
 
-        response = self.client.get(
-            reverse("books:isbn_lookup", kwargs={"isbn": "invalid-isbn"})
-        )
+        response = self.client.get(reverse("books:isbn_lookup", kwargs={"isbn": "invalid-isbn"}))
 
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
@@ -1511,9 +1441,7 @@ class AjaxViewTests(BaseViewTestCase):
 
     def test_toggle_needs_review(self):
         """Test toggle needs review functionality"""
-        response = self.client.post(
-            reverse("books:toggle_needs_review", kwargs={"book_id": self.book.id})
-        )
+        response = self.client.post(reverse("books:toggle_needs_review", kwargs={"book_id": self.book.id}))
 
         # Should return JSON response (not implemented yet)
         self.assertEqual(response.status_code, 200)
@@ -1524,9 +1452,7 @@ class AjaxViewTests(BaseViewTestCase):
 
     def test_toggle_needs_review_invalid_book(self):
         """Test toggle needs review with invalid book ID"""
-        response = self.client.post(
-            reverse("books:toggle_needs_review", kwargs={"book_id": 99999})
-        )
+        response = self.client.post(reverse("books:toggle_needs_review", kwargs={"book_id": 99999}))
 
         # Function returns success even for invalid books (not implemented)
         self.assertEqual(response.status_code, 200)
@@ -1596,9 +1522,7 @@ class ThemeAndSettingsViewTests(BaseViewTestCase):
 
     def test_preview_theme_invalid_theme(self):
         """Test theme preview with invalid theme"""
-        response = self.client.post(
-            reverse("books:preview_theme"), {"theme": "invalid-theme"}
-        )
+        response = self.client.post(reverse("books:preview_theme"), {"theme": "invalid-theme"})
 
         self.assertEqual(response.status_code, 200)
         data = response.json()
@@ -1810,9 +1734,7 @@ class BookRenamerViewTests(BaseViewTestCase):
 
         response = self.client.post(
             reverse("books:bulk_rename_execute"),
-            {
-                "renames": f'[{{"book_id": {self.book.id}, "new_filename": "Test Author - Test Book.epub"}}]'
-            },
+            {"renames": f'[{{"book_id": {self.book.id}, "new_filename": "Test Author - Test Book.epub"}}]'},
             HTTP_X_REQUESTED_WITH="XMLHttpRequest",
         )
 
@@ -1853,16 +1775,12 @@ class AIFeedbackViewTests(BaseViewTestCase):
     def test_ai_suggest_metadata_anonymous(self):
         """Test AI metadata suggestions require authentication"""
         self.client.logout()
-        response = self.client.post(
-            reverse("books:ai_suggest_metadata", kwargs={"book_id": self.book.id})
-        )
+        response = self.client.post(reverse("books:ai_suggest_metadata", kwargs={"book_id": self.book.id}))
         self.assertEqual(response.status_code, 302)
 
     def test_ai_suggest_metadata_invalid_book(self):
         """Test AI metadata suggestions with invalid book ID"""
-        response = self.client.post(
-            reverse("books:ai_suggest_metadata", kwargs={"book_id": 99999})
-        )
+        response = self.client.post(reverse("books:ai_suggest_metadata", kwargs={"book_id": 99999}))
         self.assertEqual(response.status_code, 404)
 
     @patch("books.views.requests.post")
@@ -1975,9 +1893,7 @@ class UploadFileViewTests(BaseViewTestCase):
 
     def test_upload_file_post_missing_file(self):
         """Test file upload without selecting a file"""
-        response = self.client.post(
-            reverse("books:upload_file"), {"scan_folder": self.scan_folder.id}
-        )
+        response = self.client.post(reverse("books:upload_file"), {"scan_folder": self.scan_folder.id})
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "error")
@@ -1986,13 +1902,9 @@ class UploadFileViewTests(BaseViewTestCase):
         """Test file upload without selecting a folder"""
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        uploaded_file = SimpleUploadedFile(
-            "test.epub", b"fake file content", content_type="application/epub+zip"
-        )
+        uploaded_file = SimpleUploadedFile("test.epub", b"fake file content", content_type="application/epub+zip")
 
-        response = self.client.post(
-            reverse("books:upload_file"), {"file": uploaded_file}
-        )
+        response = self.client.post(reverse("books:upload_file"), {"file": uploaded_file})
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "error")
@@ -2003,9 +1915,7 @@ class UploadFileViewTests(BaseViewTestCase):
         """Test successful file upload"""
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        uploaded_file = SimpleUploadedFile(
-            "test.epub", b"fake file content", content_type="application/epub+zip"
-        )
+        uploaded_file = SimpleUploadedFile("test.epub", b"fake file content", content_type="application/epub+zip")
 
         mock_save.return_value = "/test/upload/folder/test.epub"
 
@@ -2025,9 +1935,7 @@ class UploadFileViewTests(BaseViewTestCase):
 
     def test_delete_file_invalid_id(self):
         """Test file deletion with invalid file ID"""
-        response = self.client.post(
-            reverse("books:delete_file", kwargs={"file_id": 99999})
-        )
+        response = self.client.post(reverse("books:delete_file", kwargs={"file_id": 99999}))
         self.assertEqual(response.status_code, 404)
 
 
@@ -2137,9 +2045,7 @@ class UtilityFunctionTests(BaseViewTestCase):
         request = HttpRequest()
         request.GET = {"page": "2"}
 
-        object_list, page_obj, is_paginated = paginate_queryset(
-            queryset, request, per_page=10
-        )
+        object_list, page_obj, is_paginated = paginate_queryset(queryset, request, per_page=10)
 
         self.assertEqual(len(object_list), 10)
         self.assertEqual(page_obj.number, 2)
@@ -2193,20 +2099,12 @@ class UtilityFunctionTests(BaseViewTestCase):
 
         # Create related metadata
         data_source = DataSource.objects.get_or_create(name="Test Source")[0]
-        author = Author.objects.create(
-            name="Test Author", name_normalized="test author"
-        )
-        BookTitle.objects.create(
-            book=book, title="Test Book", confidence=90, source=data_source
-        )
-        BookAuthor.objects.create(
-            book=book, author=author, confidence=90, source=data_source
-        )
+        author = Author.objects.create(name="Test Author", name_normalized="test author")
+        BookTitle.objects.create(book=book, title="Test Book", confidence=90, source=data_source)
+        BookAuthor.objects.create(book=book, author=author, confidence=90, source=data_source)
 
         # Create final metadata
-        FinalMetadata.objects.create(
-            book=book, final_title="Test Book", final_author="Test Author"
-        )
+        FinalMetadata.objects.create(book=book, final_title="Test Book", final_author="Test Author")
 
         filename = generate_filename_from_metadata(book)
 
@@ -2233,9 +2131,7 @@ class BookDetailNavigationIntegrationTestCase(BaseViewTestCase):
     def setUp(self):
         """Set up test data for integration tests."""
         self.client = Client()
-        self.user, created = User.objects.get_or_create(
-            username="testuser_integration", defaults={"password": "testpass"}
-        )
+        self.user, created = User.objects.get_or_create(username="testuser_integration", defaults={"password": "testpass"})
         if created:
             self.user.set_password("testpass")
             self.user.save()
@@ -2271,9 +2167,7 @@ class BookDetailNavigationIntegrationTestCase(BaseViewTestCase):
 
         # Navigate forward through all books
         while current_id < 5:
-            response = self.client.get(
-                reverse("books:book_detail", kwargs={"pk": current_id})
-            )
+            response = self.client.get(reverse("books:book_detail", kwargs={"pk": current_id}))
             self.assertEqual(response.status_code, 200)
 
             context = self.get_context_from_response(response)
@@ -2290,9 +2184,7 @@ class BookDetailNavigationIntegrationTestCase(BaseViewTestCase):
         # Navigate backward
         visited_backward = [current_id]
         while current_id > 1:
-            response = self.client.get(
-                reverse("books:book_detail", kwargs={"pk": current_id})
-            )
+            response = self.client.get(reverse("books:book_detail", kwargs={"pk": current_id}))
             self.assertEqual(response.status_code, 200)
 
             context = self.get_context_from_response(response)
@@ -2505,9 +2397,7 @@ class BookRescanViewTests(BaseViewTestCase):
         """Test book rescan with no books specified"""
         self.client.login(username="testuser_book_rescan", password="testpass123")
 
-        response = self.client.post(
-            reverse("books:start_book_rescan"), {"enable_external_apis": "on"}
-        )
+        response = self.client.post(reverse("books:start_book_rescan"), {"enable_external_apis": "on"})
 
         # Should redirect back to dashboard with error
         self.assertEqual(response.status_code, 302)
@@ -2609,9 +2499,7 @@ class ScanProgressAjaxViewTests(BaseViewTestCase):
 
     def test_scan_progress_ajax_anonymous_user(self):
         """Test that anonymous users cannot access progress endpoint"""
-        response = self.client.get(
-            reverse("books:scan_progress_ajax", kwargs={"job_id": "test-job-id"})
-        )
+        response = self.client.get(reverse("books:scan_progress_ajax", kwargs={"job_id": "test-job-id"}))
         self.assertEqual(response.status_code, 302)
         self.assertIn("/login/", response.url)
 
@@ -2626,9 +2514,7 @@ class ScanProgressAjaxViewTests(BaseViewTestCase):
         }
 
         self.client.login(username="testuser_progress", password="testpass123")
-        response = self.client.get(
-            reverse("books:scan_progress_ajax", kwargs={"job_id": "test-job-id"})
-        )
+        response = self.client.get(reverse("books:scan_progress_ajax", kwargs={"job_id": "test-job-id"}))
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/json")
@@ -2686,18 +2572,14 @@ class CancelScanViewTests(BaseViewTestCase):
 
     def test_cancel_scan_ajax_anonymous_user(self):
         """Test that anonymous users cannot cancel scans"""
-        response = self.client.post(
-            reverse("books:cancel_scan_ajax", kwargs={"job_id": "test-job-id"})
-        )
+        response = self.client.post(reverse("books:cancel_scan_ajax", kwargs={"job_id": "test-job-id"}))
         self.assertEqual(response.status_code, 302)
         self.assertIn("/login/", response.url)
 
     def test_cancel_scan_ajax_get_method_not_allowed(self):
         """Test that GET method is not allowed for cancel scan"""
         self.client.login(username="testuser_cancel", password="testpass123")
-        response = self.client.get(
-            reverse("books:cancel_scan_ajax", kwargs={"job_id": "test-job-id"})
-        )
+        response = self.client.get(reverse("books:cancel_scan_ajax", kwargs={"job_id": "test-job-id"}))
         self.assertEqual(response.status_code, 405)  # Method not allowed
 
     @patch("books.scanner.background.cancel_scan")
@@ -2706,9 +2588,7 @@ class CancelScanViewTests(BaseViewTestCase):
         mock_cancel_scan.return_value = True
 
         self.client.login(username="testuser_cancel", password="testpass123")
-        response = self.client.post(
-            reverse("books:cancel_scan_ajax", kwargs={"job_id": "test-job-id"})
-        )
+        response = self.client.post(reverse("books:cancel_scan_ajax", kwargs={"job_id": "test-job-id"}))
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/json")
@@ -2722,9 +2602,7 @@ class CancelScanViewTests(BaseViewTestCase):
         mock_cancel_scan.return_value = False
 
         self.client.login(username="testuser_cancel", password="testpass123")
-        response = self.client.post(
-            reverse("books:cancel_scan_ajax", kwargs={"job_id": "test-job-id"})
-        )
+        response = self.client.post(reverse("books:cancel_scan_ajax", kwargs={"job_id": "test-job-id"}))
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response["Content-Type"], "application/json")
@@ -2760,9 +2638,7 @@ class TriggerScanViewEnhancedTests(BaseViewTestCase):
     """Comprehensive tests for TriggerScanView."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="testuser_scan", password="testpass123"
-        )
+        self.user = User.objects.create_user(username="testuser_scan", password="testpass123")
         self.client.login(username="testuser_scan", password="testpass123")
 
         # Create test scan folder
@@ -2804,9 +2680,7 @@ class TriggerScanViewEnhancedTests(BaseViewTestCase):
 
     def test_trigger_scan_no_folders_selected(self):
         """Test scan trigger with no folders selected."""
-        response = self.client.post(
-            reverse("books:trigger_scan"), {"scan_folders": [], "scan_type": "full"}
-        )
+        response = self.client.post(reverse("books:trigger_scan"), {"scan_folders": [], "scan_type": "full"})
 
         # Should redirect back with error
         self.assertEqual(response.status_code, 302)
@@ -2877,9 +2751,7 @@ class ScanStatusViewTests(BaseViewTestCase):
     """Comprehensive tests for ScanStatusView."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="testuser_status", password="testpass123"
-        )
+        self.user = User.objects.create_user(username="testuser_status", password="testpass123")
         self.client.login(username="testuser_status", password="testpass123")
 
     def test_scan_status_view_access(self):
@@ -2893,9 +2765,7 @@ class ScanStatusViewTests(BaseViewTestCase):
         # Create test scan logs
         ScanLog.objects.create(level="INFO", message="Scan in progress", books_found=10)
 
-        ScanLog.objects.create(
-            level="INFO", message="Scan completed successfully", books_processed=10
-        )
+        ScanLog.objects.create(level="INFO", message="Scan completed successfully", books_processed=10)
 
         response = self.client.get(reverse("books:scan_status"))
         context = response.context
@@ -2908,9 +2778,7 @@ class ScanStatusViewTests(BaseViewTestCase):
     def test_scan_status_with_running_scan(self):
         """Test scan status when scan is running."""
         # Create running scan
-        running_scan = ScanLog.objects.create(
-            level="INFO", message="Processing files...", books_processed=75
-        )
+        running_scan = ScanLog.objects.create(level="INFO", message="Processing files...", books_processed=75)
 
         response = self.client.get(reverse("books:scan_status"))
         context = response.context
@@ -2922,9 +2790,7 @@ class ScanStatusViewTests(BaseViewTestCase):
         """Test scan status view pagination."""
         # Create many scan logs
         for i in range(25):
-            ScanLog.objects.create(
-                level="INFO", message=f"Scan {i} completed", books_processed=100
-            )
+            ScanLog.objects.create(level="INFO", message=f"Scan {i} completed", books_processed=100)
 
         response = self.client.get(reverse("books:scan_status"))
         self.assertTrue(response.context["is_paginated"])
@@ -2941,9 +2807,7 @@ class ScanStatusViewTests(BaseViewTestCase):
         ScanLog.objects.create(level="INFO", message="Running")
 
         # Test status filter
-        response = self.client.get(
-            reverse("books:scan_status"), {"status": "completed"}
-        )
+        response = self.client.get(reverse("books:scan_status"), {"status": "completed"})
         self.assertEqual(response.status_code, 200)
 
         response = self.client.get(reverse("books:scan_status"), {"status": "failed"})
@@ -2952,13 +2816,9 @@ class ScanStatusViewTests(BaseViewTestCase):
     def test_scan_status_statistics_calculation(self):
         """Test scan statistics calculation."""
         # Create test data
-        ScanLog.objects.create(
-            level="INFO", message="Success", books_found=10, books_processed=10
-        )
+        ScanLog.objects.create(level="INFO", message="Success", books_found=10, books_processed=10)
 
-        ScanLog.objects.create(
-            level="ERROR", message="Failed", books_found=5, books_processed=3
-        )
+        ScanLog.objects.create(level="ERROR", message="Failed", books_found=5, books_processed=3)
 
         response = self.client.get(reverse("books:scan_status"))
         stats = response.context["scan_statistics"]
@@ -2973,9 +2833,7 @@ class DataSourceListViewTests(BaseViewTestCase):
     """Tests for DataSourceListView."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="testuser_datasource", password="testpass123"
-        )
+        self.user = User.objects.create_user(username="testuser_datasource", password="testpass123")
         self.client.login(username="testuser_datasource", password="testpass123")
 
         # Create test data sources
@@ -2998,9 +2856,7 @@ class DataSourceListViewTests(BaseViewTestCase):
     def test_data_source_list_context(self):
         """Test data source list context data."""
         # Create some metadata entries
-        book = create_test_book_with_file(
-            title="Test Book", file_path="/test/book.epub", file_format="epub"
-        )
+        book = create_test_book_with_file(title="Test Book", file_path="/test/book.epub", file_format="epub")
 
         BookMetadata.objects.create(
             book=book,
@@ -3019,9 +2875,7 @@ class DataSourceListViewTests(BaseViewTestCase):
     def test_data_source_statistics(self):
         """Test data source statistics calculation."""
         # Create test book and metadata
-        book = create_test_book_with_file(
-            title="Test Book", file_path="/test/book.epub", file_format="epub"
-        )
+        book = create_test_book_with_file(title="Test Book", file_path="/test/book.epub", file_format="epub")
 
         # Add metadata from different sources
         for i in range(5):
@@ -3064,9 +2918,7 @@ class ScanFolderManagementTests(BaseViewTestCase):
     """Tests for scan folder management views."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="testuser_folders", password="testpass123"
-        )
+        self.user = User.objects.create_user(username="testuser_folders", password="testpass123")
         self.client.login(username="testuser_folders", password="testpass123")
 
     def test_scan_folder_list_view(self):
@@ -3116,17 +2968,13 @@ class ScanFolderManagementTests(BaseViewTestCase):
 
         # Should show form with errors
         self.assertEqual(response.status_code, 200)
-        self.assertFormError(
-            response.context["form"], "name", "This field is required."
-        )
+        self.assertFormError(response.context["form"], "name", "This field is required.")
 
     def test_delete_scan_folder(self):
         """Test scan folder deletion."""
         folder = create_test_scan_folder(name="Test Library")
 
-        response = self.client.post(
-            reverse("books:delete_scan_folder", kwargs={"pk": folder.pk})
-        )
+        response = self.client.post(reverse("books:delete_scan_folder", kwargs={"pk": folder.pk}))
 
         # Should redirect on success
         self.assertEqual(response.status_code, 302)
@@ -3136,9 +2984,7 @@ class ScanFolderManagementTests(BaseViewTestCase):
 
     def test_delete_nonexistent_scan_folder(self):
         """Test deletion of non-existent scan folder."""
-        response = self.client.post(
-            reverse("books:delete_scan_folder", kwargs={"pk": 99999})
-        )
+        response = self.client.post(reverse("books:delete_scan_folder", kwargs={"pk": 99999}))
 
         # Should return 404
         self.assertEqual(response.status_code, 404)
@@ -3148,9 +2994,7 @@ class ScanErrorHandlingTests(BaseViewTestCase):
     """Tests for error handling in scan-related views."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="testuser_errors", password="testpass123"
-        )
+        self.user = User.objects.create_user(username="testuser_errors", password="testpass123")
         self.client.login(username="testuser_errors", password="testpass123")
 
     def test_trigger_scan_with_nonexistent_folder(self):
@@ -3189,9 +3033,7 @@ class ScanErrorHandlingTests(BaseViewTestCase):
 
     def test_data_source_trust_update_boundary_values(self):
         """Test trust level updates with boundary values."""
-        source = DataSource.objects.get_or_create(
-            name=DataSource.EPUB_INTERNAL, defaults={"trust_level": 0.5}
-        )[0]
+        source = DataSource.objects.get_or_create(name=DataSource.EPUB_INTERNAL, defaults={"trust_level": 0.5})[0]
 
         # Test minimum value
         response = self.client.post(
@@ -3212,9 +3054,7 @@ class ScanPerformanceTests(BaseViewTestCase):
     """Performance tests for scan-related views."""
 
     def setUp(self):
-        self.user = User.objects.create_user(
-            username="testuser_perf", password="testpass123"
-        )
+        self.user = User.objects.create_user(username="testuser_perf", password="testpass123")
         self.client.login(username="testuser_perf", password="testpass123")
 
     def test_scan_status_with_many_logs(self):
@@ -3222,9 +3062,7 @@ class ScanPerformanceTests(BaseViewTestCase):
         # Create many scan logs
         scan_logs = []
         for i in range(100):
-            scan_logs.append(
-                ScanLog(level="INFO", message=f"Scan {i}", books_processed=100)
-            )
+            scan_logs.append(ScanLog(level="INFO", message=f"Scan {i}", books_processed=100))
         ScanLog.objects.bulk_create(scan_logs)
 
         import time

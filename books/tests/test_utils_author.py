@@ -1,6 +1,7 @@
 """
 Test cases for Author utilities
 """
+
 from django.test import TestCase
 
 from books.models import Author, BookAuthor, DataSource
@@ -15,17 +16,9 @@ class AuthorUtilsTests(TestCase):
         """Set up test data"""
         self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
-        self.book = create_test_book_with_file(
-            file_path="/test/scan/folder/book.epub",
-            file_format="epub",
-            file_size=1024000,
-            scan_folder=self.scan_folder
-        )
+        self.book = create_test_book_with_file(file_path="/test/scan/folder/book.epub", file_format="epub", file_size=1024000, scan_folder=self.scan_folder)
 
-        self.source = DataSource.objects.get_or_create(
-            name="test_source",
-            defaults={"trust_level": 0.8}
-        )[0]
+        self.source = DataSource.objects.get_or_create(name="test_source", defaults={"trust_level": 0.8})[0]
 
     def test_split_author_parts_first_last_format(self):
         """Test splitting author name in 'First Last' format"""
@@ -90,9 +83,7 @@ class AuthorUtilsTests(TestCase):
         attach_authors(self.book, raw_names, self.source, confidence=0.8)
 
         # Check all authors were created
-        authors = Author.objects.filter(
-            name__in=["John Doe", "Jane Smith", "Bob Wilson"]
-        )
+        authors = Author.objects.filter(name__in=["John Doe", "Jane Smith", "Bob Wilson"])
         self.assertEqual(authors.count(), 3)
 
         # Check BookAuthor relationships
@@ -121,11 +112,7 @@ class AuthorUtilsTests(TestCase):
     def test_attach_authors_existing_author_reuse(self):
         """Test that existing authors are reused"""
         # Create an existing author
-        existing_author = Author.objects.create(
-            name="John Doe",
-            first_name="John",
-            last_name="Doe"
-        )
+        existing_author = Author.objects.create(name="John Doe", first_name="John", last_name="Doe")
         existing_id = existing_author.id
 
         raw_names = ["John Doe"]
@@ -139,11 +126,7 @@ class AuthorUtilsTests(TestCase):
     def test_attach_authors_normalized_name_matching(self):
         """Test author matching by normalized name"""
         # Create author with different formatting
-        Author.objects.create(
-            name="J. R. R. Tolkien",
-            first_name="John Ronald Reuel",
-            last_name="Tolkien"
-        )
+        Author.objects.create(name="J. R. R. Tolkien", first_name="John Ronald Reuel", last_name="Tolkien")
 
         # Try to attach similar but differently formatted name
         raw_names = ["John Ronald Reuel Tolkien"]
@@ -156,11 +139,7 @@ class AuthorUtilsTests(TestCase):
     def test_attach_authors_case_insensitive_matching(self):
         """Test case insensitive author matching"""
         # Create author
-        Author.objects.create(
-            name="john doe",
-            first_name="john",
-            last_name="doe"
-        )
+        Author.objects.create(name="john doe", first_name="john", last_name="doe")
 
         # Try to attach with different case
         raw_names = ["John Doe"]

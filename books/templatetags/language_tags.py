@@ -1,6 +1,7 @@
 """
 Template tags for language management.
 """
+
 from django import template
 
 from books.utils.language_manager import LanguageManager
@@ -8,9 +9,17 @@ from books.utils.language_manager import LanguageManager
 register = template.Library()
 
 
-@register.inclusion_tag('books/snippets/language_select.html')
-def language_select(field_name='language', selected_value=None, include_empty=True, empty_label='Select language',
-                    css_class='form-control', required=False, all_languages=False, all_label='All Languages'):
+@register.inclusion_tag("books/snippets/language_select.html")
+def language_select(
+    field_name="language",
+    selected_value=None,
+    include_empty=True,
+    empty_label="Select language",
+    css_class="form-control",
+    required=False,
+    all_languages=False,
+    all_label="All Languages",
+):
     """
     Render a language select dropdown.
 
@@ -27,16 +36,16 @@ def language_select(field_name='language', selected_value=None, include_empty=Tr
         choices = LanguageManager.get_language_choices()
 
     return {
-        'field_name': field_name,
-        'choices': choices,
-        'selected_value': selected_value or '',
-        'css_class': css_class,
-        'required': required,
+        "field_name": field_name,
+        "choices": choices,
+        "selected_value": selected_value or "",
+        "css_class": css_class,
+        "required": required,
     }
 
 
-@register.inclusion_tag('books/snippets/language_options.html')
-def language_options(selected_value=None, include_empty=True, empty_label='Select language', all_languages=False, all_label='All Languages'):
+@register.inclusion_tag("books/snippets/language_options.html")
+def language_options(selected_value=None, include_empty=True, empty_label="Select language", all_languages=False, all_label="All Languages"):
     """
     Render language option tags for use inside an existing select element.
 
@@ -53,8 +62,8 @@ def language_options(selected_value=None, include_empty=True, empty_label='Selec
         choices = LanguageManager.get_language_choices()
 
     return {
-        'choices': choices,
-        'selected_value': selected_value or '',
+        "choices": choices,
+        "selected_value": selected_value or "",
     }
 
 
@@ -84,7 +93,7 @@ def language_choices():
 
 
 @register.simple_tag
-def language_choices_with_empty(empty_label='Select language'):
+def language_choices_with_empty(empty_label="Select language"):
     """
     Get language choices with an empty option.
 
@@ -95,7 +104,7 @@ def language_choices_with_empty(empty_label='Select language'):
 
 
 @register.simple_tag
-def language_choices_with_all(all_label='All Languages'):
+def language_choices_with_all(all_label="All Languages"):
     """
     Get language choices with an 'all' option.
 

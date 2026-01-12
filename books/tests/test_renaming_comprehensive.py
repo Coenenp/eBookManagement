@@ -30,37 +30,19 @@ class ComprehensiveRenamingTestCase(TransactionTestCase):
 
         # Create test user
         User = get_user_model()
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
+        self.user = User.objects.create_user(username="testuser", password="testpass123")
 
         # Create comprehensive test data
 
         # Create data source for BookAuthor relationships
-        self.data_source, _ = DataSource.objects.get_or_create(
-            name='test_source',
-            defaults={'trust_level': 0.8}
-        )
+        self.data_source, _ = DataSource.objects.get_or_create(name="test_source", defaults={"trust_level": 0.8})
 
         # Authors
-        self.asimov = Author.objects.create(
-            name="Isaac Asimov",
-            first_name="Isaac",
-            last_name="Asimov"
-        )
+        self.asimov = Author.objects.create(name="Isaac Asimov", first_name="Isaac", last_name="Asimov")
 
-        self.heinlein = Author.objects.create(
-            name="Robert A. Heinlein",
-            first_name="Robert A.",
-            last_name="Heinlein"
-        )
+        self.heinlein = Author.objects.create(name="Robert A. Heinlein", first_name="Robert A.", last_name="Heinlein")
 
-        self.tolkien = Author.objects.create(
-            name="J.R.R. Tolkien",
-            first_name="J.R.R.",
-            last_name="Tolkien"
-        )
+        self.tolkien = Author.objects.create(name="J.R.R. Tolkien", first_name="J.R.R.", last_name="Tolkien")
 
         # Series
         self.foundation_series = Series.objects.create(name="Foundation Series")
@@ -91,77 +73,37 @@ class ComprehensiveRenamingTestCase(TransactionTestCase):
         # 1. Standard ebook with full metadata
         self.foundation_path = Path(self.temp_dir) / "Foundation.epub"
         self.foundation_path.touch()
-        self.foundation = create_test_book_with_file(
-            file_path=str(self.foundation_path),
-            file_size=1024000,
-            file_format="epub"
-        )
+        self.foundation = create_test_book_with_file(file_path=str(self.foundation_path), file_size=1024000, file_format="epub")
         # Create FinalMetadata for Foundation
         FinalMetadata.objects.create(
-            book=self.foundation,
-            final_title="Foundation",
-            final_author="Isaac Asimov",
-            final_series="Foundation Series",
-            final_series_number=1,
-            is_reviewed=True
+            book=self.foundation, final_title="Foundation", final_author="Isaac Asimov", final_series="Foundation Series", final_series_number=1, is_reviewed=True
         )
 
         # 2. Ebook with special characters in title
         self.special_title_path = Path(self.temp_dir) / "Harry Potter: The Philosopher's Stone.epub"
         self.special_title_path.touch()
-        self.special_title = create_test_book_with_file(
-            file_path=str(self.special_title_path),
-            file_size=2048000,
-            file_format="epub"
-        )
+        self.special_title = create_test_book_with_file(file_path=str(self.special_title_path), file_size=2048000, file_format="epub")
         # Create FinalMetadata for Harry Potter
-        FinalMetadata.objects.create(
-            book=self.special_title,
-            final_title="Harry Potter: The Philosopher's Stone",
-            final_author="J.K. Rowling",
-            is_reviewed=True
-        )
+        FinalMetadata.objects.create(book=self.special_title, final_title="Harry Potter: The Philosopher's Stone", final_author="J.K. Rowling", is_reviewed=True)
 
         # 3. Standalone book without series
         self.standalone_path = Path(self.temp_dir) / "Stranger in a Strange Land.epub"
         self.standalone_path.touch()
-        self.standalone = create_test_book_with_file(
-            file_path=str(self.standalone_path),
-            file_size=1536000,
-            file_format="epub"
-        )
+        self.standalone = create_test_book_with_file(file_path=str(self.standalone_path), file_size=1536000, file_format="epub")
         # Create FinalMetadata for Stranger in a Strange Land
-        FinalMetadata.objects.create(
-            book=self.standalone,
-            final_title="Stranger in a Strange Land",
-            final_author="Robert A. Heinlein",
-            is_reviewed=True
-        )
+        FinalMetadata.objects.create(book=self.standalone, final_title="Stranger in a Strange Land", final_author="Robert A. Heinlein", is_reviewed=True)
 
         # 4. Book with missing metadata
         self.minimal_path = Path(self.temp_dir) / "minimal_book.pdf"
         self.minimal_path.touch()
-        self.minimal = create_test_book_with_file(
-            file_path=str(self.minimal_path),
-            file_size=512000,
-            file_format="pdf"
-        )
+        self.minimal = create_test_book_with_file(file_path=str(self.minimal_path), file_size=512000, file_format="pdf")
 
         # 5. Comic book (different media type)
         self.comic_path = Path(self.temp_dir) / "Comic Issue 1.cbz"
         self.comic_path.touch()
-        self.comic = create_test_book_with_file(
-            file_path=str(self.comic_path),
-            file_size=256000,
-            file_format="cbz"
-        )
+        self.comic = create_test_book_with_file(file_path=str(self.comic_path), file_size=256000, file_format="cbz")
         # Create FinalMetadata for Comic
-        FinalMetadata.objects.create(
-            book=self.comic,
-            final_title="Comic Issue 1",
-            final_author="Comic Author",
-            is_reviewed=True
-        )
+        FinalMetadata.objects.create(book=self.comic, final_title="Comic Issue 1", final_author="Comic Author", is_reviewed=True)
 
         # 6. Audiobook
         self.audiobook_path = Path(self.temp_dir) / "Foundation Audiobook.m4b"
@@ -171,20 +113,9 @@ class ComprehensiveRenamingTestCase(TransactionTestCase):
             file_size=104857600,  # 100MB
             file_format="placeholder",
         )
-        BookAuthor.objects.create(
-            book=self.audiobook,
-            author=self.asimov,
-            source=self.data_source,
-            confidence=0.8,
-            is_main_author=True
-        )
+        BookAuthor.objects.create(book=self.audiobook, author=self.asimov, source=self.data_source, confidence=0.8, is_main_author=True)
         # Create FinalMetadata for Audiobook
-        FinalMetadata.objects.create(
-            book=self.audiobook,
-            final_title="Foundation Audiobook",
-            final_author="Isaac Asimov",
-            is_reviewed=True
-        )
+        FinalMetadata.objects.create(book=self.audiobook, final_title="Foundation Audiobook", final_author="Isaac Asimov", is_reviewed=True)
 
         # Create companion files for some books
         self.create_companion_files()
@@ -196,7 +127,7 @@ class ComprehensiveRenamingTestCase(TransactionTestCase):
         foundation_dir = self.foundation_path.parent
         (foundation_dir / "Foundation.jpg").touch()  # Cover
         (foundation_dir / "Foundation.opf").touch()  # Metadata
-        (foundation_dir / "cover.jpg").touch()       # Generic cover
+        (foundation_dir / "cover.jpg").touch()  # Generic cover
 
         # Special title companion files
         special_dir = self.special_title_path.parent
@@ -299,19 +230,9 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
 
         # TC3.4 – Duplicate detection postponed
         # Create duplicate
-        duplicate = create_test_book_with_file(
-            file_path="/different/path/Foundation.epub",
-            file_size=1024000,
-            file_format="epub"
-        )
+        duplicate = create_test_book_with_file(file_path="/different/path/Foundation.epub", file_size=1024000, file_format="epub")
         BookTitle.objects.create(book=duplicate, title="Foundation")
-        BookAuthor.objects.create(
-            book=duplicate,
-            author=self.asimov,
-            source=self.data_source,
-            confidence=0.8,
-            is_main_author=True
-        )
+        BookAuthor.objects.create(book=duplicate, author=self.asimov, source=self.data_source, confidence=0.8, is_main_author=True)
 
         pattern = "${author_sort} - ${title}.${ext}"
         result1 = self.engine.process_template(pattern, self.foundation)
@@ -323,28 +244,23 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
         # Both books should remain in database
         self.assertEqual(Book.objects.filter(booktitle__title="Foundation").count(), 2)
 
-    @patch('books.utils.batch_renamer.BatchRenamer._move_file')
+    @patch("books.utils.batch_renamer.BatchRenamer._move_file")
     def test_tc4_complete_companion_file_handling(self, mock_move):
         """Complete test of TC4 – Companion File Handling"""
 
         # TC4.1 – Rename companion files consistently
         mock_move.return_value = True
 
-        self.batch_renamer.add_book(
-            self.foundation,
-            folder_pattern="${author_sort}",
-            filename_pattern="${title}.${ext}",
-            include_companions=True
-        )
+        self.batch_renamer.add_book(self.foundation, folder_pattern="${author_sort}", filename_pattern="${title}.${ext}", include_companions=True)
 
         result = self.batch_renamer.execute_operations(dry_run=True)
-        self.assertTrue(result['success'])
+        self.assertTrue(result["success"])
 
-        operations = result['operations']
+        operations = result["operations"]
 
         # Should have operations for main file and companions
-        main_ops = [op for op in operations if op['operation_type'] == 'move_file']
-        companion_ops = [op for op in operations if op['operation_type'] == 'move_companion']
+        main_ops = [op for op in operations if op["operation_type"] == "move_file"]
+        companion_ops = [op for op in operations if op["operation_type"] == "move_companion"]
 
         self.assertGreater(len(main_ops), 0)
         self.assertGreater(len(companion_ops), 0)
@@ -410,13 +326,7 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
         self.assertEqual(self.foundation.authors.count(), original_author_count)
 
         # TC6.3 – Multiple metadata entries per field
-        BookAuthor.objects.create(
-            book=self.foundation,
-            author=self.heinlein,
-            source=self.data_source,
-            confidence=0.8,
-            is_main_author=False  # Second author
-        )
+        BookAuthor.objects.create(book=self.foundation, author=self.heinlein, source=self.data_source, confidence=0.8, is_main_author=False)  # Second author
         self.assertEqual(self.foundation.authors.count(), 2)
 
         # All authors should be preserved
@@ -428,25 +338,21 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
         # This would be tested with actual metadata scoring system
         self.assertTrue(self.foundation.authors.exists())
 
-    @patch('books.utils.batch_renamer.BatchRenamer._move_file')
+    @patch("books.utils.batch_renamer.BatchRenamer._move_file")
     def test_tc7_complete_execution_and_undo(self, mock_move):
         """Complete test of TC7 – Renaming Execution and Undo"""
 
         mock_move.return_value = True
 
         # TC7.1 – Dry run mode
-        self.batch_renamer.add_book(
-            self.foundation,
-            folder_pattern="${author_sort}",
-            filename_pattern="${title}.${ext}"
-        )
+        self.batch_renamer.add_book(self.foundation, folder_pattern="${author_sort}", filename_pattern="${title}.${ext}")
 
         dry_result = self.batch_renamer.execute_operations(dry_run=True)
 
         # Should show preview without modifying
-        self.assertTrue(dry_result['success'])
-        self.assertTrue(dry_result['dry_run'])
-        self.assertGreater(len(dry_result['operations']), 0)
+        self.assertTrue(dry_result["success"])
+        self.assertTrue(dry_result["dry_run"])
+        self.assertGreater(len(dry_result["operations"]), 0)
 
         # Database unchanged
         self.foundation.refresh_from_db()
@@ -455,23 +361,19 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
         # TC7.2 – Execute mode
         actual_result = self.batch_renamer.execute_operations(dry_run=False)
 
-        self.assertTrue(actual_result['success'])
-        self.assertFalse(actual_result['dry_run'])
+        self.assertTrue(actual_result["success"])
+        self.assertFalse(actual_result["dry_run"])
 
         # TC7.3 – Undo operation
         # Would require history tracking implementation
 
         # TC7.4 – Path length validation
         long_pattern = "Very" + ("Long" * 50) + "Path"
-        self.batch_renamer.add_book(
-            self.minimal,
-            folder_pattern=long_pattern,
-            filename_pattern="${title}.${ext}"
-        )
+        self.batch_renamer.add_book(self.minimal, folder_pattern=long_pattern, filename_pattern="${title}.${ext}")
 
         result = self.batch_renamer.execute_operations(dry_run=True)
         # Should handle very long paths (may warn or truncate)
-        self.assertIn('success', result)
+        self.assertIn("success", result)
 
     def test_tc8_complete_book_deletion_impact(self):
         """Complete test of TC8 – Book Deletion Impact"""
@@ -498,32 +400,20 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
         """Complete test of TC9 – Media Type Rules"""
 
         # TC9.1 – Folder content type validation
-        self.batch_renamer.add_book(
-            self.foundation,  # EPUB
-            folder_pattern="Ebooks",
-            filename_pattern="${title}.${ext}"
-        )
+        self.batch_renamer.add_book(self.foundation, folder_pattern="Ebooks", filename_pattern="${title}.${ext}")  # EPUB
 
-        self.batch_renamer.add_book(
-            self.comic,  # CBZ
-            folder_pattern="Comics",
-            filename_pattern="${title}.${ext}"
-        )
+        self.batch_renamer.add_book(self.comic, folder_pattern="Comics", filename_pattern="${title}.${ext}")  # CBZ
 
         self.batch_renamer.execute_operations(dry_run=True)
         # Should handle different media types appropriately
 
         # TC9.2 – Extension whitelist validation
-        valid_extensions = {
-            'ebook': ['.epub', '.mobi', '.azw3', '.pdf', '.txt'],
-            'comic': ['.cbz', '.cbr', '.cb7'],
-            'audiobook': ['.mp3', '.m4b', '.aac', '.flac']
-        }
+        valid_extensions = {"ebook": [".epub", ".mobi", ".azw3", ".pdf", ".txt"], "comic": [".cbz", ".cbr", ".cb7"], "audiobook": [".mp3", ".m4b", ".aac", ".flac"]}
 
         # Validate format models match whitelist
-        self.assertIn('.epub', valid_extensions['ebook'])
-        self.assertIn('.cbz', valid_extensions['comic'])
-        self.assertIn('.m4b', valid_extensions['audiobook'])
+        self.assertIn(".epub", valid_extensions["ebook"])
+        self.assertIn(".cbz", valid_extensions["comic"])
+        self.assertIn(".m4b", valid_extensions["audiobook"])
 
         # TC9.3 – Unknown extensions rejected
         # Would be handled during file scanning phase
@@ -543,8 +433,8 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
 
         for pattern_name, pattern_data in PREDEFINED_PATTERNS.items():
             with self.subTest(pattern=pattern_name):
-                folder_pattern = pattern_data['folder']
-                filename_pattern = pattern_data['filename']
+                folder_pattern = pattern_data["folder"]
+                filename_pattern = pattern_data["filename"]
 
                 # Test with book that has full metadata
                 folder_result = self.engine.process_template(folder_pattern, self.foundation)
@@ -553,7 +443,7 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
                 # Should generate valid paths
                 self.assertGreater(len(folder_result), 0)
                 self.assertGreater(len(filename_result), 0)
-                self.assertIn('.epub', filename_result)
+                self.assertIn(".epub", filename_result)
 
                 # Test with minimal metadata book
                 folder_result = self.engine.process_template(folder_pattern, self.minimal)
@@ -574,28 +464,20 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
         # Should handle gracefully (implementation dependent)
 
         # Very long title
-        long_title_book = create_test_book_with_file(
-            file_path="/test/long.epub",
-            file_size=1024,
-            file_format="epub"
-        )
+        long_title_book = create_test_book_with_file(file_path="/test/long.epub", file_size=1024, file_format="epub")
 
         pattern = "${title}.${ext}"
         result = self.engine.process_template(pattern, long_title_book)
         # Should handle long titles (may truncate)
-        self.assertIn('.epub', result)
+        self.assertIn(".epub", result)
 
         # Book with no authors
-        no_author_book = create_test_book_with_file(
-            file_path="/test/noauthor.epub",
-            file_size=1024,
-            file_format="epub"
-        )
+        no_author_book = create_test_book_with_file(file_path="/test/noauthor.epub", file_size=1024, file_format="epub")
 
         pattern = "${author_sort}/${title}.${ext}"
         result = self.engine.process_template(pattern, no_author_book)
         # Should handle missing authors
-        self.assertIn('No Author Book', result)
+        self.assertIn("No Author Book", result)
 
     def test_performance_and_scalability(self):
         """Test performance with multiple books"""
@@ -606,27 +488,13 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
             book_path = Path(self.temp_dir) / f"book_{i}.epub"
             book_path.touch()
 
-            book = create_test_book_with_file(
-                file_path=str(book_path),
-                file_size=1024000,
-                file_format="epub"
-            )
-            BookAuthor.objects.create(
-                book=book,
-                author=self.asimov,
-                source=self.data_source,
-                confidence=0.8,
-                is_main_author=True
-            )
+            book = create_test_book_with_file(file_path=str(book_path), file_size=1024000, file_format="epub")
+            BookAuthor.objects.create(book=book, author=self.asimov, source=self.data_source, confidence=0.8, is_main_author=True)
             books.append(book)
 
         # Test batch processing performance
         for book in books:
-            self.batch_renamer.add_book(
-                book,
-                folder_pattern="${author_sort}",
-                filename_pattern="${title}.${ext}"
-            )
+            self.batch_renamer.add_book(book, folder_pattern="${author_sort}", filename_pattern="${title}.${ext}")
 
         # Execute dry run
         start_time = time.time()
@@ -638,37 +506,29 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
 
         # Should complete in reasonable time
         self.assertLess(processing_time, 5.0)  # 5 seconds max for 10 books
-        self.assertTrue(result['success'])
-        self.assertEqual(len(result['operations']), 10)
+        self.assertTrue(result["success"])
+        self.assertEqual(len(result["operations"]), 10)
 
     def test_concurrent_access_scenarios(self):
         """Test handling of concurrent access scenarios"""
 
         # Test with file in use (simulated)
-        with patch('books.utils.batch_renamer.os.rename') as mock_rename:
+        with patch("books.utils.batch_renamer.os.rename") as mock_rename:
             mock_rename.side_effect = OSError("File in use")
 
-            self.batch_renamer.add_book(
-                self.foundation,
-                folder_pattern="${author_sort}",
-                filename_pattern="${title}.${ext}"
-            )
+            self.batch_renamer.add_book(self.foundation, folder_pattern="${author_sort}", filename_pattern="${title}.${ext}")
 
             result = self.batch_renamer.execute_operations(dry_run=False)
 
             # Should handle file access errors gracefully
-            self.assertFalse(result['success'])
-            self.assertIn('error', result)
+            self.assertFalse(result["success"])
+            self.assertIn("error", result)
 
     def test_international_and_unicode_support(self):
         """Test international characters and Unicode support"""
 
         # Create book with Unicode characters
-        unicode_author = Author.objects.create(
-            name="François Mauriac",
-            first_name="François",
-            last_name="Mauriac"
-        )
+        unicode_author = Author.objects.create(name="François Mauriac", first_name="François", last_name="Mauriac")
 
         unicode_path = Path(self.temp_dir) / "Thérèse Desqueyroux.epub"
         unicode_path.touch()
@@ -678,13 +538,7 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
             file_size=1024000,
             file_format="epub",
         )
-        BookAuthor.objects.create(
-            book=unicode_book,
-            author=unicode_author,
-            source=self.data_source,
-            confidence=0.8,
-            is_main_author=True
-        )
+        BookAuthor.objects.create(book=unicode_book, author=unicode_author, source=self.data_source, confidence=0.8, is_main_author=True)
 
         pattern = "${author_sort} - ${title}.${ext}"
         result = self.engine.process_template(pattern, unicode_book)
@@ -701,33 +555,23 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
         filename_pattern = "${series_name} #${series_number} - ${title}.${ext}"
 
         # 2. Add books with various metadata completeness
-        books_to_rename = [
-            self.foundation,      # Full metadata
-            self.standalone,      # No series
-            self.minimal,         # Minimal metadata
-            self.special_title    # Special characters
-        ]
+        books_to_rename = [self.foundation, self.standalone, self.minimal, self.special_title]  # Full metadata  # No series  # Minimal metadata  # Special characters
 
-        self.batch_renamer.add_books(
-            books_to_rename,
-            folder_pattern=folder_pattern,
-            filename_pattern=filename_pattern,
-            include_companions=True
-        )
+        self.batch_renamer.add_books(books_to_rename, folder_pattern=folder_pattern, filename_pattern=filename_pattern, include_companions=True)
 
         # 3. Execute dry run
         dry_result = self.batch_renamer.execute_operations(dry_run=True)
 
-        self.assertTrue(dry_result['success'])
-        self.assertTrue(dry_result['dry_run'])
+        self.assertTrue(dry_result["success"])
+        self.assertTrue(dry_result["dry_run"])
 
-        operations = dry_result['operations']
+        operations = dry_result["operations"]
         self.assertGreaterEqual(len(operations), len(books_to_rename))
 
         # 4. Validate all operations have valid paths
         for operation in operations:
-            source_path = operation.get('source_path', '')
-            target_path = operation.get('target_path', '')
+            source_path = operation.get("source_path", "")
+            target_path = operation.get("target_path", "")
 
             self.assertGreater(len(source_path), 0)
             self.assertGreater(len(target_path), 0)
@@ -736,18 +580,18 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
             self.assertNotEqual(source_path, target_path)
 
         # 5. Check that patterns generated expected results
-        foundation_ops = [op for op in operations if 'Foundation' in op.get('target_path', '')]
+        foundation_ops = [op for op in operations if "Foundation" in op.get("target_path", "")]
         if foundation_ops:
-            target = foundation_ops[0]['target_path']
-            self.assertIn('Asimov, Isaac', target)
-            self.assertIn('Foundation Series #1', target)
+            target = foundation_ops[0]["target_path"]
+            self.assertIn("Asimov, Isaac", target)
+            self.assertIn("Foundation Series #1", target)
 
-        standalone_ops = [op for op in operations if 'Stranger' in op.get('target_path', '')]
+        standalone_ops = [op for op in operations if "Stranger" in op.get("target_path", "")]
         if standalone_ops:
-            target = standalone_ops[0]['target_path']
-            self.assertIn('Heinlein', target)
+            target = standalone_ops[0]["target_path"]
+            self.assertIn("Heinlein", target)
             # Should not have series number
-            self.assertNotIn('#', target)
+            self.assertNotIn("#", target)
 
 
 class RegressionTests(ComprehensiveRenamingTestCase):
@@ -760,7 +604,7 @@ class RegressionTests(ComprehensiveRenamingTestCase):
         partial_book = create_test_book_with_file(
             file_path="/test/partial.epub",
             file_size=1024000,
-            file_format="epub"
+            file_format="epub",
             # No author, series, year, etc.
         )
 
@@ -781,8 +625,8 @@ class RegressionTests(ComprehensiveRenamingTestCase):
         result = self.engine.process_template(pattern, self.foundation)
 
         # Should use forward slashes consistently
-        self.assertIn('/', result)
-        self.assertNotIn('\\', result)
+        self.assertIn("/", result)
+        self.assertNotIn("\\", result)
 
         # Path should be valid for conversion to Path object
         path_obj = Path(result)
@@ -792,18 +636,14 @@ class RegressionTests(ComprehensiveRenamingTestCase):
         """Test handling of very long filenames"""
 
         # Create book for filename length testing
-        long_book = create_test_book_with_file(
-            file_path="/test/long.epub",
-            file_size=1024000,
-            file_format="epub"
-        )
+        long_book = create_test_book_with_file(file_path="/test/long.epub", file_size=1024000, file_format="epub")
 
         pattern = "${title}.${ext}"
         result = self.engine.process_template(pattern, long_book)
 
         # Should handle long filenames appropriately
         # Implementation may truncate or warn
-        self.assertTrue(result.endswith('.epub'))
+        self.assertTrue(result.endswith(".epub"))
         self.assertGreater(len(result), 0)
 
 
@@ -827,6 +667,6 @@ def run_comprehensive_tests():
     return result
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Allow running tests directly
     run_comprehensive_tests()

@@ -35,8 +35,7 @@ class ScanFolderForm(StandardFormMixin, forms.ModelForm):
         help_text="Type of content in this scan folder (defaults to 'ebooks')",
     )
     language = forms.ChoiceField(
-        choices=[("", "----")]
-        + list(LANGUAGE_CHOICES),  # Add empty choice for initial state
+        choices=[("", "----")] + list(LANGUAGE_CHOICES),  # Add empty choice for initial state
         required=False,
         help_text="Language of content (defaults to 'en' - English)",
     )
@@ -51,9 +50,7 @@ class ScanFolderForm(StandardFormMixin, forms.ModelForm):
                     "placeholder": "Enter the full path to your folder (e.g., C:\\Users\\Pieter\\Documents\\eBooks)",
                 }
             ),
-            "is_active": forms.CheckboxInput(
-                attrs={"class": "form-check-input", "checked": True}
-            ),
+            "is_active": forms.CheckboxInput(attrs={"class": "form-check-input", "checked": True}),
         }
 
     def clean_path(self):
@@ -72,13 +69,9 @@ class ScanFolderForm(StandardFormMixin, forms.ModelForm):
             import logging
 
             logger = logging.getLogger(__name__)
-            logger.warning(
-                f"Scan folder path does not exist (may be intentional for testing): {path}"
-            )
+            logger.warning(f"Scan folder path does not exist (may be intentional for testing): {path}")
         elif not os.path.isdir(path):
-            raise forms.ValidationError(
-                f"The specified path is not a directory: {path}"
-            )
+            raise forms.ValidationError(f"The specified path is not a directory: {path}")
         return path
 
     def clean(self):
@@ -152,9 +145,7 @@ class ScanFolderEditForm(StandardFormMixin, forms.ModelForm):
 
         # Validate language field (should be a valid language code)
         if instance.language:
-            valid_languages = [
-                code for code, _ in LanguageManager.get_language_choices()
-            ]
+            valid_languages = [code for code, _ in LanguageManager.get_language_choices()]
             if instance.language not in valid_languages:
                 errors["language"] = f"Invalid language code: {instance.language}"
 
@@ -182,9 +173,8 @@ class TriggerScanForm(forms.Form):
 class DataSourceForm(StandardFormMixin, forms.ModelForm):
     class Meta:
         model = DataSource
-        fields = ["name", "trust_level", "priority", "is_active"]
+        fields = ["trust_level", "priority", "is_active"]
         widgets = {
-            "name": forms.Select(attrs={"class": "form-select"}),
             "trust_level": forms.NumberInput(
                 attrs={
                     "class": "form-control",
@@ -216,22 +206,16 @@ class DataSourceForm(StandardFormMixin, forms.ModelForm):
             self.fields["is_active"].initial = self.instance.is_active
 
         # Add help text
-        self.fields["trust_level"].help_text = (
-            "Trust level for this source (0.0 = lowest, 1.0 = highest)"
-        )
+        self.fields["trust_level"].help_text = "Trust level for this source (0.0 = lowest, 1.0 = highest)"
         self.fields["priority"].help_text = "Lower numbers have higher priority"
-        self.fields["is_active"].help_text = (
-            "Whether this data source is currently active"
-        )
+        self.fields["is_active"].help_text = "Whether this data source is currently active"
 
 
 class BookSearchForm(StandardFormMixin, forms.Form):
     search_query = forms.CharField(
         max_length=100,
         required=False,
-        widget=forms.TextInput(
-            attrs={"placeholder": "Search books, authors, series..."}
-        ),
+        widget=forms.TextInput(attrs={"placeholder": "Search books, authors, series..."}),
     )
 
     language = forms.ChoiceField(
@@ -240,11 +224,7 @@ class BookSearchForm(StandardFormMixin, forms.Form):
     )
 
     file_format = forms.ChoiceField(
-        choices=[("", "All Formats")]
-        + [
-            (fmt, fmt.upper())
-            for fmt in sorted(set(COMIC_FORMATS + EBOOK_FORMATS + AUDIOBOOK_FORMATS))
-        ],
+        choices=[("", "All Formats")] + [(fmt, fmt.upper()) for fmt in sorted(set(COMIC_FORMATS + EBOOK_FORMATS + AUDIOBOOK_FORMATS))],
         required=False,
     )
 
@@ -292,18 +272,14 @@ class MetadataReviewForm(MetadataFormMixin, forms.ModelForm):
     # Cover upload field
     new_cover_upload = forms.ImageField(
         required=False,
-        widget=forms.ClearableFileInput(
-            attrs={"class": "form-control", "accept": "image/*"}
-        ),
+        widget=forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/*"}),
         label="Upload New Cover",
     )
 
     # Manual entry fields for additional genres
     manual_genres = forms.CharField(
         required=False,
-        widget=forms.TextInput(
-            attrs={"class": "form-control", "placeholder": "Enter additional genres..."}
-        ),
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Enter additional genres..."}),
         label="Add Custom Genres (comma-separated)",
     )
 
@@ -334,17 +310,13 @@ class MetadataReviewForm(MetadataFormMixin, forms.ModelForm):
                 self.fields[field_name].widget = widget
 
         # Set language choices including empty option
-        self.fields["language"].widget.choices = (
-            LanguageManager.get_language_choices_with_empty("Select language")
-        )
+        self.fields["language"].widget.choices = LanguageManager.get_language_choices_with_empty("Select language")
 
         # Update cover upload widget using mixin
         self.fields["new_cover_upload"].widget = self.get_widget("image_input")
 
         # Update manual genres widget using mixin
-        self.fields["manual_genres"].widget = self.text_with_placeholder(
-            "Enter additional genres..."
-        )
+        self.fields["manual_genres"].widget = self.text_with_placeholder("Enter additional genres...")
 
         # Set required fields - but allow partial updates when instance exists
         # When updating an existing record, preserve instance values for missing fields
@@ -405,16 +377,8 @@ class MetadataReviewForm(MetadataFormMixin, forms.ModelForm):
         # For partial updates on existing instances, preserve values not provided
         # But treat whitespace-only values as empty (not provided)
         if self.instance and self.instance.pk:
-            title = (
-                cleaned_data.get("final_title", "").strip()
-                if cleaned_data.get("final_title")
-                else ""
-            )
-            author = (
-                cleaned_data.get("final_author", "").strip()
-                if cleaned_data.get("final_author")
-                else ""
-            )
+            title = cleaned_data.get("final_title", "").strip() if cleaned_data.get("final_title") else ""
+            author = cleaned_data.get("final_author", "").strip() if cleaned_data.get("final_author") else ""
 
             if not title and self.instance.final_title:
                 cleaned_data["final_title"] = self.instance.final_title
@@ -437,9 +401,7 @@ class MetadataReviewForm(MetadataFormMixin, forms.ModelForm):
             if publication_year < 1000 or publication_year > current_year + 1:
                 self.add_error(
                     "publication_year",
-                    forms.ValidationError(
-                        f"Publication year must be between 1000 and {current_year + 1}."
-                    ),
+                    forms.ValidationError(f"Publication year must be between 1000 and {current_year + 1}."),
                 )
 
         return cleaned_data
@@ -476,12 +438,8 @@ class BookCoverForm(MetadataFormMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         # Apply custom widgets using mixin
-        self.fields["cover_path"].widget = self.text_with_placeholder(
-            "Path to cover image or URL"
-        )
-        self.fields["confidence"].widget = self.number_with_range(
-            min_val=0, max_val=1, step=0.1, placeholder="Confidence score"
-        )
+        self.fields["cover_path"].widget = self.text_with_placeholder("Path to cover image or URL")
+        self.fields["confidence"].widget = self.number_with_range(min_val=0, max_val=1, step=0.1, placeholder="Confidence score")
         self.fields["width"].widget = self.text_with_placeholder("Width in pixels")
         self.fields["height"].widget = self.text_with_placeholder("Height in pixels")
         self.fields["format"].widget = self.text_with_placeholder("jpg, png, gif, etc.")
@@ -530,14 +488,10 @@ class BulkUpdateForm(MetadataFormMixin, forms.Form):
             return []
 
         try:
-            item_list = [
-                int(item.strip()) for item in value_str.split(",") if item.strip()
-            ]
+            item_list = [int(item.strip()) for item in value_str.split(",") if item.strip()]
             return item_list
         except ValueError:
-            raise forms.ValidationError(
-                "Invalid book IDs - must be comma-separated integers."
-            )
+            raise forms.ValidationError("Invalid book IDs - must be comma-separated integers.")
 
 
 class AdvancedSearchForm(StandardFormMixin, forms.Form):
@@ -556,22 +510,16 @@ class AdvancedSearchForm(StandardFormMixin, forms.Form):
         widget=forms.TextInput(attrs={"placeholder": "Series contains..."}),
     )
 
-    isbn = forms.CharField(
-        required=False, widget=forms.TextInput(attrs={"placeholder": "ISBN"})
-    )
+    isbn = forms.CharField(required=False, widget=forms.TextInput(attrs={"placeholder": "ISBN"}))
 
     publisher = forms.CharField(
         required=False,
         widget=forms.TextInput(attrs={"placeholder": "Publisher contains..."}),
     )
 
-    publication_year_from = forms.IntegerField(
-        required=False, widget=forms.NumberInput(attrs={"placeholder": "From year"})
-    )
+    publication_year_from = forms.IntegerField(required=False, widget=forms.NumberInput(attrs={"placeholder": "From year"}))
 
-    publication_year_to = forms.IntegerField(
-        required=False, widget=forms.NumberInput(attrs={"placeholder": "To year"})
-    )
+    publication_year_to = forms.IntegerField(required=False, widget=forms.NumberInput(attrs={"placeholder": "To year"}))
 
     language = forms.ChoiceField(
         choices=LanguageManager.get_language_choices_with_all("All Languages"),
@@ -579,11 +527,7 @@ class AdvancedSearchForm(StandardFormMixin, forms.Form):
     )
 
     file_format = forms.ChoiceField(
-        choices=[("", "All Formats")]
-        + [
-            (fmt, fmt.upper())
-            for fmt in sorted(set(COMIC_FORMATS + EBOOK_FORMATS + AUDIOBOOK_FORMATS))
-        ],
+        choices=[("", "All Formats")] + [(fmt, fmt.upper()) for fmt in sorted(set(COMIC_FORMATS + EBOOK_FORMATS + AUDIOBOOK_FORMATS))],
         required=False,
     )
 
@@ -630,17 +574,13 @@ class AdvancedSearchForm(StandardFormMixin, forms.Form):
                 self.add_error("publication_year_to", "Invalid to year.")
 
         if year_from and year_to and year_from > year_to:
-            raise forms.ValidationError(
-                "'From year' must be less than or equal to 'To year'."
-            )
+            raise forms.ValidationError("'From year' must be less than or equal to 'To year'.")
 
         conf_min = cleaned_data.get("confidence_min")
         conf_max = cleaned_data.get("confidence_max")
 
         if conf_min is not None and conf_max is not None and conf_min > conf_max:
-            raise forms.ValidationError(
-                "Minimum confidence must be less than or equal to maximum confidence."
-            )
+            raise forms.ValidationError("Minimum confidence must be less than or equal to maximum confidence.")
 
         return cleaned_data
 
@@ -671,16 +611,10 @@ class UserProfileForm(StandardFormMixin, forms.ModelForm):
                     "title": "Select your preferred theme",
                 }
             ),
-            "items_per_page": forms.NumberInput(
-                attrs={"class": "form-control", "min": "10", "max": "200", "step": "10"}
-            ),
-            "show_covers_in_list": forms.CheckboxInput(
-                attrs={"class": "form-check-input"}
-            ),
+            "items_per_page": forms.NumberInput(attrs={"class": "form-control", "min": "10", "max": "200", "step": "10"}),
+            "show_covers_in_list": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "default_view_mode": forms.Select(attrs={"class": "form-select"}),
-            "share_reading_progress": forms.CheckboxInput(
-                attrs={"class": "form-check-input"}
-            ),
+            "share_reading_progress": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "default_folder_pattern": forms.TextInput(
                 attrs={
                     "class": "form-control",
@@ -695,9 +629,7 @@ class UserProfileForm(StandardFormMixin, forms.ModelForm):
                     "maxlength": 255,
                 }
             ),
-            "include_companion_files": forms.CheckboxInput(
-                attrs={"class": "form-check-input"}
-            ),
+            "include_companion_files": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -705,22 +637,10 @@ class UserProfileForm(StandardFormMixin, forms.ModelForm):
 
         # Add help text and labels
         self.fields["theme"].help_text = "Choose your preferred visual theme"
-        self.fields["items_per_page"].help_text = (
-            "Number of books to display per page (10-200)"
-        )
-        self.fields["show_covers_in_list"].help_text = (
-            "Display book cover thumbnails in list views"
-        )
+        self.fields["items_per_page"].help_text = "Number of books to display per page (10-200)"
+        self.fields["show_covers_in_list"].help_text = "Display book cover thumbnails in list views"
         self.fields["default_view_mode"].help_text = "Default layout for browsing books"
-        self.fields["share_reading_progress"].help_text = (
-            "Allow other users to see your reading progress"
-        )
-        self.fields["default_folder_pattern"].help_text = (
-            "Default pattern for organizing folders when renaming (use {author}, {title}, {series_name}, {series_number})"
-        )
-        self.fields["default_filename_pattern"].help_text = (
-            "Default pattern for naming files when renaming (use {author}, {title}, {series_name}, {series_number})"
-        )
-        self.fields["include_companion_files"].help_text = (
-            "Include companion files (images, metadata) when renaming"
-        )
+        self.fields["share_reading_progress"].help_text = "Allow other users to see your reading progress"
+        self.fields["default_folder_pattern"].help_text = "Default pattern for organizing folders when renaming (use {author}, {title}, {series_name}, {series_number})"
+        self.fields["default_filename_pattern"].help_text = "Default pattern for naming files when renaming (use {author}, {title}, {series_name}, {series_number})"
+        self.fields["include_companion_files"].help_text = "Include companion files (images, metadata) when renaming"

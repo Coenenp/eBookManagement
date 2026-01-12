@@ -26,9 +26,7 @@ class CoverService:
         context["primary_cover"] = final_metadata.final_cover_path or fallback_cover
 
         if context["primary_cover"] and not context["primary_cover"].startswith("http"):
-            context["primary_cover_base64"] = encode_cover_to_base64(
-                context["primary_cover"]
-            )
+            context["primary_cover_base64"] = encode_cover_to_base64(context["primary_cover"])
         else:
             context["primary_cover_base64"] = None
 
@@ -59,11 +57,7 @@ class CoverService:
                 cover_path = fallback_cover
 
             is_url = str(cover_path).startswith("http")
-            base64_image = (
-                encode_cover_to_base64(cover_path)
-                if cover_path and not is_url
-                else None
-            )
+            base64_image = encode_cover_to_base64(cover_path) if cover_path and not is_url else None
 
             processed.append(
                 {
@@ -166,11 +160,7 @@ class DashboardService:
         metadata_stats["total_books"] = total_books
 
         format_stats = (
-            Book.objects.exclude(is_placeholder=True)
-            .values("files__file_format")
-            .annotate(count=Count("id"))
-            .filter(files__file_format__isnull=False)
-            .order_by("-count")
+            Book.objects.exclude(is_placeholder=True).values("files__file_format").annotate(count=Count("id")).filter(files__file_format__isnull=False).order_by("-count")
         )
 
         return metadata_stats, format_stats

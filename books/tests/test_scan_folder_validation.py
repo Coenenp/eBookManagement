@@ -15,9 +15,7 @@ class TestScanFolderPathValidation(TestCase):
 
     def test_can_create_with_nonexistent_path(self):
         """Test that we can create ScanFolder with non-existent path"""
-        sf = ScanFolder.objects.create(
-            path="/fake/nonexistent/path", name="Test Non-Existent"
-        )
+        sf = ScanFolder.objects.create(path="/fake/nonexistent/path", name="Test Non-Existent")
         self.assertIsNotNone(sf.pk)
         self.assertEqual(sf.path, "/fake/nonexistent/path")
 

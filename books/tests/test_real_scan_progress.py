@@ -15,7 +15,7 @@ import django
 from books.scanner.background import add_active_scan, background_scan_folder, get_all_active_scans
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ebook_manager.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ebook_manager.settings")
 django.setup()
 
 
@@ -26,12 +26,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
     print(f"Creating test files in: {temp_dir}")
 
     # Create some test ebook files
-    test_files = [
-        "test_book1.epub",
-        "test_book2.mobi",
-        "test_book3.pdf",
-        "standalone.opf"
-    ]
+    test_files = ["test_book1.epub", "test_book2.mobi", "test_book3.pdf", "standalone.opf"]
 
     for filename in test_files:
         file_path = Path(temp_dir) / filename
@@ -52,13 +47,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
     def run_scan():
         print("Starting background scan thread...")
         try:
-            result = background_scan_folder(
-                job_id=job_id,
-                folder_path=temp_dir,
-                language='en',
-                enable_external_apis=False,  # Disable for faster testing
-                content_type='ebooks'
-            )
+            result = background_scan_folder(job_id=job_id, folder_path=temp_dir, language="en", enable_external_apis=False, content_type="ebooks")  # Disable for faster testing
             print(f"Scan completed with result: {result}")
         except Exception as e:
             print(f"Scan failed with error: {e}")
@@ -74,10 +63,10 @@ with tempfile.TemporaryDirectory() as temp_dir:
         print(f"Time {i+1}s: {len(active_scans)} active scans")
 
         for j, scan in enumerate(active_scans):
-            status = scan.get('status', 'Unknown')
-            percentage = scan.get('percentage', 0)
-            current = scan.get('current', 0)
-            total = scan.get('total', 0)
+            status = scan.get("status", "Unknown")
+            percentage = scan.get("percentage", 0)
+            current = scan.get("current", 0)
+            total = scan.get("total", 0)
             print(f"  Scan {j+1}: {status} - {current}/{total} ({percentage}%)")
 
         if not active_scans:

@@ -1,6 +1,7 @@
 """
 Utilities for author name processing and normalization.
 """
+
 import re
 
 
@@ -25,9 +26,29 @@ def parse_author_name(full_name):
 
     # Surname prefixes that should be kept with the last name
     surname_prefixes = {
-        "o'", 'mac', 'mc', 'van', 'von', 'vander', 'vonder', 'van der',
-        'von der', 'van den', 'von den', 'vanden', 'vonden', 'del', 'della',
-        "d'", 'du', 'de', 'di', 'ter', 'lo', 'gel', 'van t'
+        "o'",
+        "mac",
+        "mc",
+        "van",
+        "von",
+        "vander",
+        "vonder",
+        "van der",
+        "von der",
+        "van den",
+        "von den",
+        "vanden",
+        "vonden",
+        "del",
+        "della",
+        "d'",
+        "du",
+        "de",
+        "di",
+        "ter",
+        "lo",
+        "gel",
+        "van t",
     }
 
     name_clean = full_name.strip()

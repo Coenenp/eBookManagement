@@ -26,7 +26,5 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        scanner = EbookScanner(
-            rescan=options.get("rescan", False), resume=options.get("resume", False)
-        )
+        scanner = EbookScanner(rescan=options.get("rescan", False), resume=options.get("resume", False))
         scanner.run(folder_path=options.get("folder_path"))

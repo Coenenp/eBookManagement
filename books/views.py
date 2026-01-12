@@ -140,22 +140,23 @@ except ImportError:
     from django.views.generic import TemplateView
 
     class BookRenamerView(LoginRequiredMixin, TemplateView):
-        template_name = 'books/book_renamer.html'
+        template_name = "books/book_renamer.html"
 
     class BookRenamerPreviewView(LoginRequiredMixin, TemplateView):
-        template_name = 'books/book_renamer_preview.html'
+        template_name = "books/book_renamer_preview.html"
 
     class BookRenamerExecuteView(LoginRequiredMixin, TemplateView):
-        template_name = 'books/book_renamer_execute.html'
+        template_name = "books/book_renamer_execute.html"
 
     class BookRenamerFileDetailsView(LoginRequiredMixin, TemplateView):
-        template_name = 'books/book_renamer_file_details.html'
+        template_name = "books/book_renamer_file_details.html"
 
     class BookRenamerRevertView(LoginRequiredMixin, TemplateView):
-        template_name = 'books/book_renamer_revert.html'
+        template_name = "books/book_renamer_revert.html"
 
     class BookRenamerHistoryView(LoginRequiredMixin, TemplateView):
-        template_name = 'books/book_renamer_history.html'
+        template_name = "books/book_renamer_history.html"
+
 
 try:
     from .views.ai_feedback import *  # noqa: F401,F403
@@ -164,18 +165,19 @@ except ImportError:
     from django.views.generic import DetailView, ListView
 
     class AIFeedbackListView(LoginRequiredMixin, ListView):
-        template_name = 'books/ai_feedback_list.html'
-        context_object_name = 'feedback_list'
+        template_name = "books/ai_feedback_list.html"
+        context_object_name = "feedback_list"
 
         def get_queryset(self):
             return []  # Empty queryset until implemented
 
     class AIFeedbackDetailView(LoginRequiredMixin, DetailView):
-        template_name = 'books/ai_feedback_detail.html'
-        context_object_name = 'feedback'
+        template_name = "books/ai_feedback_detail.html"
+        context_object_name = "feedback"
 
         def get_object(self):
             return None  # No object until implemented
+
 
 # Additional scanning views that may be needed
 try:
@@ -183,13 +185,14 @@ try:
 except ImportError:
     # Create placeholder scanning status views
     class ScanStatusView(LoginRequiredMixin, TemplateView):
-        template_name = 'books/scanning/status.html'
+        template_name = "books/scanning/status.html"
 
     class TriggerScanView(LoginRequiredMixin, TemplateView):
-        template_name = 'books/trigger_scan.html'
+        template_name = "books/trigger_scan.html"
 
     def current_scan_status(request):
-        return JsonResponse({'status': 'idle'})
+        return JsonResponse({"status": "idle"})
+
 
 # Additional AJAX endpoints (these exist in ajax.py)
 from .views.ajax import (  # noqa: F401

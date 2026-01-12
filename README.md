@@ -133,7 +133,7 @@ Input: "De Rode Ridder - 271 - De kruisvaarder (Digitale rip).cbr"
 Output:
 - Title: "De kruisvaarder"
 - Author: "Willy Vandersteen" (from creator database)
-- Series: "De Rode Ridder"  
+- Series: "De Rode Ridder"
 - Series Number: "271"
 - Language: From scan folder setting
 ```
@@ -152,7 +152,7 @@ The system supports sophisticated content type organization for multi-media libr
 
 - Content type designation independent of file formats
 - Visual organization with color-coded badges throughout UI
-- Content type-aware scanning and processing  
+- Content type-aware scanning and processing
 - Dedicated interfaces for each media type
 
 **How It Works:**
@@ -251,36 +251,36 @@ python manage.py migrate
 
 1. **Create Database and User**:
 
-   ```sql
-   CREATE DATABASE ebook_manager CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-   CREATE USER 'ebook_user'@'localhost' IDENTIFIED BY 'your_password';
-   GRANT ALL PRIVILEGES ON ebook_manager.* TO 'ebook_user'@'localhost';
-   FLUSH PRIVILEGES;
-   ```
+    ```sql
+    CREATE DATABASE ebook_manager CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    CREATE USER 'ebook_user'@'localhost' IDENTIFIED BY 'your_password';
+    GRANT ALL PRIVILEGES ON ebook_manager.* TO 'ebook_user'@'localhost';
+    FLUSH PRIVILEGES;
+    ```
 
 2. **Configure Environment Variables**:
    Create/update `.env` file:
 
-   ```env
-   USE_SQLITE_TEMPORARILY=False
-   DB_NAME=ebook_manager
-   DB_USER=ebook_user
-   DB_PASSWORD=your_password
-   DB_HOST=localhost
-   DB_PORT=3306
-   ```
+    ```env
+    USE_SQLITE_TEMPORARILY=False
+    DB_NAME=ebook_manager
+    DB_USER=ebook_user
+    DB_PASSWORD=your_password
+    DB_HOST=localhost
+    DB_PORT=3306
+    ```
 
 3. **Install MySQL Driver**:
 
-   ```bash
-   pip install mysqlclient
-   ```
+    ```bash
+    pip install mysqlclient
+    ```
 
 4. **Run Migrations**:
 
-   ```bash
-   python manage.py migrate
-   ```
+    ```bash
+    python manage.py migrate
+    ```
 
 **Performance Benefits**: MySQL/MariaDB provides 5-10x performance improvement for large collections, full-text search, and concurrent user support.
 
@@ -396,17 +396,17 @@ The system uses a smart trust level hierarchy to automatically resolve conflicts
 
 **How It Works**: When the system finds conflicting metadata (e.g., different publication years from different sources), it automatically selects the information from the most trusted source.
 
-| Priority | Data Source | Trust Level | Why It's Trusted |
-|----------|-------------|-------------|------------------|
-| 1 | Manual Entry | 1.0 | You verified it personally (highest priority) |
-| 2 | Open Library | 0.95 | Highly curated, community-verified database |
-| 3 | OPF File | 0.9 | Official publisher metadata files |
-| 4 | Content Scan | 0.85 | Extracted directly from book content |
-| 5 | EPUB Internal | 0.8 | Well-structured ebook format with good metadata |
-| 6 | MOBI Internal | 0.75 | Good format but with some limitations |
-| 7 | Google Books | 0.7 | Comprehensive but less curated than Open Library |
-| 8 | PDF Internal | 0.6 | PDFs have limited, often incomplete metadata |
-| 9 | Filename | 0.2 | Last resort - filenames are often unreliable |
+| Priority | Data Source   | Trust Level | Why It's Trusted                                 |
+| -------- | ------------- | ----------- | ------------------------------------------------ |
+| 1        | Manual Entry  | 1.0         | You verified it personally (highest priority)    |
+| 2        | Open Library  | 0.95        | Highly curated, community-verified database      |
+| 3        | OPF File      | 0.9         | Official publisher metadata files                |
+| 4        | Content Scan  | 0.85        | Extracted directly from book content             |
+| 5        | EPUB Internal | 0.8         | Well-structured ebook format with good metadata  |
+| 6        | MOBI Internal | 0.75        | Good format but with some limitations            |
+| 7        | Google Books  | 0.7         | Comprehensive but less curated than Open Library |
+| 8        | PDF Internal  | 0.6         | PDFs have limited, often incomplete metadata     |
+| 9        | Filename      | 0.2         | Last resort - filenames are often unreliable     |
 
 **User Benefits**:
 
@@ -511,7 +511,7 @@ This feature significantly improves the metadata review workflow by providing us
 The current development cycle is focused on completing the media type ecosystem:
 
 1. **Audiobook Processing Pipeline**: Implementing MP3/M4A/M4B support with chapter detection
-2. **Enhanced Format Support**: Adding FB2, TXT, RTF processing capabilities  
+2. **Enhanced Format Support**: Adding FB2, TXT, RTF processing capabilities
 3. **AI System Improvements**: Ensemble models and multi-language filename recognition
 4. **Advanced UI Components**: Segmented media type interfaces and enhanced analytics
 
@@ -531,9 +531,9 @@ The current development cycle is focused on completing the media type ecosystem:
 - **Audiobook Support**: Full MP3, M4A, M4B audiobook processing with chapter detection and metadata extraction
 - **Enhanced Archive Processing**: Improved handling of RAR/ZIP archives containing multiple ebooks
 - **Advanced AI Features**:
-  - Ensemble ML models for improved metadata prediction accuracy
-  - Multi-language filename pattern recognition
-  - Automated genre classification from content analysis
+    - Ensemble ML models for improved metadata prediction accuracy
+    - Multi-language filename pattern recognition
+    - Automated genre classification from content analysis
 - **Additional Format Support**: FB2, TXT, RTF, and other ebook formats
 - **Cloud Integration**: Google Drive, Dropbox, and OneDrive sync capabilities
 - **Advanced Search**: Full-text search within ebook content
@@ -849,12 +849,12 @@ The system now includes intelligent file handling capabilities:
 
 - **User Choice Interface**: Modal dialog presents all detected files with action options
 - **Smart Categorization**:
-  - **Automatic Files**: Covers (.jpg, .png), metadata (.opf, .json) - renamed automatically
-  - **Optional Files**: Documents (.txt, .md, .pdf), extras - user chooses action
+    - **Automatic Files**: Covers (.jpg, .png), metadata (.opf, .json) - renamed automatically
+    - **Optional Files**: Documents (.txt, .md, .pdf), extras - user chooses action
 - **File Actions**: For each file, users can choose to:
-  - **Rename**: Move with the book using the new naming scheme
-  - **Delete**: Remove the file permanently
-  - **Skip**: Leave the file in its original location
+    - **Rename**: Move with the book using the new naming scheme
+    - **Delete**: Remove the file permanently
+    - **Skip**: Leave the file in its original location
 
 #### File Operation Features
 
@@ -1088,7 +1088,7 @@ The Universal Media Manager has undergone significant enhancements, evolving fro
 These implementations provide immediate benefits:
 
 - **Personalized Interface**: Choose from 25+ themes to match your preferences
-- **Organized Collections**: Clear visual distinction between different media types  
+- **Organized Collections**: Clear visual distinction between different media types
 - **Streamlined Workflow**: Content type-aware scanning and processing
 - **Professional Results**: Industry-standard metadata and file organization
 - **Reliable Operation**: Comprehensive testing ensures your data stays safe

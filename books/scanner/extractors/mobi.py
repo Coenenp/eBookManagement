@@ -19,9 +19,7 @@ logger = logging.getLogger("books.scanner")
 
 def _get_mobi_internal_source():
     """Get or create the MOBI Internal DataSource."""
-    source, created = DataSource.objects.get_or_create(
-        name=DataSource.MOBI_INTERNAL, defaults={"trust_level": 0.75}
-    )
+    source, created = DataSource.objects.get_or_create(name=DataSource.MOBI_INTERNAL, defaults={"trust_level": 0.75})
     return source
 
 
@@ -46,9 +44,7 @@ def extract(book):
         encoding = metadata.get("encoding")
         publisher = metadata.get("publisher")
 
-        logger.info(
-            f"Title: {title or 'Unknown'}, Author: {author or 'Unknown'}, Encoding: {encoding or 'Unknown'}"
-        )
+        logger.info(f"Title: {title or 'Unknown'}, Author: {author or 'Unknown'}, Encoding: {encoding or 'Unknown'}")
 
         # Get internal source
         source = _get_mobi_internal_source()
@@ -72,9 +68,7 @@ def extract(book):
         if publisher:
             cleaned_name = publisher.strip()
             if cleaned_name:  # Only create if non-empty after stripping
-                existing_pub = Publisher.objects.filter(
-                    name__iexact=cleaned_name
-                ).first()
+                existing_pub = Publisher.objects.filter(name__iexact=cleaned_name).first()
                 if existing_pub:
                     pub_obj = existing_pub
                 else:
@@ -87,9 +81,7 @@ def extract(book):
                         defaults={"confidence": source.trust_level},
                     )
                 except IntegrityError as e:
-                    logger.warning(
-                        f"[BOOKPUBLISHER DUPLICATE] Could not create BookPublisher for {book.file_path}: {e}"
-                    )
+                    logger.warning(f"[BOOKPUBLISHER DUPLICATE] Could not create BookPublisher for {book.file_path}: {e}")
 
         # Optional fields to record
         optional_fields = {"encoding": encoding}

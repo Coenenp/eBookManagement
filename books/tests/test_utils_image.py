@@ -1,6 +1,7 @@
 """
 Test cases for Image utilities
 """
+
 import os
 import tempfile
 from unittest.mock import MagicMock, mock_open, patch
@@ -20,16 +21,12 @@ class ImageUtilsTests(TestCase):
         self.scan_folder = create_test_scan_folder(name="Test Scan Folder")
 
         self.book = create_test_book_with_file(
-            file_path="/test/scan/folder/book.epub",
-            file_format="epub",
-            file_size=1024000,
-            opf_path="",  # Set empty string for opf_path field
-            scan_folder=self.scan_folder
+            file_path="/test/scan/folder/book.epub", file_format="epub", file_size=1024000, opf_path="", scan_folder=self.scan_folder  # Set empty string for opf_path field
         )
 
-    @patch('books.utils.image_utils.requests.get')
-    @patch('builtins.open', new_callable=mock_open)
-    @override_settings(MEDIA_ROOT='/test/media', MEDIA_URL='/media/')
+    @patch("books.utils.image_utils.requests.get")
+    @patch("builtins.open", new_callable=mock_open)
+    @override_settings(MEDIA_ROOT="/test/media", MEDIA_URL="/media/")
     def test_download_and_store_cover_success(self, mock_file, mock_get):
         """Test successful cover download and storage"""
         # Mock the cover candidate
@@ -53,11 +50,11 @@ class ImageUtilsTests(TestCase):
         mock_file().write.assert_called_once_with(b"fake image data")
 
         # Verify return value contains the expected URL pattern (handle path separators)
-        self.assertTrue(result.startswith('/media/covers'), f"Result '{result}' does not start with '/media/covers'")
-        self.assertTrue(result.endswith('_cover.jpg'), f"Result '{result}' does not end with '_cover.jpg'")
-        self.assertIn('covers', result)  # Ensure covers directory is in path
+        self.assertTrue(result.startswith("/media/covers"), f"Result '{result}' does not start with '/media/covers'")
+        self.assertTrue(result.endswith("_cover.jpg"), f"Result '{result}' does not end with '_cover.jpg'")
+        self.assertIn("covers", result)  # Ensure covers directory is in path
 
-    @patch('books.utils.image_utils.requests.get')
+    @patch("books.utils.image_utils.requests.get")
     def test_download_and_store_cover_http_error(self, mock_get):
         """Test cover download with HTTP error"""
         candidate = MagicMock()
@@ -72,7 +69,7 @@ class ImageUtilsTests(TestCase):
         with self.assertRaises(Exception):
             download_and_store_cover(candidate)
 
-    @patch('books.utils.image_utils.requests.get')
+    @patch("books.utils.image_utils.requests.get")
     def test_download_and_store_cover_timeout(self, mock_get):
         """Test cover download with timeout"""
         candidate = MagicMock()
@@ -104,7 +101,8 @@ class ImageUtilsTests(TestCase):
 
             # Verify the encoded content
             import base64
-            expected_b64 = base64.b64encode(test_data).decode('utf-8')
+
+            expected_b64 = base64.b64encode(test_data).decode("utf-8")
             expected_result = f"data:image/jpeg;base64,{expected_b64}"
             self.assertEqual(result, expected_result)
 
@@ -127,15 +125,15 @@ class ImageUtilsTests(TestCase):
         result = encode_cover_to_base64(None)
         self.assertEqual(result, "")
 
-    @patch('builtins.open', side_effect=PermissionError("Permission denied"))
-    @patch('os.path.isfile', return_value=True)
+    @patch("builtins.open", side_effect=PermissionError("Permission denied"))
+    @patch("os.path.isfile", return_value=True)
     def test_encode_cover_to_base64_permission_error(self, mock_isfile, mock_open):
         """Test base64 encoding with permission error"""
         result = encode_cover_to_base64("/test/path.jpg")
         self.assertEqual(result, "")
 
-    @patch('builtins.open', side_effect=IOError("IO Error"))
-    @patch('os.path.isfile', return_value=True)
+    @patch("builtins.open", side_effect=IOError("IO Error"))
+    @patch("os.path.isfile", return_value=True)
     def test_encode_cover_to_base64_io_error(self, mock_isfile, mock_open):
         """Test base64 encoding with IO error"""
         result = encode_cover_to_base64("/test/path.jpg")
@@ -155,7 +153,8 @@ class ImageUtilsTests(TestCase):
 
             # Verify empty content
             import base64
-            expected_b64 = base64.b64encode(b"").decode('utf-8')
+
+            expected_b64 = base64.b64encode(b"").decode("utf-8")
             expected_result = f"data:image/jpeg;base64,{expected_b64}"
             self.assertEqual(result, expected_result)
 
@@ -163,10 +162,10 @@ class ImageUtilsTests(TestCase):
             # Clean up temporary file
             os.unlink(tmp_path)
 
-    @patch('books.utils.image_utils.slugify')
-    @patch('books.utils.image_utils.requests.get')
-    @patch('builtins.open', new_callable=mock_open)
-    @override_settings(MEDIA_ROOT='/test/media', MEDIA_URL='/media/')
+    @patch("books.utils.image_utils.slugify")
+    @patch("books.utils.image_utils.requests.get")
+    @patch("builtins.open", new_callable=mock_open)
+    @override_settings(MEDIA_ROOT="/test/media", MEDIA_URL="/media/")
     def test_download_and_store_cover_filename_slugification(self, mock_file, mock_get, mock_slugify):
         """Test that filename is properly slugified"""
         candidate = MagicMock()

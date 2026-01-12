@@ -3,6 +3,7 @@
 This module provides functions for processing ISBN numbers including
 validation, normalization, and format conversion operations.
 """
+
 import re
 from datetime import datetime
 
@@ -15,13 +16,13 @@ def normalize_isbn(raw):
     raw = raw.lower().strip()
 
     # Strip known prefixes
-    prefixes = ['urn:isbn:', 'isbn:', 'urn:', 'isbn']
+    prefixes = ["urn:isbn:", "isbn:", "urn:", "isbn"]
     for prefix in prefixes:
         if raw.startswith(prefix):
-            raw = raw[len(prefix):]
+            raw = raw[len(prefix) :]
 
     # Extract digits only
-    raw_digits = re.sub(r'[^0-9xX]', '', raw)
+    raw_digits = re.sub(r"[^0-9xX]", "", raw)
 
     # Check for ISBN-10 format
     if len(raw_digits) == 10:
@@ -39,7 +40,7 @@ def normalize_isbn(raw):
 
 def is_valid_isbn13(isbn):
     """Validate ISBN-13 using check digit."""
-    if not re.match(r'^\d{13}$', isbn):
+    if not re.match(r"^\d{13}$", isbn):
         return False
     total = sum((int(num) if i % 2 == 0 else int(num) * 3) for i, num in enumerate(isbn[:12]))
     check = (10 - (total % 10)) % 10
@@ -48,15 +49,15 @@ def is_valid_isbn13(isbn):
 
 def is_valid_isbn10(isbn):
     """Validate ISBN-10 using check digit."""
-    if not re.match(r'^\d{9}[\dXx]$', isbn):
+    if not re.match(r"^\d{9}[\dXx]$", isbn):
         return False
-    total = sum((10 - i) * (10 if ch in 'Xx' else int(ch)) for i, ch in enumerate(isbn))
+    total = sum((10 - i) * (10 if ch in "Xx" else int(ch)) for i, ch in enumerate(isbn))
     return total % 11 == 0
 
 
 def convert_to_isbn13(isbn10):
     """Convert ISBN-10 to ISBN-13."""
-    core = '978' + isbn10[:-1]
+    core = "978" + isbn10[:-1]
     total = sum((int(num) if i % 2 == 0 else int(num) * 3) for i, num in enumerate(core))
     check = (10 - (total % 10)) % 10
     return core + str(check)
@@ -78,7 +79,7 @@ def normalize_publication_year(raw):
     try:
         # Convert to string and extract first 4 digits
         year_str = str(raw).strip()
-        year_match = re.search(r'\d{4}', year_str)
+        year_match = re.search(r"\d{4}", year_str)
 
         if not year_match:
             return None

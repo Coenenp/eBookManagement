@@ -10,7 +10,7 @@ from django.contrib.auth import get_user_model
 from django.test import Client
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ebook_manager.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ebook_manager.settings")
 django.setup()
 
 
@@ -21,7 +21,7 @@ def test_ajax_scan():
 
     # Get or create test user
     User = get_user_model()
-    user, created = User.objects.get_or_create(username='testuser', defaults={'is_staff': True})
+    user, created = User.objects.get_or_create(username="testuser", defaults={"is_staff": True})
 
     # Get a scan folder to test with
     folders = ScanFolder.objects.all()
@@ -37,25 +37,18 @@ def test_ajax_scan():
     client.force_login(user)
 
     # Prepare request data
-    data = {
-        'folder_id': folder.id,
-        'use_external_apis': False
-    }
+    data = {"folder_id": folder.id, "use_external_apis": False}
 
     print(f"Sending request with data: {data}")
 
     try:
         # Make the AJAX request
-        response = client.post(
-            '/ajax/trigger-scan/',
-            data=json.dumps(data),
-            content_type='application/json'
-        )
+        response = client.post("/ajax/trigger-scan/", data=json.dumps(data), content_type="application/json")
 
         print(f"Response status: {response.status_code}")
         print(f"Response headers: {dict(response.items())}")
 
-        if hasattr(response, 'content'):
+        if hasattr(response, "content"):
             print(f"Response content: {response.content.decode()}")
 
         if response.status_code == 302:
@@ -64,6 +57,7 @@ def test_ajax_scan():
     except Exception as e:
         print(f"Error making request: {e}")
         import traceback
+
         traceback.print_exc()
 
 

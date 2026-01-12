@@ -11,9 +11,7 @@ class StandardWidgetMixin:
 
     STANDARD_WIDGETS = {
         "text_input": forms.TextInput(attrs={"class": "form-control"}),
-        "text_input_required": forms.TextInput(
-            attrs={"class": "form-control", "required": True}
-        ),
+        "text_input_required": forms.TextInput(attrs={"class": "form-control", "required": True}),
         "email_input": forms.EmailInput(attrs={"class": "form-control"}),
         "password_input": forms.PasswordInput(attrs={"class": "form-control"}),
         "textarea": forms.Textarea(attrs={"class": "form-control", "rows": 5}),
@@ -21,9 +19,7 @@ class StandardWidgetMixin:
         "number_input": forms.NumberInput(attrs={"class": "form-control"}),
         "checkbox": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         "file_input": forms.ClearableFileInput(attrs={"class": "form-control"}),
-        "image_input": forms.ClearableFileInput(
-            attrs={"class": "form-control", "accept": "image/*"}
-        ),
+        "image_input": forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/*"}),
         "hidden": forms.HiddenInput(),
     }
 
@@ -87,9 +83,7 @@ class BaseMetadataValidator:
         # Allow alphanumeric series numbers (1, 1.5, 2a, etc.)
         value_str = str(value).strip()
         if len(value_str) > max_length:
-            raise forms.ValidationError(
-                f"Series number too long (max {max_length} characters)."
-            )
+            raise forms.ValidationError(f"Series number too long (max {max_length} characters).")
 
         return value_str
 
@@ -104,9 +98,7 @@ class BaseMetadataValidator:
             current_year = timezone.now().year
 
             if year < 1000 or year > current_year + 1:
-                raise forms.ValidationError(
-                    f"{field_name} must be between 1000 and {current_year + 1}."
-                )
+                raise forms.ValidationError(f"{field_name} must be between 1000 and {current_year + 1}.")
 
             return year
         except (ValueError, TypeError):
@@ -127,9 +119,7 @@ class BaseMetadataValidator:
 
         # Check if all characters are digits (except last character of ISBN-10 can be 'X')
         if len(isbn) == 10:
-            if not (
-                isbn[:9].isdigit() and (isbn[9].isdigit() or isbn[9].upper() == "X")
-            ):
+            if not (isbn[:9].isdigit() and (isbn[9].isdigit() or isbn[9].upper() == "X")):
                 raise forms.ValidationError("Invalid ISBN-10 format.")
         else:  # ISBN-13
             if not isbn.isdigit():
@@ -179,14 +169,10 @@ class BaseMetadataValidator:
             return []
 
         try:
-            item_list = [
-                int(item.strip()) for item in value_str.split(",") if item.strip()
-            ]
+            item_list = [int(item.strip()) for item in value_str.split(",") if item.strip()]
             return item_list
         except ValueError:
-            raise forms.ValidationError(
-                f"Invalid {field_name} - must be comma-separated integers."
-            )
+            raise forms.ValidationError(f"Invalid {field_name} - must be comma-separated integers.")
 
 
 class StandardFormMixin(StandardWidgetMixin):
@@ -227,9 +213,7 @@ class MetadataFormMixin(StandardFormMixin, BaseMetadataValidator):
             "final_cover_path": self.get_widget("file_input"),
             "language": self.get_widget("select"),
             "isbn": self.text_with_placeholder("Enter ISBN"),
-            "publication_year": self.number_with_range(
-                min_val=1000, max_val=2030, placeholder="Enter publication year"
-            ),
+            "publication_year": self.number_with_range(min_val=1000, max_val=2030, placeholder="Enter publication year"),
             "description": forms.Textarea(
                 attrs={
                     "class": "form-control",
@@ -242,15 +226,11 @@ class MetadataFormMixin(StandardFormMixin, BaseMetadataValidator):
 
     def clean_final_title(self):
         """Validate final title using base validator"""
-        return self.validate_required_text(
-            self.cleaned_data.get("final_title"), "Title"
-        )
+        return self.validate_required_text(self.cleaned_data.get("final_title"), "Title")
 
     def clean_final_author(self):
         """Validate final author using base validator"""
-        return self.validate_required_text(
-            self.cleaned_data.get("final_author"), "Author"
-        )
+        return self.validate_required_text(self.cleaned_data.get("final_author"), "Author")
 
     def clean_final_series_number(self):
         """Validate final series number using base validator"""
@@ -258,9 +238,7 @@ class MetadataFormMixin(StandardFormMixin, BaseMetadataValidator):
 
     def clean_publication_year(self):
         """Validate publication year using base validator"""
-        return self.validate_year(
-            self.cleaned_data.get("publication_year"), "Publication year"
-        )
+        return self.validate_year(self.cleaned_data.get("publication_year"), "Publication year")
 
     def clean_isbn(self):
         """Validate ISBN using base validator"""
@@ -268,6 +246,4 @@ class MetadataFormMixin(StandardFormMixin, BaseMetadataValidator):
 
     def clean_manual_genres(self):
         """Validate manual genres using base validator"""
-        return self.validate_comma_separated_list(
-            self.cleaned_data.get("manual_genres"), "Manual genres"
-        )
+        return self.validate_comma_separated_list(self.cleaned_data.get("manual_genres"), "Manual genres")

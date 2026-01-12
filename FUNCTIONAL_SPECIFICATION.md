@@ -3,33 +3,198 @@
 ## Table of Contents
 
 1. [System Overview](#system-overview)
-2. [Core Features and Workflows](#core-features-and-workflows)
-3. [Data Models and Relationships](#data-models-and-relationships)
-4. [User Authentication and Permissions](#user-authentication-and-permissions)
-5. [File Management and Import](#file-management-and-import)
-6. [Metadata Management](#metadata-management)
-7. [Book Renaming and Organization](#book-renaming-and-organization)
-8. [Series and Author Management](#series-and-author-management)
-9. [Cover Image Management](#cover-image-management)
-10. [Scanning and Background Processing](#scanning-and-background-processing)
-11. [Search and Filtering](#search-and-filtering)
-12. [Data Sources and Trust Levels](#data-sources-and-trust-levels)
-13. [Error Handling and Recovery](#error-handling-and-recovery)
-14. [System Configuration](#system-configuration)
+2. [User Interface and Navigation](#user-interface-and-navigation)
+3. [Core Features and Workflows](#core-features-and-workflows)
+    - [Initial Setup and Configuration](#1-initial-setup-and-configuration)
+    - [File Import and Scanning](#2-file-import-and-scanning)
+    - [Metadata Management System](#3-metadata-management-system)
+    - [Book Renaming and Organization](#4-book-renaming-and-organization)
+    - [Series Management](#5-series-management)
+    - [Cover Image Management](#6-cover-image-management)
+    - [Advanced Search and Filtering](#7-advanced-search-and-filtering)
+    - [Data Sources and Trust Management](#8-data-sources-and-trust-management)
+    - [Background Processing and Task Management](#9-background-processing-and-task-management)
+    - [Error Handling and Recovery](#10-error-handling-and-recovery)
+    - [System Configuration and Customization](#11-system-configuration-and-customization)
+4. [Data Flow and Integration Patterns](#data-flow-and-integration-patterns)
+5. [Security and Data Protection](#security-and-data-protection)
+6. [Performance and Scalability Considerations](#performance-and-scalability-considerations)
+7. [Future Architecture Enhancements](#future-architecture-enhancements)
 
 ---
 
 ## System Overview
 
-The Django Ebook Management System is a comprehensive library management application designed to organize, catalog, and maintain large collections of digital books across multiple formats (EPUB, MOBI, PDF, CBR, CBZ). The system provides automated metadata extraction, intelligent file organization, series management, and comprehensive search capabilities.
+The Django Ebook Management System is a comprehensive library management application designed to organize, catalog, and maintain large collections of digital media across multiple formats:
+
+- **Ebooks:** EPUB, PDF, MOBI, AZW, AZW3, FB2, LIT, PRC
+- **Comics:** CBR, CBZ, CB7, CBT, PDF
+- **Audiobooks:** MP3, M4A, M4B, AAC, FLAC, OGG, WAV
+
+The system provides automated metadata extraction, intelligent file organization, series management, and comprehensive search capabilities across all supported media types.
 
 ### Core Architecture Principles
 
 - **Multi-source metadata aggregation** with confidence scoring
-- **Non-destructive operations** with rollback capabilities  
+- **Non-destructive operations** with rollback capabilities
 - **Background processing** for resource-intensive operations
 - **Flexible file organization** with user-defined patterns
 - **Comprehensive audit logging** for all operations
+
+---
+
+## User Interface and Navigation
+
+### Main Navigation Structure
+
+The system provides a dual-level navigation structure designed for efficient access to all major features:
+
+#### Top Authentication Bar
+
+**Purpose:** User account management and quick access to core settings.
+
+**Components:**
+
+- **Brand/Logo:** Links to dashboard, provides consistent home navigation
+- **User Menu (Authenticated):** - User profile dropdown with username display - Settings - Personal preferences and template management - Dashboard - Overview and activity feed - Sign out - Secure logout functionality
+- **Authentication Links (Unauthenticated):** - Sign in button - Sign up button
+
+#### Main Content Navigation Pills
+
+**Purpose:** Primary content access organized by media type and function.
+
+**Navigation Items:**
+
+1. **Dashboard**
+    - URL: `/dashboard/`
+    - Icon: Tachometer
+    - Purpose: Activity overview, recent scans, statistics, quick actions
+    - Features: Real-time scan status, library statistics, recent activity feed
+
+2. **Library (Full Library)**
+    - URL: `/books/`
+    - Icon: Swatchbook
+    - Purpose: Unified view of entire library across all content types
+    - Features:
+        - Combined listing of all books, comics, and audiobooks
+        - Advanced filtering by content type, format, metadata
+        - Bulk operations across different media types
+        - Export and reporting capabilities
+        - Cross-content-type search
+
+3. **Ebooks**
+    - URL: `/ebooks/`
+    - Icon: Book
+    - Purpose: Focused view of traditional ebooks (EPUB, MOBI, AZW, AZW3, PDF, FB2, LIT, PRC)
+    - Features:
+        - Format-specific filtering
+        - Reading progress tracking
+        - Export to e-reader devices
+        - Metadata quality indicators
+        - Format conversion capabilities (where applicable)
+
+4. **Series**
+    - URL: `/series/`
+    - Icon: Layer Group
+    - Purpose: Series-centric organization and browsing
+    - Features:
+        - Series completion tracking
+        - Reading order management
+        - Multi-book operations
+        - Series metadata editing
+
+5. **Comics**
+    - URL: `/comics/`
+    - Icon: Mask
+    - Purpose: Comic book management (CBR, CBZ, CB7, CBT, PDF)
+    - Features:
+        - Issue number tracking
+        - Creator information
+        - Publication chronology
+        - Cover gallery view
+        - Archive format conversion
+        - Series and volume organization
+
+6. **Audiobooks**
+    - URL: `/audiobooks/`
+    - Icon: Headphones
+    - Purpose: Audiobook library management (MP3, M4A, M4B, AAC, FLAC, OGG, WAV)
+    - Features:
+        - Chapter and track organization
+        - Playback duration tracking
+        - Narrator information
+        - Series and collection management
+        - Album art display
+        - Multi-file audiobook grouping
+
+7. **Authors**
+    - URL: `/authors/`
+    - Icon: User Group
+    - Purpose: Author-centric browsing and management
+    - Features:
+        - Author bibliography
+        - Name normalization tools
+        - Pseudonym management
+        - Author statistics
+
+8. **Rename Books**
+    - URL: `/rename-books/`
+    - Icon: Edit
+    - Purpose: Bulk file organization and renaming
+    - Features:
+        - Batch renaming with templates
+        - Preview before execution
+        - Template management (redirects to Template Management)
+        - Companion file handling
+
+9. **Scanning**
+    - URL: `/scanning/`
+    - Icon: Search
+    - Purpose: Library scanning and background task management
+    - Features:
+        - Active scan monitoring
+        - Scan folder configuration
+        - Task queue management
+        - Scan history and logs
+
+10. **Management** (Dropdown Menu)
+    - Icon: Cogs
+    - Purpose: Administrative and advanced management functions
+    - Submenu Items:
+        - **Authors** - Author management and bibliography
+        - **Genres** - Genre taxonomy and categorization
+        - **Data Sources** - Metadata source configuration
+        - **Scan Folders** - Library directory management
+        - **Add Scan Folder** - Quick folder addition
+        - **API Status** - External API health monitoring
+        - **Rename Books** - Bulk file organization (also available in main nav)
+        - **Quick Process** - Legacy quick metadata processing (deprecated - functionality merged into unified metadata workflow)
+        - **AI Feedback** - AI-assisted metadata feedback review
+
+**Navigation Behavior:**
+
+- Active tab highlighted with visual indicator
+- Responsive design: Icons only on mobile, full text on desktop
+- Maintains context when navigating between related views
+- Breadcrumb support on detail pages
+- Dropdown menus for grouped administrative functions
+
+### Content Type Organization
+
+The system employs a **content-type-centric architecture** that provides specialized views while maintaining unified data management:
+
+**Design Philosophy:**
+
+- **Unified Data Model:** All content types share core book metadata structure
+- **Specialized Views:** Each content type has optimized UI and filtering
+- **Cross-Type Operations:** Library view enables operations across all types
+- **Consistent UX:** Similar patterns across different content areas
+
+**Content Type Detection:**
+
+- Ebooks: `.epub`, `.pdf`, `.mobi`, `.azw`, `.azw3`, `.fb2`, `.lit`, `.prc`
+- Comics: `.cbr`, `.cbz`, `.cb7`, `.cbt`, `.pdf`
+- Audiobooks: `.mp3`, `.m4a`, `.m4b`, `.aac`, `.flac`, `.ogg`, `.wav`
 
 ---
 
@@ -114,20 +279,23 @@ The Django Ebook Management System is a comprehensive library management applica
 **System Actions:**
 
 1. **Directory Traversal:**
-   - Recursively scans all subdirectories of configured `ScanFolder` paths
-   - Identifies files matching supported formats: `.epub`, `.mobi`, `.pdf`, `.cbr`, `.cbz`
-   - Calculates SHA256 hash of file path for uniqueness
+    - Recursively scans all subdirectories of configured `ScanFolder` paths
+    - Identifies files matching supported formats:
+        - Ebooks: `.epub`, `.pdf`, `.mobi`, `.azw`, `.azw3`, `.fb2`, `.lit`, `.prc`
+        - Comics: `.cbr`, `.cbz`, `.cb7`, `.cbt`, `.pdf`
+        - Audiobooks: `.mp3`, `.m4a`, `.m4b`, `.aac`, `.flac`, `.ogg`, `.wav`
+    - Calculates SHA256 hash of file path for uniqueness
 
 2. **File Processing:**
-   - Creates `Book` record with file metadata (path, size, format, scan timestamp)
-   - Extracts embedded metadata (EPUB internal, MOBI headers, PDF properties)
-   - Generates initial `FinalMetadata` record with low confidence scores
-   - Queues background tasks for enhanced metadata retrieval
+    - Creates `Book` record with file metadata (path, size, format, scan timestamp)
+    - Extracts embedded metadata (EPUB internal, MOBI headers, PDF properties)
+    - Generates initial `FinalMetadata` record with low confidence scores
+    - Queues background tasks for enhanced metadata retrieval
 
 3. **Duplicate Detection:**
-   - Uses file path hash to prevent duplicate imports
-   - Handles file moves/renames by updating existing records
-   - Logs conflicts when same file appears in multiple locations
+    - Uses file path hash to prevent duplicate imports
+    - Handles file moves/renames by updating existing records
+    - Logs conflicts when same file appears in multiple locations
 
 **Expected Output:**
 
@@ -182,16 +350,62 @@ The Django Ebook Management System is a comprehensive library management applica
 
 ### 3. Metadata Management System
 
-#### Multi-Source Metadata Aggregation
+#### Unified Metadata Review and Processing
 
-**Purpose:** Aggregate metadata from multiple sources (internal file data, external APIs, manual input) and determine the most reliable information for each book.
+**Purpose:** Provide a comprehensive, single-page workflow for reviewing, editing, and processing book metadata, covers, file operations, and duplicates. This unified interface replaces the previous separate "Metadata" and "Quick Process" views.
 
 **Entry Points:**
 
+- `/book/<id>/metadata/` - Unified metadata review and processing interface
+- `/book/<id>/metadata/?workflow=1` - Workflow mode with prev/next navigation
 - Automatic: Triggered during file import
-- `/book/<id>/metadata/` - Manual metadata management
-- `/book/<id>/rescan/` - Force metadata refresh
 - `/ajax/rescan-external-metadata/` - AJAX metadata update
+
+**Interface Sections:**
+
+The metadata page is organized into distinct, collapsible sections:
+
+1. **Metadata Review**
+    - Radio button selection for title, author, series, genre, publisher, language, publication year
+    - Confidence scores displayed for each option
+    - Source attribution (e.g., "Google Books", "Calibre", "Manual")
+    - Manual entry options for custom metadata
+    - Quick access to add new metadata sources
+
+2. **Cover Selection**
+    - Grid display of all available covers from different sources
+    - Quality indicators (resolution, file size)
+    - Confidence scoring for each cover
+    - Select/deselect individual covers
+    - Bulk download selected covers
+    - Upload custom cover option
+
+3. **File Operations**
+    - Rename and move configuration with live preview
+    - Template selection dropdown (loads user's default from Settings)
+    - Folder pattern and filename pattern inputs
+    - Live preview showing resulting path
+    - Companion file inclusion checkbox (synced with Settings)
+    - Link to Template Management for advanced configuration
+
+4. **Duplicate Detection** (conditional)
+    - Displays potential duplicate books
+    - Comparison view with metadata differences
+    - Merge or keep separate options
+    - File path comparison
+
+5. **External Metadata Refresh**
+    - Source selection checkboxes (Google Books, Open Library, etc.)
+    - Option to clear existing metadata before rescan
+    - Rescan trigger button
+
+**Workflow Mode:**
+
+- Activated via `?workflow=1` parameter
+- Provides Previous/Next book navigation
+- Streamlined review process for batch metadata curation
+- Progress indicator showing position in queue
+- Quick save and move to next functionality
 
 **User Inputs:**
 
@@ -203,28 +417,31 @@ The Django Ebook Management System is a comprehensive library management applica
 **System Actions:**
 
 1. **Internal Metadata Extraction:**
-   - **EPUB:** Parses OPF files, Dublin Core elements, content.opf
-   - **MOBI:** Extracts EXTH headers, title, author, ASIN
-   - **PDF:** Reads document properties, XMP metadata
-   - **Comics:** Extracts ComicInfo.xml if present
+    - **EPUB:** Parses OPF files, Dublin Core elements, content.opf
+    - **MOBI/AZW/AZW3:** Extracts EXTH headers, title, author, ASIN
+    - **PDF:** Reads document properties, XMP metadata
+    - **FB2 (FictionBook):** Parses XML structure for title, author, genre, annotation
+    - **LIT (Microsoft Reader):** Extracts embedded metadata where accessible
+    - **PRC (Palm Resource):** Reads PalmDOC/Mobipocket headers
+    - **Comics (CBR/CBZ/CB7/CBT):** Extracts ComicInfo.xml if present, analyzes archive contents
 
 2. **External API Queries:**
-   - **Open Library:** ISBN/title lookup for books
-   - **Google Books:** Comprehensive metadata and covers
-   - **Comic Vine:** Comic series and issue information
-   - Rate limiting and API key management
+    - **Open Library:** ISBN/title lookup for books
+    - **Google Books:** Comprehensive metadata and covers
+    - **Comic Vine:** Comic series and issue information
+    - Rate limiting and API key management
 
 3. **Confidence Scoring:**
-   - Each metadata source assigned trust level (0.0-1.0)
-   - Field-specific confidence based on data completeness
-   - Weighted aggregation determines final values
-   - Manual entries receive highest confidence (1.0)
+    - Each metadata source assigned trust level (0.0-1.0)
+    - Field-specific confidence based on data completeness
+    - Weighted aggregation determines final values
+    - Manual entries receive highest confidence (1.0)
 
 4. **Data Harmonization:**
-   - Author name normalization (Last, First format)
-   - Series number standardization (padded integers)
-   - Genre mapping to standardized taxonomy
-   - Language code normalization (ISO 639-1)
+    - Author name normalization (Last, First format)
+    - Series number standardization (padded integers)
+    - Genre mapping to standardized taxonomy
+    - Language code normalization (ISO 639-1)
 
 **Expected Output:**
 
@@ -272,16 +489,58 @@ The Django Ebook Management System is a comprehensive library management applica
 
 ### 4. Book Renaming and Organization
 
-#### Intelligent File Renaming System
+#### Intelligent File Renaming System with Template Management
 
-**Purpose:** Rename and reorganize book files according to user-defined patterns while preserving all metadata and ensuring no data loss.
+**Purpose:** Rename and reorganize book files according to user-defined patterns while preserving all metadata and ensuring no data loss. The system provides both predefined templates and custom pattern creation, with centralized management through user settings.
 
 **Entry Points:**
 
-- `/rename-books/` - Main renaming interface
-- `/rename-books/preview/` - Pattern preview and validation
-- `/rename-books/execute/` - Batch rename execution
+- `/rename-books/` - Bulk renaming interface
+- `/rename-books/templates/` - Template management (CRUD operations)
+- `/settings/` - Default template selection and preview
+- `/book/<id>/metadata/` - Single-file rename within metadata workflow
 - `/ajax/bulk-rename-preview/` - AJAX preview generation
+
+**Template Management Architecture:**
+
+1. **Predefined System Templates:**
+    - Comprehensive: `${author.sortname}/${bookseries.title}/${title}.${ext}`
+    - Author-Title: `${author.sortname}/${title}.${ext}`
+    - Title Only: `${title}.${ext}`
+    - Series Focused: `${bookseries.title}/${bookseries.title} ${bookseries.number} - ${title}.${ext}`
+    - Year-Author: `${publicationyear}/${author.sortname}/${title}.${ext}`
+    - Genre Organization: `${genre}/${author.sortname}/${title}.${ext}`
+
+2. **Custom User Templates:**
+    - Created and managed in `/rename-books/templates/`
+    - Stored in UserProfile.saved_patterns as JSON
+    - Full CRUD operations available
+    - Pattern validation before save
+
+3. **Settings Integration (Single Source of Truth):**
+    - `/settings/` page includes template selection section
+    - Preview example showing folder and filename patterns
+    - "Save as Default Template" button persists choice to UserProfile
+    - Pattern examples displayed with clickable selection
+    - Visual feedback (green border) when template matches current default
+    - All rename operations automatically load user's default template:
+        - Bulk rename page (`/rename-books/`)
+        - Template management page (`/rename-books/templates/`)
+        - Metadata page file operations (`/book/<id>/metadata/`)
+
+**Template Variables:**
+
+- `${title}` - Book title
+- `${author}` - Author name (Last, First)
+- `${author.sortname}` - Author sort name
+- `${series}` - Series title
+- `${series_number}` - Series number (padded)
+- `${bookseries.title}` - Series title (alternative)
+- `${bookseries.number}` - Series number (alternative)
+- `${year}` / `${publicationyear}` - Publication year
+- `${genre}` - Primary genre
+- `${ext}` - File extension
+- `${publisher}` - Publisher name
 
 **User Inputs:**
 
@@ -293,27 +552,27 @@ The Django Ebook Management System is a comprehensive library management applica
 **System Actions:**
 
 1. **Pattern Processing:**
-   - Template engine processes tokens like `${author.sortname}`, `${bookseries.title}`, `${publicationyear}`
-   - Character sanitization for filesystem compatibility
-   - Path length validation (Windows/Linux limits)
-   - Preview generation showing before/after paths
+    - Template engine processes tokens like `${author.sortname}`, `${bookseries.title}`, `${publicationyear}`
+    - Character sanitization for filesystem compatibility
+    - Path length validation (Windows/Linux limits)
+    - Preview generation showing before/after paths
 
 2. **Conflict Detection:**
-   - Checks for destination file existence
-   - Identifies potential path collisions
-   - Detects circular references or invalid patterns
-   - Validates directory creation permissions
+    - Checks for destination file existence
+    - Identifies potential path collisions
+    - Detects circular references or invalid patterns
+    - Validates directory creation permissions
 
 3. **File Operations:**
-   - Creates target directories as needed
-   - Moves primary book file atomically
-   - Handles companion files (covers, OPF, NFO)
-   - Updates database paths after successful move
+    - Creates target directories as needed
+    - Moves primary book file atomically
+    - Handles companion files (covers, OPF, NFO)
+    - Updates database paths after successful move
 
 4. **Rollback Capability:**
-   - Maintains operation log for reversal
-   - Atomic operations where possible
-   - Recovery procedures for partial failures
+    - Maintains operation log for reversal
+    - Atomic operations where possible
+    - Recovery procedures for partial failures
 
 **Expected Output:**
 
@@ -391,22 +650,22 @@ The Django Ebook Management System is a comprehensive library management applica
 **System Actions:**
 
 1. **Series Detection:**
-   - Automatic detection from book metadata
-   - Pattern recognition in titles (Book 1, Part I, Vol. 2)
-   - External metadata source series information
-   - Manual series creation and assignment
+    - Automatic detection from book metadata
+    - Pattern recognition in titles (Book 1, Part I, Vol. 2)
+    - External metadata source series information
+    - Manual series creation and assignment
 
 2. **Ordering Management:**
-   - Numeric series positions with decimal support (1.5 for novellas)
-   - Multiple ordering schemes (publication vs. chronological)
-   - Gap detection and suggested corrections
-   - Duplicate number conflict resolution
+    - Numeric series positions with decimal support (1.5 for novellas)
+    - Multiple ordering schemes (publication vs. chronological)
+    - Gap detection and suggested corrections
+    - Duplicate number conflict resolution
 
 3. **Series Metadata:**
-   - Series descriptions and cover art
-   - Author consistency validation
-   - Genre and category inheritance
-   - Reading status tracking across series
+    - Series descriptions and cover art
+    - Author consistency validation
+    - Genre and category inheritance
+    - Reading status tracking across series
 
 **Expected Output:**
 
@@ -468,28 +727,31 @@ The Django Ebook Management System is a comprehensive library management applica
 **System Actions:**
 
 1. **Cover Extraction:**
-   - **EPUB:** Extracts covers from OPF manifest and content
-   - **MOBI:** Retrieves embedded cover images
-   - **PDF:** Generates thumbnails from first page
-   - **Comics:** Uses first page or cover image
+    - **EPUB:** Extracts covers from OPF manifest and content
+    - **MOBI/AZW/AZW3:** Retrieves embedded cover images from EXTH records
+    - **PDF:** Generates thumbnails from first page
+    - **FB2:** Extracts inline base64-encoded cover images from XML
+    - **LIT:** Attempts extraction from internal structure
+    - **Comics (CBR/CBZ/CB7/CBT):** Uses first page or dedicated cover.jpg/cover.png from archive
+    - **Audiobooks:** Extracts embedded album art from ID3 tags (MP3) or iTunes metadata (M4A/M4B)
 
 2. **External Cover Retrieval:**
-   - Open Library cover API integration
-   - Google Books cover download
-   - Comic Vine cover matching
-   - High-resolution preference settings
+    - Open Library cover API integration
+    - Google Books cover download
+    - Comic Vine cover matching
+    - High-resolution preference settings
 
 3. **Image Processing:**
-   - Automatic resize and optimization
-   - Format standardization (JPEG for photos, PNG for graphics)
-   - Quality assessment and duplicate detection
-   - Thumbnail generation for UI performance
+    - Automatic resize and optimization
+    - Format standardization (JPEG for photos, PNG for graphics)
+    - Quality assessment and duplicate detection
+    - Thumbnail generation for UI performance
 
 4. **Cover Association:**
-   - Multiple covers per book with confidence scoring
-   - Primary cover selection based on quality metrics
-   - Cover preservation during file operations
-   - Backup and recovery procedures
+    - Multiple covers per book with confidence scoring
+    - Primary cover selection based on quality metrics
+    - Cover preservation during file operations
+    - Backup and recovery procedures
 
 **Expected Output:**
 
@@ -551,22 +813,22 @@ The Django Ebook Management System is a comprehensive library management applica
 **System Actions:**
 
 1. **Search Processing:**
-   - Full-text search across multiple fields
-   - Fuzzy matching for typos and variations
-   - Boolean operators (AND, OR, NOT)
-   - Wildcard and regex pattern support
+    - Full-text search across multiple fields
+    - Fuzzy matching for typos and variations
+    - Boolean operators (AND, OR, NOT)
+    - Wildcard and regex pattern support
 
 2. **Filtering Engine:**
-   - Multiple simultaneous filters
-   - Range queries (publication years, file sizes)
-   - Existence filters (has cover, has series)
-   - Quality filters (metadata completeness)
+    - Multiple simultaneous filters
+    - Range queries (publication years, file sizes)
+    - Existence filters (has cover, has series)
+    - Quality filters (metadata completeness)
 
 3. **Result Ranking:**
-   - Relevance scoring based on field matches
-   - Boost factors for exact vs. partial matches
-   - User preference influence on ranking
-   - Recently accessed book prioritization
+    - Relevance scoring based on field matches
+    - Boost factors for exact vs. partial matches
+    - User preference influence on ranking
+    - Recently accessed book prioritization
 
 **Expected Output:**
 
@@ -628,22 +890,22 @@ The Django Ebook Management System is a comprehensive library management applica
 **System Actions:**
 
 1. **Source Management:**
-   - Track reliability statistics for each source
-   - Automatic quality assessment based on accuracy
-   - Performance monitoring and timeout handling
-   - API quota and rate limit management
+    - Track reliability statistics for each source
+    - Automatic quality assessment based on accuracy
+    - Performance monitoring and timeout handling
+    - API quota and rate limit management
 
 2. **Trust Level Calculation:**
-   - Historical accuracy tracking
-   - Data completeness scoring
-   - User feedback integration
-   - Automatic trust adjustment based on performance
+    - Historical accuracy tracking
+    - Data completeness scoring
+    - User feedback integration
+    - Automatic trust adjustment based on performance
 
 3. **Conflict Resolution:**
-   - Weighted voting system for conflicting data
-   - Manual override capabilities
-   - Confidence scoring for final decisions
-   - Audit trail for all resolutions
+    - Weighted voting system for conflicting data
+    - Manual override capabilities
+    - Confidence scoring for final decisions
+    - Audit trail for all resolutions
 
 **Expected Output:**
 
@@ -705,22 +967,22 @@ The Django Ebook Management System is a comprehensive library management applica
 **System Actions:**
 
 1. **Task Queue Management:**
-   - Priority-based task scheduling
-   - Resource allocation and throttling
-   - Progress tracking and status updates
-   - Error handling and retry logic
+    - Priority-based task scheduling
+    - Resource allocation and throttling
+    - Progress tracking and status updates
+    - Error handling and retry logic
 
 2. **Operation Types:**
-   - **Metadata Enhancement:** External API queries, cover downloads
-   - **File Operations:** Batch renaming, organization, validation
-   - **Maintenance Tasks:** Database optimization, cleanup operations
-   - **Import Processing:** Large-scale file discovery and cataloging
+    - **Metadata Enhancement:** External API queries, cover downloads
+    - **File Operations:** Batch renaming, organization, validation
+    - **Maintenance Tasks:** Database optimization, cleanup operations
+    - **Import Processing:** Large-scale file discovery and cataloging
 
 3. **Progress Reporting:**
-   - Real-time progress updates via WebSocket/AJAX
-   - Detailed operation logs
-   - Performance metrics and statistics
-   - Completion notifications
+    - Real-time progress updates via WebSocket/AJAX
+    - Detailed operation logs
+    - Performance metrics and statistics
+    - Completion notifications
 
 **Expected Output:**
 
@@ -768,22 +1030,22 @@ The Django Ebook Management System is a comprehensive library management applica
 **System-Wide Error Handling Principles:**
 
 1. **Graceful Degradation:**
-   - Operations continue with reduced functionality when possible
-   - Clear user communication about limitations
-   - Automatic fallback to alternative approaches
-   - No complete system failures from individual component errors
+    - Operations continue with reduced functionality when possible
+    - Clear user communication about limitations
+    - Automatic fallback to alternative approaches
+    - No complete system failures from individual component errors
 
 2. **Data Integrity Protection:**
-   - Atomic operations where possible
-   - Transaction rollback on failures
-   - Backup and recovery procedures
-   - Validation before destructive operations
+    - Atomic operations where possible
+    - Transaction rollback on failures
+    - Backup and recovery procedures
+    - Validation before destructive operations
 
 3. **User Communication:**
-   - Clear, actionable error messages
-   - Progress indicators during recovery
-   - Suggested resolution steps
-   - Contact information for support
+    - Clear, actionable error messages
+    - Progress indicators during recovery
+    - Suggested resolution steps
+    - Contact information for support
 
 **Common Error Scenarios:**
 
@@ -842,24 +1104,50 @@ The Django Ebook Management System is a comprehensive library management applica
 
 ### 11. System Configuration and Customization
 
-#### Administrative Configuration System
+#### User Settings and Preferences
 
-**Purpose:** Provide comprehensive system configuration options for administrators and advanced users.
+**Purpose:** Provide comprehensive user-level configuration options with immediate effect across all system operations.
 
 **Entry Points:**
 
-- `/settings/` - User preferences and configuration
-- `/admin/` - Django admin interface for system settings
+- `/settings/` - User preferences and configuration hub
+- `/admin/` - Django admin interface for system-level settings
 - Configuration files and environment variables
 - `/scanning/help/` - Configuration guidance
 
-**Configuration Categories:**
+**User Settings Page (`/settings/`):**
 
-#### Library Management
+The Settings page serves as the **single source of truth** for user preferences, ensuring consistent behavior across all system features.
+
+**Configuration Sections:**
+
+#### 1. File Renaming Templates
+
+**Purpose:** Centralized template selection and management for all file renaming operations.
+
+**Features:**
+
+- **Template Selection:** - Dropdown showing all available templates (system + custom) - Custom templates marked with ⭐ indicator - Read-only display with link to Template Management for editing
+
+- **Pattern Preview:** - Live example showing folder pattern - Live example showing filename pattern - Sample result preview using example book metadata - Optimized font sizing (0.7-0.75rem) for readability - Word-break handling to prevent overflow
+
+- **Pattern Examples:** - Dynamically generated from predefined system templates - Clickable examples that update dropdown selection - Visual feedback: Green border when example matches current default, orange when different - Automatic scroll to dropdown on selection - Examples sourced from PREDEFINED_PATTERNS (not hardcoded)
+
+- **Save Functionality:** - "Save as Default Template" button - AJAX save to UserProfile (default_folder_pattern, default_filename_pattern) - Visual confirmation ("Saved!" message for 2 seconds) - Immediate effect across all rename operations
+
+- **Companion Files:** - Checkbox to include companion files (covers, OPF, metadata) - Synced to UserProfile.include_companion_files - Automatically applied in bulk rename and metadata workflows
+
+**Integration Points:**
+
+- Settings selections automatically load in: - `/rename-books/` - Bulk rename page - `/rename-books/templates/` - Template management - `/book/<id>/metadata/` - File operations section
+
+- UserProfile Model Fields: - `default_folder_pattern` - User's preferred folder organization pattern - `default_filename_pattern` - User's preferred filename pattern - `include_companion_files` - Boolean for companion file handling - `saved_patterns` - JSON array of custom templates
+
+#### 2. Library Management
 
 - **Scan Folders:** Add/remove directories, set scan frequency
 - **File Formats:** Enable/disable format support, set processing priorities
-- **Organization:** Default naming patterns, directory structures
+- **Organization:** Default naming patterns (managed via templates above)
 - **Cleanup:** Orphan file handling, duplicate management
 
 #### Metadata Sources
@@ -918,19 +1206,19 @@ The Django Ebook Management System is a comprehensive library management applica
 ### Cross-Module Dependencies
 
 1. **Import → Metadata → Organization Flow:**
-   - File scanning creates basic book records
-   - Background metadata enhancement populates detailed information
-   - Renaming system uses enhanced metadata for organization
+    - File scanning creates basic book records
+    - Background metadata enhancement populates detailed information
+    - Renaming system uses enhanced metadata for organization
 
 2. **Search → Display → Action Pattern:**
-   - Search system queries across all metadata sources
-   - Results display with consistent formatting and controls
-   - User actions (rename, edit, delete) maintain data integrity
+    - Search system queries across all metadata sources
+    - Results display with consistent formatting and controls
+    - User actions (rename, edit, delete) maintain data integrity
 
 3. **Source Management → Quality Assessment Loop:**
-   - Data sources provide metadata with confidence scores
-   - User feedback and accuracy tracking adjusts source trust
-   - Improved trust levels enhance future metadata quality
+    - Data sources provide metadata with confidence scores
+    - User feedback and accuracy tracking adjusts source trust
+    - Improved trust levels enhance future metadata quality
 
 ### System Integration Points
 
@@ -974,7 +1262,7 @@ The Django Ebook Management System is a comprehensive library management applica
 #### Background Processing Architecture
 
 - **Asynchronous Task Queue**: Non-blocking operations for large libraries
-- **Progress Tracking**: Real-time progress with ETA calculations  
+- **Progress Tracking**: Real-time progress with ETA calculations
 - **Error Recovery**: Automatic retry with exponential backoff
 - **Resource Management**: Memory and CPU throttling for system stability
 - **API Health Monitoring**: Circuit breaker pattern for failing services

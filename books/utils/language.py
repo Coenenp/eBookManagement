@@ -3,78 +3,117 @@ def normalize_language(value):
 
     lang_map = {
         # English
-        'en': 'en', 'eng': 'en', 'english': 'en',
-        'en-us': 'en', 'en-gb': 'en', 'en-au': 'en',
-
+        "en": "en",
+        "eng": "en",
+        "english": "en",
+        "en-us": "en",
+        "en-gb": "en",
+        "en-au": "en",
         # French
-        'fr': 'fr', 'fra': 'fr', 'fre': 'fr', 'french': 'fr', 'fr-fr': 'fr',
-        'français': 'fr', 'fr-ca': 'fr', 'fr-be': 'fr',
-
+        "fr": "fr",
+        "fra": "fr",
+        "fre": "fr",
+        "french": "fr",
+        "fr-fr": "fr",
+        "français": "fr",
+        "fr-ca": "fr",
+        "fr-be": "fr",
         # German
-        'de': 'de', 'deu': 'de', 'ger': 'de', 'german': 'de', 'de-de': 'de',
-        'de-at': 'de', 'de-ch': 'de',
-
+        "de": "de",
+        "deu": "de",
+        "ger": "de",
+        "german": "de",
+        "de-de": "de",
+        "de-at": "de",
+        "de-ch": "de",
         # Dutch
-        'nl': 'nl', 'nld': 'nl', 'dut': 'nl', 'dutch': 'nl', 'nl-nl': 'nl',
-
+        "nl": "nl",
+        "nld": "nl",
+        "dut": "nl",
+        "dutch": "nl",
+        "nl-nl": "nl",
         # Spanish
-        'es': 'es', 'spa': 'es', 'spanish': 'es',
-        'español': 'es', 'es-mx': 'es', 'es-ar': 'es',
-
+        "es": "es",
+        "spa": "es",
+        "spanish": "es",
+        "español": "es",
+        "es-mx": "es",
+        "es-ar": "es",
         # Portuguese
-        'pt': 'pt', 'por': 'pt', 'pt-br': 'pt', 'portuguese': 'pt',
-
+        "pt": "pt",
+        "por": "pt",
+        "pt-br": "pt",
+        "portuguese": "pt",
         # Italian
-        'it': 'it', 'ita': 'it', 'italian': 'it',
-
+        "it": "it",
+        "ita": "it",
+        "italian": "it",
         # Japanese
-        'ja': 'ja', 'jpn': 'ja', 'japanese': 'ja',
-        '日本語': 'ja',
-
+        "ja": "ja",
+        "jpn": "ja",
+        "japanese": "ja",
+        "日本語": "ja",
         # Korean
-        'ko': 'ko', 'kor': 'ko', 'korean': 'ko',
-
+        "ko": "ko",
+        "kor": "ko",
+        "korean": "ko",
         # Chinese
-        'zh': 'zh', 'chi': 'zh', 'zho': 'zh', 'chinese': 'zh',
-        'zh-hans': 'zh', 'zh-hant': 'zh', 'zh-cn': 'zh', 'zh-tw': 'zh',
-        '中文': 'zh',
-
+        "zh": "zh",
+        "chi": "zh",
+        "zho": "zh",
+        "chinese": "zh",
+        "zh-hans": "zh",
+        "zh-hant": "zh",
+        "zh-cn": "zh",
+        "zh-tw": "zh",
+        "中文": "zh",
         # Additional languages to match LANGUAGE_CHOICES
         # Hebrew
-        'he': 'he', 'heb': 'he', 'hebrew': 'he',
-
+        "he": "he",
+        "heb": "he",
+        "hebrew": "he",
         # Hungarian
-        'hu': 'hu', 'hun': 'hu', 'hungarian': 'hu',
-
+        "hu": "hu",
+        "hun": "hu",
+        "hungarian": "hu",
         # Polish
-        'pl': 'pl', 'pol': 'pl', 'polish': 'pl',
-
+        "pl": "pl",
+        "pol": "pl",
+        "polish": "pl",
         # Russian
-        'ru': 'ru', 'rus': 'ru', 'russian': 'ru',
-        'русский': 'ru',
-
+        "ru": "ru",
+        "rus": "ru",
+        "russian": "ru",
+        "русский": "ru",
         # Turkish
-        'tr': 'tr', 'tur': 'tr', 'turkish': 'tr',
-
+        "tr": "tr",
+        "tur": "tr",
+        "turkish": "tr",
         # Catalan
-        'ca': 'ca', 'cat': 'ca', 'catalan': 'ca',
-
+        "ca": "ca",
+        "cat": "ca",
+        "catalan": "ca",
         # Indonesian
-        'id': 'id', 'ind': 'id', 'indonesian': 'id',
-
+        "id": "id",
+        "ind": "id",
+        "indonesian": "id",
         # Hebrew mis-capitalizations
-        'Heb': 'he', 'HEB': 'he',
-
+        "Heb": "he",
+        "HEB": "he",
         # Unknown or undefined - return None to be filtered out
-        'und': None, 'zxx': None, '': None, 'unknown': None,
+        "und": None,
+        "zxx": None,
+        "": None,
+        "unknown": None,
     }
 
     # Import here to avoid circular imports
     from books.utils.language_manager import LanguageManager
+
     valid_codes = LanguageManager.get_valid_codes()
 
     normalized_values = []
-    for segment in str(value).replace(';', ',').split(','):
+    for segment in str(value).replace(";", ",").split(","):
         code = segment.strip().lower()
         if code:
             normalized_code = lang_map.get(code)

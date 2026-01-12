@@ -70,9 +70,7 @@ class ComicVineAPI:
                 return None
 
             if data.get("status_code") != 1:
-                logger.warning(
-                    f"[COMICVINE ERROR] {data.get('error', 'Unknown error')}"
-                )
+                logger.warning(f"[COMICVINE ERROR] {data.get('error', 'Unknown error')}")
                 return None
 
             return data
@@ -95,9 +93,7 @@ class ComicVineAPI:
             return result["results"]
         return []
 
-    def search_issues(
-        self, volume_id: int, issue_number: Optional[int] = None, limit: int = 10
-    ) -> List[Dict]:
+    def search_issues(self, volume_id: int, issue_number: Optional[int] = None, limit: int = 10) -> List[Dict]:
         """Search for issues within a specific volume."""
         params = {
             "filter": f"volume:{volume_id}",
@@ -115,9 +111,7 @@ class ComicVineAPI:
 
     def get_volume_details(self, volume_id: int) -> Optional[Dict]:
         """Get detailed information about a specific volume."""
-        params = {
-            "field_list": "id,name,publisher,start_year,count_of_issues,deck,description,person_credits,character_credits"
-        }
+        params = {"field_list": "id,name,publisher,start_year,count_of_issues,deck,description,person_credits,character_credits"}
 
         result = self._make_request(f"volume/4050-{volume_id}", params)
         if result and result.get("results"):
@@ -126,9 +120,7 @@ class ComicVineAPI:
 
     def get_issue_details(self, issue_id: int) -> Optional[Dict]:
         """Get detailed information about a specific issue."""
-        params = {
-            "field_list": "id,name,issue_number,cover_date,store_date,deck,description,image,person_credits,volume"
-        }
+        params = {"field_list": "id,name,issue_number,cover_date,store_date,deck,description,image,person_credits,volume"}
 
         result = self._make_request(f"issue/4000-{issue_id}", params)
         if result and result.get("results"):
@@ -159,13 +151,9 @@ class ComicVineAPI:
             logger.error(f"[COMICVINE] Error saving comic metadata: {e}")
 
 
-def query_comicvine_metadata(
-    book: Book, series_name: str, issue_number: Optional[int] = None
-) -> bool:
+def query_comicvine_metadata(book: Book, series_name: str, issue_number: Optional[int] = None) -> bool:
     """Query Comic Vine API for comic book metadata."""
-    logger.info(
-        f"[COMICVINE QUERY] Searching for series: {series_name}, issue: {issue_number}"
-    )
+    logger.info(f"[COMICVINE QUERY] Searching for series: {series_name}, issue: {issue_number}")
 
     try:
         api = ComicVineAPI()
@@ -191,15 +179,11 @@ def query_comicvine_metadata(
             issues = api.search_issues(volume_id, issue_number, limit=1)
             if issues:
                 issue = issues[0]
-                logger.info(
-                    f"[COMICVINE] Found issue: {issue.get('name', 'Untitled')} #{issue.get('issue_number')}"
-                )
+                logger.info(f"[COMICVINE] Found issue: {issue.get('name', 'Untitled')} #{issue.get('issue_number')}")
                 _save_issue_metadata(book, issue, source)
                 return True
             else:
-                logger.info(
-                    f"[COMICVINE] No specific issue #{issue_number} found in volume {volume_id}"
-                )
+                logger.info(f"[COMICVINE] No specific issue #{issue_number} found in volume {volume_id}")
 
         # If no specific issue found, use volume-level metadata
         return True
@@ -228,9 +212,7 @@ def _save_volume_metadata(book: Book, volume: Dict, source: DataSource):
         # Save publisher
         publisher_info = volume.get("publisher")
         if publisher_info and publisher_info.get("name"):
-            publisher_obj, _ = Publisher.objects.get_or_create(
-                name=publisher_info["name"]
-            )
+            publisher_obj, _ = Publisher.objects.get_or_create(name=publisher_info["name"])
             BookPublisher.objects.get_or_create(
                 book=book,
                 publisher=publisher_obj,

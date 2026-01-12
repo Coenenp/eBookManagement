@@ -1,0 +1,228 @@
+{% extends 'books/base.html' %}
+{% load static %}
+{% load custom_filters %}
+
+{% block title %}Rename Template Management{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'book/css/renamer.css' %}">
+<style>
+    /* Make empty pattern fields visually distinct from filled ones */
+    .field-empty {
+        background-color: #f8f9fa !important;
+        font-style: italic;
+        color: #6c757d;
+    }
+    
+    .field-filled {
+        background-color: white !important;
+        font-style: normal;
+        font-weight: 500;
+        color: #212529;
+    }
+    
+    /* Default state for pattern fields */
+    #folder-pattern,
+    #filename-pattern {
+        background-color: #f8f9fa;
+        font-style: italic;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1>Rename Template Management</h1>
+                    <p class="text-muted">Create and manage reusable patterns for organizing your library</p>
+                </div>
+                <a href="{% url 'books:book_renamer' %}" class="btn btn-primary">
+                    <i class="fas fa-arrow-right me-1"></i> Go to Bulk Rename
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Template Management Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-th-list me-2"></i>Rename Templates</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Unified Template Selection -->
+                        <div class="col-md-8 mb-3">
+                            <label for="template-selector" class="form-label">Select Template</label>
+                            <select class="form-select" id="template-selector" name="template_selector">
+                                <option value="">-- Create a new template --</option>
+                                <optgroup label="Your Saved Templates" id="saved-templates-group">
+                                    <!-- User templates will be loaded via JS -->
+                                </optgroup>
+                                <optgroup label="System Templates">
+                                    {% for key, pattern in predefined_patterns.items %}
+                                    <option value="system-{{ key }}" 
+                                            data-folder="{{ pattern.folder }}" 
+                                            data-filename="{{ pattern.filename }}"
+                                            data-deletable="false">
+                                        {{ pattern.name }} - {{ pattern.description }}
+                                    </option>
+                                    {% endfor %}
+                                </optgroup>
+                            </select>
+                            <small class="text-muted">⭐ = Your custom templates (can be edited/deleted) | System templates can be used as starting points</small>
+                        </div>
+                        
+                        <!-- Template Actions -->
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Actions</label>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-success" id="save-template-btn">
+                                    <i class="fas fa-save me-1"></i> Save
+                                </button>
+                                <button type="button" class="btn btn-outline-danger" id="delete-template-btn" disabled>
+                                    <i class="fas fa-trash me-1"></i> Delete
+                                </button>
+                            </div>
+                            <small class="text-muted">Save as new or update existing template</small>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <!-- Pattern Editors -->
+                    <div class="row">
+                        <!-- Folder Pattern -->
+                        <div class="col-md-6 mb-3">
+                            <label for="folder-pattern" class="form-label">Folder Structure Pattern</label>
+                            <input type="text" class="form-control font-monospace field-empty" id="folder-pattern" name="folder_pattern" 
+                                   placeholder="${category}/${author.sortname}">
+                            <div class="form-text">Define the folder hierarchy using tokens</div>
+                            <div id="folder-pattern-validation" class="mt-1"></div>
+                        </div>
+
+                        <!-- Filename Pattern -->
+                        <div class="col-md-6 mb-3">
+                            <label for="filename-pattern" class="form-label">Filename Pattern</label>
+                            <input type="text" class="form-control font-monospace field-empty" id="filename-pattern" name="filename_pattern" 
+                                   placeholder="${author.sortname} - ${title}.${ext}">
+                            <div class="form-text">Define the filename using tokens and static text</div>
+                            <div id="filename-pattern-validation" class="mt-1"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Live Preview -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="alert alert-info mb-0">
+                                <h6 class="alert-heading"><i class="fas fa-eye me-2"></i>Live Preview (Sample Book)</h6>
+                                <div id="pattern-preview" class="font-monospace small">
+                                    <em class="text-muted">Enter patterns to see preview...</em>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Token Reference Section -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card border">
+                <div class="card-header bg-body-secondary">
+                    <h5 class="mb-0"><i class="fas fa-code me-2"></i>Available Tokens</h5>
+                </div>
+                <div class="card-body bg-body">
+                    <div class="accordion" id="token-reference">
+                        {% for category, tokens in available_tokens.items %}
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                {% if forloop.first %}
+                                <button class="accordion-button" 
+                                        type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#collapse-{{ category }}" 
+                                        aria-expanded="true">
+                                {% else %}
+                                <button class="accordion-button collapsed" 
+                                        type="button" data-bs-toggle="collapse" 
+                                        data-bs-target="#collapse-{{ category }}" 
+                                        aria-expanded="false">
+                                {% endif %}
+                                    {{ category|title }} Tokens
+                                </button>
+                            </h2>
+                            <div id="collapse-{{ category }}" 
+                                 class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" 
+                                 data-bs-parent="#token-reference">
+                                <div class="accordion-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Token</th>
+                                                    <th>Description</th>
+                                                    <th>Example</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for token in tokens %}
+                                                <tr>
+                                                    <td><code class="token-clickable" data-token="{{ token.token }}">{{ token.token }}</code></td>
+                                                    <td>{{ token.description }}</td>
+                                                    <td><small class="text-muted">{{ token.example }}</small></td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Pattern Examples -->
+                    <div class="mt-3">
+                        <h6>Pattern Examples</h6>
+                        {% for example in pattern_examples %}
+                        <div class="border border-warning-subtle rounded p-2 mb-2 bg-warning-subtle example-clickable" 
+                             data-folder="{{ example.folder }}" 
+                             data-filename="{{ example.filename }}">
+                            <strong class="text-warning-emphasis">{{ example.name }}</strong><br>
+                            <small class="text-muted font-monospace">{{ example.result }}</small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loading-overlay" class="d-none">
+    <div class="text-center">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div class="mt-2">Processing...</div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="{% static 'book/js/template-manager.js' %}"></script>
+<script>
+// Pass default template to JavaScript
+window.defaultTemplateKey = '{{ default_template_key|default:"" }}';
+</script>
+{% endblock %}

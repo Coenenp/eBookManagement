@@ -31,48 +31,32 @@ class Command(BaseCommand):
         # Scan folder command
         scan_parser = subparsers.add_parser("scan", help="Scan a folder for books")
         scan_parser.add_argument("folder_path", help="Path to folder to scan")
-        scan_parser.add_argument(
-            "--language", default="en", help="Default language for books"
-        )
-        scan_parser.add_argument(
-            "--no-external-apis", action="store_true", help="Skip external API queries"
-        )
+        scan_parser.add_argument("--language", default="en", help="Default language for books")
+        scan_parser.add_argument("--no-external-apis", action="store_true", help="Skip external API queries")
         scan_parser.add_argument(
             "--background",
             action="store_true",
             help="Run in background (returns job ID)",
         )
-        scan_parser.add_argument(
-            "--wait", action="store_true", help="Wait for completion and show progress"
-        )
+        scan_parser.add_argument("--wait", action="store_true", help="Wait for completion and show progress")
 
         # Rescan books command
         rescan_parser = subparsers.add_parser("rescan", help="Rescan existing books")
-        rescan_parser.add_argument(
-            "--book-ids", nargs="+", type=int, help="Specific book IDs to rescan"
-        )
-        rescan_parser.add_argument(
-            "--all", action="store_true", help="Rescan all books"
-        )
+        rescan_parser.add_argument("--book-ids", nargs="+", type=int, help="Specific book IDs to rescan")
+        rescan_parser.add_argument("--all", action="store_true", help="Rescan all books")
         rescan_parser.add_argument("--folder", help="Rescan books in specific folder")
-        rescan_parser.add_argument(
-            "--no-external-apis", action="store_true", help="Skip external API queries"
-        )
+        rescan_parser.add_argument("--no-external-apis", action="store_true", help="Skip external API queries")
         rescan_parser.add_argument(
             "--background",
             action="store_true",
             help="Run in background (returns job ID)",
         )
-        rescan_parser.add_argument(
-            "--wait", action="store_true", help="Wait for completion and show progress"
-        )
+        rescan_parser.add_argument("--wait", action="store_true", help="Wait for completion and show progress")
 
         # Status command
         status_parser = subparsers.add_parser("status", help="Show scanning status")
         status_parser.add_argument("--job-id", help="Show status for specific job")
-        status_parser.add_argument(
-            "--apis", action="store_true", help="Show API rate limit status"
-        )
+        status_parser.add_argument("--apis", action="store_true", help="Show API rate limit status")
 
         # List active scans
         subparsers.add_parser("list", help="List all active scan jobs")
@@ -125,16 +109,12 @@ class Command(BaseCommand):
             self.stdout.write(f"Starting background scan (Job ID: {job_id})")
 
             # Start the background job
-            result = background_scan_folder(
-                job_id, folder_path, language, enable_external_apis
-            )
+            result = background_scan_folder(job_id, folder_path, language, enable_external_apis)
 
             if wait:
                 self.wait_for_completion(job_id)
             else:
-                self.stdout.write(
-                    f"Background scan started. Use 'scan_books status --job-id {job_id}' to monitor progress."
-                )
+                self.stdout.write(f"Background scan started. Use 'scan_books status --job-id {job_id}' to monitor progress.")
         else:
             # Run synchronously (not recommended for large folders)
             self.stdout.write("Running synchronous scan...")
@@ -144,15 +124,9 @@ class Command(BaseCommand):
             result = scanner.scan_folder(folder_path, language, enable_external_apis)
 
             if result["success"]:
-                self.stdout.write(
-                    self.style.SUCCESS(f"Scan completed: {result['message']}")
-                )
+                self.stdout.write(self.style.SUCCESS(f"Scan completed: {result['message']}"))
             else:
-                self.stdout.write(
-                    self.style.ERROR(
-                        f"Scan failed: {result.get('error', 'Unknown error')}"
-                    )
-                )
+                self.stdout.write(self.style.ERROR(f"Scan failed: {result.get('error', 'Unknown error')}"))
 
     def handle_rescan(self, options):
         """Handle book rescanning."""
@@ -203,9 +177,7 @@ class Command(BaseCommand):
             if wait:
                 self.wait_for_completion(job_id)
             else:
-                self.stdout.write(
-                    f"Background rescan started. Use 'scan_books status --job-id {job_id}' to monitor progress."
-                )
+                self.stdout.write(f"Background rescan started. Use 'scan_books status --job-id {job_id}' to monitor progress.")
         else:
             # Run synchronously
             self.stdout.write("Running synchronous rescan...")
@@ -215,15 +187,9 @@ class Command(BaseCommand):
             result = scanner.rescan_existing_books(book_ids, enable_external_apis)
 
             if result["success"]:
-                self.stdout.write(
-                    self.style.SUCCESS(f"Rescan completed: {result['message']}")
-                )
+                self.stdout.write(self.style.SUCCESS(f"Rescan completed: {result['message']}"))
             else:
-                self.stdout.write(
-                    self.style.ERROR(
-                        f"Rescan failed: {result.get('error', 'Unknown error')}"
-                    )
-                )
+                self.stdout.write(self.style.ERROR(f"Rescan failed: {result.get('error', 'Unknown error')}"))
 
     def handle_status(self, options):
         """Handle status queries."""
@@ -282,17 +248,9 @@ class Command(BaseCommand):
 
             if status.get("completed"):
                 if status.get("success"):
-                    self.stdout.write(
-                        self.style.SUCCESS(
-                            f"Completed: {status.get('message', 'Success')}"
-                        )
-                    )
+                    self.stdout.write(self.style.SUCCESS(f"Completed: {status.get('message', 'Success')}"))
                 else:
-                    self.stdout.write(
-                        self.style.ERROR(
-                            f"Failed: {status.get('error', 'Unknown error')}"
-                        )
-                    )
+                    self.stdout.write(self.style.ERROR(f"Failed: {status.get('error', 'Unknown error')}"))
                 break
 
             percentage = status.get("percentage", 0)
@@ -321,13 +279,9 @@ class Command(BaseCommand):
         if status.get("completed"):
             self.stdout.write("Status: Completed")
             if status.get("success"):
-                self.stdout.write(
-                    self.style.SUCCESS(f"Result: {status.get('message', 'Success')}")
-                )
+                self.stdout.write(self.style.SUCCESS(f"Result: {status.get('message', 'Success')}"))
             else:
-                self.stdout.write(
-                    self.style.ERROR(f"Error: {status.get('error', 'Unknown error')}")
-                )
+                self.stdout.write(self.style.ERROR(f"Error: {status.get('error', 'Unknown error')}"))
 
             total_time = status.get("total_time", 0)
             self.stdout.write(f"Total time: {int(total_time)}s")
@@ -371,11 +325,5 @@ class Command(BaseCommand):
                 if period in current_counts:
                     count = current_counts[period]
                     limit = limits.get(period, "N/A")
-                    percentage = (
-                        int((count / limit * 100))
-                        if isinstance(limit, int) and limit > 0
-                        else 0
-                    )
-                    self.stdout.write(
-                        f"  {period.title()}: {count}/{limit} ({percentage}%)"
-                    )
+                    percentage = int((count / limit * 100)) if isinstance(limit, int) and limit > 0 else 0
+                    self.stdout.write(f"  {period.title()}: {count}/{limit} ({percentage}%)")

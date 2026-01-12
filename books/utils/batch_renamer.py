@@ -3,6 +3,7 @@ Ebook & Series Renamer - Batch Processing
 
 Handles batch renaming operations, companion file management, and rollback capabilities.
 """
+
 import logging
 import os
 import shutil
@@ -54,8 +55,7 @@ class ExecutionResult:
 class FileOperation:
     """Represents a single file operation (rename/move)."""
 
-    def __init__(self, source_path: str, target_path: str,
-                 operation_type: str = 'rename', book_id: Optional[int] = None):
+    def __init__(self, source_path: str, target_path: str, operation_type: str = "rename", book_id: Optional[int] = None):
         self.source_path = Path(source_path)
         self.target_path = Path(target_path)
         self.operation_type = operation_type
@@ -71,10 +71,16 @@ class CompanionFileFinder:
     """Finds and manages companion files for ebooks."""
 
     COMPANION_EXTENSIONS = {
-        '.jpg', '.jpeg', '.png', '.gif',  # Cover images
-        '.opf', '.xml',                   # Metadata files
-        '.txt', '.nfo',                   # Description files
-        '.srt', '.vtt',                   # Subtitle files (for audiobooks)
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".gif",  # Cover images
+        ".opf",
+        ".xml",  # Metadata files
+        ".txt",
+        ".nfo",  # Description files
+        ".srt",
+        ".vtt",  # Subtitle files (for audiobooks)
     }
 
     def __init__(self):
@@ -106,7 +112,7 @@ class CompanionFileFinder:
                 companion_files.append(str(companion_path))
 
         # Look for common generic names
-        generic_names = ['cover', 'metadata', 'description']
+        generic_names = ["cover", "metadata", "description"]
         for generic in generic_names:
             for ext in self.COMPANION_EXTENSIONS:
                 generic_path = book_dir / f"{generic}{ext}"
@@ -115,9 +121,7 @@ class CompanionFileFinder:
 
         return companion_files
 
-    def generate_companion_operations(self, book: Book, folder_pattern: str,
-                                      filename_pattern: str,
-                                      companion_files: List[str]) -> List[FileOperation]:
+    def generate_companion_operations(self, book: Book, folder_pattern: str, filename_pattern: str, companion_files: List[str]) -> List[FileOperation]:
         """
         Generate file operations for companion files.
 
@@ -138,18 +142,11 @@ class CompanionFileFinder:
 
             # Generate target path for companion file
             target_folder = self.engine.process_template(folder_pattern, book)
-            target_filename = self.engine.process_template(
-                filename_pattern, book, companion_ext
-            )
+            target_filename = self.engine.process_template(filename_pattern, book, companion_ext)
 
             target_path = Path(target_folder) / target_filename
 
-            operations.append(FileOperation(
-                source_path=str(companion_file),
-                target_path=str(target_path),
-                operation_type='companion_rename',
-                book_id=book.id
-            ))
+            operations.append(FileOperation(source_path=str(companion_file), target_path=str(target_path), operation_type="companion_rename", book_id=book.id))
 
         return operations
 
@@ -166,8 +163,7 @@ class BatchRenamer:
         self.operations: List[FileOperation] = []
         self.rollback_log: List[Dict] = []
 
-    def add_book(self, book: Book, folder_pattern: str,
-                 filename_pattern: str, include_companions: bool = True) -> None:
+    def add_book(self, book: Book, folder_pattern: str, filename_pattern: str, include_companions: bool = True) -> None:
         """
         Add a single book to the batch renaming queue.
 
@@ -178,13 +174,11 @@ class BatchRenamer:
             include_companions: Whether to include companion files
         """
         try:
-            self._add_single_book(book, folder_pattern, filename_pattern,
-                                  include_companions)
+            self._add_single_book(book, folder_pattern, filename_pattern, include_companions)
         except Exception as e:
             logger.error(f"Error adding book {book.id} to batch: {e}")
 
-    def add_books(self, books: List[Book], folder_pattern: str,
-                  filename_pattern: str, include_companions: bool = True) -> None:
+    def add_books(self, books: List[Book], folder_pattern: str, filename_pattern: str, include_companions: bool = True) -> None:
         """
         Add books to the batch renaming queue.
 
@@ -196,13 +190,11 @@ class BatchRenamer:
         """
         for book in books:
             try:
-                self._add_single_book(book, folder_pattern, filename_pattern,
-                                      include_companions)
+                self._add_single_book(book, folder_pattern, filename_pattern, include_companions)
             except Exception as e:
                 logger.error(f"Error adding book {book.id} to batch: {e}")
 
-    def _add_single_book(self, book: Book, folder_pattern: str,
-                         filename_pattern: str, include_companions: bool) -> None:
+    def _add_single_book(self, book: Book, folder_pattern: str, filename_pattern: str, include_companions: bool) -> None:
         """Add a single book and its operations to the batch."""
         if not book.file_path or not os.path.exists(book.file_path):
             logger.warning(f"Book {book.id} file not found: {book.file_path}")
@@ -221,20 +213,13 @@ class BatchRenamer:
         target_path = book_base_dir / target_folder / target_filename
 
         # Add main file operation
-        main_operation = FileOperation(
-            source_path=book.file_path,
-            target_path=str(target_path),
-            operation_type='main_rename',
-            book_id=book.id
-        )
+        main_operation = FileOperation(source_path=book.file_path, target_path=str(target_path), operation_type="main_rename", book_id=book.id)
         self.operations.append(main_operation)
 
         # Add companion file operations
         if include_companions:
             companion_files = self.companion_finder.find_companion_files(book.file_path)
-            companion_ops = self.companion_finder.generate_companion_operations(
-                book, folder_pattern, filename_pattern, companion_files
-            )
+            companion_ops = self.companion_finder.generate_companion_operations(book, folder_pattern, filename_pattern, companion_files)
             self.operations.extend(companion_ops)
 
     def preview_operations(self) -> List[Dict]:
@@ -249,19 +234,19 @@ class BatchRenamer:
         for op in self.operations:
             # For dry run previews, assume success unless there are blocking warnings
             warnings = self._check_operation_warnings(op)
-            has_blocking_warnings = any('permission denied' in w.lower() or 'not found' in w.lower() for w in warnings)
+            has_blocking_warnings = any("permission denied" in w.lower() or "not found" in w.lower() for w in warnings)
 
             preview = {
-                'operation_type': op.operation_type,
-                'book_id': op.book_id,
-                'source_path': str(op.source_path),
-                'target_path': str(op.target_path),
-                'source_exists': op.source_path.exists(),
-                'target_exists': op.target_path.exists(),
-                'will_create_dirs': not op.target_path.parent.exists(),
-                'path_length': len(str(op.target_path)),
-                'warnings': warnings,
-                'status': 'failed' if has_blocking_warnings else 'success'
+                "operation_type": op.operation_type,
+                "book_id": op.book_id,
+                "source_path": str(op.source_path),
+                "target_path": str(op.target_path),
+                "source_exists": op.source_path.exists(),
+                "target_exists": op.target_path.exists(),
+                "will_create_dirs": not op.target_path.parent.exists(),
+                "path_length": len(str(op.target_path)),
+                "warnings": warnings,
+                "status": "failed" if has_blocking_warnings else "success",
             }
             previews.append(preview)
 
@@ -310,13 +295,7 @@ class BatchRenamer:
         if is_dry_run:
             logger.info("Dry run mode - no files will be moved")
             return ExecutionResult(
-                successful=len(self.operations),
-                failed=0,
-                errors=[],
-                success=True,
-                dry_run=True,
-                operations=self.preview_operations(),
-                summary=self.get_operation_summary()
+                successful=len(self.operations), failed=0, errors=[], success=True, dry_run=True, operations=self.preview_operations(), summary=self.get_operation_summary()
             )
 
         successful = 0
@@ -370,20 +349,16 @@ class BatchRenamer:
                 op.target_path.parent.mkdir(parents=True, exist_ok=True)
 
                 # Perform the file operation
-                if op.operation_type in ['main_rename', 'companion_rename']:
+                if op.operation_type in ["main_rename", "companion_rename"]:
                     self._move_file(str(op.source_path), str(op.target_path))
 
                 op.executed = True
                 executed_ops.append(op)
 
                 # Log operation for potential rollback
-                self.rollback_log.append({
-                    'book_id': book_id,
-                    'operation': op.operation_type,
-                    'source': str(op.source_path),
-                    'target': str(op.target_path),
-                    'timestamp': timezone.now()
-                })
+                self.rollback_log.append(
+                    {"book_id": book_id, "operation": op.operation_type, "source": str(op.source_path), "target": str(op.target_path), "timestamp": timezone.now()}
+                )
 
         except Exception as e:
             # Rollback already executed operations for this book
@@ -409,7 +384,7 @@ class BatchRenamer:
 
     def _update_book_path(self, book_id: int, operations: List[FileOperation]) -> None:
         """Update the book's file path in the database."""
-        main_ops = [op for op in operations if op.operation_type == 'main_rename']
+        main_ops = [op for op in operations if op.operation_type == "main_rename"]
 
         if main_ops:
             main_op = main_ops[0]  # Should only be one main operation per book
@@ -419,7 +394,7 @@ class BatchRenamer:
                 primary_file = book.primary_file
                 if primary_file:
                     primary_file.file_path = str(main_op.target_path)
-                    primary_file.save(update_fields=['file_path'])
+                    primary_file.save(update_fields=["file_path"])
                     logger.info(f"Updated book {book_id} primary file path to: {primary_file.file_path}")
                 else:
                     logger.error(f"Book {book_id} has no primary file to update")
@@ -428,18 +403,12 @@ class BatchRenamer:
 
     def get_operation_summary(self) -> Dict:
         """Get a summary of queued operations."""
-        main_files = sum(1 for op in self.operations if op.operation_type == 'main_rename')
-        companion_files = sum(1 for op in self.operations if op.operation_type == 'companion_rename')
+        main_files = sum(1 for op in self.operations if op.operation_type == "main_rename")
+        companion_files = sum(1 for op in self.operations if op.operation_type == "companion_rename")
 
         unique_books = len(set(op.book_id for op in self.operations if op.book_id))
 
-        return {
-            'total_operations': len(self.operations),
-            'main_files': main_files,
-            'companion_files': companion_files,
-            'books_affected': unique_books,
-            'dry_run': self.dry_run
-        }
+        return {"total_operations": len(self.operations), "main_files": main_files, "companion_files": companion_files, "books_affected": unique_books, "dry_run": self.dry_run}
 
 
 class RenamingHistory:

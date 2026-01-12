@@ -31,7 +31,7 @@ class BaseTestCaseWithTempDir(TestCase):
 
     def tearDown(self):
         """Clean up temporary directories."""
-        if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+        if hasattr(self, "temp_dir") and os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
         super().tearDown()
 
@@ -39,7 +39,7 @@ class BaseTestCaseWithTempDir(TestCase):
         """Create a temporary book file for testing."""
         file_path = Path(self.temp_dir) / filename
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(file_path, 'wb') as f:
+        with open(file_path, "wb") as f:
             f.write(content)
         return file_path
 
@@ -54,74 +54,56 @@ class FileUploadTests(BaseTestCaseWithTempDir):
     def setUp(self):
         super().setUp()
         self.client = Client()
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.client.login(username='testuser', password='testpass123')
+        self.user = User.objects.create_user(username="testuser", password="testpass123")
+        self.client.login(username="testuser", password="testpass123")
 
         # Create scan folder for book creation using temporary directory
-        self.scan_folder = ScanFolder.objects.create(
-            path=self.temp_dir,
-            is_active=True
-        )
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir, is_active=True)
 
     def test_single_file_upload_success(self):
         """Test successful single file upload."""
         # Create a test file
         test_content = b"This is a test ebook file content."
-        uploaded_file = SimpleUploadedFile(
-            "test_book.epub",
-            test_content,
-            content_type="application/epub+zip"
-        )
+        uploaded_file = SimpleUploadedFile("test_book.epub", test_content, content_type="application/epub+zip")
 
-        url = reverse('books:ajax_upload_file')
-        response = self.client.post(url, {'file': uploaded_file})
+        url = reverse("books:ajax_upload_file")
+        response = self.client.post(url, {"file": uploaded_file})
 
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
-        self.assertTrue(response_data.get('success', False))
-        self.assertIn('file_id', response_data)
+        self.assertTrue(response_data.get("success", False))
+        self.assertIn("file_id", response_data)
 
     def test_multiple_file_upload(self):
         """Test multiple file upload functionality."""
         files = []
         for i in range(3):
             content = f"Test ebook content {i}".encode()
-            uploaded_file = SimpleUploadedFile(
-                f"test_book_{i}.epub",
-                content,
-                content_type="application/epub+zip"
-            )
+            uploaded_file = SimpleUploadedFile(f"test_book_{i}.epub", content, content_type="application/epub+zip")
             files.append(uploaded_file)
 
-        url = reverse('books:ajax_upload_multiple_files')
-        response = self.client.post(url, {'files': files})
+        url = reverse("books:ajax_upload_multiple_files")
+        response = self.client.post(url, {"files": files})
 
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
-        self.assertTrue(response_data.get('success', False))
-        self.assertEqual(len(response_data.get('uploaded_files', [])), 3)
+        self.assertTrue(response_data.get("success", False))
+        self.assertEqual(len(response_data.get("uploaded_files", [])), 3)
 
     def test_file_upload_size_validation(self):
         """Test file size validation during upload."""
         # Create oversized file (mock large content)
         large_content = b"x" * (100 * 1024 * 1024)  # 100MB
-        large_file = SimpleUploadedFile(
-            "large_book.epub",
-            large_content,
-            content_type="application/epub+zip"
-        )
+        large_file = SimpleUploadedFile("large_book.epub", large_content, content_type="application/epub+zip")
 
-        url = reverse('books:ajax_upload_file')
-        response = self.client.post(url, {'file': large_file})
+        url = reverse("books:ajax_upload_file")
+        response = self.client.post(url, {"file": large_file})
 
         # Should either succeed or fail gracefully with size limit message
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
         # Either success or appropriate error message
-        self.assertIn('success', response_data)
+        self.assertIn("success", response_data)
 
     def test_file_upload_format_validation(self):
         """Test file format validation during upload."""
@@ -135,36 +117,28 @@ class FileUploadTests(BaseTestCaseWithTempDir):
 
         for filename, content_type in valid_formats:
             with self.subTest(format=filename):
-                uploaded_file = SimpleUploadedFile(
-                    filename,
-                    b"test content",
-                    content_type=content_type
-                )
+                uploaded_file = SimpleUploadedFile(filename, b"test content", content_type=content_type)
 
-                url = reverse('books:ajax_upload_file')
-                response = self.client.post(url, {'file': uploaded_file})
+                url = reverse("books:ajax_upload_file")
+                response = self.client.post(url, {"file": uploaded_file})
 
                 self.assertEqual(response.status_code, 200)
                 response_data = json.loads(response.content)
-                self.assertTrue(response_data.get('success', False))
+                self.assertTrue(response_data.get("success", False))
 
     def test_file_upload_invalid_format(self):
         """Test upload rejection for invalid file formats."""
-        invalid_file = SimpleUploadedFile(
-            "test.txt",
-            b"This is not an ebook",
-            content_type="text/plain"
-        )
+        invalid_file = SimpleUploadedFile("test.txt", b"This is not an ebook", content_type="text/plain")
 
-        url = reverse('books:ajax_upload_file')
-        response = self.client.post(url, {'file': invalid_file})
+        url = reverse("books:ajax_upload_file")
+        response = self.client.post(url, {"file": invalid_file})
 
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
         # Should reject invalid format
-        if not response_data.get('success', True):
-            self.assertIn('error', response_data)
-            self.assertIn('format', response_data['error'].lower())
+        if not response_data.get("success", True):
+            self.assertIn("error", response_data)
+            self.assertIn("format", response_data["error"].lower())
 
     def test_file_upload_duplicate_handling(self):
         """Test handling of duplicate file uploads."""
@@ -172,14 +146,10 @@ class FileUploadTests(BaseTestCaseWithTempDir):
         test_content = b"Duplicate test content"
 
         for attempt in range(2):
-            uploaded_file = SimpleUploadedFile(
-                "duplicate_test.epub",
-                test_content,
-                content_type="application/epub+zip"
-            )
+            uploaded_file = SimpleUploadedFile("duplicate_test.epub", test_content, content_type="application/epub+zip")
 
-            url = reverse('books:ajax_upload_file')
-            response = self.client.post(url, {'file': uploaded_file})
+            url = reverse("books:ajax_upload_file")
+            response = self.client.post(url, {"file": uploaded_file})
 
             self.assertEqual(response.status_code, 200)
             response_data = json.loads(response.content)
@@ -187,42 +157,35 @@ class FileUploadTests(BaseTestCaseWithTempDir):
             if attempt == 1:
                 # Second upload might be handled differently
                 # Either allowed (with new name) or rejected as duplicate
-                self.assertIn('success', response_data)
+                self.assertIn("success", response_data)
 
     def test_file_upload_progress_tracking(self):
         """Test file upload progress tracking."""
-        url = reverse('books:ajax_upload_progress')
+        url = reverse("books:ajax_upload_progress")
 
         # Check upload progress (may return empty if no active uploads)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
         response_data = json.loads(response.content)
-        self.assertIn('uploads', response_data)
-        self.assertIsInstance(response_data['uploads'], list)
+        self.assertIn("uploads", response_data)
+        self.assertIsInstance(response_data["uploads"], list)
 
     def test_file_upload_cancellation(self):
         """Test cancelling file uploads."""
         # Start upload
-        uploaded_file = SimpleUploadedFile(
-            "cancel_test.epub",
-            b"test content for cancellation",
-            content_type="application/epub+zip"
-        )
+        uploaded_file = SimpleUploadedFile("cancel_test.epub", b"test content for cancellation", content_type="application/epub+zip")
 
-        upload_url = reverse('books:ajax_upload_file')
-        upload_response = self.client.post(upload_url, {'file': uploaded_file})
+        upload_url = reverse("books:ajax_upload_file")
+        upload_response = self.client.post(upload_url, {"file": uploaded_file})
 
         if upload_response.status_code == 200:
             upload_data = json.loads(upload_response.content)
 
-            if upload_data.get('success') and 'upload_id' in upload_data:
+            if upload_data.get("success") and "upload_id" in upload_data:
                 # Cancel upload
-                cancel_url = reverse('books:ajax_cancel_upload')
-                cancel_response = self.client.post(
-                    cancel_url,
-                    {'upload_id': upload_data['upload_id']}
-                )
+                cancel_url = reverse("books:ajax_cancel_upload")
+                cancel_response = self.client.post(cancel_url, {"upload_id": upload_data["upload_id"]})
 
                 self.assertEqual(cancel_response.status_code, 200)
 
@@ -233,27 +196,21 @@ class FileValidationTests(BaseTestCaseWithTempDir):
     def setUp(self):
         super().setUp()
         self.client = Client()
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.client.login(username='testuser', password='testpass123')
+        self.user = User.objects.create_user(username="testuser", password="testpass123")
+        self.client.login(username="testuser", password="testpass123")
 
         # Create scan folder for book creation using temporary directory
-        self.scan_folder = ScanFolder.objects.create(
-            path=self.temp_dir,
-            is_active=True
-        )
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir, is_active=True)
 
     def test_file_integrity_validation(self):
         """Test file integrity validation."""
-        url = reverse('books:ajax_validate_file_integrity')
+        url = reverse("books:ajax_validate_file_integrity")
 
         # Test with valid file ID
         # Create test file in temp directory
-        test_file_path = os.path.join(self.temp_dir, 'test.epub')
-        with open(test_file_path, 'w') as f:
-            f.write('test content')
+        test_file_path = os.path.join(self.temp_dir, "test.epub")
+        with open(test_file_path, "w") as f:
+            f.write("test content")
 
         book = create_test_book_with_file(
             file_path=test_file_path,
@@ -261,18 +218,15 @@ class FileValidationTests(BaseTestCaseWithTempDir):
             scan_folder=self.scan_folder,
         )
 
-        response = self.client.post(
-            url,
-            {'book_id': book.id}
-        )
+        response = self.client.post(url, {"book_id": book.id})
 
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
-        self.assertIn('success', response_data)
-        self.assertIn('valid', response_data)
+        self.assertIn("success", response_data)
+        self.assertIn("valid", response_data)
 
-    @patch('os.path.exists')
-    @patch('os.path.getsize')
+    @patch("os.path.exists")
+    @patch("os.path.getsize")
     def test_file_existence_validation(self, mock_getsize, mock_exists):
         """Test validation of file existence."""
         # Mock file exists and has size
@@ -280,9 +234,9 @@ class FileValidationTests(BaseTestCaseWithTempDir):
         mock_getsize.return_value = 1024
 
         # Create test file in temp directory
-        test_file_path = os.path.join(self.temp_dir, 'existing.epub')
-        with open(test_file_path, 'w') as f:
-            f.write('test content')
+        test_file_path = os.path.join(self.temp_dir, "existing.epub")
+        with open(test_file_path, "w") as f:
+            f.write("test content")
 
         book = create_test_book_with_file(
             file_path=test_file_path,
@@ -291,21 +245,21 @@ class FileValidationTests(BaseTestCaseWithTempDir):
             scan_folder=self.scan_folder,
         )
 
-        url = reverse('books:ajax_validate_file_existence')
-        response = self.client.post(url, {'book_id': book.id})
+        url = reverse("books:ajax_validate_file_existence")
+        response = self.client.post(url, {"book_id": book.id})
 
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
-        self.assertTrue(response_data.get('exists', False))
+        self.assertTrue(response_data.get("exists", False))
 
-    @patch('os.path.exists')
+    @patch("os.path.exists")
     def test_missing_file_detection(self, mock_exists):
         """Test detection of missing files."""
         # Mock file doesn't exist
         mock_exists.return_value = False
 
         # Create a book with a file path that starts with '/' to trigger the os.path.exists check
-        non_existent_path = '/nonexistent/missing.epub'
+        non_existent_path = "/nonexistent/missing.epub"
         book = create_test_book_with_file(
             file_path=non_existent_path,
             file_format="epub",
@@ -313,12 +267,12 @@ class FileValidationTests(BaseTestCaseWithTempDir):
         )
         # The mock will make os.path.exists return False for any file
 
-        url = reverse('books:ajax_validate_file_existence')
-        response = self.client.post(url, {'book_id': book.id})
+        url = reverse("books:ajax_validate_file_existence")
+        response = self.client.post(url, {"book_id": book.id})
 
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
-        self.assertFalse(response_data.get('exists', True))
+        self.assertFalse(response_data.get("exists", True))
 
     def test_file_format_validation_detailed(self):
         """Test detailed file format validation."""
@@ -332,16 +286,13 @@ class FileValidationTests(BaseTestCaseWithTempDir):
 
         for filename, expected_format in formats_to_test:
             with self.subTest(format=expected_format):
-                url = reverse('books:ajax_validate_file_format')
+                url = reverse("books:ajax_validate_file_format")
 
-                response = self.client.post(url, {
-                    'filename': filename,
-                    'expected_format': expected_format
-                })
+                response = self.client.post(url, {"filename": filename, "expected_format": expected_format})
 
                 self.assertEqual(response.status_code, 200)
                 response_data = json.loads(response.content)
-                self.assertIn('valid', response_data)
+                self.assertIn("valid", response_data)
 
     def test_batch_file_validation(self):
         """Test batch validation of multiple files."""
@@ -349,9 +300,9 @@ class FileValidationTests(BaseTestCaseWithTempDir):
         books = []
         for i in range(5):
             # Create test file in temp directory
-            test_file_path = os.path.join(self.temp_dir, f'batch_test_{i}.epub')
-            with open(test_file_path, 'w') as f:
-                f.write('test content')
+            test_file_path = os.path.join(self.temp_dir, f"batch_test_{i}.epub")
+            with open(test_file_path, "w") as f:
+                f.write("test content")
 
             book = create_test_book_with_file(
                 file_path=test_file_path,
@@ -362,26 +313,22 @@ class FileValidationTests(BaseTestCaseWithTempDir):
 
         book_ids = [book.id for book in books]
 
-        url = reverse('books:ajax_batch_validate_files')
-        response = self.client.post(
-            url,
-            data=json.dumps({'book_ids': book_ids}),
-            content_type='application/json'
-        )
+        url = reverse("books:ajax_batch_validate_files")
+        response = self.client.post(url, data=json.dumps({"book_ids": book_ids}), content_type="application/json")
 
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
-        self.assertIn('results', response_data)
-        self.assertEqual(len(response_data['results']), 5)
+        self.assertIn("results", response_data)
+        self.assertEqual(len(response_data["results"]), 5)
 
     def test_corrupted_file_detection(self):
         """Test detection of corrupted files."""
-        url = reverse('books:ajax_check_file_corruption')
+        url = reverse("books:ajax_check_file_corruption")
 
         # Create test file in temp directory
-        test_file_path = os.path.join(self.temp_dir, 'corruption_test.epub')
-        with open(test_file_path, 'w') as f:
-            f.write('test content')
+        test_file_path = os.path.join(self.temp_dir, "corruption_test.epub")
+        with open(test_file_path, "w") as f:
+            f.write("test content")
 
         book = create_test_book_with_file(
             file_path=test_file_path,
@@ -389,15 +336,15 @@ class FileValidationTests(BaseTestCaseWithTempDir):
             scan_folder=self.scan_folder,
         )
 
-        with patch('zipfile.ZipFile') as mock_zipfile:
+        with patch("zipfile.ZipFile") as mock_zipfile:
             # Mock corrupted ZIP file
             mock_zipfile.side_effect = Exception("Bad ZIP file")
 
-            response = self.client.post(url, {'book_id': book.id})
+            response = self.client.post(url, {"book_id": book.id})
 
             self.assertEqual(response.status_code, 200)
             response_data = json.loads(response.content)
-            self.assertIn('corrupted', response_data)
+            self.assertIn("corrupted", response_data)
 
 
 class FileProcessingTests(BaseTestCaseWithTempDir):
@@ -406,28 +353,17 @@ class FileProcessingTests(BaseTestCaseWithTempDir):
     def setUp(self):
         super().setUp()
         self.client = Client()
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.client.login(username='testuser', password='testpass123')
+        self.user = User.objects.create_user(username="testuser", password="testpass123")
+        self.client.login(username="testuser", password="testpass123")
 
         # Create scan folder for book creation using temporary directory
-        self.scan_folder = ScanFolder.objects.create(
-            path=self.temp_dir,
-            is_active=True
-        )
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir, is_active=True)
 
-    @patch('books.scanner.parsing.parse_path_metadata')
+    @patch("books.scanner.parsing.parse_path_metadata")
     def test_metadata_extraction_from_file(self, mock_extract):
         """Test metadata extraction from uploaded files."""
         # Mock metadata extraction
-        mock_extract.return_value = {
-            'title': 'Extracted Title',
-            'authors': ['Extracted Author'],
-            'series': 'Test Series',
-            'series_number': 1
-        }
+        mock_extract.return_value = {"title": "Extracted Title", "authors": ["Extracted Author"], "series": "Test Series", "series_number": 1}
 
         book_file = self.create_temp_book_file("processing_test.epub", b"fake epub content")
         book = self.create_test_book_with_file(
@@ -436,17 +372,17 @@ class FileProcessingTests(BaseTestCaseWithTempDir):
             scan_folder=self.scan_folder,
         )
 
-        url = reverse('books:ajax_extract_metadata')
-        response = self.client.post(url, {'book_id': book.id})
+        url = reverse("books:ajax_extract_metadata")
+        response = self.client.post(url, {"book_id": book.id})
 
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
         # Metadata extraction might not be fully implemented yet
-        if not response_data.get('success', False):
+        if not response_data.get("success", False):
             # Check for reasonable error handling
-            self.assertIn('error', response_data)
+            self.assertIn("error", response_data)
         else:
-            self.assertIn('metadata', response_data)
+            self.assertIn("metadata", response_data)
 
     def test_cover_image_extraction(self):
         """Test cover image extraction from files."""
@@ -457,17 +393,17 @@ class FileProcessingTests(BaseTestCaseWithTempDir):
             scan_folder=self.scan_folder,
         )
 
-        url = reverse('books:ajax_extract_cover')
+        url = reverse("books:ajax_extract_cover")
 
-        with patch('books.utils.image_utils.encode_cover_to_base64') as mock_extract:
-            mock_extract.return_value = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ...'
+        with patch("books.utils.image_utils.encode_cover_to_base64") as mock_extract:
+            mock_extract.return_value = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQ..."
 
-            response = self.client.post(url, {'book_id': book.id})
+            response = self.client.post(url, {"book_id": book.id})
 
             self.assertEqual(response.status_code, 200)
             response_data = json.loads(response.content)
             # Cover extraction may not be fully implemented yet
-            self.assertIn('success', response_data)
+            self.assertIn("success", response_data)
 
     def test_file_format_conversion(self):
         """Test file format conversion functionality."""
@@ -478,26 +414,15 @@ class FileProcessingTests(BaseTestCaseWithTempDir):
             scan_folder=self.scan_folder,
         )
 
-        url = reverse('books:ajax_convert_format')
+        url = reverse("books:ajax_convert_format")
 
-        conversion_data = {
-            'book_id': book.id,
-            'target_format': 'pdf',
-            'conversion_options': {
-                'quality': 'high',
-                'preserve_formatting': True
-            }
-        }
+        conversion_data = {"book_id": book.id, "target_format": "pdf", "conversion_options": {"quality": "high", "preserve_formatting": True}}
 
-        response = self.client.post(
-            url,
-            data=json.dumps(conversion_data),
-            content_type='application/json'
-        )
+        response = self.client.post(url, data=json.dumps(conversion_data), content_type="application/json")
 
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
-        self.assertIn('success', response_data)
+        self.assertIn("success", response_data)
 
     def test_batch_processing(self):
         """Test batch processing of multiple files."""
@@ -514,33 +439,25 @@ class FileProcessingTests(BaseTestCaseWithTempDir):
 
         book_ids = [book.id for book in books]
 
-        url = reverse('books:ajax_batch_process_files')
+        url = reverse("books:ajax_batch_process_files")
 
-        batch_data = {
-            'book_ids': book_ids,
-            'operations': ['extract_metadata', 'extract_cover', 'validate'],
-            'priority': 'normal'
-        }
+        batch_data = {"book_ids": book_ids, "operations": ["extract_metadata", "extract_cover", "validate"], "priority": "normal"}
 
-        response = self.client.post(
-            url,
-            data=json.dumps(batch_data),
-            content_type='application/json'
-        )
+        response = self.client.post(url, data=json.dumps(batch_data), content_type="application/json")
 
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
         # Batch processing might not be fully implemented yet
-        if 'batch_id' not in response_data:
+        if "batch_id" not in response_data:
             # Check that the endpoint at least responds reasonably
-            self.assertIn('success', response_data)
+            self.assertIn("success", response_data)
         else:
-            self.assertTrue(response_data.get('success', False))
-            self.assertIn('batch_id', response_data)
+            self.assertTrue(response_data.get("success", False))
+            self.assertIn("batch_id", response_data)
 
     def test_processing_status_tracking(self):
         """Test tracking of file processing status."""
-        url = reverse('books:ajax_processing_status')
+        url = reverse("books:ajax_processing_status")
 
         # Check processing status
         response = self.client.get(url)
@@ -548,45 +465,37 @@ class FileProcessingTests(BaseTestCaseWithTempDir):
 
         response_data = json.loads(response.content)
         # Processing status might not be fully implemented yet
-        if 'active_jobs' not in response_data:
+        if "active_jobs" not in response_data:
             # Check for a reasonable error message
-            self.assertTrue('error' in response_data or 'success' in response_data)
+            self.assertTrue("error" in response_data or "success" in response_data)
         else:
-            self.assertIn('active_jobs', response_data)
-            self.assertIn('completed_jobs', response_data)
-            self.assertIn('failed_jobs', response_data)
+            self.assertIn("active_jobs", response_data)
+            self.assertIn("completed_jobs", response_data)
+            self.assertIn("failed_jobs", response_data)
 
     def test_processing_queue_management(self):
         """Test management of file processing queue."""
         # Add job to queue
-        queue_url = reverse('books:ajax_add_to_processing_queue')
+        queue_url = reverse("books:ajax_add_to_processing_queue")
 
-        queue_data = {
-            'book_id': 1,
-            'operation': 'extract_metadata',
-            'priority': 'high'
-        }
+        queue_data = {"book_id": 1, "operation": "extract_metadata", "priority": "high"}
 
-        response = self.client.post(
-            queue_url,
-            data=json.dumps(queue_data),
-            content_type='application/json'
-        )
+        response = self.client.post(queue_url, data=json.dumps(queue_data), content_type="application/json")
 
         self.assertEqual(response.status_code, 200)
 
         # Check queue status
-        status_url = reverse('books:ajax_processing_queue_status')
+        status_url = reverse("books:ajax_processing_queue_status")
         status_response = self.client.get(status_url)
 
         self.assertEqual(status_response.status_code, 200)
         status_data = json.loads(status_response.content)
         # Queue management might not be fully implemented yet
-        if 'queue_length' not in status_data:
+        if "queue_length" not in status_data:
             # Check for a reasonable error message
-            self.assertTrue('error' in status_data or 'success' in status_data)
+            self.assertTrue("error" in status_data or "success" in status_data)
         else:
-            self.assertIn('queue_length', status_data)
+            self.assertIn("queue_length", status_data)
 
 
 class FileOperationSecurityTests(BaseTestCaseWithTempDir):
@@ -595,70 +504,51 @@ class FileOperationSecurityTests(BaseTestCaseWithTempDir):
     def setUp(self):
         super().setUp()
         self.client = Client()
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.client.login(username='testuser', password='testpass123')
+        self.user = User.objects.create_user(username="testuser", password="testpass123")
+        self.client.login(username="testuser", password="testpass123")
 
         # Create scan folder for book creation using temporary directory
-        self.scan_folder = ScanFolder.objects.create(
-            path=self.temp_dir,
-            is_active=True
-        )
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir, is_active=True)
 
     def test_path_traversal_protection(self):
         """Test protection against path traversal attacks."""
-        malicious_filenames = [
-            "../../../etc/passwd",
-            "..\\..\\..\\windows\\system32\\config\\sam",
-            "test/../../../sensitive_file.txt",
-            "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd"
-        ]
+        malicious_filenames = ["../../../etc/passwd", "..\\..\\..\\windows\\system32\\config\\sam", "test/../../../sensitive_file.txt", "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd"]
 
         for filename in malicious_filenames:
             with self.subTest(filename=filename):
-                uploaded_file = SimpleUploadedFile(
-                    filename,
-                    b"malicious content",
-                    content_type="application/epub+zip"
-                )
+                uploaded_file = SimpleUploadedFile(filename, b"malicious content", content_type="application/epub+zip")
 
-                url = reverse('books:ajax_upload_file')
-                response = self.client.post(url, {'file': uploaded_file})
+                url = reverse("books:ajax_upload_file")
+                response = self.client.post(url, {"file": uploaded_file})
 
                 # Should handle malicious filename safely
                 self.assertEqual(response.status_code, 200)
                 response_data = json.loads(response.content)
 
                 # Either reject or sanitize the filename
-                if response_data.get('success'):
-                    self.assertNotIn('..', response_data.get('filename', ''))
+                if response_data.get("success"):
+                    self.assertNotIn("..", response_data.get("filename", ""))
 
     def test_file_type_spoofing_protection(self):
         """Test protection against file type spoofing."""
         # Upload executable with ebook extension
         malicious_content = b"MZ\x90\x00"  # PE header for Windows executable
 
-        spoofed_file = SimpleUploadedFile(
-            "malicious.epub",
-            malicious_content,
-            content_type="application/epub+zip"
-        )
+        spoofed_file = SimpleUploadedFile("malicious.epub", malicious_content, content_type="application/epub+zip")
 
-        url = reverse('books:ajax_upload_file')
-        response = self.client.post(url, {'file': spoofed_file})
+        url = reverse("books:ajax_upload_file")
+        response = self.client.post(url, {"file": spoofed_file})
 
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
 
         # Should detect file type mismatch
-        if not response_data.get('success', True):
-            self.assertIn('error', response_data)
+        if not response_data.get("success", True):
+            self.assertIn("error", response_data)
 
     def test_zip_bomb_protection(self):
         """Test protection against zip bombs."""
-        url = reverse('books:ajax_validate_file_integrity')
+        url = reverse("books:ajax_validate_file_integrity")
 
         book_file = self.create_temp_book_file("zip_bomb.epub", b"fake epub content")
         book = self.create_test_book_with_file(
@@ -667,21 +557,21 @@ class FileOperationSecurityTests(BaseTestCaseWithTempDir):
             scan_folder=self.scan_folder,
         )
 
-        with patch('zipfile.ZipFile') as mock_zipfile:
+        with patch("zipfile.ZipFile") as mock_zipfile:
             # Mock zip bomb scenario
             mock_zip = MagicMock()
             mock_zip.infolist.return_value = [
                 MagicMock(file_size=1024, compress_size=1),  # High compression ratio
-                MagicMock(file_size=1024*1024*1024, compress_size=1024)  # Suspicious
+                MagicMock(file_size=1024 * 1024 * 1024, compress_size=1024),  # Suspicious
             ]
             mock_zipfile.return_value.__enter__.return_value = mock_zip
 
-            response = self.client.post(url, {'book_id': book.id})
+            response = self.client.post(url, {"book_id": book.id})
 
             self.assertEqual(response.status_code, 200)
             response_data = json.loads(response.content)
             # Should detect suspicious compression ratios
-            self.assertIn('valid', response_data)
+            self.assertIn("valid", response_data)
 
     def test_file_upload_size_limits(self):
         """Test enforcement of file upload size limits."""
@@ -695,50 +585,42 @@ class FileOperationSecurityTests(BaseTestCaseWithTempDir):
         for size, should_pass in size_tests:
             with self.subTest(size=size):
                 # Create content of specified size (mock to avoid memory issues)
-                large_file = SimpleUploadedFile(
-                    f"size_test_{size}.epub",
-                    b"x" * min(size, 1024),  # Limit actual content size
-                    content_type="application/epub+zip"
-                )
+                large_file = SimpleUploadedFile(f"size_test_{size}.epub", b"x" * min(size, 1024), content_type="application/epub+zip")  # Limit actual content size
 
                 # Mock the file size
                 large_file.size = size
 
-                url = reverse('books:ajax_upload_file')
-                response = self.client.post(url, {'file': large_file})
+                url = reverse("books:ajax_upload_file")
+                response = self.client.post(url, {"file": large_file})
 
                 self.assertEqual(response.status_code, 200)
                 response_data = json.loads(response.content)
 
                 if not should_pass:
                     # Large files should be rejected or handled specially
-                    self.assertIn('success', response_data)
+                    self.assertIn("success", response_data)
 
     def test_concurrent_upload_limits(self):
         """Test limits on concurrent file uploads."""
         # Simulate multiple concurrent uploads
         files = []
         for i in range(10):  # Try to upload 10 files simultaneously
-            uploaded_file = SimpleUploadedFile(
-                f"concurrent_{i}.epub",
-                b"concurrent test content",
-                content_type="application/epub+zip"
-            )
+            uploaded_file = SimpleUploadedFile(f"concurrent_{i}.epub", b"concurrent test content", content_type="application/epub+zip")
             files.append(uploaded_file)
 
-        url = reverse('books:ajax_upload_file')
+        url = reverse("books:ajax_upload_file")
 
         # Send multiple uploads (in practice would be concurrent)
         responses = []
         for file in files:
-            response = self.client.post(url, {'file': file})
+            response = self.client.post(url, {"file": file})
             responses.append(response)
 
         # All responses should be handled gracefully
         for response in responses:
             self.assertEqual(response.status_code, 200)
             response_data = json.loads(response.content)
-            self.assertIn('success', response_data)
+            self.assertIn("success", response_data)
 
     def test_filename_sanitization(self):
         """Test filename sanitization for security."""
@@ -747,28 +629,24 @@ class FileOperationSecurityTests(BaseTestCaseWithTempDir):
             "file;with;semicolons.epub",
             "file|with|pipes.epub",
             "file<with>brackets.epub",
-            "file\"with\"quotes.epub",
+            'file"with"quotes.epub',
             "file'with'apostrophes.epub",
-            "file:with:colons.epub"
+            "file:with:colons.epub",
         ]
 
         for filename in problematic_filenames:
             with self.subTest(filename=filename):
-                uploaded_file = SimpleUploadedFile(
-                    filename,
-                    b"test content",
-                    content_type="application/epub+zip"
-                )
+                uploaded_file = SimpleUploadedFile(filename, b"test content", content_type="application/epub+zip")
 
-                url = reverse('books:ajax_upload_file')
-                response = self.client.post(url, {'file': uploaded_file})
+                url = reverse("books:ajax_upload_file")
+                response = self.client.post(url, {"file": uploaded_file})
 
                 self.assertEqual(response.status_code, 200)
                 response_data = json.loads(response.content)
 
-                if response_data.get('success'):
+                if response_data.get("success"):
                     # Check that filename was sanitized (if implemented)
-                    saved_filename = response_data.get('filename', '')
+                    saved_filename = response_data.get("filename", "")
                     # File upload might not implement sanitization yet
                     # Just verify the upload succeeded with some filename
                     self.assertTrue(len(saved_filename) > 0)
@@ -784,17 +662,11 @@ class FileOperationPerformanceTests(BaseTestCaseWithTempDir):
     def setUp(self):
         super().setUp()
         self.client = Client()
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.client.login(username='testuser', password='testpass123')
+        self.user = User.objects.create_user(username="testuser", password="testpass123")
+        self.client.login(username="testuser", password="testpass123")
 
         # Create scan folder for book creation using temporary directory
-        self.scan_folder = ScanFolder.objects.create(
-            path=self.temp_dir,
-            is_active=True
-        )
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir, is_active=True)
 
     def test_large_file_upload_performance(self):
         """Test performance of large file uploads."""
@@ -802,16 +674,12 @@ class FileOperationPerformanceTests(BaseTestCaseWithTempDir):
 
         # Create moderately large file
         large_content = b"x" * (5 * 1024 * 1024)  # 5MB
-        large_file = SimpleUploadedFile(
-            "performance_test.epub",
-            large_content,
-            content_type="application/epub+zip"
-        )
+        large_file = SimpleUploadedFile("performance_test.epub", large_content, content_type="application/epub+zip")
 
-        url = reverse('books:ajax_upload_file')
+        url = reverse("books:ajax_upload_file")
 
         start_time = time.time()
-        response = self.client.post(url, {'file': large_file})
+        response = self.client.post(url, {"file": large_file})
         end_time = time.time()
 
         # Should complete within reasonable time
@@ -837,14 +705,10 @@ class FileOperationPerformanceTests(BaseTestCaseWithTempDir):
 
         book_ids = [book.id for book in books]
 
-        url = reverse('books:ajax_batch_validate_files')
+        url = reverse("books:ajax_batch_validate_files")
 
         start_time = time.time()
-        response = self.client.post(
-            url,
-            data=json.dumps({'book_ids': book_ids}),
-            content_type='application/json'
-        )
+        response = self.client.post(url, data=json.dumps({"book_ids": book_ids}), content_type="application/json")
         end_time = time.time()
 
         # Should complete within reasonable time
@@ -871,8 +735,8 @@ class FileOperationPerformanceTests(BaseTestCaseWithTempDir):
 
         def validate_book(book_id):
             """Validate a single book."""
-            url = reverse('books:ajax_validate_file_existence')
-            response = self.client.post(url, {'book_id': book_id})
+            url = reverse("books:ajax_validate_file_existence")
+            response = self.client.post(url, {"book_id": book_id})
             return response.status_code == 200
 
         # Run validations sequentially (SQLite limitation)
@@ -912,12 +776,8 @@ class FileOperationPerformanceTests(BaseTestCaseWithTempDir):
 
         book_ids = [book.id for book in books]
 
-        url = reverse('books:ajax_batch_validate_files')
-        response = self.client.post(
-            url,
-            data=json.dumps({'book_ids': book_ids}),
-            content_type='application/json'
-        )
+        url = reverse("books:ajax_batch_validate_files")
+        response = self.client.post(url, data=json.dumps({"book_ids": book_ids}), content_type="application/json")
 
         # Get memory usage
         current, peak = tracemalloc.get_traced_memory()
@@ -935,53 +795,43 @@ class FileOperationIntegrationTests(BaseTestCaseWithTempDir):
     def setUp(self):
         super().setUp()
         self.client = Client()
-        self.user = User.objects.create_user(
-            username='testuser',
-            password='testpass123'
-        )
-        self.client.login(username='testuser', password='testpass123')
+        self.user = User.objects.create_user(username="testuser", password="testpass123")
+        self.client.login(username="testuser", password="testpass123")
 
         # Create scan folder for book creation using temporary directory
-        self.scan_folder = ScanFolder.objects.create(
-            path=self.temp_dir,
-            is_active=True
-        )
+        self.scan_folder = ScanFolder.objects.create(path=self.temp_dir, is_active=True)
 
     def test_complete_file_upload_workflow(self):
         """Test complete workflow from upload to processing."""
         # 1. Upload file
         test_content = b"Complete workflow test content"
-        uploaded_file = SimpleUploadedFile(
-            "workflow_test.epub",
-            test_content,
-            content_type="application/epub+zip"
-        )
+        uploaded_file = SimpleUploadedFile("workflow_test.epub", test_content, content_type="application/epub+zip")
 
-        upload_url = reverse('books:ajax_upload_file')
-        upload_response = self.client.post(upload_url, {'file': uploaded_file})
+        upload_url = reverse("books:ajax_upload_file")
+        upload_response = self.client.post(upload_url, {"file": uploaded_file})
 
         self.assertEqual(upload_response.status_code, 200)
         upload_data = json.loads(upload_response.content)
-        self.assertTrue(upload_data.get('success', False))
+        self.assertTrue(upload_data.get("success", False))
 
-        if 'book_id' in upload_data:
-            book_id = upload_data['book_id']
+        if "book_id" in upload_data:
+            book_id = upload_data["book_id"]
 
             # 2. Validate uploaded file
-            validate_url = reverse('books:ajax_validate_file_existence')
-            validate_response = self.client.post(validate_url, {'book_id': book_id})
+            validate_url = reverse("books:ajax_validate_file_existence")
+            validate_response = self.client.post(validate_url, {"book_id": book_id})
 
             self.assertEqual(validate_response.status_code, 200)
 
             # 3. Extract metadata
-            metadata_url = reverse('books:ajax_extract_metadata')
-            metadata_response = self.client.post(metadata_url, {'book_id': book_id})
+            metadata_url = reverse("books:ajax_extract_metadata")
+            metadata_response = self.client.post(metadata_url, {"book_id": book_id})
 
             self.assertEqual(metadata_response.status_code, 200)
 
             # 4. Extract cover
-            cover_url = reverse('books:ajax_extract_cover')
-            cover_response = self.client.post(cover_url, {'book_id': book_id})
+            cover_url = reverse("books:ajax_extract_cover")
+            cover_response = self.client.post(cover_url, {"book_id": book_id})
 
             self.assertEqual(cover_response.status_code, 200)
 
@@ -995,16 +845,16 @@ class FileOperationIntegrationTests(BaseTestCaseWithTempDir):
         )
 
         # Try to validate non-existent file
-        validate_url = reverse('books:ajax_validate_file_existence')
-        response = self.client.post(validate_url, {'book_id': book.id})
+        validate_url = reverse("books:ajax_validate_file_existence")
+        response = self.client.post(validate_url, {"book_id": book.id})
 
         self.assertEqual(response.status_code, 200)
         response_data = json.loads(response.content)
 
         # Should gracefully handle missing file
-        self.assertFalse(response_data.get('exists', True))
+        self.assertFalse(response_data.get("exists", True))
         # Error handling might be implemented differently
-        self.assertTrue('error' in response_data or 'success' in response_data or 'exists' in response_data)
+        self.assertTrue("error" in response_data or "success" in response_data or "exists" in response_data)
 
     def test_file_operation_logging(self):
         """Test logging of file operations."""
@@ -1016,15 +866,13 @@ class FileOperationIntegrationTests(BaseTestCaseWithTempDir):
         )
 
         # Perform operation that should be logged
-        url = reverse('books:ajax_validate_file_integrity')
-        response = self.client.post(url, {'book_id': book.id})
+        url = reverse("books:ajax_validate_file_integrity")
+        response = self.client.post(url, {"book_id": book.id})
 
         self.assertEqual(response.status_code, 200)
 
         # Check if operation was logged (if logging is implemented)
         # This would depend on your logging system
-        logs = ScanLog.objects.filter(
-            message__icontains='file validation'
-        )
+        logs = ScanLog.objects.filter(message__icontains="file validation")
         # May or may not have logs depending on implementation
         self.assertIsInstance(logs.count(), int)  # Verify logs query executes without error

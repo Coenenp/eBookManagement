@@ -53,9 +53,7 @@ class ScanProgress:
             progress_data["eta_seconds"] = None
 
         cache.set(self.cache_key, progress_data, timeout=3600)  # 1 hour
-        logger.info(
-            f"[SCAN PROGRESS] {status}: {current}/{total} ({progress_data['percentage']}%)"
-        )
+        logger.info(f"[SCAN PROGRESS] {status}: {current}/{total} ({progress_data['percentage']}%)")
 
     def complete(self, success: bool, message: str = "", error: str = ""):
         """Mark scan as complete and remove from active scans."""
@@ -113,24 +111,16 @@ class BackgroundScanner:
                 self.scan_session = self.intelligent_scanner.session
 
                 # Get API availability recommendations
-                recommendations = (
-                    self.intelligent_scanner.get_scanning_recommendations()
-                )
+                recommendations = self.intelligent_scanner.get_scanning_recommendations()
                 logger.info(f"[BACKGROUND SCAN] API recommendations: {recommendations}")
 
                 # Adjust scanning mode based on API availability
                 if not recommendations["available_apis"]:
-                    logger.warning(
-                        "[BACKGROUND SCAN] No APIs available, switching to internal-only mode"
-                    )
+                    logger.warning("[BACKGROUND SCAN] No APIs available, switching to internal-only mode")
                     self.api_mode = "internal_only"
                     enable_external_apis = False
-                elif len(recommendations["available_apis"]) < len(
-                    recommendations["api_status"]
-                ):
-                    logger.info(
-                        f"[BACKGROUND SCAN] Partial API availability: {recommendations['available_apis']}"
-                    )
+                elif len(recommendations["available_apis"]) < len(recommendations["api_status"]):
+                    logger.info(f"[BACKGROUND SCAN] Partial API availability: {recommendations['available_apis']}")
                     self.api_mode = "partial"
                 else:
                     self.api_mode = "full"
@@ -160,9 +150,7 @@ class BackgroundScanner:
                     scan_folder.save()
 
             # Use proper folder scanning with content-type support
-            self.progress.update(
-                10, 100, "Scanning folder", "Processing files by content type..."
-            )
+            self.progress.update(10, 100, "Scanning folder", "Processing files by content type...")
 
             try:
                 # Use the folder scanner directly which supports content-type processing
@@ -179,20 +167,14 @@ class BackgroundScanner:
                 if scan_folder.content_type == "audiobooks":
                     from books.models import Audiobook
 
-                    audiobook_count = Audiobook.objects.filter(
-                        scan_folder=scan_folder
-                    ).count()
-                    logger.info(
-                        f"[BACKGROUND SCAN] Created {audiobook_count} audiobook objects"
-                    )
+                    audiobook_count = Audiobook.objects.filter(scan_folder=scan_folder).count()
+                    logger.info(f"[BACKGROUND SCAN] Created {audiobook_count} audiobook objects")
 
                 elif scan_folder.content_type == "comics":
                     from books.models import Comic
 
                     comic_count = Comic.objects.filter(scan_folder=scan_folder).count()
-                    logger.info(
-                        f"[BACKGROUND SCAN] Created {comic_count} comic objects"
-                    )
+                    logger.info(f"[BACKGROUND SCAN] Created {comic_count} comic objects")
 
                 error_count = 0  # folder_scanner handles errors internally
 
@@ -227,19 +209,13 @@ class BackgroundScanner:
 
             # Add intelligent API information to result
             if self.intelligent_scanner:
-                recommendations = (
-                    self.intelligent_scanner.get_scanning_recommendations()
-                )
+                recommendations = self.intelligent_scanner.get_scanning_recommendations()
                 result.update(
                     {
                         "api_mode": self.api_mode,
                         "available_apis": recommendations["available_apis"],
                         "session_id": self.intelligent_scanner.session_id,
-                        "books_needing_retry": (
-                            len(self.scan_session.resume_queue)
-                            if self.scan_session
-                            else 0
-                        ),
+                        "books_needing_retry": (len(self.scan_session.resume_queue) if self.scan_session else 0),
                     }
                 )
 
@@ -252,9 +228,7 @@ class BackgroundScanner:
             self.progress.complete(False, "", str(e))
             return {"success": False, "error": str(e)}
 
-    def _process_single_book(
-        self, book_path: str, scan_folder: ScanFolder, enable_external_apis: bool
-    ) -> bool:
+    def _process_single_book(self, book_path: str, scan_folder: ScanFolder, enable_external_apis: bool) -> bool:
         """Process a single book file with intelligent API management."""
         try:
             # Create book record
@@ -266,35 +240,21 @@ class BackgroundScanner:
             folder_scanner.extract_internal_metadata(book)
 
             # Use intelligent API scanner if enabled
-            if (
-                enable_external_apis
-                and self.intelligent_scanner
-                and self.api_mode != "internal_only"
-            ):
+            if enable_external_apis and self.intelligent_scanner and self.api_mode != "internal_only":
                 try:
                     # Use intelligent scanner for graceful degradation
-                    api_result = self.intelligent_scanner.scan_book_with_intelligence(
-                        book, force_all_apis=(self.api_mode == "full")
-                    )
+                    api_result = self.intelligent_scanner.scan_book_with_intelligence(book, force_all_apis=(self.api_mode == "full"))
 
                     # Log API usage details
                     if api_result["apis_succeeded"]:
-                        logger.info(
-                            f"[INTELLIGENT API] Book {book.id}: Success with {api_result['apis_succeeded']}"
-                        )
+                        logger.info(f"[INTELLIGENT API] Book {book.id}: Success with {api_result['apis_succeeded']}")
                     if api_result["apis_failed"]:
-                        logger.warning(
-                            f"[INTELLIGENT API] Book {book.id}: Failed with {api_result['apis_failed']}"
-                        )
+                        logger.warning(f"[INTELLIGENT API] Book {book.id}: Failed with {api_result['apis_failed']}")
 
                 except Exception as api_error:
-                    logger.warning(
-                        f"[INTELLIGENT API] API error for book {book.id}: {api_error}"
-                    )
+                    logger.warning(f"[INTELLIGENT API] API error for book {book.id}: {api_error}")
                     # Continue without failing - graceful degradation
-                    logger.info(
-                        f"[BACKGROUND SCAN] Continuing without APIs for book {book.id}"
-                    )
+                    logger.info(f"[BACKGROUND SCAN] Continuing without APIs for book {book.id}")
 
             # Sync final metadata if available
             if hasattr(book, "finalmetadata"):
@@ -306,26 +266,20 @@ class BackgroundScanner:
             logger.error(f"[BACKGROUND SCAN] Error processing {book_path}: {e}")
             return False
 
-    def rescan_existing_books(
-        self, book_ids: List[int], enable_external_apis: bool = True
-    ) -> Dict:
+    def rescan_existing_books(self, book_ids: List[int], enable_external_apis: bool = True) -> Dict:
         """Rescan existing books for updated metadata."""
         try:
             total_books = len(book_ids)
             logger.info(f"[BACKGROUND RESCAN] Starting rescan of {total_books} books")
 
-            self.progress.update(
-                0, 100, "Initializing", f"Rescanning {total_books} books"
-            )
+            self.progress.update(0, 100, "Initializing", f"Rescanning {total_books} books")
 
             processed_count = 0
             error_count = 0
 
             for i, book_id in enumerate(book_ids):
                 try:
-                    current_progress = int(
-                        (i / total_books) * 90
-                    )  # 0-90% for processing
+                    current_progress = int((i / total_books) * 90)  # 0-90% for processing
 
                     book = Book.objects.get(id=book_id)
                     self.progress.update(
@@ -351,9 +305,7 @@ class BackgroundScanner:
                     logger.warning(f"[BACKGROUND RESCAN] Book {book_id} not found")
                     error_count += 1
                 except Exception as e:
-                    logger.error(
-                        f"[BACKGROUND RESCAN] Error rescanning book {book_id}: {e}"
-                    )
+                    logger.error(f"[BACKGROUND RESCAN] Error rescanning book {book_id}: {e}")
                     error_count += 1
 
             # Finalize
@@ -405,14 +357,10 @@ def background_scan_folder(
     logger.info(f"[FUNCTION SIGNATURE] Expected: {all_args}")
 
     scanner = BackgroundScanner(job_id)
-    return scanner.scan_folder(
-        folder_path, language, enable_external_apis, content_type
-    )
+    return scanner.scan_folder(folder_path, language, enable_external_apis, content_type)
 
 
-def background_rescan_books(
-    job_id: str, book_ids: List[int], enable_external_apis: bool = True
-):
+def background_rescan_books(job_id: str, book_ids: List[int], enable_external_apis: bool = True):
     """Background job for rescanning existing books."""
     scanner = BackgroundScanner(job_id)
     return scanner.rescan_existing_books(book_ids, enable_external_apis)
@@ -452,10 +400,13 @@ def scan_folder_in_background(
 
     # Log function parameters for debugging
     logger.info(
-        f"[DEBUG] scan_folder_in_background received: folder_id={folder_id}, folder_path={folder_path}, folder_name={folder_name}, content_type={content_type}, language={language}, enable_external_apis={enable_external_apis}"
+        f"[DEBUG] scan_folder_in_background received: folder_id={folder_id}, folder_path={folder_path}, "
+        f"folder_name={folder_name}, content_type={content_type}, language={language}, "
+        f"enable_external_apis={enable_external_apis}"
     )
     logger.info(
-        f"[DEBUG] Calling background_scan_folder with args: job_id={job_id}, folder_path={folder_path}, language={language}, enable_external_apis={enable_external_apis}, content_type={content_type}"
+        f"[DEBUG] Calling background_scan_folder with args: job_id={job_id}, folder_path={folder_path}, "
+        f"language={language}, enable_external_apis={enable_external_apis}, content_type={content_type}"
     )
 
     # Start background scan thread
@@ -470,18 +421,14 @@ def scan_folder_in_background(
 
     try:
         thread.start()
-        logger.info(
-            f"[THREAD STARTED] Background thread started for job {job_id}, thread: {thread.name}"
-        )
+        logger.info(f"[THREAD STARTED] Background thread started for job {job_id}, thread: {thread.name}")
     except Exception as e:
         logger.error(f"[THREAD ERROR] Failed to start thread: {e}")
         raise
 
     return job_id
 
-    logger.info(
-        f"Started background scan for folder '{folder_name}' (ID: {folder_id}, Job ID: {job_id})"
-    )
+    logger.info(f"Started background scan for folder '{folder_name}' (ID: {folder_id}, Job ID: {job_id})")
     return job_id
 
 

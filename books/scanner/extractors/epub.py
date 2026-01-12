@@ -19,9 +19,7 @@ logger = logging.getLogger("books.scanner")
 
 def _get_epub_internal_source():
     """Get or create the EPUB Internal DataSource."""
-    source, created = DataSource.objects.get_or_create(
-        name=DataSource.EPUB_INTERNAL, defaults={"trust_level": 0.8}
-    )
+    source, created = DataSource.objects.get_or_create(name=DataSource.EPUB_INTERNAL, defaults={"trust_level": 0.8})
     return source
 
 
@@ -54,9 +52,7 @@ def extract(book):
             if raw_publisher:  # Only create if non-empty after stripping
                 normalized_name = raw_publisher.lower()
 
-                existing = Publisher.objects.filter(
-                    name__iexact=normalized_name
-                ).first()
+                existing = Publisher.objects.filter(name__iexact=normalized_name).first()
                 publisher_obj = existing or Publisher.objects.create(name=raw_publisher)
 
                 try:
@@ -80,9 +76,7 @@ def extract(book):
             values = epub_book.get_metadata("DC", dc_field)
             if values:
                 raw_value = values[0][0].strip()
-                field_value = (
-                    normalizer(raw_value) if callable(normalizer) else raw_value
-                )
+                field_value = normalizer(raw_value) if callable(normalizer) else raw_value
                 if not field_value:
                     continue
                 BookMetadata.objects.get_or_create(

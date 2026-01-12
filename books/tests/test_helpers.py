@@ -7,8 +7,7 @@ This module provides utilities to help convert old test code to work with the ne
 from books.models import Book, BookFile, BookTitle, DataSource, ScanFolder
 
 
-def create_test_book_with_file(file_path, file_format=None, file_size=None, scan_folder=None,
-                               content_type='ebook', title=..., opf_path=None, **book_kwargs):
+def create_test_book_with_file(file_path, file_format=None, file_size=None, scan_folder=None, content_type="ebook", title=..., opf_path=None, **book_kwargs):
     """
     Create a Book and associated BookFile using the new architecture.
 
@@ -23,7 +22,7 @@ def create_test_book_with_file(file_path, file_format=None, file_size=None, scan
 
     # Extract format from file path if not provided
     if file_format is None and file_path:
-        file_format = os.path.splitext(file_path)[1].lower().lstrip('.')
+        file_format = os.path.splitext(file_path)[1].lower().lstrip(".")
 
     # Create title from filename if not provided
     if title is ... and file_path:
@@ -32,46 +31,28 @@ def create_test_book_with_file(file_path, file_format=None, file_size=None, scan
         title = None
 
     # Create the book
-    book_data = {
-        'content_type': content_type,
-        'scan_folder': scan_folder,
-        **book_kwargs
-    }
+    book_data = {"content_type": content_type, "scan_folder": scan_folder, **book_kwargs}
     book = Book.objects.create(**book_data)
 
     # Create the title record
     if title:
-        data_source, _ = DataSource.objects.get_or_create(
-            name='test_source',
-            defaults={'trust_level': 0.8}
-        )
-        BookTitle.objects.create(
-            book=book,
-            title=title,
-            source=data_source,
-            confidence=0.8,
-            is_active=True
-        )
+        data_source, _ = DataSource.objects.get_or_create(name="test_source", defaults={"trust_level": 0.8})
+        BookTitle.objects.create(book=book, title=title, source=data_source, confidence=0.8, is_active=True)
 
     # Create the file record
     if file_path:
-        book_file_data = {
-            'book': book,
-            'file_path': file_path,
-            'file_format': file_format or 'unknown',
-            'file_size': file_size
-        }
+        book_file_data = {"book": book, "file_path": file_path, "file_format": file_format or "unknown", "file_size": file_size}
 
         # Add optional BookFile fields
         if opf_path:
-            book_file_data['opf_path'] = opf_path
+            book_file_data["opf_path"] = opf_path
 
         BookFile.objects.create(**book_file_data)
 
     return book
 
 
-def create_test_scan_folder(temp_dir=None, name="Test Scan Folder", content_type='ebooks', auto_cleanup=True):
+def create_test_scan_folder(temp_dir=None, name="Test Scan Folder", content_type="ebooks", auto_cleanup=True):
     """
     Create a ScanFolder for testing with a valid temporary directory path.
 
@@ -90,12 +71,7 @@ def create_test_scan_folder(temp_dir=None, name="Test Scan Folder", content_type
         # For automatic cleanup, you should add cleanup in your test tearDown
         # or use addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
 
-    return ScanFolder.objects.create(
-        path=temp_dir,
-        name=name,
-        content_type=content_type,
-        is_active=True
-    )
+    return ScanFolder.objects.create(path=temp_dir, name=name, content_type=content_type, is_active=True)
 
 
 def migrate_book_creation_call(old_call_text):

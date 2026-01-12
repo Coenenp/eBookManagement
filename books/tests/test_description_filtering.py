@@ -22,15 +22,15 @@ class DescriptionFilterTests(TestCase):
 
     def test_simple_html(self):
         """Test simple HTML with basic formatting"""
-        input_html = '<p>This is a <strong>simple</strong> description with <em>emphasis</em>.</p>'
+        input_html = "<p>This is a <strong>simple</strong> description with <em>emphasis</em>.</p>"
 
         result = sanitize_description(input_html)
 
         # Should preserve basic formatting tags
-        self.assertIn('This is a', result)
-        self.assertIn('simple', result)
-        self.assertIn('description with', result)
-        self.assertIn('emphasis', result)
+        self.assertIn("This is a", result)
+        self.assertIn("simple", result)
+        self.assertIn("description with", result)
+        self.assertIn("emphasis", result)
 
     def test_dangerous_html_content(self):
         """Test HTML with potentially dangerous content"""
@@ -47,7 +47,7 @@ class DescriptionFilterTests(TestCase):
 
     def test_plain_text(self):
         """Test plain text without HTML"""
-        input_text = 'This is just plain text with no HTML.'
+        input_text = "This is just plain text with no HTML."
 
         result = sanitize_description(input_text)
 

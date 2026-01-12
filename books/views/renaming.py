@@ -44,9 +44,10 @@ class BookRenamerView(LoginRequiredMixin, ListView):
             .order_by("finalmetadata__final_series", "finalmetadata__final_series_number", "finalmetadata__final_title")
         )
 
-        # Apply search filter if provided
+        # Apply filters if provided
         request = getattr(self, "request", None)
         if request:
+            # Search filter
             search = request.GET.get("search")
             if search:
                 queryset = queryset.filter(
@@ -55,7 +56,22 @@ class BookRenamerView(LoginRequiredMixin, ListView):
                     | models.Q(finalmetadata__final_series__icontains=search)
                 )
 
-            # Apply issue_type filter for comic books
+            # Content type filter (ebook, audiobook, comic)
+            content_type = request.GET.get("content_type")
+            if content_type:
+                queryset = queryset.filter(content_type=content_type)
+
+            # File format filter (epub, pdf, cbz, mp3, etc.)
+            file_format = request.GET.get("file_format")
+            if file_format:
+                queryset = queryset.filter(files__file_format__iexact=file_format).distinct()
+
+            # Language filter
+            language = request.GET.get("language")
+            if language:
+                queryset = queryset.filter(finalmetadata__language__iexact=language)
+
+            # Issue type filter for comic books (legacy support)
             issue_type = request.GET.get("issue_type")
             if issue_type:
                 queryset = queryset.filter(metadata__field_name="issue_type", metadata__field_value=issue_type, metadata__is_active=True).distinct()
@@ -68,6 +84,7 @@ class BookRenamerView(LoginRequiredMixin, ListView):
 
         # Import here to avoid circular imports
         from books.utils.renaming_engine import PREDEFINED_PATTERNS
+        from books.models import UserProfile
 
         # Add predefined patterns
         context["predefined_patterns"] = PREDEFINED_PATTERNS
@@ -79,6 +96,26 @@ class BookRenamerView(LoginRequiredMixin, ListView):
 
         # Add pattern validator for frontend validation
         context["pattern_examples"] = self._get_pattern_examples()
+
+        # Get user's default template
+        profile = UserProfile.get_or_create_for_user(self.request.user)
+        default_template_key = None
+
+        # Check user templates
+        for template in profile.saved_patterns:
+            if template["folder"] == profile.default_folder_pattern and template["filename"] == profile.default_filename_pattern:
+                default_template_key = f"user-{template['name']}"
+                break
+
+        # Check system templates if not found in user templates
+        if not default_template_key:
+            for key, pattern in PREDEFINED_PATTERNS.items():
+                if pattern["folder"] == profile.default_folder_pattern and pattern["filename"] == profile.default_filename_pattern:
+                    default_template_key = key
+                    break
+
+        context["default_template_key"] = default_template_key
+        context["include_companion_files"] = profile.include_companion_files
 
         # Process books for enhanced display
         context["books_with_previews"] = self._enhance_books_with_previews(
@@ -379,6 +416,100 @@ class BookRenamerView(LoginRequiredMixin, ListView):
             "complete_count": len([s for s in series_data.values() if s["is_complete"]]),
             "incomplete_count": len([s for s in series_data.values() if not s["is_complete"]]),
         }
+
+
+class TemplateManagementView(LoginRequiredMixin, TemplateView):
+    """View for managing rename templates - create, edit, delete patterns."""
+
+    template_name = "books/template_management.html"
+
+    def get_context_data(self, **kwargs):
+        """Add template management context."""
+        context = super().get_context_data(**kwargs)
+
+        # Import here to avoid circular imports
+        from books.utils.renaming_engine import PREDEFINED_PATTERNS
+        from books.models import UserProfile
+
+        # Add predefined patterns
+        context["predefined_patterns"] = PREDEFINED_PATTERNS
+
+        # Add token reference for the UI
+        token_reference = self._get_token_reference()
+        context["available_tokens"] = token_reference
+        context["token_reference"] = token_reference
+
+        # Add pattern examples
+        context["pattern_examples"] = self._get_pattern_examples()
+
+        # Get user's default template
+        profile = UserProfile.get_or_create_for_user(self.request.user)
+        default_template_key = None
+
+        # Check user templates
+        for template in profile.saved_patterns:
+            if template["folder"] == profile.default_folder_pattern and template["filename"] == profile.default_filename_pattern:
+                default_template_key = f"user-{template['name']}"
+                break
+
+        # Check system templates if not found in user templates
+        if not default_template_key:
+            for key, pattern in PREDEFINED_PATTERNS.items():
+                if pattern["folder"] == profile.default_folder_pattern and pattern["filename"] == profile.default_filename_pattern:
+                    default_template_key = key
+                    break
+
+        # Fall back to 'comprehensive' if no match found
+        if not default_template_key:
+            default_template_key = "comprehensive"
+
+        context["default_template_key"] = default_template_key
+
+        return context
+
+    def _get_token_reference(self):
+        """Get comprehensive token reference for the UI."""
+        return {
+            "basic": [
+                {"token": "${title}", "description": "Book title", "example": "21 Lessons for the 21st Century"},
+                {"token": "${author.sortname}", "description": "Author (Last, First)", "example": "Harari, Yuval Noah"},
+                {"token": "${author.fullname}", "description": "Author full name", "example": "Yuval Noah Harari"},
+                {"token": "${language}", "description": "Book language", "example": "English"},
+                {"token": "${category}", "description": "Book category", "example": "Non-Fiction"},
+                {"token": "${ext}", "description": "File extension", "example": "epub"},
+            ],
+            "series": [
+                {"token": "${bookseries.title}", "description": "Series name", "example": "Foundation Series"},
+                {"token": "${bookseries.number}", "description": "Series number", "example": "01"},
+                {"token": "${bookseries.titleSortable}", "description": "Series (sortable)", "example": "Foundation Series, The"},
+            ],
+            "advanced": [
+                {"token": "${title[0]}", "description": "First character of title", "example": "2"},
+                {"token": "${title;first}", "description": "First letter (A-Z) or #", "example": "#"},
+                {"token": "${publicationyear}", "description": "Publication year", "example": "2021"},
+                {"token": "${decadeShort}", "description": "Decade (short)", "example": "2020s"},
+                {"token": "${format}", "description": "File format", "example": "EPUB"},
+                {"token": "${genre}", "description": "Genre", "example": "Science Fiction"},
+            ],
+        }
+
+    def _get_pattern_examples(self):
+        """Get pattern examples for different use cases."""
+        return [
+            {"name": "Simple Author-Title", "folder": "${author.sortname}", "filename": "${title}.${ext}", "result": "Harari, Yuval Noah/21 Lessons for the 21st Century.epub"},
+            {
+                "name": "Category-Based",
+                "folder": "${category}/${author.sortname}",
+                "filename": "${title}.${ext}",
+                "result": "Non-Fiction/Harari, Yuval Noah/21 Lessons for the 21st Century.epub",
+            },
+            {
+                "name": "Series-Aware",
+                "folder": "${author.sortname}/${bookseries.title}",
+                "filename": "${bookseries.title} #${bookseries.number} - ${title}.${ext}",
+                "result": "Asimov, Isaac/Foundation Series/Foundation Series #01 - Foundation.epub",
+            },
+        ]
 
 
 class BookRenamerPreviewView(LoginRequiredMixin, TemplateView):
@@ -790,7 +921,13 @@ def preview_pattern(request):
 
             folder_pattern = request.POST.get("folder_pattern", "")
             filename_pattern = request.POST.get("filename_pattern", "")
-            book_ids = request.POST.getlist("book_ids", [])
+            book_ids = request.POST.getlist("book_ids")
+
+            # Debug logging
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.info(f"preview_pattern: book_ids={book_ids}, len={len(book_ids) if book_ids else 0}")
 
             if not folder_pattern or not filename_pattern:
                 return JsonResponse({"success": False, "error": "Both folder and filename patterns are required"})
@@ -808,8 +945,16 @@ def preview_pattern(request):
             engine = RenamingEngine()
             previews = []
 
-            # Limit preview to first 10 books for performance
-            book_queryset = Book.objects.filter(id__in=book_ids[:10])
+            # If no book_ids provided, get first available book for live preview
+            if not book_ids or len(book_ids) == 0:
+                logger.info("No book_ids provided, fetching first available book")
+                # Get books that are available, not corrupted, not placeholder, and not deleted
+                book_queryset = Book.objects.filter(is_available=True, is_corrupted=False, is_placeholder=False, deleted_at__isnull=True).order_by("id")[:1]
+                logger.info(f"Found {book_queryset.count()} available books")
+            else:
+                # Limit preview to first 10 books for performance
+                logger.info(f"Using provided book_ids: {book_ids[:10]}")
+                book_queryset = Book.objects.filter(id__in=book_ids[:10])
 
             for book in book_queryset:
                 try:
@@ -925,6 +1070,74 @@ def validate_pattern(request):
                     preview = "Could not generate preview"
 
             return JsonResponse({"success": True, "valid": is_valid, "warnings": warnings, "preview": preview, "pattern_type": pattern_type})
+
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)})
+
+    return JsonResponse({"success": False, "error": "Only POST method allowed"})
+
+
+@login_required
+def save_rename_template(request):
+    """Save a rename template to user profile."""
+    if request.method == "POST":
+        try:
+            from books.models import UserProfile
+
+            name = request.POST.get("name", "").strip()
+            folder_pattern = request.POST.get("folder_pattern", "")
+            filename_pattern = request.POST.get("filename_pattern", "")
+            description = request.POST.get("description", "")
+
+            if not name:
+                return JsonResponse({"success": False, "error": "Template name is required"})
+
+            if not folder_pattern and not filename_pattern:
+                return JsonResponse({"success": False, "error": "At least one pattern is required"})
+
+            # Save to user profile
+            profile = UserProfile.get_or_create_for_user(request.user)
+            profile.save_pattern(name, folder_pattern, filename_pattern, description)
+
+            return JsonResponse({"success": True, "message": f"Template '{name}' saved successfully"})
+
+        except Exception as e:
+            return JsonResponse({"success": False, "error": str(e)})
+
+    return JsonResponse({"success": False, "error": "Only POST method allowed"})
+
+
+@login_required
+def load_rename_templates(request):
+    """Load user's saved rename templates."""
+    try:
+        from books.models import UserProfile
+
+        profile = UserProfile.get_or_create_for_user(request.user)
+        templates = profile.saved_patterns
+
+        return JsonResponse({"success": True, "templates": templates})
+
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)})
+
+
+@login_required
+def delete_rename_template(request):
+    """Delete a rename template from user profile."""
+    if request.method == "POST":
+        try:
+            from books.models import UserProfile
+
+            name = request.POST.get("name", "")
+
+            if not name:
+                return JsonResponse({"success": False, "error": "Template name is required"})
+
+            profile = UserProfile.get_or_create_for_user(request.user)
+            profile.remove_pattern(name)
+
+            return JsonResponse({"success": True, "message": f"Template '{name}' deleted successfully"})
 
         except Exception as e:
             return JsonResponse({"success": False, "error": str(e)})

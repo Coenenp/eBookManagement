@@ -25,20 +25,9 @@
                         {% csrf_token %}
                         
                         <div class="mb-3">
-                            <label for="{{ form.name.id_for_label }}" class="form-label">
-                                {{ form.name.label }}
-                            </label>
-                            {{ form.name }}
-                            {% if form.name.errors %}
-                                <div class="text-danger">
-                                    {% for error in form.name.errors %}
-                                        <small>{{ error }}</small>
-                                    {% endfor %}
-                                </div>
-                            {% endif %}
-                            {% if form.name.help_text %}
-                                <div class="form-text">{{ form.name.help_text }}</div>
-                            {% endif %}
+                            <label class="form-label fw-bold">Data Source Name</label>
+                            <p class="form-control-plaintext">{{ object.name }}</p>
+                            <div class="form-text">The data source name cannot be changed.</div>
                         </div>
 
                         <div class="mb-3">

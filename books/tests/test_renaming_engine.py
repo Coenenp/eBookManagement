@@ -25,12 +25,14 @@ class BaseTestCaseWithTempDir(TestCase):
         # Create a temporary directory for test files
         import tempfile
         from pathlib import Path
+
         self.temp_dir = Path(tempfile.mkdtemp())
 
     def tearDown(self):
         super().tearDown()
         # Clean up temporary directory
         import shutil
+
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
 
@@ -43,45 +45,31 @@ class RenamingEngineTests(TestCase):
         self.engine = RenamingEngine()
 
         # Create data source for testing
-        self.data_source, created = DataSource.objects.get_or_create(
-            name=DataSource.MANUAL,
-            defaults={'priority': 1, 'trust_level': 5}
-        )
+        self.data_source, created = DataSource.objects.get_or_create(name=DataSource.MANUAL, defaults={"priority": 1, "trust_level": 5})
 
         # Create test data using existing model structure
-        self.author = Author.objects.create(
-            first_name="Isaac",
-            last_name="Asimov"
-        )
+        self.author = Author.objects.create(first_name="Isaac", last_name="Asimov")
 
-        self.series = Series.objects.create(
-            name="Foundation Series"
-        )
+        self.series = Series.objects.create(name="Foundation Series")
 
         # Create basic book using actual Book model structure
-        self.book = create_test_book_with_file(
-            file_path="/test/Foundation.epub",
-            file_format="epub",
-            file_size=1024000
-        )
+        self.book = create_test_book_with_file(file_path="/test/Foundation.epub", file_format="epub", file_size=1024000)
 
         # Create author relationship
         from books.models import BookAuthor
+
         BookAuthor.objects.create(book=self.book, author=self.author, source=self.data_source)
 
         # Create series relationship
         from books.models import BookSeries
+
         BookSeries.objects.create(book=self.book, series=self.series, source=self.data_source)
 
         # Create final metadata that the renaming engine will use
         from books.models import FinalMetadata
+
         self.final_metadata = FinalMetadata.objects.create(
-            book=self.book,
-            final_title="Foundation",
-            final_author="Isaac Asimov",
-            final_series="Foundation Series",
-            final_series_number="1",
-            language="English"
+            book=self.book, final_title="Foundation", final_author="Isaac Asimov", final_series="Foundation Series", final_series_number="1", language="English"
         )
 
 
@@ -111,36 +99,23 @@ class TC1BasicRenamingRulesTests(RenamingEngineTests):
         self.assertEqual(result, "Foundation Series - Foundation.epub")
 
         # Test without series
-        book_no_series = create_test_book_with_file(
-            file_path="/test/Foundation_no_series.epub",
-            file_format="epub",
-            file_size=1024000
-        )
+        book_no_series = create_test_book_with_file(file_path="/test/Foundation_no_series.epub", file_format="epub", file_size=1024000)
         # Create final metadata for book without series
         from books.models import FinalMetadata
-        FinalMetadata.objects.create(
-            book=book_no_series,
-            final_title="Foundation",
-            final_author="Isaac Asimov"
-        )
+
+        FinalMetadata.objects.create(book=book_no_series, final_title="Foundation", final_author="Isaac Asimov")
 
         result = self.engine.process_template(pattern, book_no_series)
         self.assertEqual(result, "Foundation.epub")
 
     def test_tc1_4_character_sanitization(self):
         """TC1.4 – Character sanitization"""
-        book = create_test_book_with_file(
-            file_path="/test/book.epub",
-            file_size=1024000,
-            file_format="epub"
-        )
+        book = create_test_book_with_file(file_path="/test/book.epub", file_size=1024000, file_format="epub")
 
         # Create final metadata with invalid characters
         from books.models import FinalMetadata
-        FinalMetadata.objects.create(
-            book=book,
-            final_title="Harry Potter: The Philosopher's Stone"
-        )
+
+        FinalMetadata.objects.create(book=book, final_title="Harry Potter: The Philosopher's Stone")
 
         pattern = "${title}.${ext}"
         result = self.engine.process_template(pattern, book)
@@ -172,24 +147,16 @@ class TC2FolderStructureRulesTests(RenamingEngineTests):
     def test_tc2_2_omit_empty_hierarchy_levels(self):
         """TC2.2 – Omit empty hierarchy levels"""
         # Create book without series
-        book_no_series = create_test_book_with_file(
-            file_path="/test/Foundation.epub",
-            file_size=1024000,
-            file_format="epub"
-        )
+        book_no_series = create_test_book_with_file(file_path="/test/Foundation.epub", file_size=1024000, file_format="epub")
 
         # Add title and author relationships
         BookTitle.objects.create(book=book_no_series, title="Foundation", source=self.data_source)
         from books.models import BookAuthor
+
         BookAuthor.objects.create(book=book_no_series, author=self.author, source=self.data_source)
 
         # Create FinalMetadata with language for this book
-        FinalMetadata.objects.create(
-            book=book_no_series,
-            final_title="Foundation",
-            final_author="Isaac Asimov",
-            language="English"
-        )
+        FinalMetadata.objects.create(book=book_no_series, final_title="Foundation", final_author="Isaac Asimov", language="English")
 
         pattern = "Library/${format}/${language}/${category}/${author.sortname}/${bookseries.title}/${title}.${ext}"
         result = self.engine.process_template(pattern, book_no_series)
@@ -209,12 +176,8 @@ class TC2FolderStructureRulesTests(RenamingEngineTests):
         """TC2.4 – Deep nesting structure"""
         # Add category metadata for testing
         from books.models import BookMetadata
-        BookMetadata.objects.create(
-            book=self.book,
-            field_name='category',
-            field_value='Fiction',
-            source=self.data_source
-        )
+
+        BookMetadata.objects.create(book=self.book, field_name="category", field_value="Fiction", source=self.data_source)
 
         pattern = "Library/${category}/${format}/${author.sortname}/${bookseries.title}/${title}.${ext}"
         result = self.engine.process_template(pattern, self.book)
@@ -283,22 +246,14 @@ class TC3SeriesAndStandaloneTests(RenamingEngineTests):
     def test_tc3_4_duplicate_detection_postponed(self):
         """TC3.4 – Duplicate detection postponed"""
         # Create duplicate book
-        book2 = create_test_book_with_file(
-            file_path="/test/duplicate/Foundation.epub",
-            file_size=1024000,
-            file_format="epub"
-        )
+        book2 = create_test_book_with_file(file_path="/test/duplicate/Foundation.epub", file_size=1024000, file_format="epub")
         BookTitle.objects.create(book=book2, title="Foundation", source=self.data_source)
         from books.models import BookAuthor
+
         BookAuthor.objects.create(book=book2, author=self.author, source=self.data_source)
 
         # Create final metadata for book2 to match book1
-        FinalMetadata.objects.create(
-            book=book2,
-            final_title="Foundation",
-            final_author="Isaac Asimov",
-            language="English"
-        )
+        FinalMetadata.objects.create(book=book2, final_title="Foundation", final_author="Isaac Asimov", language="English")
 
         pattern = "${author.sortname} - ${title}.${ext}"
 
@@ -337,6 +292,7 @@ class TC4CompanionFileHandlingTests(RenamingEngineTests):
     def tearDown(self):
         # Clean up temporary files
         import shutil
+
         shutil.rmtree(self.temp_dir, ignore_errors=True)
         super().tearDown()
 
@@ -350,11 +306,7 @@ class TC4CompanionFileHandlingTests(RenamingEngineTests):
         self.assertEqual(base_name, expected_base)
 
         # Companion files should share same base name
-        expected_files = {
-            f"{expected_base}.epub",
-            f"{expected_base}.cover.jpeg",
-            f"{expected_base}.opf"
-        }
+        expected_files = {f"{expected_base}.epub", f"{expected_base}.cover.jpeg", f"{expected_base}.opf"}
 
         # This would be handled by BatchRenamer, but we can test the pattern
         self.assertTrue(all(expected_base in filename for filename in expected_files))
@@ -456,8 +408,8 @@ class TC5TokenResolutionTests(RenamingEngineTests):
         self.assertEqual(result, "Foundation.epub")
 
         # Verify engine can be extended for future conditional logic
-        self.assertTrue(hasattr(self.engine, 'process_template'))
-        self.assertTrue(callable(getattr(self.engine, 'process_template')))
+        self.assertTrue(hasattr(self.engine, "process_template"))
+        self.assertTrue(callable(getattr(self.engine, "process_template")))
 
 
 class TC6MetadataPreservationTests(RenamingEngineTests):
@@ -492,11 +444,9 @@ class TC6MetadataPreservationTests(RenamingEngineTests):
     def test_tc6_3_multiple_metadata_entries_per_field(self):
         """TC6.3 – Multiple metadata entries per field"""
         # Add multiple authors
-        author2 = Author.objects.create(
-            first_name="Robert",
-            last_name="Heinlein"
-        )
+        author2 = Author.objects.create(first_name="Robert", last_name="Heinlein")
         from books.models import BookAuthor
+
         BookAuthor.objects.create(book=self.book, author=author2, source=self.data_source)
 
         # Both authors should be retained
@@ -535,7 +485,7 @@ class RenamingPatternValidatorTests(TestCase):
             "${title}",
             "${author.sortname} - ${title}.${ext}",
             "Library/${format}/${author.sortname}/${title}",
-            "${bookseries.title} #${bookseries.number} - ${title}"
+            "${bookseries.title} #${bookseries.number} - ${title}",
         ]
 
         for pattern in valid_patterns:
@@ -548,8 +498,8 @@ class RenamingPatternValidatorTests(TestCase):
         invalid_patterns = [
             "${invalid_token}",
             "${title",  # Missing closing brace
-            "title}",   # Missing opening brace
-            "",         # Empty pattern
+            "title}",  # Missing opening brace
+            "",  # Empty pattern
         ]
 
         for pattern in invalid_patterns:
@@ -577,25 +527,12 @@ class TokenProcessorTests(BaseTestCaseWithTempDir):
         self.processor = RenamingEngine()
 
         # Create test book
-        self.author = Author.objects.create(
-            name="Isaac Asimov",
-            first_name="Isaac",
-            last_name="Asimov"
-        )
+        self.author = Author.objects.create(name="Isaac Asimov", first_name="Isaac", last_name="Asimov")
 
         # Create required scan folder using temp directory
-        scan_folder = ScanFolder.objects.create(
-            name="Test Folder",
-            path=str(self.temp_dir),
-            content_type="ebooks"
-        )
+        scan_folder = ScanFolder.objects.create(name="Test Folder", path=str(self.temp_dir), content_type="ebooks")
 
-        self.book = create_test_book_with_file(
-            file_path=str(self.temp_dir / "Foundation.epub"),
-            file_format="epub",
-            file_size=1024000,
-            scan_folder=scan_folder
-        )
+        self.book = create_test_book_with_file(file_path=str(self.temp_dir / "Foundation.epub"), file_format="epub", file_size=1024000, scan_folder=scan_folder)
 
     def test_basic_token_processing(self):
         """Test basic token processing using template processing"""
@@ -612,8 +549,8 @@ class TokenProcessorTests(BaseTestCaseWithTempDir):
         ext_result = self.processor.process_template("${ext}", self.book)
 
         # These should work with the basic book data
-        self.assertEqual(format_result, 'EPUB')
-        self.assertEqual(ext_result, 'epub')
+        self.assertEqual(format_result, "EPUB")
+        self.assertEqual(ext_result, "epub")
 
     def test_empty_token_handling(self):
         """Test handling of empty/missing tokens"""
@@ -630,10 +567,10 @@ class TokenProcessorTests(BaseTestCaseWithTempDir):
         result = self.processor._normalize_path(template)
 
         # Invalid filesystem characters should be sanitized
-        self.assertNotIn(':', result)
-        self.assertNotIn('<', result)
-        self.assertNotIn('>', result)
-        self.assertNotIn('|', result)
+        self.assertNotIn(":", result)
+        self.assertNotIn("<", result)
+        self.assertNotIn(">", result)
+        self.assertNotIn("|", result)
 
 
 class PredefinedPatternsTests(TestCase):
@@ -648,13 +585,13 @@ class PredefinedPatternsTests(TestCase):
         """Test predefined patterns have correct structure"""
         for name, pattern_data in PREDEFINED_PATTERNS.items():
             with self.subTest(pattern=name):
-                self.assertIn('folder', pattern_data)
-                self.assertIn('filename', pattern_data)
-                self.assertIn('description', pattern_data)
+                self.assertIn("folder", pattern_data)
+                self.assertIn("filename", pattern_data)
+                self.assertIn("description", pattern_data)
 
                 # Both patterns should be strings
-                self.assertIsInstance(pattern_data['folder'], str)
-                self.assertIsInstance(pattern_data['filename'], str)
+                self.assertIsInstance(pattern_data["folder"], str)
+                self.assertIsInstance(pattern_data["filename"], str)
 
     def test_predefined_patterns_validity(self):
         """Test that predefined patterns are valid"""
@@ -662,8 +599,8 @@ class PredefinedPatternsTests(TestCase):
 
         for name, pattern_data in PREDEFINED_PATTERNS.items():
             with self.subTest(pattern=name):
-                folder_valid, _ = validator.validate_pattern(pattern_data['folder'])
-                filename_valid, _ = validator.validate_pattern(pattern_data['filename'])
+                folder_valid, _ = validator.validate_pattern(pattern_data["folder"])
+                filename_valid, _ = validator.validate_pattern(pattern_data["filename"])
 
                 self.assertTrue(folder_valid, f"Invalid folder pattern in {name}")
                 self.assertTrue(filename_valid, f"Invalid filename pattern in {name}")
@@ -699,11 +636,7 @@ class IntegrationTests(RenamingEngineTests):
     def test_pattern_with_missing_optional_fields(self):
         """Test pattern processing with missing optional fields"""
         # Create minimal book
-        minimal_book = create_test_book_with_file(
-            file_path="/test/book.epub",
-            file_size=1024000,
-            file_format="epub"
-        )
+        minimal_book = create_test_book_with_file(file_path="/test/book.epub", file_size=1024000, file_format="epub")
         # Add title through BookTitle relationship
         BookTitle.objects.create(book=minimal_book, title="Test Book", source=self.data_source)
 

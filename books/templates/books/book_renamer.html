@@ -2,7 +2,7 @@
 {% load static %}
 {% load custom_filters %}
 
-{% block title %}Ebook & Series Renamer{% endblock %}
+{% block title %}Bulk File Renamer{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'book/css/renamer.css' %}">
@@ -10,167 +10,85 @@
 
 {% block content %}
 <div class="container-fluid">
-    <div class="row">
+    <div class="row mb-3">
         <div class="col-12">
-            <h1>Ebook & Series Renamer</h1>
-            <p class="text-muted">Template-driven renaming for ebooks, comics, and audiobooks with companion files.</p>
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1>Bulk File Renamer</h1>
+                    <p class="text-muted">Apply rename templates to organize your library files</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'books:template_management' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-cog me-1"></i> Manage Templates
+                    </a>
+                    <a href="{% url 'books:book_renamer_history' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-history me-1"></i> View History
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Pattern Configuration Section -->
+    <!-- Template Selection -->
     <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="card border">
-                <div class="card-header bg-body-secondary">
-                    <h5 class="mb-0">Folder Structure Pattern</h5>
+        <div class="col-12">
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-tag me-2"></i>Select Rename Template</h5>
                 </div>
                 <div class="card-body">
-                    <form id="pattern-form">
-                        <!-- Predefined Patterns -->
-                        <div class="mb-3">
-                            <label for="predefined-pattern" class="form-label">Quick Templates</label>
-                            <select class="form-select" id="predefined-pattern" name="predefined_pattern">
-                                <option value="">-- Select a template --</option>
-                                {% for key, pattern in predefined_patterns.items %}
-                                <option value="{{ key }}" 
-                                        data-folder="{{ pattern.folder }}" 
-                                        data-filename="{{ pattern.filename }}">
-                                    {{ pattern.name }} - {{ pattern.description }}
-                                </option>
-                                {% endfor %}
+                    <div class="row align-items-end">
+                        <div class="col-md-10 mb-3">
+                            <label for="template-selector" class="form-label fw-bold">Active Template</label>
+                            <select class="form-select form-select-lg" id="template-selector" name="template_selector">
+                                <option value="">-- Select a template to apply --</option>
+                                <optgroup label="Your Saved Templates" id="saved-templates-group">
+                                    <!-- User templates will be loaded via JS -->
+                                </optgroup>
+                                <optgroup label="System Templates">
+                                    {% for key, pattern in predefined_patterns.items %}
+                                    <option value="system-{{ key }}" 
+                                            data-folder="{{ pattern.folder }}" 
+                                            data-filename="{{ pattern.filename }}">
+                                        {{ pattern.name }} - {{ pattern.description }}
+                                    </option>
+                                    {% endfor %}
+                                </optgroup>
                             </select>
                         </div>
-
-                        <!-- Custom Folder Pattern -->
-                        <div class="mb-3">
-                            <label for="folder-pattern" class="form-label">Folder Structure</label>
-                            <input type="text" class="form-control" id="folder-pattern" name="folder_pattern" 
-                                   placeholder="${category}/${author.sortname}/${bookseries.title}">
-                            <div class="form-text">Define the folder hierarchy using tokens like ${author.sortname}</div>
-                            <div id="folder-pattern-validation" class="mt-1"></div>
+                        <div class="col-md-2 mb-3">
+                            <a href="{% url 'books:template_management' %}" class="btn btn-outline-secondary w-100">
+                                <i class="fas fa-plus me-1"></i> New Template
+                            </a>
                         </div>
-
-                        <!-- Custom Filename Pattern -->
-                        <div class="mb-3">
-                            <label for="filename-pattern" class="form-label">Filename Pattern</label>
-                            <input type="text" class="form-control" id="filename-pattern" name="filename_pattern" 
-                                   placeholder="${author.sortname} - ${bookseries.title} #${bookseries.number} - ${title}.${ext}">
-                            <div class="form-text">Define the filename using tokens and static text</div>
-                            <div id="filename-pattern-validation" class="mt-1"></div>
-                        </div>
-
-                        <!-- Options -->
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="include-companions" name="include_companions" checked>
-                                    <label class="form-check-label" for="include-companions">
-                                        Include companion files (covers, metadata)
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="dry-run" name="dry_run" checked>
-                                    <label class="form-check-label" for="dry-run">
-                                        Dry run (preview only)
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Action Buttons -->
-                        <div class="d-flex flex-wrap gap-2">
-                            <button type="button" class="btn btn-outline-primary" id="preview-btn">
-                                <i class="fas fa-eye me-1"></i> Preview Changes
-                            </button>
-                            <button type="button" class="btn btn-success" id="execute-btn" disabled>
-                                <i class="fas fa-play me-1"></i> Execute Rename
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6">
-            <!-- Token Reference -->
-            <div class="card border">
-                <div class="card-header bg-body-secondary">
-                    <h5 class="mb-0">Available Tokens</h5>
-                </div>
-                <div class="card-body bg-body">
-                    <div class="accordion" id="token-reference">
-                        {% for category, tokens in available_tokens.items %}
-                        <div class="accordion-item">
-                            <h2 class="accordion-header">
-                                {% if forloop.first %}
-                                <button class="accordion-button" 
-                                        type="button" data-bs-toggle="collapse" 
-                                        data-bs-target="#collapse-{{ category }}" 
-                                        aria-expanded="true">
-                                {% else %}
-                                <button class="accordion-button collapsed" 
-                                        type="button" data-bs-toggle="collapse" 
-                                        data-bs-target="#collapse-{{ category }}" 
-                                        aria-expanded="false">
-                                {% endif %}
-                                    {{ category|title }} Tokens
-                                </button>
-                            </h2>
-                            <div id="collapse-{{ category }}" 
-                                 class="accordion-collapse collapse {% if forloop.first %}show{% endif %}" 
-                                 data-bs-parent="#token-reference">
-                                <div class="accordion-body">
-                                    <div class="table-responsive">
-                                        <table class="table table-sm">
-                                            <thead>
-                                                <tr>
-                                                    <th>Token</th>
-                                                    <th>Description</th>
-                                                    <th>Example</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {% for token in tokens %}
-                                                <tr>
-                                                    <td><code class="token-clickable" data-token="{{ token.token }}">{{ token.token }}</code></td>
-                                                    <td>{{ token.description }}</td>
-                                                    <td><small class="text-muted">{{ token.example }}</small></td>
-                                                </tr>
-                                                {% endfor %}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
                     </div>
-
-                    <!-- Pattern Examples -->
-                    <div class="mt-3">
-                        <h6>Pattern Examples</h6>
-                        {% for example in pattern_examples %}
-                        <div class="border border-warning-subtle rounded p-2 mb-2 bg-warning-subtle example-clickable" 
-                             data-folder="{{ example.folder }}" 
-                             data-filename="{{ example.filename }}">
-                            <strong class="text-warning-emphasis">{{ example.name }}</strong><br>
-                            <small class="text-muted font-monospace">{{ example.result }}</small>
+                    
+                    <!-- Pattern Display (Read-only) -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label text-muted small">Folder Pattern</label>
+                            <div class="font-monospace bg-light p-2 rounded border" id="folder-pattern-display">
+                                <em class="text-muted">Select a template...</em>
+                            </div>
                         </div>
-                        {% endfor %}
+                        <div class="col-md-6">
+                            <label class="form-label text-muted small">Filename Pattern</label>
+                            <div class="font-monospace bg-light p-2 rounded border" id="filename-pattern-display">
+                                <em class="text-muted">Select a template...</em>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Book Selection and Preview Section -->
+    <!-- Book Selection and Actions Section -->
     <div class="row">
         <div class="col-12">
             <div class="card border">
                 <div class="card-header bg-body-secondary d-flex flex-wrap justify-content-between align-items-center gap-2">
-                    <h5 class="mb-0">Books to Rename</h5>
+                    <h5 class="mb-0"><i class="fas fa-books me-2"></i>Books to Rename</h5>
                     <div class="d-flex flex-wrap align-items-center gap-2">
                         <button type="button" class="btn btn-sm btn-outline-primary" id="select-all-btn">
                             <i class="fas fa-check-square me-1"></i> Select All
@@ -182,34 +100,126 @@
                     </div>
                 </div>
                 <div class="card-body bg-body">
+                    <!-- Bulk Selection Tools -->
+                    <div class="row mb-3 p-3 bg-light border rounded">
+                        <div class="col-12 mb-2">
+                            <h6 class="mb-2"><i class="fas fa-layer-group me-1"></i> Quick Selection</h6>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-sm btn-outline-primary w-100" id="select-by-author-btn">
+                                <i class="fas fa-user me-1"></i> By Author
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-sm btn-outline-primary w-100" id="select-by-series-btn">
+                                <i class="fas fa-book-reader me-1"></i> By Series
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-sm btn-outline-primary w-100" id="select-by-format-btn">
+                                <i class="fas fa-file me-1"></i> By Format
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-sm btn-outline-primary w-100" id="select-by-folder-btn">
+                                <i class="fas fa-folder me-1"></i> By Scan Folder
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Rename Options -->
+                    <div class="row mb-3 p-3 bg-primary bg-opacity-10 border border-primary rounded">
+                        <div class="col-md-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="include-companions" name="include_companions" {% if include_companion_files %}checked{% endif %}>
+                                <label class="form-check-label fw-bold" for="include-companions">
+                                    Include companion files
+                                    <br><small class="text-muted">(covers, metadata, etc.)</small>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="dry-run" name="dry_run" checked>
+                                <label class="form-check-label fw-bold" for="dry-run">
+                                    Dry run (preview only)
+                                    <br><small class="text-muted">Test without making changes</small>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <div class="d-flex gap-2 justify-content-end">
+                                <button type="button" class="btn btn-primary" id="preview-btn" disabled>
+                                    <i class="fas fa-eye me-1"></i> Preview Changes
+                                </button>
+                                <button type="button" class="btn btn-success" id="execute-btn" disabled>
+                                    <i class="fas fa-play me-1"></i> Execute Rename
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- Filters -->
                     <div class="row mb-3">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <input type="text" class="form-control" id="search-filter" 
                                    placeholder="Search books..." value="{{ request.GET.search }}">
                         </div>
-                        <div class="col-md-3">
-                            <select class="form-select" id="category-filter" aria-label="Filter by category">
-                                <option value="">All Categories</option>
-                                <option value="Fiction">Fiction</option>
-                                <option value="Non-Fiction">Non-Fiction</option>
-                                <option value="Comics">Comics</option>
-                                <option value="Audiobooks">Audiobooks</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <select class="form-select" id="language-filter" aria-label="Filter by language">
-                                <option value="">All Languages</option>
-                                <option value="English">English</option>
-                                <option value="French">French</option>
-                                <option value="German">German</option>
-                                <option value="Spanish">Spanish</option>
+                        <div class="col-md-2">
+                            <select class="form-select" id="content-type-filter" name="content_type" aria-label="Filter by content type">
+                                <option value="">All Types</option>
+                                <option value="ebook" {% if request.GET.content_type == 'ebook' %}selected{% endif %}>eBooks</option>
+                                <option value="audiobook" {% if request.GET.content_type == 'audiobook' %}selected{% endif %}>Audiobooks</option>
+                                <option value="comic" {% if request.GET.content_type == 'comic' %}selected{% endif %}>Comics</option>
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <button type="button" class="btn btn-outline-primary w-100" id="apply-filters-btn">
-                                <i class="fas fa-filter me-1"></i> Filter
-                            </button>
+                            <select class="form-select" id="format-filter" name="file_format" aria-label="Filter by file format">
+                                <option value="">All Formats</option>
+                                <optgroup label="eBook Formats">
+                                    <option value="epub" {% if request.GET.file_format == 'epub' %}selected{% endif %}>EPUB</option>
+                                    <option value="pdf" {% if request.GET.file_format == 'pdf' %}selected{% endif %}>PDF</option>
+                                    <option value="mobi" {% if request.GET.file_format == 'mobi' %}selected{% endif %}>MOBI</option>
+                                    <option value="azw" {% if request.GET.file_format == 'azw' %}selected{% endif %}>AZW</option>
+                                    <option value="azw3" {% if request.GET.file_format == 'azw3' %}selected{% endif %}>AZW3</option>
+                                </optgroup>
+                                <optgroup label="Comic Formats">
+                                    <option value="cbz" {% if request.GET.file_format == 'cbz' %}selected{% endif %}>CBZ</option>
+                                    <option value="cbr" {% if request.GET.file_format == 'cbr' %}selected{% endif %}>CBR</option>
+                                    <option value="cb7" {% if request.GET.file_format == 'cb7' %}selected{% endif %}>CB7</option>
+                                    <option value="cbt" {% if request.GET.file_format == 'cbt' %}selected{% endif %}>CBT</option>
+                                </optgroup>
+                                <optgroup label="Audio Formats">
+                                    <option value="mp3" {% if request.GET.file_format == 'mp3' %}selected{% endif %}>MP3</option>
+                                    <option value="m4a" {% if request.GET.file_format == 'm4a' %}selected{% endif %}>M4A</option>
+                                    <option value="m4b" {% if request.GET.file_format == 'm4b' %}selected{% endif %}>M4B</option>
+                                    <option value="flac" {% if request.GET.file_format == 'flac' %}selected{% endif %}>FLAC</option>
+                                </optgroup>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" id="language-filter" name="language" aria-label="Filter by language">
+                                <option value="">All Languages</option>
+                                <option value="en" {% if request.GET.language == 'en' %}selected{% endif %}>English</option>
+                                <option value="fr" {% if request.GET.language == 'fr' %}selected{% endif %}>French</option>
+                                <option value="de" {% if request.GET.language == 'de' %}selected{% endif %}>German</option>
+                                <option value="es" {% if request.GET.language == 'es' %}selected{% endif %}>Spanish</option>
+                                <option value="it" {% if request.GET.language == 'it' %}selected{% endif %}>Italian</option>
+                                <option value="nl" {% if request.GET.language == 'nl' %}selected{% endif %}>Dutch</option>
+                                <option value="pt" {% if request.GET.language == 'pt' %}selected{% endif %}>Portuguese</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="d-flex gap-1">
+                                <button type="button" class="btn btn-outline-primary flex-grow-1" id="apply-filters-btn">
+                                    <i class="fas fa-filter me-1"></i> Apply
+                                </button>
+                                {% if request.GET.search or request.GET.content_type or request.GET.file_format or request.GET.language %}
+                                <a href="{% url 'books:book_renamer' %}" class="btn btn-outline-secondary" title="Clear all filters">
+                                    <i class="fas fa-times"></i>
+                                </a>
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
 
@@ -338,617 +348,14 @@
     </div>
 </div>
 
-    <div class="row">
-        <div class="col-md-12">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2><i class="fas fa-save me-2"></i>Book File Organizer (Legacy)</h2>
-                <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-primary" id="selectAllBtn">
-                        <i class="fas fa-check-square me-1"></i>Select All
-                    </button>
-                    <button type="button" class="btn btn-secondary" id="selectNoneBtn">
-                        <i class="fas fa-square me-1"></i>Select None
-                    </button>
-                    <button type="button" class="btn btn-info" id="selectCompleteSeriesBtn">
-                        <i class="fas fa-books me-1"></i>Select Complete Series
-                    </button>
-                    <button type="button" class="btn btn-warning" id="previewBtn" disabled>
-                        <i class="fas fa-eye me-1"></i>Preview Changes
-                    </button>
-                    <button type="button" class="btn btn-success" id="interactiveRenameBtn" disabled>
-                        <i class="fas fa-cog me-1"></i>Interactive Rename
-                    </button>
-                    <button type="button" class="btn btn-success" id="executeBtn" disabled>
-                        <i class="fas fa-save me-1"></i>Execute All
-                    </button>
-                    <a href="{% url 'books:book_renamer_history' %}" class="btn btn-outline-secondary">
-                        <i class="fas fa-history me-1"></i>View History
-                    </a>
-                </div>
-            </div>
-
-            <!-- Filter Form -->
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-filter me-2"></i>Filters
-                        <button class="btn btn-sm btn-outline-secondary float-end" type="button" data-bs-toggle="collapse" data-bs-target="#filtersCollapse"
-                               aria-label="Toggle filters" title="Toggle filters section">
-                            <i class="fas fa-chevron-down"></i>
-                        </button>
-                    </h5>
-                </div>
-                <div class="collapse show" id="filtersCollapse">
-                    <div class="card-body">
-                        <form method="get" class="row g-3">
-                            <div class="col-md-3">
-                                <label for="search" class="form-label">Search</label>
-                                <input type="text" class="form-control" id="search" name="search" 
-                                       value="{{ search_query }}" placeholder="Title or Author">
-                            </div>
-                            <div class="col-md-3">
-                                <label for="author" class="form-label">Author</label>
-                                <input type="text" class="form-control" id="author" name="author" 
-                                       value="{{ author_filter }}" placeholder="Author name">
-                            </div>
-                            <div class="col-md-2">
-                                <label for="language" class="form-label">Language</label>
-                                <select class="form-select" id="language" name="language">
-                                    <option value="">All Languages</option>
-                                    {% for code, name in languages %}
-                                        <option value="{{ code }}" {% if language_filter == code %}selected{% endif %}>{{ name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <label for="file_format" class="form-label">Format</label>
-                                <select class="form-select" id="file_format" name="file_format">
-                                    <option value="">All Formats</option>
-                                    {% for value, label in formats %}
-                                        <option value="{{ value }}" {% if format_filter == value %}selected{% endif %}>{{ label }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <label for="has_series" class="form-label">Series</label>
-                                <select class="form-select" id="has_series" name="has_series">
-                                    <option value="">All Books</option>
-                                    <option value="true" {% if series_filter == 'true' %}selected{% endif %}>With Series</option>
-                                    <option value="false" {% if series_filter == 'false' %}selected{% endif %}>Without Series</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <label for="complete_series" class="form-label">Complete Series</label>
-                                <select class="form-select" id="complete_series" name="complete_series">
-                                    <option value="">All Books</option>
-                                    <option value="true" {% if complete_series_filter == 'true' %}selected{% endif %}>Complete Series Only</option>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <label for="issue_type" class="form-label">Comic Type</label>
-                                <select class="form-select" id="issue_type" name="issue_type">
-                                    <option value="">All Types</option>
-                                    <option value="main_series" {% if request.GET.issue_type == 'main_series' %}selected{% endif %}>Main Series</option>
-                                    <option value="annual" {% if request.GET.issue_type == 'annual' %}selected{% endif %}>Annuals</option>
-                                    <option value="special" {% if request.GET.issue_type == 'special' %}selected{% endif %}>Specials</option>
-                                    <option value="collection" {% if request.GET.issue_type == 'collection' %}selected{% endif %}>Collections</option>
-                                    <option value="one_shot" {% if request.GET.issue_type == 'one_shot' %}selected{% endif %}>One-Shots</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label for="genre" class="form-label">Genre</label>
-                                <input type="text" class="form-control" id="genre" name="genre" 
-                                       value="{{ genre_filter }}" placeholder="Genre name">
-                            </div>
-                            <div class="col-md-3">
-                                <label for="confidence_min" class="form-label">Min Confidence</label>
-                                <input type="number" class="form-control" id="confidence_min" name="confidence_min" 
-                                       value="{{ confidence_filter }}" min="0" max="100" step="1" placeholder="0-100">
-                            </div>
-                            <div class="col-md-6 d-flex align-items-end">
-                                <button type="submit" class="btn btn-primary me-2">
-                                    <i class="fas fa-search me-1"></i>Apply Filters
-                                </button>
-                                <a href="{% url 'books:book_renamer' %}" class="btn btn-secondary">
-                                    <i class="fas fa-times me-1"></i>Clear Filters
-                                </a>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Results Summary -->
-            <div class="row mb-3">
-                <div class="col-md-4">
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-1"></i>
-                        Showing {{ books_with_paths|length }} reviewed books ready for organization
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="alert alert-success">
-                        <i class="fas fa-check-circle me-1"></i>
-                        <strong>Complete Series:</strong> {{ complete_series|length }} available
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="alert alert-warning">
-                        <i class="fas fa-exclamation-triangle me-1"></i>
-                        <strong>Structure:</strong> /eBooks Library/[Format]/[Language]/[Category]/[Author]/[Series]/[Title]
-                    </div>
-                </div>
-            </div>
-
-            <!-- Complete Series Info -->
-            {% if complete_series %}
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-layer-group me-2"></i>Complete Series Available
-                        <button class="btn btn-sm btn-outline-secondary float-end" type="button" data-bs-toggle="collapse" data-bs-target="#seriesCollapse"
-                               aria-label="Toggle series list" title="Toggle complete series list">
-                            <i class="fas fa-chevron-down"></i>
-                        </button>
-                    </h5>
-                </div>
-                <div class="collapse" id="seriesCollapse">
-                    <div class="card-body">
-                        <div class="row">
-                            {% for series in complete_series %}
-                            <div class="col-md-6 mb-3">
-                                <div class="card">
-                                    <div class="card-body">
-                                        <h6 class="card-title">{{ series.series }}</h6>
-                                        <p class="card-text">
-                                            <strong>Author:</strong> {{ series.author }}<br>
-                                            <strong>Books:</strong> {{ series.count }} ({{ series.numbers|join:", " }})
-                                        </p>
-                                        <button class="btn btn-sm btn-primary select-series-btn" 
-                                                data-author="{{ series.author }}" 
-                                                data-series="{{ series.series }}">
-                                            <i class="fas fa-check me-1"></i>Select This Series
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
-            <!-- Comic Series Analysis -->
-            {% if comic_series_analysis and comic_series_analysis.total_series > 0 %}
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-book-open me-2"></i>Comic Series Analysis
-                        <span class="badge bg-primary ms-2">{{ comic_series_analysis.total_series }} Series</span>
-                        <button class="btn btn-sm btn-outline-secondary float-end" type="button" data-bs-toggle="collapse" data-bs-target="#comicSeriesCollapse"
-                               aria-label="Toggle comic series analysis" title="Toggle comic series analysis">
-                            <i class="fas fa-chevron-down"></i>
-                        </button>
-                    </h5>
-                </div>
-                <div class="collapse" id="comicSeriesCollapse">
-                    <div class="card-body">
-                        <div class="row mb-3">
-                            <div class="col-md-4">
-                                <div class="alert alert-success">
-                                    <i class="fas fa-check-circle me-1"></i>
-                                    <strong>Complete:</strong> {{ comic_series_analysis.complete_count }} series
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="alert alert-warning">
-                                    <i class="fas fa-exclamation-triangle me-1"></i>
-                                    <strong>Incomplete:</strong> {{ comic_series_analysis.incomplete_count }} series
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="alert alert-info">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    <strong>Organization:</strong> By Issue Type
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Complete Comic Series -->
-                        {% if comic_series_analysis.complete_series %}
-                        <h6><i class="fas fa-check-circle text-success me-2"></i>Complete Comic Series</h6>
-                        <div class="row">
-                            {% for series in comic_series_analysis.complete_series %}
-                            <div class="col-md-6 col-lg-4 mb-2">
-                                <div class="card border-success">
-                                    <div class="card-body p-2">
-                                        <h6 class="card-title mb-1">{{ series.name }}</h6>
-                                        {% if series.publisher %}
-                                        <p class="card-text text-muted small mb-1">{{ series.publisher }}</p>
-                                        {% endif %}
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <small class="text-success">
-                                                <i class="fas fa-book me-1"></i>{{ series.main_series_count }} Issues
-                                                {% if series.annuals_count > 0 %} | {{ series.annuals_count }} Annuals{% endif %}
-                                                {% if series.specials_count > 0 %} | {{ series.specials_count }} Specials{% endif %}
-                                            </small>
-                                            <span class="badge bg-success">{{ series.completeness_percentage }}% Complete</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        
-                        <!-- Incomplete Comic Series -->
-                        {% if comic_series_analysis.incomplete_series %}
-                        <h6 class="mt-3"><i class="fas fa-exclamation-triangle text-warning me-2"></i>Incomplete Comic Series</h6>
-                        <div class="row">
-                            {% for series in comic_series_analysis.incomplete_series %}
-                            <div class="col-md-6 col-lg-4 mb-2">
-                                <div class="card border-warning">
-                                    <div class="card-body p-2">
-                                        <h6 class="card-title mb-1">{{ series.name }}</h6>
-                                        {% if series.publisher %}
-                                        <p class="card-text text-muted small mb-1">{{ series.publisher }}</p>
-                                        {% endif %}
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <small class="text-warning">
-                                                <i class="fas fa-book me-1"></i>{{ series.main_series_count }} Issues
-                                                {% if series.missing_issues %}
-                                                    | Missing: {{ series.missing_issues|length }}
-                                                {% endif %}
-                                            </small>
-                                            <span class="badge bg-warning text-dark">{{ series.completeness_percentage }}% Complete</span>
-                                        </div>
-                                        {% if series.gap_analysis %}
-                                        <small class="text-muted d-block mt-1">
-                                            Gaps: {{ series.gap_analysis|join:", " }}
-                                        </small>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
-            <!-- Books Table -->
-            {% if books_with_paths %}
-            <form id="renameForm">
-                {% csrf_token %}
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover table-sm">
-                        <thead class="table-dark">
-                            <tr>
-                                <th class="table-col-narrow">
-                                    <label for="selectAllCheckbox" class="visually-hidden">Select all books</label>
-                                    <input type="checkbox" id="selectAllCheckbox" class="form-check-input" aria-label="Select all books">
-                                </th>
-                                <th>Title</th>
-                                <th>Author</th>
-                                <th>Series</th>
-                                <th class="table-col-format">Fmt</th>
-                                <th class="table-col-lang">Lang</th>
-                                <th class="table-col-confidence">Conf</th>
-                                <th class="table-col-cover"><i class="fas fa-image"></i></th>
-                                <th class="table-col-status">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in books_with_paths %}
-                            <tr data-book-id="{{ item.book.id }}" 
-                                data-current-path="{{ item.current_path }}"
-                                data-new-path="{{ item.new_path }}"
-                                data-can-rename="{{ item.can_rename|yesno:'true,false' }}"
-                                data-complete-series="{{ item.is_complete_series|yesno:'true,false' }}">
-                                <td>
-                                    {% if item.can_rename %}
-                                    <input type="checkbox" name="selected_books" value="{{ item.book.id }}" 
-                                           class="form-check-input book-checkbox"
-                                           data-author="{{ item.book.finalmetadata.final_author }}"
-                                           data-series="{{ item.book.finalmetadata.final_series }}"
-                                           aria-label="Select {{ item.book.finalmetadata.final_title|truncatechars:30 }}"
-                                           {% if item.is_complete_series %}data-complete-series="true"{% endif %}>
-                                    {% else %}
-                                    <i class="fas fa-times text-danger" title="File not found"></i>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <strong class="text-truncate d-block text-truncate-title" title="{{ item.book.finalmetadata.final_title }}">
-                                        {{ item.book.finalmetadata.final_title|truncatechars:50 }}
-                                    </strong>
-                                    {% if item.is_complete_series %}
-                                    <span class="badge bg-success badge-xs">Complete</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <span class="text-truncate d-block text-truncate-author" title="{{ item.book.finalmetadata.final_author }}">
-                                        {{ item.book.finalmetadata.final_author|default:"Unknown"|truncatechars:30 }}
-                                    </span>
-                                </td>
-                                <td>
-                                    {% if item.book.finalmetadata.final_series %}
-                                    <span class="text-truncate d-block text-truncate-series" title="{{ item.book.finalmetadata.final_series }}">
-                                        {{ item.book.finalmetadata.final_series|truncatechars:25 }}
-                                        {% if item.book.finalmetadata.final_series_number %}
-                                        <br><small class="text-muted">#{{ item.book.finalmetadata.final_series_number }}</small>
-                                        {% endif %}
-                                    </span>
-                                    {% else %}
-                                    <span class="text-muted small">Standalone</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <span class="badge bg-secondary badge-xs">{{ item.book.file_format|upper }}</span>
-                                </td>
-                                <td>
-                                    <span class="badge bg-info badge-xs">{{ item.book.finalmetadata.language|language_name|truncatechars:3 }}</span>
-                                </td>
-                                <td>
-                                    {% if item.book.finalmetadata.overall_confidence %}
-                                    {% with confidence=item.book.finalmetadata.overall_confidence %}
-                                    <span class="badge badge-xs {% if confidence >= 0.8 %}bg-success{% elif confidence >= 0.6 %}bg-warning{% else %}bg-danger{% endif %}">
-                                        {{ confidence|floatformat:1 }}
-                                    </span>
-                                    {% endwith %}
-                                    {% else %}
-                                    <span class="badge bg-secondary badge-xs">N/A</span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-center">
-                                    {% if item.book.finalmetadata.has_cover %}
-                                    <i class="fas fa-image text-success" title="Has cover"></i>
-                                    {% else %}
-                                    <i class="far fa-image text-muted" title="No cover"></i>
-                                    {% endif %}
-                                </td>
-                                <td class="text-center">
-                                    {% if item.can_rename %}
-                                    <span class="badge bg-success badge-xs">Ready</span>
-                                    {% else %}
-                                    <span class="badge bg-danger badge-xs">Missing</span>
-                                    {% endif %}
-                                    
-                                    {% if item.warnings %}
-                                    <div class="mt-1">
-                                        {% for warning in item.warnings %}
-                                        <div class="alert alert-{{ warning.type }} alert-sm-custom mb-1">
-                                            <small>{{ warning.message|truncatechars:20 }}</small>
-                                        </div>
-                                        {% endfor %}
-                                    </div>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </form>
-
-            <!-- Pagination -->
-            {% if is_paginated %}
-            <nav aria-label="Books pagination">
-                <ul class="pagination justify-content-center" role="list">{% if page_obj.has_previous %}<li class="page-item" role="listitem"><a class="page-link" href="?{% url_replace page=1 %}">First</a></li><li class="page-item" role="listitem"><a class="page-link" href="?{% url_replace page=page_obj.previous_page_number %}">Previous</a></li>{% endif %}{% for num in page_obj.paginator.page_range %}{% if page_obj.number == num %}<li class="page-item active" role="listitem"><span class="page-link">{{ num }}</span></li>{% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}<li class="page-item" role="listitem"><a class="page-link" href="?{% url_replace page=num %}">{{ num }}</a></li>{% endif %}{% endfor %}{% if page_obj.has_next %}<li class="page-item" role="listitem"><a class="page-link" href="?{% url_replace page=page_obj.next_page_number %}">Next</a></li><li class="page-item" role="listitem"><a class="page-link" href="?{% url_replace page=page_obj.paginator.num_pages %}">Last</a></li>{% endif %}</ul>
-            </nav>
-            {% endif %}
-
-            {% else %}
-            <div class="alert alert-info text-center">
-                <i class="fas fa-info-circle me-2"></i>
-                No reviewed books found with the current filters.
-            </div>
-            {% endif %}
-        </div>
-    </div>
-</div>
-
-<!-- Preview Modal -->
-<div class="modal fade" id="previewModal" tabindex="-1" aria-labelledby="previewModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="previewModalLabel">
-                    <i class="fas fa-eye me-2"></i>Preview File Organization Changes
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div id="previewContent">
-                    <div class="text-center">
-                        <div class="spinner-border" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-success" id="confirmExecuteBtn">
-                    <i class="fas fa-save me-1"></i>Execute Changes
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Interactive Rename Modal -->
-<div class="modal fade" id="interactiveRenameModal" tabindex="-1" aria-labelledby="interactiveRenameModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="interactiveRenameModalLabel">
-                    <i class="fas fa-cog me-2"></i>Interactive File Rename
-                    <span id="queueProgress" class="badge bg-primary ms-2">1 of 0</span>
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div id="interactiveContent">
-                    <!-- Current book details will be loaded here -->
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6 class="border-bottom pb-2">Current Information</h6>
-                            <div class="mb-3">
-                                <strong>Title:</strong> <span id="currentTitle"></span>
-                            </div>
-                            <div class="mb-3">
-                                <strong>Author:</strong> <span id="currentAuthor"></span>
-                            </div>
-                            <div class="mb-3">
-                                <strong>Series:</strong> <span id="currentSeries"></span>
-                            </div>
-                            <div class="mb-3">
-                                <strong>Current Path:</strong>
-                                <div class="font-monospace text-break bg-light p-2 rounded" id="currentPath"></div>
-                            </div>
-                            <div class="mb-3">
-                                <strong>Current Cover:</strong>
-                                <div id="currentCoverContainer">
-                                    <img id="currentCover" src="" alt="Current cover" class="img-thumbnail d-none cover-thumbnail">
-                                    <span id="noCover" class="text-muted">No cover available</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <h6 class="border-bottom pb-2">New Information</h6>
-                            <div class="mb-3">
-                                <strong>New Path:</strong>
-                                <div class="font-monospace text-break bg-success bg-opacity-10 p-2 rounded text-success" id="newPath"></div>
-                            </div>
-                            <div class="mb-3">
-                                <strong>New Filename:</strong>
-                                <div class="font-monospace text-break bg-info bg-opacity-10 p-2 rounded" id="newFilename"></div>
-                            </div>
-                            <div class="mb-3">
-                                <strong>Cover Status:</strong>
-                                <div id="newCoverInfo">
-                                    <span id="coverStatus"></span>
-                                </div>
-                            </div>
-                            <div class="mb-3" id="warningsContainer">
-                                <strong>Warnings:</strong>
-                                <div id="warningsList"></div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Additional Files Section -->
-                    <div id="additionalFilesSection" class="mt-4 d-none">
-                        <h6 class="border-bottom pb-2">
-                            <i class="fas fa-files me-2"></i>Additional Files
-                        </h6>
-                        
-                        <!-- Automatic Files -->
-                        <div id="automaticFilesContainer" class="mb-4 d-none">
-                            <div class="alert alert-info">
-                                <h6 class="alert-heading mb-2">
-                                    <i class="fas fa-magic me-2"></i>Files that will be automatically renamed
-                                </h6>
-                                <p class="mb-2">These files will be renamed with the book automatically (cover images, metadata files, etc.):</p>
-                                <div id="automaticFilesList"></div>
-                            </div>
-                        </div>
-                        
-                        <!-- Optional Files -->
-                        <div id="optionalFilesContainer" class="mb-4 d-none">
-                            <div class="alert alert-warning">
-                                <h6 class="alert-heading mb-2">
-                                    <i class="fas fa-question-circle me-2"></i>Additional files found - Choose action
-                                </h6>
-                                <p class="mb-3">These files were found in the same directory. Choose what to do with each:</p>
-                                <div id="optionalFilesList"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <div class="d-flex justify-content-between w-100">
-                    <div>
-                        <button type="button" class="btn btn-danger" id="abortQueueBtn">
-                            <i class="fas fa-stop me-1"></i>Abort Queue
-                        </button>
-                    </div>
-                    <div>
-                        <button type="button" class="btn btn-secondary" id="rejectBtn">
-                            <i class="fas fa-times me-1"></i>Reject
-                        </button>
-                        <button type="button" class="btn btn-warning" id="acceptAllBtn">
-                            <i class="fas fa-check-double me-1"></i>Accept All Remaining
-                        </button>
-                        <button type="button" class="btn btn-success" id="acceptBtn">
-                            <i class="fas fa-check me-1"></i>Accept
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Progress Modal -->
-<div class="modal fade" id="progressModal" tabindex="-1" aria-labelledby="progressModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="progressModalLabel">
-                    <i class="fas fa-cog fa-spin me-2"></i>Organizing Files
-                </h5>
-            </div>
-            <div class="modal-body">
-                <div class="progress mb-3">
-                    <div class="progress-bar progress-bar-width-0" role="progressbar" id="progressBar"></div>
-                </div>
-                <div id="progressText">Preparing to organize files...</div>
-                <div id="progressResults" class="mt-3 d-none">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="alert alert-success">
-                                <strong>Successful:</strong> <span id="successCount">0</span>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="alert alert-warning">
-                                <strong>With Warnings:</strong> <span id="warningCount">0</span>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="alert alert-danger">
-                                <strong>Failed:</strong> <span id="errorCount">0</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="revertSection" class="mt-3 d-none">
-                        <div class="alert alert-info">
-                            <strong>Need to revert?</strong> 
-                            <button type="button" class="btn btn-sm btn-warning ms-2" id="revertBtn">
-                                <i class="fas fa-undo me-1"></i>Revert All Changes
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-primary d-none" id="closeProgressBtn" data-bs-dismiss="modal">Close</button>
-            </div>
-        </div>
-    </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'book/js/book-renamer.js' %}"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="{% static 'book/js/renamer.js' %}"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    new BookRenamer();
-});
+// Pass default template to JavaScript
+window.defaultTemplateKey = '{{ default_template_key|default:"" }}';
 </script>
 {% endblock %}

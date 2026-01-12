@@ -26,66 +26,34 @@ class BatchRenamerTestCase(TransactionTestCase):
         self.temp_dir = tempfile.mkdtemp()
 
         # Get or create test data source
-        self.source, _ = DataSource.objects.get_or_create(
-            name=DataSource.MANUAL
-        )
+        self.source, _ = DataSource.objects.get_or_create(name=DataSource.MANUAL)
 
         # Create test models
-        self.author = Author.objects.create(
-            name="Isaac Asimov",
-            first_name="Isaac",
-            last_name="Asimov"
-        )
+        self.author = Author.objects.create(name="Isaac Asimov", first_name="Isaac", last_name="Asimov")
 
         self.series = Series.objects.create(name="Foundation Series")
 
         # Create test books with actual files
         self.book1_path = Path(self.temp_dir) / "Foundation.epub"
         self.book1_path.touch()
-        self.book1 = create_test_book_with_file(
-            file_path=str(self.book1_path),
-            file_format='epub',
-            file_size=1024000
-        )
+        self.book1 = create_test_book_with_file(file_path=str(self.book1_path), file_format="epub", file_size=1024000)
 
         # Create relationships using intermediate models
-        BookAuthor.objects.create(
-            book=self.book1,
-            author=self.author,
-            source=self.source,
-            is_main_author=True
-        )
-        BookSeries.objects.create(
-            book=self.book1,
-            series=self.series,
-            source=self.source,
-            series_number="1"
-        )
+        BookAuthor.objects.create(book=self.book1, author=self.author, source=self.source, is_main_author=True)
+        BookSeries.objects.create(book=self.book1, series=self.series, source=self.source, series_number="1")
 
         # Create FinalMetadata for renaming engine
-        FinalMetadata.objects.create(
-            book=self.book1,
-            final_title="Foundation",
-            final_author="Isaac Asimov"
-        )
+        FinalMetadata.objects.create(book=self.book1, final_title="Foundation", final_author="Isaac Asimov")
 
         self.book2_path = Path(self.temp_dir) / "Second Foundation.epub"
         self.book2_path.touch()
-        self.book2 = create_test_book_with_file(
-            file_path=str(self.book2_path),
-            file_format='epub',
-            file_size=2048000
-        )
+        self.book2 = create_test_book_with_file(file_path=str(self.book2_path), file_format="epub", file_size=2048000)
         # Create relationships using intermediate models
         BookAuthor.objects.create(book=self.book2, author=self.author, source=self.source, is_main_author=True)
         BookSeries.objects.create(book=self.book2, series=self.series, source=self.source, series_number="2")
 
         # Create FinalMetadata for renaming engine
-        FinalMetadata.objects.create(
-            book=self.book2,
-            final_title="Second Foundation",
-            final_author="Isaac Asimov"
-        )
+        FinalMetadata.objects.create(book=self.book2, final_title="Second Foundation", final_author="Isaac Asimov")
 
         self.renamer = BatchRenamer()
 
@@ -103,11 +71,7 @@ class TC7RenamingExecutionAndUndoTests(BatchRenamerTestCase):
         dry_renamer = BatchRenamer(dry_run=True)
 
         # Add books to renamer
-        dry_renamer.add_books(
-            [self.book1],
-            folder_pattern="Authors/${author.sortname}",
-            filename_pattern="${title}.${ext}"
-        )
+        dry_renamer.add_books([self.book1], folder_pattern="Authors/${author.sortname}", filename_pattern="${title}.${ext}")
 
         # Execute dry run
         successful, failed, errors = dry_renamer.execute_operations()
@@ -132,11 +96,7 @@ class TC7RenamingExecutionAndUndoTests(BatchRenamerTestCase):
         target_dir = Path(self.temp_dir) / "Authors" / "Asimov, Isaac"
 
         # Add book to renamer
-        execute_renamer.add_books(
-            [self.book1],
-            folder_pattern="Authors/${author.sortname}",
-            filename_pattern="${title}.${ext}"
-        )
+        execute_renamer.add_books([self.book1], folder_pattern="Authors/${author.sortname}", filename_pattern="${title}.${ext}")
 
         # Execute actual rename
         successful, failed, errors = execute_renamer.execute_operations()
@@ -160,11 +120,7 @@ class TC7RenamingExecutionAndUndoTests(BatchRenamerTestCase):
         execute_renamer = BatchRenamer(dry_run=False)
 
         # Execute rename first
-        execute_renamer.add_books(
-            [self.book1],
-            folder_pattern="Authors/${author.sortname}",
-            filename_pattern="${title}.${ext}"
-        )
+        execute_renamer.add_books([self.book1], folder_pattern="Authors/${author.sortname}", filename_pattern="${title}.${ext}")
 
         successful, failed, errors = execute_renamer.execute_operations()
         self.assertEqual(failed, 0)  # No failures expected
@@ -194,11 +150,7 @@ class TC7RenamingExecutionAndUndoTests(BatchRenamerTestCase):
         # Create very long pattern that would exceed path limits
         long_pattern = "Very" + ("Long" * 50) + "Path/${title}"
 
-        dry_renamer.add_books(
-            [self.book1],
-            folder_pattern=long_pattern,
-            filename_pattern="${title}.${ext}"
-        )
+        dry_renamer.add_books([self.book1], folder_pattern=long_pattern, filename_pattern="${title}.${ext}")
 
         # Should warn about path length
         successful, failed, errors = dry_renamer.execute_operations()
@@ -219,11 +171,7 @@ class TC8BookDeletionImpactTests(BatchRenamerTestCase):
 
         # Create a non-dry-run renamer for actual execution
         execute_renamer = BatchRenamer(dry_run=False)
-        execute_renamer.add_books(
-            [self.book1],
-            folder_pattern="Authors/${author.sortname}",
-            filename_pattern="${title}.${ext}"
-        )
+        execute_renamer.add_books([self.book1], folder_pattern="Authors/${author.sortname}", filename_pattern="${title}.${ext}")
         successful, failed, errors = execute_renamer.execute_operations()
         self.assertEqual(failed, 0)  # No failures expected
 
@@ -246,7 +194,7 @@ class TC8BookDeletionImpactTests(BatchRenamerTestCase):
     def test_tc8_2_unreviewed_books_auto_deletion(self):
         """TC8.2 – Only unreviewed books are auto-deleted"""
         # Set book as unreviewed (assuming reviewed field exists)
-        if hasattr(self.book1, 'reviewed'):
+        if hasattr(self.book1, "reviewed"):
             self.book1.reviewed = False
             self.book1.save()
 
@@ -328,19 +276,11 @@ class TC9MediaTypeRulesTests(BatchRenamerTestCase):
         # Create different media type files
         self.comic_path = Path(self.temp_dir) / "comic.cbz"
         self.comic_path.touch()
-        self.comic_book = create_test_book_with_file(
-            file_path=str(self.comic_path),
-            file_size=512000,
-            file_format='cbz'
-        )
+        self.comic_book = create_test_book_with_file(file_path=str(self.comic_path), file_size=512000, file_format="cbz")
 
         self.audio_path = Path(self.temp_dir) / "audiobook.m4b"
         self.audio_path.touch()
-        self.audio_book = create_test_book_with_file(
-            file_path=str(self.audio_path),
-            file_size=1024000000,
-            file_format='m4b'
-        )
+        self.audio_book = create_test_book_with_file(file_path=str(self.audio_path), file_size=1024000000, file_format="m4b")
 
     def test_tc9_1_folder_content_type_separation(self):
         """TC9.1 – Folder content type separation"""
@@ -353,8 +293,8 @@ class TC9MediaTypeRulesTests(BatchRenamerTestCase):
         result = self.renamer.execute_operations()
 
         # Should not have content type conflicts since they're in separate folders
-        operations = result['operations']
-        success_count = len([op for op in operations if op.get('status') == 'success'])
+        operations = result["operations"]
+        success_count = len([op for op in operations if op.get("status") == "success"])
 
         # Both operations should succeed
         self.assertGreater(success_count, 0, "Should successfully organize different content types in separate folders")
@@ -364,19 +304,19 @@ class TC9MediaTypeRulesTests(BatchRenamerTestCase):
         # Test valid extensions for each media type
 
         # Ebooks
-        valid_ebook_exts = ['.epub', '.mobi', '.azw3', '.pdf', '.txt']
+        valid_ebook_exts = [".epub", ".mobi", ".azw3", ".pdf", ".txt"]
         for ext in valid_ebook_exts:
-            self.assertIn(ext, ['.epub', '.mobi', '.azw3', '.pdf', '.txt'])
+            self.assertIn(ext, [".epub", ".mobi", ".azw3", ".pdf", ".txt"])
 
         # Comics
-        valid_comic_exts = ['.cbz', '.cbr', '.cb7']
+        valid_comic_exts = [".cbz", ".cbr", ".cb7"]
         for ext in valid_comic_exts:
-            self.assertIn(ext, ['.cbz', '.cbr', '.cb7'])
+            self.assertIn(ext, [".cbz", ".cbr", ".cb7"])
 
         # Audiobooks
-        valid_audio_exts = ['.mp3', '.m4b', '.aac', '.flac']
+        valid_audio_exts = [".mp3", ".m4b", ".aac", ".flac"]
         for ext in valid_audio_exts:
-            self.assertIn(ext, ['.mp3', '.m4b', '.aac', '.flac'])
+            self.assertIn(ext, [".mp3", ".m4b", ".aac", ".flac"])
 
     def test_tc9_3_reject_unknown_extensions(self):
         """TC9.3 – Reject unknown extensions"""
@@ -408,8 +348,8 @@ class TC9MediaTypeRulesTests(BatchRenamerTestCase):
         operations = self.renamer.preview_operations()
 
         # Find operations for each book
-        ebook_ops = [op for op in operations if 'Foundation' in op['target_path']]
-        comic_ops = [op for op in operations if 'Test Comic' in op['target_path']]
+        ebook_ops = [op for op in operations if "Foundation" in op["target_path"]]
+        comic_ops = [op for op in operations if "Test Comic" in op["target_path"]]
 
         # Should have separate folder structures
         self.assertGreater(len(ebook_ops), 0)
@@ -417,9 +357,9 @@ class TC9MediaTypeRulesTests(BatchRenamerTestCase):
 
         # Paths should reflect media type separation
         if ebook_ops:
-            self.assertIn('Ebooks', ebook_ops[0]['target_path'])
+            self.assertIn("Ebooks", ebook_ops[0]["target_path"])
         if comic_ops:
-            self.assertIn('Comics', comic_ops[0]['target_path'])
+            self.assertIn("Comics", comic_ops[0]["target_path"])
 
 
 class CompanionFileFinderTests(TestCase):
@@ -437,8 +377,8 @@ class CompanionFileFinderTests(TestCase):
         (Path(self.temp_dir) / "Foundation.jpg").touch()  # Cover
         (Path(self.temp_dir) / "Foundation.opf").touch()  # Metadata
         (Path(self.temp_dir) / "Foundation.nfo").touch()  # NFO file
-        (Path(self.temp_dir) / "cover.jpg").touch()       # Generic cover
-        (Path(self.temp_dir) / "metadata.opf").touch()    # Generic metadata
+        (Path(self.temp_dir) / "cover.jpg").touch()  # Generic cover
+        (Path(self.temp_dir) / "metadata.opf").touch()  # Generic metadata
 
         # Create non-companion file
         (Path(self.temp_dir) / "other_book.epub").touch()
@@ -478,7 +418,7 @@ class CompanionFileFinderTests(TestCase):
 
     def test_companion_extensions(self):
         """Test recognized companion file extensions"""
-        valid_companion_exts = ['.jpg', '.jpeg', '.png', '.opf', '.nfo', '.txt']
+        valid_companion_exts = [".jpg", ".jpeg", ".png", ".opf", ".nfo", ".txt"]
 
         for ext in valid_companion_exts:
             companion_file = Path(self.temp_dir) / f"Foundation{ext}"
@@ -501,11 +441,7 @@ class RenamingHistoryTests(TestCase):
 
         # Create test book
         # No need to create format objects - file_format is just a CharField
-        self.book = create_test_book_with_file(
-            file_path=os.path.join(self.temp_dir, "test.epub"),
-            file_size=1024000,
-            file_format='epub'
-        )
+        self.book = create_test_book_with_file(file_path=os.path.join(self.temp_dir, "test.epub"), file_size=1024000, file_format="epub")
 
         # Create actual file
         Path(self.book.file_path).touch()
@@ -575,18 +511,8 @@ class IntegrationTests(BatchRenamerTestCase):
 
         # Execute actual rename with new non-dry-run renamer
         execute_renamer = BatchRenamer(dry_run=False)
-        execute_renamer.add_books(
-            [self.book1],
-            folder_pattern="Library/${format}/${author.sortname}",
-            filename_pattern="${title}.${ext}",
-            include_companions=True
-        )
-        execute_renamer.add_books(
-            [self.book2],
-            folder_pattern="Library/${format}/${author.sortname}",
-            filename_pattern="${title}.${ext}",
-            include_companions=True
-        )
+        execute_renamer.add_books([self.book1], folder_pattern="Library/${format}/${author.sortname}", filename_pattern="${title}.${ext}", include_companions=True)
+        execute_renamer.add_books([self.book2], folder_pattern="Library/${format}/${author.sortname}", filename_pattern="${title}.${ext}", include_companions=True)
         actual_successful, actual_failed, actual_errors = execute_renamer.execute_operations()
         self.assertEqual(actual_failed, 0)  # No failures expected
 
@@ -596,14 +522,8 @@ class IntegrationTests(BatchRenamerTestCase):
 
         expected_dir = Path(self.temp_dir) / "Library" / "EPUB" / "Asimov, Isaac"
 
-        self.assertEqual(
-            Path(self.book1.file_path).parent,
-            expected_dir
-        )
-        self.assertEqual(
-            Path(self.book2.file_path).parent,
-            expected_dir
-        )
+        self.assertEqual(Path(self.book1.file_path).parent, expected_dir)
+        self.assertEqual(Path(self.book2.file_path).parent, expected_dir)
 
         # Verify files exist in new locations
         self.assertTrue(Path(self.book1.file_path).exists())
@@ -645,15 +565,15 @@ class IntegrationTests(BatchRenamerTestCase):
         self.renamer.add_books([self.book1], folder_pattern="Library/${author.sortname}", filename_pattern="${title}.${ext}")
 
         # Simulate concurrent access by opening file
-        with open(self.book1_path, 'rb') as _:
+        with open(self.book1_path, "rb") as _:
             # Try to rename while file is open
             result = self.renamer.execute_operations()
 
             # Should handle file being in use
             # (Behavior depends on OS and implementation)
-            self.assertIn('success', result)
+            self.assertIn("success", result)
 
-    @patch('books.utils.batch_renamer.os.rename')
+    @patch("books.utils.batch_renamer.os.rename")
     def test_filesystem_error_handling(self, mock_rename):
         """Test handling of filesystem errors"""
         # Mock filesystem operation to raise error

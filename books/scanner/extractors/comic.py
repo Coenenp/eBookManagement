@@ -37,9 +37,7 @@ logger = logging.getLogger("books.scanner")
 
 def _get_content_scan_source():
     """Get or create the Content Scan DataSource."""
-    source, created = DataSource.objects.get_or_create(
-        name=DataSource.CONTENT_SCAN, defaults={"trust_level": 0.85}
-    )
+    source, created = DataSource.objects.get_or_create(name=DataSource.CONTENT_SCAN, defaults={"trust_level": 0.85})
     return source
 
 
@@ -269,25 +267,17 @@ def _detect_issue_type(filename):
         return "giant_size"
     elif re.search(r"\bpreview\b|\bpromo\b", filename_lower):
         return "preview"
-    elif re.search(
-        r"\bwhatif\b|\bwhat\s+if\b|\belseworlds\b|\bimaginary\b", filename_lower
-    ):
+    elif re.search(r"\bwhatif\b|\bwhat\s+if\b|\belseworlds\b|\bimaginary\b", filename_lower):
         return "alternate_reality"
     elif re.search(r"\bcrossover\b|\bevent\b", filename_lower):
         return "crossover"
     elif re.search(r"\bmini[\-\s]?series\b|\blimited\b.*\bseries\b", filename_lower):
         return "mini_series"
-    elif re.search(
-        r"#\d+(?:\.\d+)?(?:\s|$)", filename
-    ):  # Has regular issue number with #
+    elif re.search(r"#\d+(?:\.\d+)?(?:\s|$)", filename):  # Has regular issue number with #
         return "main_series"
-    elif re.search(
-        r"\bissue\s+\d+(?:\.\d+)?(?:\s|$)", filename_lower
-    ):  # Has "Issue 15" format
+    elif re.search(r"\bissue\s+\d+(?:\.\d+)?(?:\s|$)", filename_lower):  # Has "Issue 15" format
         return "main_series"
-    elif re.search(
-        r"\b\d+(?:\.\d+)?(?:\s*\.|$)", filename
-    ):  # Has number at end or before extension
+    elif re.search(r"\b\d+(?:\.\d+)?(?:\s*\.|$)", filename):  # Has number at end or before extension
         return "main_series"
     else:
         return "unknown"
@@ -308,16 +298,12 @@ def _extract_special_identifiers(filename):
         metadata["is_variant"] = True
 
         # Try to extract variant type
-        variant_match = re.search(
-            r"(incentive|virgin|sketch|foil|holofoil|chromium)", filename_lower
-        )
+        variant_match = re.search(r"(incentive|virgin|sketch|foil|holofoil|chromium)", filename_lower)
         if variant_match:
             metadata["variant_type"] = variant_match.group(1)
 
     # Detect reprint information
-    if re.search(
-        r"\breprint\b|\bsecond\b.*\bprinting\b|\b2nd\b.*\bprint\b", filename_lower
-    ):
+    if re.search(r"\breprint\b|\bsecond\b.*\bprinting\b|\b2nd\b.*\bprint\b", filename_lower):
         metadata["is_reprint"] = True
 
     # Detect digital vs print
@@ -335,9 +321,7 @@ def _extract_special_identifiers(filename):
         if match:
             potential_arc = match.group(1).strip()
             # Filter out common non-arc words
-            if len(potential_arc) > 3 and not re.search(
-                r"^(vol|volume|issue|part|pt)\b", potential_arc.lower()
-            ):
+            if len(potential_arc) > 3 and not re.search(r"^(vol|volume|issue|part|pt)\b", potential_arc.lower()):
                 metadata["story_arc"] = potential_arc
                 break
 
@@ -462,9 +446,7 @@ def _extract_first_image_as_cover(archive_file, book, format_type):
         temp_path = None
         try:
             # Create temp file in cover cache directory to avoid permission issues
-            temp_fd, temp_path = tempfile.mkstemp(
-                suffix=".tmp", dir=cover_cache_dir, prefix="cover_temp_"
-            )
+            temp_fd, temp_path = tempfile.mkstemp(suffix=".tmp", dir=cover_cache_dir, prefix="cover_temp_")
 
             # Write image data to temp file
             with os.fdopen(temp_fd, "wb") as f:
@@ -577,24 +559,16 @@ def _save_comic_metadata(book, extracted_data, filename_metadata, source):
                 import re
 
                 authors = re.split(r"[,;]", extracted_data[field])
-                comic_info_authors.extend(
-                    [author.strip() for author in authors if author.strip()]
-                )
+                comic_info_authors.extend([author.strip() for author in authors if author.strip()])
 
         # Add comic info authors to the main authors list if we don't have any from filename
         if comic_info_authors and not authors_list:
             from books.utils.author import attach_authors
 
-            attach_authors(
-                book, comic_info_authors, source, confidence=source.trust_level
-            )
+            attach_authors(book, comic_info_authors, source, confidence=source.trust_level)
 
         # Add language from scan folder for comics
-        if (
-            hasattr(book, "scan_folder")
-            and book.scan_folder
-            and book.scan_folder.language
-        ):
+        if hasattr(book, "scan_folder") and book.scan_folder and book.scan_folder.language:
             BookMetadata.objects.get_or_create(
                 book=book,
                 field_name="language",
@@ -640,9 +614,7 @@ def analyze_comic_series(series_name, publisher=None):
 
     try:
         # Find all books in the series
-        series_filter = Q(
-            metadata__field_name="series", metadata__field_value__iexact=series_name
-        )
+        series_filter = Q(metadata__field_name="series", metadata__field_value__iexact=series_name)
         if publisher:
             series_filter &= Q(finalmetadata__final_publisher__iexact=publisher)
 
@@ -687,9 +659,7 @@ def analyze_comic_series(series_name, publisher=None):
 
         # Analyze main series completeness
         if analysis["main_series_issues"]:
-            analysis["completeness_analysis"] = _analyze_main_series_completeness(
-                analysis["main_series_issues"]
-            )
+            analysis["completeness_analysis"] = _analyze_main_series_completeness(analysis["main_series_issues"])
 
         return analysis
 
@@ -710,9 +680,7 @@ def _get_comic_issue_info(book):
         "year": None,
         "is_variant": False,
         "story_arc": None,
-        "title": (
-            book.finalmetadata.final_title if hasattr(book, "finalmetadata") else ""
-        ),
+        "title": (book.finalmetadata.final_title if hasattr(book, "finalmetadata") else ""),
     }
 
     # Get metadata from database
@@ -798,11 +766,7 @@ def _analyze_main_series_completeness(main_series_issues):
             else:
                 gap_analysis.append(f"#{gap_start}-#{gap_end}")
 
-    completeness_percentage = (
-        len(sorted_issues) / (max_issue - min_issue + 1) * 100
-        if max_issue > min_issue
-        else 100
-    )
+    completeness_percentage = len(sorted_issues) / (max_issue - min_issue + 1) * 100 if max_issue > min_issue else 100
 
     return {
         "is_complete": len(missing_issues) == 0,
@@ -822,9 +786,7 @@ def get_comic_series_list():
 
     # Get all series from comics
     comic_series = (
-        BookMetadata.objects.filter(
-            field_name="series", book__files__file_path__iregex=r"\.(cbr|cbz)$"
-        )
+        BookMetadata.objects.filter(field_name="series", book__files__file_path__iregex=r"\.(cbr|cbz)$")
         .values("field_value")
         .annotate(book_count=Count("book", distinct=True))
         .order_by("field_value")
@@ -861,9 +823,7 @@ def _enrich_with_comicvine(book, extracted_data):
 
         # Check if Comic Vine API key is configured
         if not hasattr(settings, "COMICVINE_API_KEY") or not settings.COMICVINE_API_KEY:
-            logger.debug(
-                "Comic Vine API key not configured, skipping Comic Vine enrichment"
-            )
+            logger.debug("Comic Vine API key not configured, skipping Comic Vine enrichment")
             return
 
         # Import Comic Vine API wrapper
@@ -873,9 +833,7 @@ def _enrich_with_comicvine(book, extracted_data):
 
         # Build search query from extracted data
         series_name = extracted_data.get("series")
-        issue_number = extracted_data.get("series_number") or extracted_data.get(
-            "issue"
-        )
+        issue_number = extracted_data.get("series_number") or extracted_data.get("issue")
         title = extracted_data.get("title")
 
         # Prefer series + issue number for search
@@ -886,9 +844,7 @@ def _enrich_with_comicvine(book, extracted_data):
         elif title:
             search_query = title
         else:
-            logger.debug(
-                f"No suitable search terms for Comic Vine API for book {book.id}"
-            )
+            logger.debug(f"No suitable search terms for Comic Vine API for book {book.id}")
             return
 
         logger.info(f"Searching Comic Vine for: {search_query}")
@@ -897,17 +853,13 @@ def _enrich_with_comicvine(book, extracted_data):
         issue_result = api.search_issue(search_query)
 
         if issue_result:
-            logger.info(
-                f"Found Comic Vine match for {search_query}: {issue_result.get('name', 'Unknown')}"
-            )
+            logger.info(f"Found Comic Vine match for {search_query}: {issue_result.get('name', 'Unknown')}")
             # Save Comic Vine metadata to database
             api.save_comic_metadata(book, issue_result)
         else:
             logger.debug(f"No Comic Vine results found for {search_query}")
 
     except ImportError:
-        logger.warning(
-            "Comic Vine API wrapper not available, skipping Comic Vine enrichment"
-        )
+        logger.warning("Comic Vine API wrapper not available, skipping Comic Vine enrichment")
     except Exception as e:
         logger.warning(f"Error enriching comic metadata with Comic Vine: {e}")

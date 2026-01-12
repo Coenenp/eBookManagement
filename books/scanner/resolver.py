@@ -23,34 +23,20 @@ def resolve_final_metadata(book):
         final_metadata.final_title_confidence = best_title.confidence
 
     # 👤 Author
-    best_author = (
-        book.author_relationships.filter(is_active=True)
-        .order_by("-confidence", "-is_main_author")
-        .first()
-    )
+    best_author = book.author_relationships.filter(is_active=True).order_by("-confidence", "-is_main_author").first()
     if best_author:
         final_metadata.final_author = best_author.author.name
         final_metadata.final_author_confidence = best_author.confidence
 
     # 📚 Series
-    best_series = (
-        book.series_relationships.filter(is_active=True).order_by("-confidence").first()
-    )
+    best_series = book.series_relationships.filter(is_active=True).order_by("-confidence").first()
     if best_series:
         final_metadata.final_series = best_series.series.name
-        final_metadata.final_series_number = (
-            str(best_series.series_number)
-            if best_series.series_number is not None
-            else ""
-        )
+        final_metadata.final_series_number = str(best_series.series_number) if best_series.series_number is not None else ""
         final_metadata.final_series_confidence = best_series.confidence
 
     # 📕 Cover
-    best_cover = (
-        book.covers.filter(is_active=True)
-        .order_by("-confidence", "-is_high_resolution", "-width")
-        .first()
-    )
+    best_cover = book.covers.filter(is_active=True).order_by("-confidence", "-is_high_resolution", "-width").first()
     if best_cover and best_cover.cover_path:
         final_metadata.final_cover_path = best_cover.cover_path
         final_metadata.final_cover_confidence = best_cover.confidence
@@ -59,11 +45,7 @@ def resolve_final_metadata(book):
         final_metadata.has_cover = False
 
     # 🏢 Publisher
-    best_pub = (
-        book.publisher_relationships.filter(is_active=True)
-        .order_by("-confidence")
-        .first()
-    )
+    best_pub = book.publisher_relationships.filter(is_active=True).order_by("-confidence").first()
     if best_pub:
         final_metadata.final_publisher = best_pub.publisher.name
         final_metadata.final_publisher_confidence = best_pub.confidence
@@ -77,12 +59,7 @@ def resolve_final_metadata(book):
     }
 
     for field_name, attr_name in metadata_fields.items():
-        best_metadata = (
-            book.metadata.filter(field_name=field_name)
-            .filter(is_active=True)
-            .order_by("-confidence")
-            .first()
-        )
+        best_metadata = book.metadata.filter(field_name=field_name).filter(is_active=True).order_by("-confidence").first()
         if best_metadata:
             value = best_metadata.field_value
             if field_name == "publication_year":
@@ -94,13 +71,9 @@ def resolve_final_metadata(book):
                         if 1000 < year <= 2100:  # sanity check
                             final_metadata.publication_year = year
                         else:
-                            logger.warning(
-                                f"[YEAR OUT OF RANGE] Parsed year '{year}' from '{value}'"
-                            )
+                            logger.warning(f"[YEAR OUT OF RANGE] Parsed year '{year}' from '{value}'")
                     else:
-                        logger.warning(
-                            f"[YEAR PARSE FAIL] No valid year found in '{value}'"
-                        )
+                        logger.warning(f"[YEAR PARSE FAIL] No valid year found in '{value}'")
                 except Exception as e:
                     logger.warning(f"[YEAR CAST ERROR] field_value='{value}' — {e}")
             else:

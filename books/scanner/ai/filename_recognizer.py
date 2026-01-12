@@ -50,9 +50,7 @@ class FilenamePatternRecognizer:
         logger.info("Collecting training data from reviewed books...")
 
         # Get all books that have been reviewed (approved metadata)
-        reviewed_books = Book.objects.filter(
-            finalmetadata__is_reviewed=True
-        ).select_related("finalmetadata")
+        reviewed_books = Book.objects.filter(finalmetadata__is_reviewed=True).select_related("finalmetadata")
 
         training_data = []
 
@@ -122,9 +120,7 @@ class FilenamePatternRecognizer:
         ]
 
         for noise_word in noise_words:
-            cleaned = re.sub(
-                r"\b" + re.escape(noise_word) + r"\b", " ", cleaned, flags=re.IGNORECASE
-            )
+            cleaned = re.sub(r"\b" + re.escape(noise_word) + r"\b", " ", cleaned, flags=re.IGNORECASE)
 
         # Clean up multiple spaces
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
@@ -142,12 +138,8 @@ class FilenamePatternRecognizer:
         # Pattern features
         features["has_numbers"] = bool(re.search(r"\d", filename))
         features["has_year"] = bool(re.search(r"\b(19|20)\d{2}\b", filename))
-        features["has_volume_indicator"] = bool(
-            re.search(r"\b(vol|volume|book|#)\s*\d+\b", filename, re.IGNORECASE)
-        )
-        features["has_series_indicator"] = bool(
-            re.search(r"\b(series|saga|chronicles|tales)\b", filename, re.IGNORECASE)
-        )
+        features["has_volume_indicator"] = bool(re.search(r"\b(vol|volume|book|#)\s*\d+\b", filename, re.IGNORECASE))
+        features["has_series_indicator"] = bool(re.search(r"\b(series|saga|chronicles|tales)\b", filename, re.IGNORECASE))
 
         # Punctuation features
         features["dash_count"] = filename.count("-")
@@ -159,9 +151,7 @@ class FilenamePatternRecognizer:
         if words:
             features["first_word_length"] = len(words[0])
             features["last_word_length"] = len(words[-1])
-            features["first_word_capitalized"] = (
-                words[0][0].isupper() if words[0] else False
-            )
+            features["first_word_capitalized"] = words[0][0].isupper() if words[0] else False
 
         return features
 
@@ -177,9 +167,7 @@ class FilenamePatternRecognizer:
         X_text = df["filename"].values
 
         # Create TF-IDF vectorizer for text features
-        self.vectorizer = TfidfVectorizer(
-            max_features=5000, ngram_range=(1, 3), stop_words="english", lowercase=True
-        )
+        self.vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1, 3), stop_words="english", lowercase=True)
 
         X_text_features = self.vectorizer.fit_transform(X_text)
 
@@ -207,18 +195,14 @@ class FilenamePatternRecognizer:
                 continue
 
             # Split data
-            X_train, X_test, y_train, y_test = train_test_split(
-                X_combined, y, test_size=0.2, random_state=42
-            )
+            X_train, X_test, y_train, y_test = train_test_split(X_combined, y, test_size=0.2, random_state=42)
 
             # Create and train model
             model = Pipeline(
                 [
                     (
                         "classifier",
-                        RandomForestClassifier(
-                            n_estimators=100, max_depth=10, random_state=42, n_jobs=-1
-                        ),
+                        RandomForestClassifier(n_estimators=100, max_depth=10, random_state=42, n_jobs=-1),
                     )
                 ]
             )
@@ -299,9 +283,7 @@ class FilenamePatternRecognizer:
 
         # Prepare features
         X_text = self.vectorizer.transform([cleaned_filename])
-        X_engineered = pd.DataFrame(
-            [list(self._extract_features(cleaned_filename).values())]
-        ).values
+        X_engineered = pd.DataFrame([list(self._extract_features(cleaned_filename).values())]).values
 
         from scipy.sparse import hstack
 
@@ -319,14 +301,10 @@ class FilenamePatternRecognizer:
 
                     # Get prediction probabilities for confidence
                     if hasattr(model.named_steps["classifier"], "predict_proba"):
-                        probabilities = model.named_steps["classifier"].predict_proba(
-                            X_combined
-                        )[0]
+                        probabilities = model.named_steps["classifier"].predict_proba(X_combined)[0]
                         confidence = max(probabilities)
                     else:
-                        confidence = (
-                            0.5  # Default confidence for non-probabilistic models
-                        )
+                        confidence = 0.5  # Default confidence for non-probabilistic models
 
                     predictions[field] = (prediction, confidence)
 
@@ -335,25 +313,17 @@ class FilenamePatternRecognizer:
 
         return predictions
 
-    def is_prediction_confident(
-        self, predictions: Dict[str, Tuple[str, float]]
-    ) -> bool:
+    def is_prediction_confident(self, predictions: Dict[str, Tuple[str, float]]) -> bool:
         """Check if predictions meet confidence threshold."""
         if not predictions:
             return False
 
         # Check if at least one prediction is above threshold
-        confident_predictions = [
-            conf
-            for _, conf in predictions.values()
-            if conf >= self.confidence_threshold
-        ]
+        confident_predictions = [conf for _, conf in predictions.values() if conf >= self.confidence_threshold]
 
         return len(confident_predictions) > 0
 
-    def retrain_with_feedback(
-        self, feedback_data: List[Dict[str, str]]
-    ) -> Dict[str, float]:
+    def retrain_with_feedback(self, feedback_data: List[Dict[str, str]]) -> Dict[str, float]:
         """Retrain models with user feedback corrections."""
         logger.info(f"Retraining models with {len(feedback_data)} feedback samples...")
 
@@ -398,11 +368,7 @@ class FilenamePatternRecognizer:
             return {
                 "total_samples": len(df),
                 "accuracy": 0.85,  # Placeholder - would need real accuracy calculation
-                "last_trained": (
-                    training_data_path.stat().st_mtime
-                    if training_data_path.exists()
-                    else None
-                ),
+                "last_trained": (training_data_path.stat().st_mtime if training_data_path.exists() else None),
             }
         except Exception as e:
             logger.error(f"Failed to get training data stats: {e}")

@@ -38,9 +38,7 @@ def extract_isbn_from_content(book, page_limit=10):
         elif file_extension in [".mobi", ".azw", ".azw3"]:
             return _extract_from_mobi(book, page_limit)
         else:
-            logger.warning(
-                f"Unsupported file type for content ISBN extraction: {file_extension}"
-            )
+            logger.warning(f"Unsupported file type for content ISBN extraction: {file_extension}")
             return []
 
     except Exception as e:
@@ -57,9 +55,7 @@ def _extract_from_epub(book, page_limit):
         isbn_candidates = []
 
         # Get all text items (chapters, pages)
-        items = [
-            item for item in epub_book.get_items() if item.get_type() == 9
-        ]  # ITEM_DOCUMENT
+        items = [item for item in epub_book.get_items() if item.get_type() == 9]  # ITEM_DOCUMENT
 
         # Scan first few items (usually contain title/copyright pages)
         for i, item in enumerate(items[:page_limit]):
@@ -79,9 +75,7 @@ def _extract_from_epub(book, page_limit):
                     text = _extract_text_from_html(content)
                     isbn_candidates.extend(_find_isbn_patterns(text))
                 except Exception as e:
-                    logger.debug(
-                        f"Failed to process EPUB item {len(items)-page_limit+i}: {e}"
-                    )
+                    logger.debug(f"Failed to process EPUB item {len(items)-page_limit+i}: {e}")
                     continue
 
         return _validate_and_dedupe_isbns(isbn_candidates)
@@ -139,9 +133,7 @@ def _extract_from_mobi(book, page_limit):
     try:
         # Try to use mobidedrm or similar library if available
         # For now, return empty list as MOBI parsing is complex
-        logger.info(
-            f"MOBI content ISBN extraction not yet implemented for {book.file_path}"
-        )
+        logger.info(f"MOBI content ISBN extraction not yet implemented for {book.file_path}")
         return []
 
     except Exception as e:
@@ -293,9 +285,7 @@ def save_content_isbns(book):
                     field_name="isbn",
                     field_value=isbn,
                     source=source,
-                    defaults={
-                        "confidence": source.trust_level
-                    },  # Use source's trust level
+                    defaults={"confidence": source.trust_level},  # Use source's trust level
                 )
                 if created:
                     saved_count += 1
@@ -304,9 +294,7 @@ def save_content_isbns(book):
                 logger.warning(f"Failed to save content ISBN {isbn}: {e}")
 
         if saved_count > 0:
-            logger.info(
-                f"Saved {saved_count} ISBNs from content scan for {book.file_path}"
-            )
+            logger.info(f"Saved {saved_count} ISBNs from content scan for {book.file_path}")
         else:
             logger.info(f"All content ISBNs already existed for {book.file_path}")
 
@@ -342,26 +330,18 @@ def bulk_scan_content_isbns(books_queryset=None, page_limit=10):
             stats["total_books"] += 1
 
             # Check if we already have content-scanned ISBNs for this book
-            existing_content_isbns = BookMetadata.objects.filter(
-                book=book, field_name="isbn", source__name=DataSource.CONTENT_SCAN
-            ).count()
+            existing_content_isbns = BookMetadata.objects.filter(book=book, field_name="isbn", source__name=DataSource.CONTENT_SCAN).count()
 
             if existing_content_isbns > 0:
-                logger.debug(
-                    f"Skipping {book.file_path}, already has content-scanned ISBNs"
-                )
+                logger.debug(f"Skipping {book.file_path}, already has content-scanned ISBNs")
                 continue
 
             # Extract and save ISBNs
-            initial_count = BookMetadata.objects.filter(
-                book=book, field_name="isbn", source__name=DataSource.CONTENT_SCAN
-            ).count()
+            initial_count = BookMetadata.objects.filter(book=book, field_name="isbn", source__name=DataSource.CONTENT_SCAN).count()
 
             save_content_isbns(book)
 
-            final_count = BookMetadata.objects.filter(
-                book=book, field_name="isbn", source__name=DataSource.CONTENT_SCAN
-            ).count()
+            final_count = BookMetadata.objects.filter(book=book, field_name="isbn", source__name=DataSource.CONTENT_SCAN).count()
 
             new_isbns = final_count - initial_count
             if new_isbns > 0:
