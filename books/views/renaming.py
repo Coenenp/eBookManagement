@@ -17,6 +17,7 @@ from django.views.generic import ListView, TemplateView
 from books.constants import PAGINATION
 from books.models import COMIC_FORMATS
 from books.utils.batch_renamer import BatchRenamer
+from books.utils.file_collision import get_collision_suffix, resolve_collision
 
 
 def get_model(model_name):
@@ -83,8 +84,8 @@ class BookRenamerView(LoginRequiredMixin, ListView):
         context = super().get_context_data(**kwargs)
 
         # Import here to avoid circular imports
-        from books.utils.renaming_engine import PREDEFINED_PATTERNS
         from books.models import UserProfile
+        from books.utils.renaming_engine import PREDEFINED_PATTERNS
 
         # Add predefined patterns
         context["predefined_patterns"] = PREDEFINED_PATTERNS
@@ -111,7 +112,7 @@ class BookRenamerView(LoginRequiredMixin, ListView):
         if not default_template_key:
             for key, pattern in PREDEFINED_PATTERNS.items():
                 if pattern["folder"] == profile.default_folder_pattern and pattern["filename"] == profile.default_filename_pattern:
-                    default_template_key = key
+                    default_template_key = f"system-{key}"
                     break
 
         context["default_template_key"] = default_template_key
@@ -174,15 +175,33 @@ class BookRenamerView(LoginRequiredMixin, ListView):
 
         # If patterns are provided, use them to generate previews
         if folder_pattern and filename_pattern:
+            from pathlib import Path
+
+            from books.utils.file_collision import resolve_collision
             from books.utils.renaming_engine import RenamingEngine
 
             engine = RenamingEngine()
 
             for book in books:
                 try:
-                    target_folder = engine.process_template(folder_pattern, book)
+                    target_folder = engine.process_template(folder_pattern, book) if folder_pattern else ""
                     target_filename = engine.process_template(filename_pattern, book)
-                    preview_path = f"{target_folder}/{target_filename}" if target_folder and target_filename else None
+
+                    if target_filename:
+                        # Build target path
+                        if book.file_path:
+                            book_base_dir = Path(book.file_path).parent
+                            target_path = book_base_dir / target_folder / target_filename
+
+                            # Resolve collision to show actual final path with suffix
+                            resolved_path = resolve_collision(str(target_path))
+
+                            # Format for display (relative path)
+                            preview_path = f"{target_folder}/{Path(resolved_path).name}" if target_folder else Path(resolved_path).name
+                        else:
+                            preview_path = f"{target_folder}/{target_filename}" if target_folder else target_filename
+                    else:
+                        preview_path = None
                 except Exception:
                     preview_path = "Error generating preview"
 
@@ -428,8 +447,8 @@ class TemplateManagementView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
 
         # Import here to avoid circular imports
-        from books.utils.renaming_engine import PREDEFINED_PATTERNS
         from books.models import UserProfile
+        from books.utils.renaming_engine import PREDEFINED_PATTERNS
 
         # Add predefined patterns
         context["predefined_patterns"] = PREDEFINED_PATTERNS
@@ -853,6 +872,11 @@ def rename_book(request, book_id):
             # Build new path
             new_path = parent_os.path.join(parent_os.path.dirname(old_path), new_filename)
 
+            # Resolve collision (adds " (2)", " (3)", etc. if needed)
+            original_new_path = new_path
+            new_path = resolve_collision(new_path)
+            collision_suffix = get_collision_suffix(original_new_path, new_path)
+
             # Rename the file (this will be mocked by tests)
             parent_os.rename(old_path, new_path)
 
@@ -860,7 +884,12 @@ def rename_book(request, book_id):
             primary_file.file_path = new_path
             primary_file.save()
 
-            return JsonResponse({"success": True, "message": "Book renamed successfully"})
+            # If there was a collision, inform the user
+            message = "Book renamed successfully"
+            if collision_suffix:
+                message += f" (renamed to avoid collision: {parent_os.path.basename(new_path)})"
+
+            return JsonResponse({"success": True, "message": message, "new_path": new_path})
 
         except Book.DoesNotExist:
             return JsonResponse({"success": False, "error": "Book not found"}, status=404)
@@ -1004,7 +1033,7 @@ def execute_batch_rename(request):
             filename_pattern = request.POST.get("filename_pattern", "")
             book_ids = request.POST.getlist("book_ids", [])
             dry_run = request.POST.get("dry_run", "true").lower() == "true"
-            include_companions = request.POST.get("include_companions", "true").lower() == "true"
+            embed_metadata = request.POST.get("embed_metadata", "true").lower() == "true"
 
             if not folder_pattern or not filename_pattern:
                 return JsonResponse({"success": False, "error": "Both folder and filename patterns are required"})
@@ -1020,7 +1049,7 @@ def execute_batch_rename(request):
             renamer = BatchRenamer(dry_run=dry_run)
 
             # Add books to the batch
-            renamer.add_books(books, folder_pattern, filename_pattern, include_companions)
+            renamer.add_books(books, folder_pattern, filename_pattern, embed_metadata)
 
             # Get preview/summary
             operation_summary = renamer.get_operation_summary()

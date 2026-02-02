@@ -54,12 +54,8 @@ class EbookRenamer {
         $('#save-template-btn').on('click', () => this.showSaveTemplateDialog());
         $('#delete-template-btn').on('click', () => this.deleteTemplate());
 
-        // Pattern form events with live preview
-        $('#folder-pattern, #filename-pattern').on('input', (e) => {
-            this.validatePattern(e);
-            this.updateLivePreview();
-            this.updateButtonStates(); // Check for duplicates on every input
-        });
+        // Pattern form events - not needed since patterns are read-only displays
+        // Patterns are selected via template dropdown only
 
         // Token reference events
         $('.token-clickable').on('click', (e) => this.insertToken(e));
@@ -124,12 +120,31 @@ class EbookRenamer {
 
             console.log('Loading template:', { templateValue, folderPattern, filenamePattern, isDeletable });
 
-            // Update text fields
-            $('#folder-pattern').val(folderPattern).removeClass('field-empty').addClass('field-filled');
-            $('#filename-pattern').val(filenamePattern).removeClass('field-empty').addClass('field-filled');
+            // Store patterns for later use
+            this.currentFolderPattern = folderPattern;
+            this.currentFilenamePattern = filenamePattern;
+
+            // Update display divs (read-only pattern displays)
+            if (folderPattern) {
+                $('#folder-pattern-display').html(`<code>${folderPattern}</code>`);
+            } else {
+                $('#folder-pattern-display').html('<em class="text-muted">Select a template...</em>');
+            }
+
+            if (filenamePattern) {
+                $('#filename-pattern-display').html(`<code>${filenamePattern}</code>`);
+            } else {
+                $('#filename-pattern-display').html('<em class="text-muted">Select a template...</em>');
+            }
 
             // Track current template
             this.currentTemplate = templateValue.startsWith('user-') ? templateValue.replace('user-', '') : null;
+
+            // Update preview example
+            this.updatePreviewExample(folderPattern, filenamePattern);
+
+            // Update book table previews
+            this.updateBookTablePreviews();
 
             // Enable/disable delete button based on template type
             $('#delete-template-btn').prop('disabled', !isDeletable);
@@ -140,9 +155,11 @@ class EbookRenamer {
             this.updateLivePreview();
             this.updateButtonStates();
         } else {
-            // Clear fields when no template selected
-            $('#folder-pattern').val('').removeClass('field-filled').addClass('field-empty');
-            $('#filename-pattern').val('').removeClass('field-filled').addClass('field-empty');
+            // Clear stored patterns and display divs when no template selected
+            this.currentFolderPattern = '';
+            this.currentFilenamePattern = '';
+            $('#folder-pattern-display').html('<em class="text-muted">Select a template...</em>');
+            $('#filename-pattern-display').html('<em class="text-muted">Select a template...</em>');
             this.currentTemplate = null;
             this.validationState = { folder: false, filename: false };
 
@@ -151,6 +168,116 @@ class EbookRenamer {
             $('#filename-pattern-validation').empty();
             $('#pattern-preview').html('<em class="text-muted">Select a template to get started...</em>');
             this.updateButtonStates();
+        }
+    }
+
+    /**
+     * Update preview example with sample book metadata
+     */
+    updatePreviewExample(folderPattern, filenamePattern) {
+        // Example book metadata for preview
+        const exampleAuthor = 'Asimov, Isaac';
+        const exampleTitle = 'Foundation';
+        const exampleSeries = 'Foundation Series';
+        const exampleSeriesNum = '01';
+        const exampleYear = '1951';
+        const exampleGenre = 'Science Fiction';
+        const exampleExt = 'epub';
+
+        // Simple token replacement for preview
+        let folderPreview = folderPattern || '';
+        let filenamePreview = filenamePattern || '';
+
+        // Replace common tokens
+        const replacements = {
+            '${author.sortname}': exampleAuthor,
+            '${author}': exampleAuthor,
+            '${title}': exampleTitle,
+            '${bookseries.title}': exampleSeries,
+            '${series}': exampleSeries,
+            '${bookseries.number}': exampleSeriesNum,
+            '${series_number}': exampleSeriesNum,
+            '${publicationyear}': exampleYear,
+            '${year}': exampleYear,
+            '${genre}': exampleGenre,
+            '${ext}': exampleExt,
+        };
+
+        Object.keys(replacements).forEach((token) => {
+            folderPreview = folderPreview.replace(
+                new RegExp(token.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'), 'g'),
+                replacements[token]
+            );
+            filenamePreview = filenamePreview.replace(
+                new RegExp(token.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'), 'g'),
+                replacements[token]
+            );
+        });
+
+        // Update preview displays
+        if (folderPreview) {
+            $('#preview-folder-example').text(folderPreview);
+        } else {
+            $('#preview-folder-example').text('Select a template to see preview');
+        }
+
+        if (filenamePreview) {
+            $('#preview-filename-example').text(filenamePreview);
+        } else {
+            $('#preview-filename-example').text('Select a template to see preview');
+        }
+    }
+
+    /**
+     * Update book table previews for all books
+     */
+    async updateBookTablePreviews() {
+        const folderPattern = this.currentFolderPattern;
+        const filenamePattern = this.currentFilenamePattern;
+
+        if (!folderPattern || !filenamePattern) {
+            // Clear all previews if no patterns
+            $('.preview-path').each(function () {
+                $(this).html('<span class="text-muted fst-italic">Configure patterns to see preview</span>');
+            });
+            return;
+        }
+
+        // Get all book IDs from the table
+        const bookIds = [];
+        $('.book-checkbox').each(function () {
+            bookIds.push($(this).val());
+        });
+
+        if (bookIds.length === 0) {
+            return;
+        }
+
+        try {
+            const response = await $.post('/renamer/preview-pattern/', {
+                folder_pattern: folderPattern,
+                filename_pattern: filenamePattern,
+                book_ids: bookIds,
+                csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val(),
+            });
+
+            if (response.success && response.previews) {
+                // Update each book's preview in the table
+                response.previews.forEach((preview) => {
+                    const bookRow = $(`.book-checkbox[value="${preview.book_id}"]`).closest('tr');
+                    const previewCell = bookRow.find('.preview-path');
+
+                    if (preview.new_path) {
+                        previewCell.html(
+                            `<span class="text-truncate d-inline-block" title="${preview.new_path}">${preview.new_path}</span>`
+                        );
+                    } else if (preview.error) {
+                        previewCell.html(`<span class="text-danger fst-italic">${preview.error}</span>`);
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error updating book previews:', error);
         }
     }
 
@@ -476,8 +603,8 @@ class EbookRenamer {
             return;
         }
 
-        const folderPattern = $('#folder-pattern').val();
-        const filenamePattern = $('#filename-pattern').val();
+        const folderPattern = this.currentFolderPattern || '';
+        const filenamePattern = this.currentFilenamePattern || '';
 
         if (!folderPattern || !filenamePattern) {
             this.showAlert('Please configure both folder and filename patterns.', 'warning');
@@ -580,13 +707,59 @@ class EbookRenamer {
         const folderPattern = $('#folder-pattern').val();
         const filenamePattern = $('#filename-pattern').val();
         const dryRun = $('#dry-run').is(':checked');
-        const includeCompanions = $('#include-companions').is(':checked');
+        const embedMetadata = $('#embed-metadata').is(':checked');
 
         if (!folderPattern || !filenamePattern) {
             this.showAlert('Please configure both folder and filename patterns.', 'warning');
             return;
         }
 
+        // Check if we have EPUB files selected and embed_metadata is enabled
+        if (embedMetadata && !dryRun) {
+            const hasEpubs = await this.checkForEpubFiles();
+            if (hasEpubs) {
+                // Show EPUB preview for the first EPUB file
+                const firstEpubId = await this.getFirstEpubFileId();
+                if (firstEpubId) {
+                    // Store the callback to proceed after preview confirmation
+                    window.proceedWithRename = () =>
+                        this.proceedWithActualRename(folderPattern, filenamePattern, dryRun, embedMetadata);
+                    // Show EPUB preview modal
+                    window.showEpubPreview(firstEpubId, embedMetadata);
+                    return; // Wait for user confirmation
+                }
+            }
+        }
+
+        // If no EPUBs or dry run, proceed directly
+        await this.proceedWithActualRename(folderPattern, filenamePattern, dryRun, embedMetadata);
+    }
+
+    async checkForEpubFiles() {
+        // Check if any selected books are EPUB files
+        for (const bookId of this.selectedBooks) {
+            const row = $(`.book-checkbox[value="${bookId}"]`).closest('tr');
+            const format = row.find('td').eq(3).text().trim().toLowerCase(); // Assuming format is in 4th column
+            if (format === 'epub') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    async getFirstEpubFileId() {
+        // Get the first EPUB file from selected books
+        for (const bookId of this.selectedBooks) {
+            const row = $(`.book-checkbox[value="${bookId}"]`).closest('tr');
+            const format = row.find('td').eq(3).text().trim().toLowerCase();
+            if (format === 'epub') {
+                return bookId;
+            }
+        }
+        return null;
+    }
+
+    async proceedWithActualRename(folderPattern, filenamePattern, dryRun, embedMetadata) {
         // Confirmation dialog for actual rename
         if (!dryRun) {
             if (
@@ -606,7 +779,7 @@ class EbookRenamer {
                 filename_pattern: filenamePattern,
                 book_ids: Array.from(this.selectedBooks),
                 dry_run: dryRun,
-                include_companions: includeCompanions,
+                embed_metadata: embedMetadata,
                 csrfmiddlewaretoken: $('[name=csrfmiddlewaretoken]').val(),
             });
 

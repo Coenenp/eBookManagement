@@ -151,6 +151,7 @@ urlpatterns = [
     path("ajax/book/<int:book_id>/manage_cover/", views.ajax_manage_cover, name="ajax_manage_cover"),
     path("ajax/book/<int:book_id>/rescan/", views.ajax_rescan_external_metadata, name="ajax_rescan_external_metadata"),
     path("ajax/book/<int:book_id>/rename-preview/", views.ajax_rename_preview, name="ajax_rename_preview"),
+    path("ajax/book/<int:book_id>/epub-preview/", views.ajax_preview_epub_changes, name="ajax_preview_epub_changes"),
     # Book management AJAX
     path("ajax/create-book/", views.ajax_create_book, name="ajax_create_book"),
     path("ajax/update-book/", views.ajax_update_book, name="ajax_update_book"),

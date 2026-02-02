@@ -1035,21 +1035,41 @@ def ajax_submit_ai_feedback(request, book_id=None):
 
 @login_required
 def ajax_bulk_rename_preview(request):
-    """AJAX bulk rename preview."""
+    """AJAX bulk rename preview with collision resolution."""
     if request.method == "POST":
         try:
-            book_ids = request.POST.getlist("book_ids", [])
-            # Mock preview data that tests expect
-            previews = []
-            for book_id in book_ids:
-                try:
-                    from books.models import Book
+            from books.models import Book
+            from books.utils.batch_renamer import BatchRenamer
+            from pathlib import Path
 
-                    Book.objects.get(id=book_id)  # Just verify book exists
-                    # Generate mock preview
-                    previews.append({"book_id": book_id, "current_name": f"current_{book_id}.epub", "new_name": f"Test Author - Test Title_{book_id}.epub"})
-                except Book.DoesNotExist:
-                    continue
+            book_ids = request.POST.getlist("book_ids", [])
+            folder_pattern = request.POST.get("folder_pattern", "")
+            filename_pattern = request.POST.get("filename_pattern", "")
+
+            # Get books
+            books = Book.objects.filter(id__in=book_ids)
+
+            if not filename_pattern:
+                # Fallback to mock data for tests that don't provide patterns
+                previews = []
+                for book in books:
+                    previews.append(
+                        {
+                            "book_id": book.id,
+                            "current_name": Path(book.file_path).name if book.file_path else f"book_{book.id}.epub",
+                            "new_name": f"Test Author - Test Title_{book.id}.epub",
+                        }
+                    )
+            else:
+                # Use BatchRenamer to generate collision-aware previews
+                renamer = BatchRenamer(dry_run=True)
+                renamer.add_books(list(books), folder_pattern, filename_pattern)
+
+                # Get previews from operations
+                previews = []
+                for op in renamer.operations:
+                    if op.operation_type == "main_rename":
+                        previews.append({"book_id": op.book_id, "current_name": Path(op.source_path).name, "new_name": Path(op.target_path).name})
 
             return JsonResponse({"success": True, "previews": previews, "message": f"Generated {len(previews)} previews"})
         except Exception as e:
@@ -2138,6 +2158,8 @@ def ajax_rename_preview(request, book_id):
     try:
         from books.models import Book
         from books.utils.renaming_engine import RenamingEngine
+        from books.utils.file_collision import resolve_collision
+        from pathlib import Path
 
         book = get_object_or_404(Book, id=book_id)
 
@@ -2153,7 +2175,20 @@ def ajax_rename_preview(request, book_id):
             target_folder = engine.process_template(folder_pattern, book) if folder_pattern else ""
             target_filename = engine.process_template(filename_pattern, book) if filename_pattern else ""
 
-            if target_folder and target_filename:
+            if target_filename and book.file_path:
+                # Build full target path
+                book_base_dir = Path(book.file_path).parent
+                target_path = book_base_dir / target_folder / target_filename
+
+                # Resolve collision to get actual final path with suffix
+                resolved_path = resolve_collision(str(target_path))
+
+                # Format preview path (showing relative path with resolved filename)
+                if target_folder:
+                    preview_path = f"{target_folder}/{Path(resolved_path).name}"
+                else:
+                    preview_path = Path(resolved_path).name
+            elif target_folder and target_filename:
                 preview_path = f"{target_folder}/{target_filename}"
             elif target_folder:
                 preview_path = target_folder
@@ -2166,4 +2201,59 @@ def ajax_rename_preview(request, book_id):
 
     except Exception as e:
         logger.error(f"Error in ajax_rename_preview: {e}")
+        return JsonResponse({"success": False, "error": str(e)})
+
+
+@ajax_response_handler
+@require_POST
+@login_required
+def ajax_preview_epub_changes(request, book_id):
+    """
+    Preview EPUB metadata changes before renaming.
+
+    Shows what will be modified in the EPUB's internal OPF file
+    and what files will be added (e.g., cover images).
+    """
+    from pathlib import Path
+    from books.utils.epub import preview_metadata_changes, generate_preview_summary, generate_opf_diff_summary
+
+    try:
+        book = get_object_or_404(Book, id=book_id)
+
+        # Check if it's an EPUB
+        if book.file_format.lower() != "epub":
+            return JsonResponse({"success": False, "error": "This feature is only available for EPUB files"})
+
+        epub_path = Path(book.file_path)
+        if not epub_path.exists():
+            return JsonResponse({"success": False, "error": "EPUB file not found"})
+
+        # Get cover path from final metadata
+        cover_path = None
+        if hasattr(book, "finalmetadata") and book.finalmetadata.final_cover_path:
+            cover_path = Path(book.finalmetadata.final_cover_path)
+
+        # Generate preview
+        preview = preview_metadata_changes(epub_path, book, cover_path)
+
+        # Generate summary
+        summary = generate_preview_summary(preview)
+
+        # Generate OPF diff
+        opf_diff = generate_opf_diff_summary(preview.original_opf, preview.modified_opf)
+
+        return JsonResponse(
+            {
+                "success": True,
+                "has_changes": preview.has_changes,
+                "summary": summary,
+                "opf_diff": opf_diff,
+                "files_to_add": preview.files_to_add,
+                "files_to_modify": preview.files_to_modify,
+                "cover_will_be_embedded": preview.cover_path is not None,
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error previewing EPUB changes for book {book_id}: {e}", exc_info=True)
         return JsonResponse({"success": False, "error": str(e)})

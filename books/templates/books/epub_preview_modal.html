@@ -1,0 +1,379 @@
+{% load static %}
+
+<!-- EPUB Preview Modal -->
+<div class="modal fade" id="epubPreviewModal" tabindex="-1" role="dialog" aria-labelledby="epubPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="epubPreviewModalLabel">
+                    <i class="fas fa-book"></i> EPUB Metadata Changes Preview
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Loading State -->
+                <div id="epub-preview-loading" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="sr-only">Loading preview...</span>
+                    </div>
+                    <p class="mt-3">Analyzing EPUB changes...</p>
+                </div>
+                
+                <!-- Error State -->
+                <div id="epub-preview-error" class="alert alert-danger" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Error:</strong> <span id="epub-preview-error-message"></span>
+                </div>
+                
+                <!-- No Changes State -->
+                <div id="epub-preview-no-changes" class="alert alert-info" style="display: none;">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>No metadata changes detected.</strong> Only the filename will be changed.
+                </div>
+                
+                <!-- Preview Content -->
+                <div id="epub-preview-content" style="display: none;">
+                    <!-- Summary Section -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-primary text-white">
+                            <i class="fas fa-info-circle"></i> Change Summary
+                        </div>
+                        <div class="card-body">
+                            <div id="epub-change-summary">
+                                <!-- Dynamic summary will be inserted here -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tabs for Different Views -->
+                    <ul class="nav nav-tabs" id="epubPreviewTabs" role="tablist">
+                        <li class="nav-item">
+                            <a class="nav-link active" id="opf-diff-tab" data-toggle="tab" href="#opf-diff" role="tab">
+                                <i class="fas fa-file-code"></i> OPF Changes
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" id="file-changes-tab" data-toggle="tab" href="#file-changes" role="tab">
+                                <i class="fas fa-folder-open"></i> File Changes
+                            </a>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content border border-top-0 p-3" id="epubPreviewTabContent">
+                        <!-- OPF Diff Tab -->
+                        <div class="tab-pane fade show active" id="opf-diff" role="tabpanel">
+                            <div class="mb-2">
+                                <button class="btn btn-sm btn-outline-secondary" id="toggle-diff-view">
+                                    <i class="fas fa-columns"></i> Toggle View
+                                </button>
+                            </div>
+                            
+                            <!-- Side-by-side diff -->
+                            <div id="opf-diff-side-by-side" class="diff-container">
+                                <!-- Dynamic diff HTML will be inserted here -->
+                            </div>
+                            
+                            <!-- Unified diff (hidden by default) -->
+                            <div id="opf-diff-unified" class="diff-container" style="display: none;">
+                                <pre class="bg-light p-3 border rounded"><code id="opf-diff-unified-content"></code></pre>
+                            </div>
+                        </div>
+                        
+                        <!-- File Changes Tab -->
+                        <div class="tab-pane fade" id="file-changes" role="tabpanel">
+                            <div id="file-changes-list">
+                                <!-- Dynamic file changes will be inserted here -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Embed Metadata Reminder -->
+                    <div id="embed-metadata-reminder" class="alert alert-warning mt-3" style="display: none;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Note:</strong> "Embed metadata" option is currently <strong>disabled</strong>. 
+                        Only the filename will be changed, internal EPUB metadata will NOT be updated.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-success" id="confirm-epub-changes">
+                    <i class="fas fa-check"></i> Proceed with Changes
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* EPUB Preview Modal Styles */
+.diff-container {
+    max-height: 500px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+}
+
+.diff-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+}
+
+.diff-table th {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 5px;
+    font-weight: bold;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.diff-table td {
+    border: 1px solid #dee2e6;
+    padding: 2px 5px;
+    vertical-align: top;
+}
+
+.diff-table .line-num {
+    width: 40px;
+    text-align: right;
+    background-color: #f8f9fa;
+    color: #6c757d;
+    user-select: none;
+}
+
+.diff-table .diff-content {
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.diff-table .diff-content pre {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+}
+
+.diff-equal {
+    background-color: #ffffff;
+}
+
+.diff-add {
+    background-color: #d4edda;
+}
+
+.diff-add .diff-content {
+    background-color: #c3e6cb;
+}
+
+.diff-remove {
+    background-color: #f8d7da;
+}
+
+.diff-remove .diff-content {
+    background-color: #f5c6cb;
+}
+
+.diff-change {
+    background-color: #fff3cd;
+}
+
+.diff-change .diff-content {
+    background-color: #ffeaa7;
+}
+
+.change-badge {
+    font-size: 0.85em;
+    margin-left: 5px;
+}
+
+.file-change-item {
+    padding: 8px;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.file-change-item:last-child {
+    border-bottom: none;
+}
+
+.file-change-item.added {
+    background-color: #d4edda;
+}
+
+.file-change-item.modified {
+    background-color: #fff3cd;
+}
+</style>
+
+<script>
+// EPUB Preview Modal JavaScript
+(function() {
+    let currentBookId = null;
+    let embedMetadataEnabled = false;
+    
+    // Show EPUB preview modal
+    window.showEpubPreview = function(bookId, embedMetadata) {
+        currentBookId = bookId;
+        embedMetadataEnabled = embedMetadata;
+        
+        // Reset modal state
+        $('#epub-preview-loading').show();
+        $('#epub-preview-error').hide();
+        $('#epub-preview-no-changes').hide();
+        $('#epub-preview-content').hide();
+        
+        // Show modal
+        $('#epubPreviewModal').modal('show');
+        
+        // Load preview data
+        loadEpubPreview(bookId);
+    };
+    
+    // Load EPUB preview via AJAX
+    function loadEpubPreview(bookId) {
+        $.ajax({
+            url: `/ajax/book/${bookId}/epub-preview/`,
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCsrfToken()
+            },
+            success: function(response) {
+                $('#epub-preview-loading').hide();
+                
+                if (response.success) {
+                    if (response.has_changes) {
+                        displayPreview(response);
+                    } else {
+                        $('#epub-preview-no-changes').show();
+                    }
+                    
+                    // Show reminder if embed_metadata is disabled
+                    if (!embedMetadataEnabled) {
+                        $('#embed-metadata-reminder').show();
+                    }
+                } else {
+                    showError(response.error || 'Failed to load preview');
+                }
+            },
+            error: function(xhr, status, error) {
+                $('#epub-preview-loading').hide();
+                showError('Network error: ' + error);
+            }
+        });
+    }
+    
+    // Display preview content
+    function displayPreview(data) {
+        // Build summary
+        let summaryHtml = '<ul class="mb-0">';
+        
+        if (data.summary.opf_modified) {
+            summaryHtml += '<li><i class="fas fa-edit text-warning"></i> OPF metadata will be updated</li>';
+        }
+        
+        if (data.cover_will_be_embedded) {
+            summaryHtml += '<li><i class="fas fa-image text-success"></i> Cover image will be embedded</li>';
+        }
+        
+        if (data.files_to_add.length > 0) {
+            summaryHtml += `<li><i class="fas fa-plus text-success"></i> ${data.files_to_add.length} file(s) will be added</li>`;
+        }
+        
+        if (data.files_to_modify.length > 0) {
+            summaryHtml += `<li><i class="fas fa-pen text-warning"></i> ${data.files_to_modify.length} file(s) will be modified</li>`;
+        }
+        
+        if (data.summary.opf_changes) {
+            const changes = data.summary.opf_changes;
+            if (changes.title_changed) summaryHtml += '<li><i class="fas fa-heading text-info"></i> Title updated</li>';
+            if (changes.author_changed) summaryHtml += '<li><i class="fas fa-user text-info"></i> Author updated</li>';
+            if (changes.publisher_changed) summaryHtml += '<li><i class="fas fa-building text-info"></i> Publisher updated</li>';
+            if (changes.description_changed) summaryHtml += '<li><i class="fas fa-align-left text-info"></i> Description updated</li>';
+            if (changes.calibre_removed) summaryHtml += '<li><i class="fas fa-trash-alt text-danger"></i> Calibre metadata removed</li>';
+        }
+        
+        summaryHtml += '</ul>';
+        $('#epub-change-summary').html(summaryHtml);
+        
+        // Display OPF diff
+        if (data.opf_diff && data.opf_diff.side_by_side_html) {
+            $('#opf-diff-side-by-side').html(data.opf_diff.side_by_side_html);
+        }
+        
+        if (data.opf_diff && data.opf_diff.unified_diff) {
+            $('#opf-diff-unified-content').text(data.opf_diff.unified_diff);
+        }
+        
+        // Display file changes
+        let fileChangesHtml = '';
+        
+        if (data.files_to_add.length > 0) {
+            fileChangesHtml += '<h6><i class="fas fa-plus-circle text-success"></i> Files to Add:</h6>';
+            fileChangesHtml += '<div class="mb-3">';
+            data.files_to_add.forEach(file => {
+                fileChangesHtml += `<div class="file-change-item added"><i class="fas fa-file"></i> ${escapeHtml(file)}</div>`;
+            });
+            fileChangesHtml += '</div>';
+        }
+        
+        if (data.files_to_modify.length > 0) {
+            fileChangesHtml += '<h6><i class="fas fa-edit text-warning"></i> Files to Modify:</h6>';
+            fileChangesHtml += '<div class="mb-3">';
+            data.files_to_modify.forEach(file => {
+                fileChangesHtml += `<div class="file-change-item modified"><i class="fas fa-file-code"></i> ${escapeHtml(file)}</div>`;
+            });
+            fileChangesHtml += '</div>';
+        }
+        
+        if (!fileChangesHtml) {
+            fileChangesHtml = '<p class="text-muted">No file structure changes.</p>';
+        }
+        
+        $('#file-changes-list').html(fileChangesHtml);
+        
+        // Show content
+        $('#epub-preview-content').show();
+    }
+    
+    // Show error message
+    function showError(message) {
+        $('#epub-preview-error-message').text(message);
+        $('#epub-preview-error').show();
+    }
+    
+    // Toggle diff view
+    $('#toggle-diff-view').click(function() {
+        $('#opf-diff-side-by-side').toggle();
+        $('#opf-diff-unified').toggle();
+    });
+    
+    // Confirm changes button
+    $('#confirm-epub-changes').click(function() {
+        $('#epubPreviewModal').modal('hide');
+        // Trigger the actual rename operation
+        if (window.proceedWithRename) {
+            window.proceedWithRename();
+        }
+    });
+    
+    // Helper functions
+    function getCsrfToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+})();
+</script>

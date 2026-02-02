@@ -15,6 +15,7 @@ from django.utils import timezone
 
 from books.models import Book
 
+from .file_collision import apply_suffix_to_path, get_collision_suffix, resolve_collision
 from .renaming_engine import RenamingEngine
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,7 @@ class FileOperation:
         self.book_id = book_id
         self.executed = False
         self.error = None
+        self.embed_epub_metadata = False  # Flag for EPUB metadata embedding
 
     def __str__(self):
         return f"{self.operation_type}: {self.source_path} -> {self.target_path}"
@@ -125,28 +127,55 @@ class CompanionFileFinder:
         """
         Generate file operations for companion files.
 
+        For non-EPUB ebook formats (PDF, MOBI, AZW3, FB2, LIT, PRC), only ONE cover
+        and ONE OPF file are created because the filenames must match the main book file.
+        The final selected cover from FinalMetadata is used.
+
+        Note: This should NOT be called for comics (CBR, CBZ) or audiobooks (MP3, M4A),
+        as those formats don't use OPF files.
+
         Args:
             book: Book model instance
             folder_pattern: Target folder pattern
             filename_pattern: Target filename pattern
-            companion_files: List of companion file paths
+            companion_files: List of companion file paths (may be ignored in favor of final metadata)
 
         Returns:
-            List of FileOperation objects for companion files
+            List of FileOperation objects for companion files (max 1 cover + 1 OPF)
         """
         operations = []
 
+        # Get final metadata for the book
+        final_meta = book.finalmetadata if hasattr(book, "finalmetadata") else None
+
+        # Generate target folder
+        target_folder = self.engine.process_template(folder_pattern, book)
+
+        # Handle cover: Use ONLY the final selected cover from FinalMetadata
+        if final_meta and final_meta.final_cover_path:
+            cover_source = Path(final_meta.final_cover_path)
+            if cover_source.exists():
+                # Preserve the original extension
+                cover_ext = cover_source.suffix
+                target_filename = self.engine.process_template(filename_pattern, book, cover_ext)
+                target_path = Path(target_folder) / target_filename
+
+                operations.append(FileOperation(source_path=str(cover_source), target_path=str(target_path), operation_type="companion_rename", book_id=book.id))
+
+        # Handle OPF: Create ONE OPF file with metadata
+        # Check if there's an existing OPF file to copy
+        opf_source = None
         for companion_path in companion_files:
-            companion_file = Path(companion_path)
-            companion_ext = companion_file.suffix
+            if Path(companion_path).suffix.lower() == ".opf":
+                opf_source = Path(companion_path)
+                break
 
-            # Generate target path for companion file
-            target_folder = self.engine.process_template(folder_pattern, book)
-            target_filename = self.engine.process_template(filename_pattern, book, companion_ext)
-
+        # If OPF exists, include it (only one)
+        if opf_source and opf_source.exists():
+            target_filename = self.engine.process_template(filename_pattern, book, ".opf")
             target_path = Path(target_folder) / target_filename
 
-            operations.append(FileOperation(source_path=str(companion_file), target_path=str(target_path), operation_type="companion_rename", book_id=book.id))
+            operations.append(FileOperation(source_path=str(opf_source), target_path=str(target_path), operation_type="companion_rename", book_id=book.id))
 
         return operations
 
@@ -163,7 +192,7 @@ class BatchRenamer:
         self.operations: List[FileOperation] = []
         self.rollback_log: List[Dict] = []
 
-    def add_book(self, book: Book, folder_pattern: str, filename_pattern: str, include_companions: bool = True) -> None:
+    def add_book(self, book: Book, folder_pattern: str, filename_pattern: str, embed_metadata: bool = True) -> None:
         """
         Add a single book to the batch renaming queue.
 
@@ -171,14 +200,14 @@ class BatchRenamer:
             book: Book model instance
             folder_pattern: Template for folder structure
             filename_pattern: Template for filename
-            include_companions: Whether to include companion files
+            embed_metadata: Whether to embed metadata into files (EPUB) or create external companions
         """
         try:
-            self._add_single_book(book, folder_pattern, filename_pattern, include_companions)
+            self._add_single_book(book, folder_pattern, filename_pattern, embed_metadata)
         except Exception as e:
             logger.error(f"Error adding book {book.id} to batch: {e}")
 
-    def add_books(self, books: List[Book], folder_pattern: str, filename_pattern: str, include_companions: bool = True) -> None:
+    def add_books(self, books: List[Book], folder_pattern: str, filename_pattern: str, embed_metadata: bool = True) -> None:
         """
         Add books to the batch renaming queue.
 
@@ -186,25 +215,25 @@ class BatchRenamer:
             books: List of Book model instances
             folder_pattern: Template for folder structure
             filename_pattern: Template for filename
-            include_companions: Whether to include companion files
+            embed_metadata: Whether to embed metadata into files (EPUB) or create external companions
         """
         for book in books:
             try:
-                self._add_single_book(book, folder_pattern, filename_pattern, include_companions)
+                self._add_single_book(book, folder_pattern, filename_pattern, embed_metadata)
             except Exception as e:
                 logger.error(f"Error adding book {book.id} to batch: {e}")
 
-    def _add_single_book(self, book: Book, folder_pattern: str, filename_pattern: str, include_companions: bool) -> None:
+    def _add_single_book(self, book: Book, folder_pattern: str, filename_pattern: str, embed_metadata: bool) -> None:
         """Add a single book and its operations to the batch."""
         if not book.file_path or not os.path.exists(book.file_path):
             logger.warning(f"Book {book.id} file not found: {book.file_path}")
             return
 
         # Generate target path for main book file
-        target_folder = self.engine.process_template(folder_pattern, book)
+        target_folder = self.engine.process_template(folder_pattern, book) if folder_pattern else ""
         target_filename = self.engine.process_template(filename_pattern, book)
 
-        if not target_folder or not target_filename:
+        if not target_filename:
             logger.warning(f"Could not generate target path for book {book.id}")
             return
 
@@ -212,15 +241,40 @@ class BatchRenamer:
         book_base_dir = Path(book.file_path).parent
         target_path = book_base_dir / target_folder / target_filename
 
-        # Add main file operation
-        main_operation = FileOperation(source_path=book.file_path, target_path=str(target_path), operation_type="main_rename", book_id=book.id)
+        # Resolve collision for main file (adds " (2)", " (3)", etc. if needed)
+        original_target = str(target_path)
+        resolved_target = resolve_collision(original_target)
+        collision_suffix = get_collision_suffix(original_target, resolved_target)
+
+        # Add main file operation with resolved path
+        main_operation = FileOperation(source_path=book.file_path, target_path=resolved_target, operation_type="main_rename", book_id=book.id)
         self.operations.append(main_operation)
 
-        # Add companion file operations
-        if include_companions:
-            companion_files = self.companion_finder.find_companion_files(book.file_path)
-            companion_ops = self.companion_finder.generate_companion_operations(book, folder_pattern, filename_pattern, companion_files)
-            self.operations.extend(companion_ops)
+        # Handle metadata based on file format
+        if embed_metadata:
+            from books.models import EBOOK_FORMATS
+
+            file_format = book.file_format.lower() if book.file_format else ""
+
+            if file_format == "epub":
+                # For EPUB: Mark for metadata embedding (handled during execution)
+                main_operation.embed_epub_metadata = True
+                logger.debug(f"Book {book.id}: Will embed metadata into EPUB")
+            elif file_format in EBOOK_FORMATS and file_format != "epub":
+                # For non-EPUB ebook formats (PDF, MOBI, AZW3, etc.): Create external companion files
+                # Note: Comics (CBR, CBZ) and audiobooks (MP3, M4A) don't use OPF files
+                companion_files = self.companion_finder.find_companion_files(book.file_path)
+                companion_ops = self.companion_finder.generate_companion_operations(book, folder_pattern, filename_pattern, companion_files)
+
+                # Apply the same collision suffix to all companion files
+                for comp_op in companion_ops:
+                    comp_op.target_path = Path(apply_suffix_to_path(str(comp_op.target_path), collision_suffix))
+
+                self.operations.extend(companion_ops)
+                logger.debug(f"Book {book.id}: Will create {len(companion_ops)} external companion files")
+            else:
+                # For comics and audiobooks: No OPF files needed
+                logger.debug(f"Book {book.id}: Format '{file_format}' does not use OPF files")
 
     def preview_operations(self) -> List[Dict]:
         """
@@ -352,6 +406,10 @@ class BatchRenamer:
                 if op.operation_type in ["main_rename", "companion_rename"]:
                     self._move_file(str(op.source_path), str(op.target_path))
 
+                    # Handle EPUB metadata embedding after move
+                    if op.embed_epub_metadata:
+                        self._embed_epub_metadata_after_move(book_id, op.target_path)
+
                 op.executed = True
                 executed_ops.append(op)
 
@@ -400,6 +458,45 @@ class BatchRenamer:
                     logger.error(f"Book {book_id} has no primary file to update")
             except Book.DoesNotExist:
                 logger.error(f"Book {book_id} not found for path update")
+
+    def _embed_epub_metadata_after_move(self, book_id: int, epub_path: Path) -> None:
+        """
+        Embed metadata into EPUB file after it has been moved.
+
+        This updates the internal OPF with book metadata and embeds
+        the final selected cover image directly into the EPUB.
+
+        Note: EPUBs can internally contain multiple cover files, but we embed
+        the user's final selected cover (from FinalMetadata.final_cover_path)
+        as THE authoritative cover in the EPUB.
+        """
+        try:
+            from books.utils.epub import embed_metadata_in_epub
+
+            # Get book instance
+            book = Book.objects.get(id=book_id)
+
+            # Use the final selected cover from FinalMetadata (if available)
+            cover_path = None
+            if hasattr(book, "finalmetadata"):
+                final_meta = book.finalmetadata
+                if final_meta.final_cover_path:
+                    cover_candidate = Path(final_meta.final_cover_path)
+                    if cover_candidate.exists():
+                        cover_path = cover_candidate
+                        logger.debug(f"Using final selected cover: {cover_path}")
+
+            # Embed metadata
+            success = embed_metadata_in_epub(epub_path, book, cover_path)
+
+            if success:
+                logger.info(f"Successfully embedded metadata into EPUB for book {book_id}")
+            else:
+                logger.warning(f"Failed to embed metadata into EPUB for book {book_id}")
+
+        except Exception as e:
+            logger.error(f"Error embedding EPUB metadata for book {book_id}: {e}", exc_info=True)
+            # Don't raise - metadata embedding failure shouldn't fail the rename
 
     def get_operation_summary(self) -> Dict:
         """Get a summary of queued operations."""
