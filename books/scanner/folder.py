@@ -31,6 +31,13 @@ from books.scanner.logging_helpers import log_scan_error, update_scan_progress
 from books.scanner.parsing import parse_path_metadata
 from books.scanner.resolver import resolve_final_metadata
 from books.utils.author import attach_authors
+from books.utils.cover_cache import CoverCache
+from books.utils.cover_extractor import (
+    ArchiveCoverExtractor,
+    CoverExtractionError,
+    EPUBCoverExtractor,
+    PDFCoverExtractor,
+)
 
 logger = logging.getLogger("books.scanner")
 
@@ -39,6 +46,81 @@ def _get_initial_scan_source():
     """Get or create the 'Initial Scan' DataSource."""
     source, created = DataSource.objects.get_or_create(name=DataSource.INITIAL_SCAN)
     return source
+
+
+def _detect_and_extract_cover(file_path: str, file_format: str, cover_files: list) -> tuple:
+    """
+    Detect and extract cover from both external companions and internal sources.
+
+    Priority:
+    1. External companion file (highest priority)
+    2. Internal cover (EPUBs, PDFs, archives)
+
+    Args:
+        file_path: Path to the book file
+        file_format: File format (epub, pdf, cbz, etc.)
+        cover_files: List of external companion cover files
+
+    Returns:
+        Tuple of (cover_path, cover_source_type, cover_internal_path, has_internal_cover)
+        - cover_path: Path to external companion OR cached internal cover
+        - cover_source_type: One of COVER_SOURCE_TYPES
+        - cover_internal_path: Path within archive/EPUB (or None)
+        - has_internal_cover: Boolean indicating if internal cover exists
+    """
+    # Check for external companion cover first (highest priority)
+    external_cover = find_cover_file(file_path, cover_files)
+    if external_cover:
+        logger.info(f"Found external companion cover: {external_cover}")
+        return external_cover, "external", None, False
+
+    # No external cover, try to extract internal cover
+    file_format_lower = file_format.lower()
+
+    try:
+        # EPUB files
+        if file_format_lower == "epub":
+            cover_data, internal_path = EPUBCoverExtractor.extract_cover(file_path)
+            if cover_data and internal_path:
+                # Cache the extracted cover
+                success, cache_path = CoverCache.save_cover(file_path, cover_data, internal_path)
+                if success:
+                    logger.info(f"Extracted and cached EPUB cover: {internal_path}")
+                    return cache_path, "epub_internal", internal_path, True
+                else:
+                    logger.warning(f"Failed to cache EPUB cover for {file_path}")
+
+        # PDF files
+        elif file_format_lower == "pdf":
+            cover_data = PDFCoverExtractor.extract_cover(file_path)
+            if cover_data:
+                # Cache the extracted cover (no internal path for PDFs)
+                success, cache_path = CoverCache.save_cover(file_path, cover_data, internal_path="page_1")
+                if success:
+                    logger.info("Extracted and cached PDF first page as cover")
+                    return cache_path, "pdf_page", "page_1", True
+                else:
+                    logger.warning(f"Failed to cache PDF cover for {file_path}")
+
+        # Comic archives (CBZ, CBR)
+        elif file_format_lower in ["cbz", "cbr"]:
+            cover_data, internal_path = ArchiveCoverExtractor.extract_cover(file_path)
+            if cover_data and internal_path:
+                # Cache the extracted cover
+                success, cache_path = CoverCache.save_cover(file_path, cover_data, internal_path)
+                if success:
+                    logger.info(f"Extracted and cached archive cover: {internal_path}")
+                    return cache_path, "archive_first", internal_path, True
+                else:
+                    logger.warning(f"Failed to cache archive cover for {file_path}")
+
+    except CoverExtractionError as e:
+        logger.warning(f"Cover extraction failed for {file_path}: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error extracting cover from {file_path}: {e}")
+
+    # No cover found
+    return None, None, None, False
 
 
 def _get_book_file_path(book):
@@ -366,7 +448,14 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
     # Update the BookFile with cover and OPF paths
     primary_file = book.primary_file
     if primary_file:
-        primary_file.cover_path = find_cover_file(file_path, cover_files) or ""
+        # Detect and extract cover (external or internal)
+        cover_path, cover_source_type, cover_internal_path, has_internal_cover = _detect_and_extract_cover(file_path, primary_file.file_format, cover_files)
+
+        primary_file.cover_path = cover_path or ""
+        primary_file.cover_source_type = cover_source_type
+        primary_file.cover_internal_path = cover_internal_path or ""
+        primary_file.has_internal_cover = has_internal_cover
+
         primary_file.opf_path = find_opf_file(file_path, opf_files) or ""
         primary_file.save()
 

@@ -32,6 +32,7 @@ class EPUBMetadataPreview:
     original_structure: EPUBStructure
     files_to_add: List[str]  # New files that will be added (e.g., cover images)
     files_to_modify: List[str]  # Existing files that will be changed
+    files_to_remove: List[str]  # Orphaned files that can be removed (if cleanup enabled)
     cover_path: Optional[str]  # Path to cover that will be embedded
 
     @property
@@ -79,7 +80,13 @@ def preview_metadata_changes(epub_path: Path, book: Book, cover_path: Optional[P
             if not opf_path:
                 logger.error("No OPF file found in EPUB")
                 return EPUBMetadataPreview(
-                    original_opf=original_opf, modified_opf=original_opf, original_structure=original_structure, files_to_add=[], files_to_modify=[], cover_path=None
+                    original_opf=original_opf,
+                    modified_opf=original_opf,
+                    original_structure=original_structure,
+                    files_to_add=[],
+                    files_to_modify=[],
+                    files_to_remove=[],
+                    cover_path=None,
                 )
 
             # Track files before modification
@@ -94,6 +101,9 @@ def preview_metadata_changes(epub_path: Path, book: Book, cover_path: Optional[P
             if cover_path and cover_path.exists():
                 _embed_cover_image(extract_dir, opf_path, cover_path)
                 cover_embedded = str(cover_path)
+
+            # Detect orphaned images that could be removed
+            files_to_remove = _detect_orphaned_images(extract_dir, opf_path)
 
             # Track files after modification
             files_after = set(p.relative_to(extract_dir) for p in extract_dir.rglob("*") if p.is_file())
@@ -113,6 +123,7 @@ def preview_metadata_changes(epub_path: Path, book: Book, cover_path: Optional[P
                 original_structure=original_structure,
                 files_to_add=files_to_add,
                 files_to_modify=files_to_modify,
+                files_to_remove=files_to_remove,
                 cover_path=cover_embedded,
             )
 
@@ -126,6 +137,7 @@ def preview_metadata_changes(epub_path: Path, book: Book, cover_path: Optional[P
             original_structure=original_structure,
             files_to_add=[],
             files_to_modify=[],
+            files_to_remove=[],
             cover_path=None,
         )
 
@@ -146,8 +158,10 @@ def generate_preview_summary(preview: EPUBMetadataPreview) -> dict:
         "cover_added": preview.cover_path is not None,
         "files_added_count": len(preview.files_to_add),
         "files_modified_count": len(preview.files_to_modify),
+        "orphaned_images_count": len(preview.files_to_remove),
         "files_to_add": preview.files_to_add,
         "files_to_modify": preview.files_to_modify,
+        "files_to_remove": preview.files_to_remove,
     }
 
     # Extract specific OPF changes
@@ -220,3 +234,65 @@ def _summarize_opf_changes(original: str, modified: str) -> dict:
         logger.warning(f"Failed to parse OPF for change summary: {e}")
 
     return changes
+
+
+def _detect_orphaned_images(extract_dir: Path, opf_path: Path) -> List[str]:
+    """
+    Detect image files that are not referenced in the OPF manifest.
+
+    This is a non-destructive preview version of _remove_orphaned_images.
+
+    Args:
+        extract_dir: Extracted EPUB directory
+        opf_path: Path to OPF file
+
+    Returns:
+        List of relative paths to orphaned images
+    """
+    import xml.etree.ElementTree as ET
+
+    try:
+        # Parse OPF to get referenced files
+        tree = ET.parse(opf_path)
+        root = tree.getroot()
+        namespaces = {"opf": "http://www.idpf.org/2007/opf"}
+
+        # Get all manifest items
+        manifest = root.find(".//opf:manifest", namespaces)
+        if manifest is None:
+            return []
+
+        # Collect all referenced hrefs (normalized to absolute paths)
+        opf_dir = opf_path.parent
+        referenced_files = set()
+
+        for item in manifest.findall(".//opf:item", namespaces):
+            href = item.get("href")
+            if href:
+                # Resolve relative path to absolute
+                file_path = (opf_dir / href).resolve()
+                referenced_files.add(file_path)
+
+        # Find all image files in EPUB
+        image_extensions = {".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp"}
+        all_images = []
+
+        for ext in image_extensions:
+            all_images.extend(extract_dir.rglob(f"*{ext}"))
+            all_images.extend(extract_dir.rglob(f"*{ext.upper()}"))
+
+        # Identify orphaned images
+        orphaned = []
+        for image_path in all_images:
+            resolved_path = image_path.resolve()
+
+            if resolved_path not in referenced_files:
+                # Convert to relative path for display
+                rel_path = str(image_path.relative_to(extract_dir))
+                orphaned.append(rel_path)
+
+        return orphaned
+
+    except Exception as e:
+        logger.error(f"Error detecting orphaned images: {e}", exc_info=True)
+        return []

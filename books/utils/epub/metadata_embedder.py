@@ -19,7 +19,7 @@ from books.utils.epub.structure_fixer import repair_epub_structure, validate_epu
 logger = logging.getLogger(__name__)
 
 
-def embed_metadata_in_epub(epub_path: Path, book: Book, cover_path: Optional[Path] = None) -> bool:
+def embed_metadata_in_epub(epub_path: Path, book: Book, cover_path: Optional[Path] = None, remove_unused_images: bool = False) -> bool:
     """
     Embed metadata directly into an EPUB file.
 
@@ -27,13 +27,15 @@ def embed_metadata_in_epub(epub_path: Path, book: Book, cover_path: Optional[Pat
     1. Extracts the EPUB to a temporary directory
     2. Updates the internal OPF metadata
     3. Embeds cover image if provided
-    4. Cleans and validates the OPF
-    5. Repacks the EPUB
+    4. Optionally removes unused/orphaned images
+    5. Cleans and validates the OPF
+    6. Repacks the EPUB
 
     Args:
         epub_path: Path to the EPUB file
         book: Book model instance with metadata
         cover_path: Optional path to cover image to embed
+        remove_unused_images: If True, remove images not referenced in OPF
 
     Returns:
         True if successful, False otherwise
@@ -68,6 +70,13 @@ def embed_metadata_in_epub(epub_path: Path, book: Book, cover_path: Optional[Pat
             if cover_path and cover_path.exists():
                 logger.debug(f"Embedding cover: {cover_path.name}")
                 _embed_cover_image(extract_dir, opf_path, cover_path)
+
+            # Remove unused images if requested
+            if remove_unused_images:
+                logger.debug("Removing unused images from EPUB...")
+                removed_count = _remove_orphaned_images(extract_dir, opf_path)
+                if removed_count > 0:
+                    logger.info(f"Removed {removed_count} orphaned image(s)")
 
             # Validate and repair EPUB structure
             logger.debug("Validating EPUB structure...")
@@ -414,6 +423,71 @@ def _get_media_type(extension: str) -> str:
     """Get media type for image extension."""
     media_types = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".gif": "image/gif", ".svg": "image/svg+xml"}
     return media_types.get(extension.lower(), "image/jpeg")
+
+
+def _remove_orphaned_images(extract_dir: Path, opf_path: Path) -> int:
+    """
+    Remove image files that are not referenced in the OPF manifest.
+
+    This cleans up old cover images and other unreferenced media,
+    reducing EPUB file size.
+
+    Args:
+        extract_dir: Extracted EPUB directory
+        opf_path: Path to OPF file
+
+    Returns:
+        Number of images removed
+    """
+    try:
+        # Parse OPF to get referenced files
+        tree = ET.parse(opf_path)
+        root = tree.getroot()
+        namespaces = {"opf": "http://www.idpf.org/2007/opf"}
+
+        # Get all manifest items
+        manifest = root.find(".//opf:manifest", namespaces)
+        if manifest is None:
+            logger.warning("No manifest found in OPF")
+            return 0
+
+        # Collect all referenced hrefs (normalized to absolute paths)
+        opf_dir = opf_path.parent
+        referenced_files = set()
+
+        for item in manifest.findall(".//opf:item", namespaces):
+            href = item.get("href")
+            if href:
+                # Resolve relative path to absolute
+                file_path = (opf_dir / href).resolve()
+                referenced_files.add(file_path)
+
+        # Find all image files in EPUB
+        image_extensions = {".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp"}
+        all_images = []
+
+        for ext in image_extensions:
+            all_images.extend(extract_dir.rglob(f"*{ext}"))
+            all_images.extend(extract_dir.rglob(f"*{ext.upper()}"))
+
+        # Remove orphaned images
+        removed_count = 0
+        for image_path in all_images:
+            resolved_path = image_path.resolve()
+
+            if resolved_path not in referenced_files:
+                try:
+                    image_path.unlink()
+                    logger.debug(f"Removed orphaned image: {image_path.relative_to(extract_dir)}")
+                    removed_count += 1
+                except Exception as e:
+                    logger.warning(f"Failed to remove {image_path}: {e}")
+
+        return removed_count
+
+    except Exception as e:
+        logger.error(f"Error removing orphaned images: {e}", exc_info=True)
+        return 0
 
 
 def _repack_epub(extract_dir: Path, output_path: Path) -> None:

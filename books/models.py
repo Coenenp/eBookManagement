@@ -29,6 +29,16 @@ COMIC_FORMATS = ["cbr", "cbz", "cb7", "cbt", "pdf"]
 EBOOK_FORMATS = ["epub", "pdf", "mobi", "azw", "azw3", "fb2", "lit", "prc"]
 AUDIOBOOK_FORMATS = ["mp3", "m4a", "m4b", "aac", "flac", "ogg", "wav"]
 
+# Cover source types for tracking where covers come from
+COVER_SOURCE_TYPES = [
+    ("external", "External companion file"),
+    ("epub_internal", "EPUB embedded cover"),
+    ("pdf_page", "PDF first page"),
+    ("archive_first", "First image in CBZ/CBR"),
+    ("mobi_internal", "MOBI embedded cover"),
+    ("manual", "Manual upload"),
+]
+
 # Standard metadata field names for use with BookMetadata table
 STANDARD_METADATA_FIELDS = {
     # Universal fields (all content types)
@@ -529,6 +539,18 @@ class BookFile(HashFieldMixin, models.Model):
     # Companion files
     cover_path = models.CharField(max_length=1000, blank=True)
     opf_path = models.CharField(max_length=1000, blank=True)
+
+    # Cover source tracking
+    cover_source_type = models.CharField(max_length=20, choices=COVER_SOURCE_TYPES, default="external", help_text="Where the cover image comes from")
+    has_internal_cover = models.BooleanField(default=False, help_text="Whether the file contains an embedded cover")
+    cover_internal_path = models.CharField(max_length=500, blank=True, help_text="Path within archive/EPUB for internal covers")
+
+    # Phase 2: Cover enhancements
+    cover_image_preference = models.CharField(max_length=500, blank=True, help_text="User-selected internal path for preferred cover")
+    cover_quality_score = models.IntegerField(null=True, blank=True, help_text="Calculated quality score (0-100)")
+    cover_width = models.IntegerField(null=True, blank=True, help_text="Cover image width in pixels")
+    cover_height = models.IntegerField(null=True, blank=True, help_text="Cover image height in pixels")
+    original_cover_path = models.CharField(max_length=500, blank=True, help_text="Original auto-detected cover path (before manual upload)")
 
     # Scanning metadata
     first_scanned = models.DateTimeField(auto_now_add=True)

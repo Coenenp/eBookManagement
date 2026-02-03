@@ -1034,6 +1034,7 @@ def execute_batch_rename(request):
             book_ids = request.POST.getlist("book_ids", [])
             dry_run = request.POST.get("dry_run", "true").lower() == "true"
             embed_metadata = request.POST.get("embed_metadata", "true").lower() == "true"
+            remove_unused_images = request.POST.get("remove_unused_epub_images", "false").lower() == "true"
 
             if not folder_pattern or not filename_pattern:
                 return JsonResponse({"success": False, "error": "Both folder and filename patterns are required"})
@@ -1045,8 +1046,8 @@ def execute_batch_rename(request):
             Book = get_model("Book")
             books = Book.objects.filter(id__in=book_ids)
 
-            # Create batch renamer
-            renamer = BatchRenamer(dry_run=dry_run)
+            # Create batch renamer with optional image cleanup
+            renamer = BatchRenamer(dry_run=dry_run, remove_unused_images=remove_unused_images)
 
             # Add books to the batch
             renamer.add_books(books, folder_pattern, filename_pattern, embed_metadata)

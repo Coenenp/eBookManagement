@@ -16,6 +16,7 @@ from . import views
 # All scanning and sections views are now imported via views module
 from .views import SeriesDetailView, SeriesListView
 from .views import ajax as ajax_views
+from .views import ajax_cover as ajax_cover_views
 from .views import scanning as scanning_views
 from .views import sections as sections_views
 from .views import wizard as wizard_views
@@ -149,6 +150,11 @@ urlpatterns = [
     path("ajax/book/<int:book_id>/read_metadata/", views.ajax_read_file_metadata, name="ajax_read_file_metadata"),
     path("ajax/book/<int:book_id>/upload_cover/", views.ajax_upload_cover, name="ajax_upload_cover"),
     path("ajax/book/<int:book_id>/manage_cover/", views.ajax_manage_cover, name="ajax_manage_cover"),
+    path("ajax/book/<int:book_id>/list_internal_covers/", ajax_views.ajax_list_internal_covers, name="ajax_list_internal_covers"),
+    # Phase 2: BookFile cover management
+    path("ajax/bookfile/<int:bookfile_id>/upload_cover/", ajax_cover_views.ajax_upload_bookfile_cover, name="ajax_upload_bookfile_cover"),
+    path("ajax/bookfile/<int:bookfile_id>/restore_cover/", ajax_cover_views.ajax_restore_original_cover, name="ajax_restore_bookfile_cover"),
+    path("ajax/bookfile/<int:bookfile_id>/cover_info/", ajax_cover_views.ajax_get_cover_info, name="ajax_get_bookfile_cover_info"),
     path("ajax/book/<int:book_id>/rescan/", views.ajax_rescan_external_metadata, name="ajax_rescan_external_metadata"),
     path("ajax/book/<int:book_id>/rename-preview/", views.ajax_rename_preview, name="ajax_rename_preview"),
     path("ajax/book/<int:book_id>/epub-preview/", views.ajax_preview_epub_changes, name="ajax_preview_epub_changes"),

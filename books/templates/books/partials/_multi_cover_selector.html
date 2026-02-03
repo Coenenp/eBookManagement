@@ -1,0 +1,162 @@
+<!-- Multi-Cover Selector Modal for EPUB Internal Images -->
+<div class="modal fade" id="multiCoverSelectorModal" tabindex="-1" aria-labelledby="multiCoverSelectorModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="multiCoverSelectorModalLabel">
+                    <i class="bi bi-images me-2"></i>
+                    Select Internal Cover Image
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Loading state -->
+                <div id="multiCoverLoading" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading covers...</span>
+                    </div>
+                    <p class="mt-3 text-muted">Extracting images from EPUB...</p>
+                </div>
+                
+                <!-- Error state -->
+                <div id="multiCoverError" class="alert alert-danger d-none" role="alert">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <span id="multiCoverErrorMessage"></span>
+                </div>
+                
+                <!-- Covers grid -->
+                <div id="multiCoverGrid" class="d-none">
+                    <!-- Info banner -->
+                    <div class="alert alert-info mb-4">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-info-circle me-2"></i>
+                                <strong id="multiCoverCount">0</strong> images found in EPUB
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="showOnlyLargeImages">
+                                <label class="form-check-label" for="showOnlyLargeImages">
+                                    Show only large images (≥800px)
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Covers container -->
+                    <div class="row g-3" id="multiCoverContainer">
+                        <!-- Cover cards will be inserted here via JavaScript -->
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-primary" id="confirmCoverSelection" disabled>
+                    <i class="bi bi-check-circle me-1"></i>
+                    Select This Cover
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cover card template (cloned by JavaScript) -->
+<template id="coverCardTemplate">
+    <div class="col-md-4 col-lg-3 cover-card-wrapper" data-cover-index="">
+        <div class="card h-100 cover-card" data-internal-path="">
+            <div class="position-relative">
+                <!-- Image preview -->
+                <img src="" class="card-img-top cover-preview" alt="Cover preview" style="height: 300px; object-fit: contain; background: #f8f9fa;">
+                
+                <!-- Badges -->
+                <div class="position-absolute top-0 start-0 m-2">
+                    <span class="badge bg-primary opf-badge d-none">OPF Cover</span>
+                    <span class="badge bg-success current-badge d-none">Current</span>
+                </div>
+                
+                <!-- Selection indicator -->
+                <div class="position-absolute top-0 end-0 m-2">
+                    <div class="form-check">
+                        <input class="form-check-input cover-radio" type="radio" name="selectedCover" value="">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card-body">
+                <!-- Filename -->
+                <h6 class="card-title text-truncate mb-2" title="">
+                    <i class="bi bi-file-image me-1"></i>
+                    <span class="cover-filename"></span>
+                </h6>
+                
+                <!-- Metadata -->
+                <div class="small text-muted">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span><i class="bi bi-arrows-angle-expand me-1"></i>Dimensions:</span>
+                        <strong class="cover-dimensions"></strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span><i class="bi bi-file-earmark me-1"></i>Format:</span>
+                        <strong class="cover-format"></strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span><i class="bi bi-hdd me-1"></i>Size:</span>
+                        <strong class="cover-size"></strong>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span><i class="bi bi-star me-1"></i>Quality:</span>
+                        <strong class="cover-quality"></strong>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Hover overlay for full preview -->
+            <div class="cover-hover-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background: rgba(0,0,0,0.7); opacity: 0; transition: opacity 0.2s; pointer-events: none;">
+                <button class="btn btn-light btn-sm" style="pointer-events: all;">
+                    <i class="bi bi-zoom-in me-1"></i>
+                    View Full Size
+                </button>
+            </div>
+        </div>
+    </div>
+</template>
+
+<style>
+.cover-card {
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 2px solid transparent;
+}
+
+.cover-card:hover {
+    border-color: #0d6efd;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.cover-card:hover .cover-hover-overlay {
+    opacity: 1 !important;
+}
+
+.cover-card.selected {
+    border-color: #198754;
+    box-shadow: 0 0 0 3px rgba(25, 135, 84, 0.25);
+}
+
+.cover-radio:checked {
+    background-color: #198754;
+    border-color: #198754;
+}
+
+.cover-card-wrapper.filtered-out {
+    display: none !important;
+}
+
+.quality-excellent { color: #198754; }
+.quality-good { color: #0dcaf0; }
+.quality-fair { color: #ffc107; }
+.quality-poor { color: #dc3545; }
+</style>

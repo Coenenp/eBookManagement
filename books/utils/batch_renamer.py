@@ -185,8 +185,9 @@ class BatchRenamer:
     Handles batch renaming operations with rollback capability.
     """
 
-    def __init__(self, dry_run: bool = True):
+    def __init__(self, dry_run: bool = True, remove_unused_images: bool = False):
         self.dry_run = dry_run
+        self.remove_unused_images = remove_unused_images
         self.engine = RenamingEngine()
         self.companion_finder = CompanionFileFinder()
         self.operations: List[FileOperation] = []
@@ -486,8 +487,8 @@ class BatchRenamer:
                         cover_path = cover_candidate
                         logger.debug(f"Using final selected cover: {cover_path}")
 
-            # Embed metadata
-            success = embed_metadata_in_epub(epub_path, book, cover_path)
+            # Embed metadata with optional image cleanup
+            success = embed_metadata_in_epub(epub_path, book, cover_path, remove_unused_images=self.remove_unused_images)
 
             if success:
                 logger.info(f"Successfully embedded metadata into EPUB for book {book_id}")

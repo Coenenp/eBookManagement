@@ -249,3 +249,85 @@ def format_confidence(confidence):
         return f"{percentage:.0f}%"
     except (ValueError, TypeError):
         return "N/A"
+
+
+@register.simple_tag
+def get_book_cover_url(book_file, default=""):
+    """
+    Get the cover URL for a BookFile, handling both external and internal covers.
+
+    For external companion covers, returns the file path directly.
+    For internal covers (EPUB, PDF, archives), returns the cached cover path.
+    If cover is not yet cached but has_internal_cover is True, extracts on-demand.
+
+    Args:
+        book_file: BookFile instance
+        default: Default value if no cover found
+
+    Returns:
+        URL/path to cover image or default value
+    """
+    if not book_file:
+        return default
+
+    # If cover_path is already set, use it
+    if book_file.cover_path:
+        # Return the media URL for the cover
+        from django.conf import settings
+
+        # For cached covers, construct the media URL
+        if book_file.cover_path.startswith("cover_cache/"):
+            return f"{settings.MEDIA_URL}{book_file.cover_path}"
+
+        # For external companion files, return the path
+        return book_file.cover_path
+
+    # If no cover_path but has_internal_cover, extract on-demand
+    if book_file.has_internal_cover and book_file.file_path:
+        from books.utils.cover_cache import CoverCache
+        from books.utils.cover_extractor import (
+            ArchiveCoverExtractor,
+            CoverExtractionError,
+            EPUBCoverExtractor,
+            PDFCoverExtractor,
+        )
+
+        # Check if already cached
+        cached = CoverCache.get_cover(book_file.file_path, book_file.cover_internal_path)
+        if cached:
+            from django.conf import settings
+
+            # Update book_file with cached path
+            book_file.cover_path = cached
+            book_file.save(update_fields=["cover_path"])
+            return f"{settings.MEDIA_URL}{cached}"
+
+        # Extract on-demand based on source type
+        try:
+            cover_data = None
+            internal_path = book_file.cover_internal_path
+
+            if book_file.cover_source_type == "epub_internal":
+                cover_data, internal_path = EPUBCoverExtractor.extract_cover(book_file.file_path)
+            elif book_file.cover_source_type == "pdf_page":
+                cover_data = PDFCoverExtractor.extract_cover(book_file.file_path)
+                internal_path = "page_1"
+            elif book_file.cover_source_type == "archive_first":
+                cover_data, internal_path = ArchiveCoverExtractor.extract_cover(book_file.file_path)
+
+            if cover_data:
+                success, cache_path = CoverCache.save_cover(book_file.file_path, cover_data, internal_path)
+                if success:
+                    from django.conf import settings
+
+                    # Update book_file with cached path
+                    book_file.cover_path = cache_path
+                    book_file.save(update_fields=["cover_path"])
+                    return f"{settings.MEDIA_URL}{cache_path}"
+
+        except CoverExtractionError as e:
+            logger.warning(f"On-demand cover extraction failed for {book_file.file_path}: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error in on-demand cover extraction: {e}")
+
+    return default

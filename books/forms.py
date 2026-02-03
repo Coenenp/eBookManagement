@@ -644,3 +644,71 @@ class UserProfileForm(StandardFormMixin, forms.ModelForm):
         self.fields["default_folder_pattern"].help_text = "Default pattern for organizing folders when renaming (use {author}, {title}, {series_name}, {series_number})"
         self.fields["default_filename_pattern"].help_text = "Default pattern for naming files when renaming (use {author}, {title}, {series_name}, {series_number})"
         self.fields["include_companion_files"].help_text = "Include companion files (images, metadata) when renaming"
+
+
+class CoverUploadForm(forms.Form):
+    """Form for uploading custom cover images"""
+
+    cover_image = forms.ImageField(
+        required=True,
+        help_text="Upload a cover image (JPG, PNG, or WebP)",
+        widget=forms.FileInput(
+            attrs={
+                "class": "form-control",
+                "accept": "image/jpeg,image/png,image/webp",
+            }
+        ),
+    )
+
+    MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+    MAX_WIDTH = 2000
+    MAX_HEIGHT = 3000
+    ALLOWED_FORMATS = ["JPEG", "PNG", "WebP"]
+
+    def clean_cover_image(self):
+        """Validate uploaded cover image"""
+        from PIL import Image
+
+        cover = self.cleaned_data.get("cover_image")
+        if not cover:
+            raise forms.ValidationError("No image file provided")
+
+        # Check file size
+        if cover.size > self.MAX_FILE_SIZE:
+            raise forms.ValidationError(f"File size too large. Maximum size is {self.MAX_FILE_SIZE / (1024*1024):.1f}MB")
+
+        # Validate it's a real image and get dimensions
+        try:
+            image = Image.open(cover)
+            image.verify()  # Verify it's a valid image
+
+            # Re-open after verify (verify closes the file)
+            cover.seek(0)
+            image = Image.open(cover)
+
+            # Check format
+            if image.format not in self.ALLOWED_FORMATS:
+                raise forms.ValidationError(f"Invalid image format. Allowed: {', '.join(self.ALLOWED_FORMATS)}")
+
+            # Check dimensions
+            width, height = image.size
+            if width > self.MAX_WIDTH or height > self.MAX_HEIGHT:
+                raise forms.ValidationError(f"Image too large. Maximum dimensions: {self.MAX_WIDTH}x{self.MAX_HEIGHT}px")
+
+            # Check minimum dimensions (at least 100x100)
+            if width < 100 or height < 100:
+                raise forms.ValidationError("Image too small. Minimum dimensions: 100x100px")
+
+            # Store dimensions for later use
+            self.cleaned_dimensions = (width, height)
+
+        except Exception as e:
+            raise forms.ValidationError(f"Invalid image file: {str(e)}")
+
+        # Reset file pointer for later reading
+        cover.seek(0)
+        return cover
+
+    def get_dimensions(self):
+        """Get image dimensions after validation"""
+        return getattr(self, "cleaned_dimensions", (None, None))

@@ -62,84 +62,94 @@ function loadDefaultTemplate() {
 }
 
 /**
- * Cover Selection Grid
+ * Cover Selection Grid - Enhanced with Radio + Checkbox
  */
 function initializeCoverSelection() {
-    // Toggle individual cover selection
-    window.toggleCoverSelection = function (coverId) {
-        const checkbox = document.getElementById('cover_' + coverId);
-        const card = checkbox.closest('.card');
+    // Update cover selection visual feedback when radio button changes
+    window.updateCoverSelection = function (radioElement) {
+        // Remove selected-final class from all cover options
+        document.querySelectorAll('.cover-option').forEach((option) => {
+            option.classList.remove('selected-final');
+        });
 
-        if (checkbox.checked) {
-            card.classList.add('border-primary', 'bg-light');
-        } else {
-            card.classList.remove('border-primary', 'bg-light');
+        // Add selected-final class to the selected cover
+        const selectedCover = radioElement.closest('.cover-option-wrapper').querySelector('.cover-option');
+        if (selectedCover) {
+            selectedCover.classList.add('selected-final');
         }
-
-        updateCoverDownloadButton();
     };
 
-    // Select all covers
-    window.selectAllCovers = function () {
-        const checkboxes = document.querySelectorAll('[id^="cover_"]');
+    // Select all download checkboxes
+    window.selectAllDownloads = function () {
+        const checkboxes = document.querySelectorAll('.cover-download-checkbox');
         checkboxes.forEach((checkbox) => {
             checkbox.checked = true;
-            const card = checkbox.closest('.card');
-            card.classList.add('border-primary', 'bg-light');
         });
-        updateCoverDownloadButton();
+        updateDownloadButton();
     };
 
-    // Deselect all covers
-    window.deselectAllCovers = function () {
-        const checkboxes = document.querySelectorAll('[id^="cover_"]');
+    // Deselect all download checkboxes
+    window.deselectAllDownloads = function () {
+        const checkboxes = document.querySelectorAll('.cover-download-checkbox');
         checkboxes.forEach((checkbox) => {
             checkbox.checked = false;
-            const card = checkbox.closest('.card');
-            card.classList.remove('border-primary', 'bg-light');
         });
-        updateCoverDownloadButton();
+        updateDownloadButton();
     };
 
     // Update download button state
-    function updateCoverDownloadButton() {
-        const checkboxes = document.querySelectorAll('[id^="cover_"]:checked');
-        const downloadBtn = document.getElementById('downloadCoversBtn');
+    function updateDownloadButton() {
+        const checkboxes = document.querySelectorAll('.cover-download-checkbox:checked');
+        const downloadBtn = document.querySelector('button[onclick="downloadSelectedCovers()"]');
 
         if (downloadBtn) {
             if (checkboxes.length > 0) {
                 downloadBtn.disabled = false;
-                downloadBtn.textContent = `Download Selected (${checkboxes.length})`;
+                downloadBtn.innerHTML = `<i class="fas fa-download me-1"></i>Download Selected (${checkboxes.length})`;
             } else {
                 downloadBtn.disabled = true;
-                downloadBtn.textContent = 'Download Selected';
+                downloadBtn.innerHTML = '<i class="fas fa-download me-1"></i>Download Selected Covers';
             }
         }
     }
 
     // Download selected covers
     window.downloadSelectedCovers = function () {
-        const checkboxes = document.querySelectorAll('[id^="cover_"]:checked');
-        const coverUrls = Array.from(checkboxes).map((cb) => cb.value);
+        const checkboxes = document.querySelectorAll('.cover-download-checkbox:checked');
+        const coverIds = Array.from(checkboxes).map((cb) => cb.value);
 
-        if (coverUrls.length === 0) {
+        if (coverIds.length === 0) {
             alert('Please select at least one cover to download.');
             return;
         }
 
-        // Add hidden inputs to form for selected covers
-        const form = document.getElementById('metadataForm');
-        coverUrls.forEach((url) => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'selected_covers';
-            input.value = url;
-            form.appendChild(input);
-        });
-
         // Submit form with download action
-        form.submit();
+        const form = document.getElementById('metadataForm');
+        if (form) {
+            // Add hidden input for download action
+            const actionInput = document.createElement('input');
+            actionInput.type = 'hidden';
+            actionInput.name = 'action';
+            actionInput.value = 'download_covers';
+            form.appendChild(actionInput);
+
+            form.submit();
+        }
     };
+
+    // Initialize: highlight currently selected final cover
+    const selectedRadio = document.querySelector('.cover-final-radio:checked');
+    if (selectedRadio) {
+        updateCoverSelection(selectedRadio);
+    }
+
+    // Add change listeners to download checkboxes
+    document.querySelectorAll('.cover-download-checkbox').forEach((checkbox) => {
+        checkbox.addEventListener('change', updateDownloadButton);
+    });
+
+    // Initial button state
+    updateDownloadButton();
 }
 
 /**
@@ -348,4 +358,279 @@ function getConfidenceBadgeClass(confidence) {
     if (confidence >= 0.8) return 'bg-success';
     if (confidence >= 0.6) return 'bg-warning';
     return 'bg-danger';
+}
+
+/**
+ * Multi-Cover Selector Functions (Feature 2)
+ */
+let selectedInternalCoverPath = null;
+
+/**
+ * Open the multi-cover selector modal
+ */
+function openMultiCoverSelector(bookId) {
+    const modal = new bootstrap.Modal(document.getElementById('multiCoverSelectorModal'));
+    const loadingDiv = document.getElementById('multiCoverLoading');
+    const errorDiv = document.getElementById('multiCoverError');
+    const gridDiv = document.getElementById('multiCoverGrid');
+
+    // Reset state
+    loadingDiv.classList.remove('d-none');
+    errorDiv.classList.add('d-none');
+    gridDiv.classList.add('d-none');
+    selectedInternalCoverPath = null;
+    document.getElementById('confirmCoverSelection').disabled = true;
+
+    modal.show();
+
+    // Fetch internal covers via AJAX
+    fetch(`/books/ajax/book/${bookId}/list_internal_covers/`, {
+        method: 'GET',
+        headers: {
+            'X-CSRFToken': getCsrfToken(),
+        },
+    })
+        .then((response) => response.json())
+        .then((data) => {
+            loadingDiv.classList.add('d-none');
+
+            if (!data.success) {
+                showMultiCoverError(data.error || 'Failed to load covers');
+                return;
+            }
+
+            if (!data.covers || data.covers.length === 0) {
+                showMultiCoverError('No images found in EPUB');
+                return;
+            }
+
+            // Populate grid
+            populateMultiCoverGrid(data.covers, data.current_cover);
+            gridDiv.classList.remove('d-none');
+
+            // Update count
+            document.getElementById('multiCoverCount').textContent = data.total_count;
+        })
+        .catch((error) => {
+            loadingDiv.classList.add('d-none');
+            showMultiCoverError('Network error: ' + error.message);
+        });
+}
+
+/**
+ * Show error message in modal
+ */
+function showMultiCoverError(message) {
+    const errorDiv = document.getElementById('multiCoverError');
+    document.getElementById('multiCoverErrorMessage').textContent = message;
+    errorDiv.classList.remove('d-none');
+}
+
+/**
+ * Populate the cover grid with covers data
+ */
+function populateMultiCoverGrid(covers, currentCoverPath) {
+    const container = document.getElementById('multiCoverContainer');
+    const template = document.getElementById('coverCardTemplate');
+
+    // Clear existing content
+    container.innerHTML = '';
+
+    covers.forEach((cover, index) => {
+        // Clone template
+        const clone = template.content.cloneNode(true);
+        const wrapper = clone.querySelector('.cover-card-wrapper');
+        const card = clone.querySelector('.cover-card');
+        const img = clone.querySelector('.cover-preview');
+        const radio = clone.querySelector('.cover-radio');
+
+        // Set data attributes
+        wrapper.dataset.coverIndex = index;
+        wrapper.dataset.minDimension = Math.min(cover.width, cover.height);
+        card.dataset.internalPath = cover.internal_path;
+
+        // Set image
+        if (cover.preview_url) {
+            img.src = cover.preview_url;
+        } else {
+            img.src = '/static/images/placeholder-cover.png';
+        }
+
+        // Set radio button
+        radio.value = cover.internal_path;
+        radio.id = `cover-radio-${index}`;
+
+        // Show badges
+        if (cover.is_opf_cover) {
+            clone.querySelector('.opf-badge').classList.remove('d-none');
+        }
+        if (cover.is_current) {
+            clone.querySelector('.current-badge').classList.remove('d-none');
+            radio.checked = true;
+            card.classList.add('selected');
+            selectedInternalCoverPath = cover.internal_path;
+            document.getElementById('confirmCoverSelection').disabled = false;
+        }
+
+        // Set metadata
+        clone.querySelector('.cover-filename').textContent = cover.display_name;
+        clone.querySelector('.card-title').title = cover.internal_path;
+        clone.querySelector('.cover-dimensions').textContent = `${cover.width}×${cover.height}`;
+        clone.querySelector('.cover-format').textContent = cover.format;
+        clone.querySelector('.cover-size').textContent = formatFileSize(cover.file_size);
+
+        // Calculate quality score
+        const qualityInfo = calculateCoverQuality(cover.width, cover.height);
+        const qualitySpan = clone.querySelector('.cover-quality');
+        qualitySpan.textContent = qualityInfo.label;
+        qualitySpan.classList.add(qualityInfo.class);
+
+        container.appendChild(clone);
+    });
+
+    // Add event listeners
+    initializeMultiCoverSelection();
+}
+
+/**
+ * Calculate cover quality based on dimensions
+ */
+function calculateCoverQuality(width, height) {
+    const minDim = Math.min(width, height);
+    const maxDim = Math.max(width, height);
+
+    if (minDim >= 1200) {
+        return { label: 'Excellent', class: 'quality-excellent' };
+    } else if (minDim >= 800) {
+        return { label: 'Good', class: 'quality-good' };
+    } else if (minDim >= 500) {
+        return { label: 'Fair', class: 'quality-fair' };
+    } else {
+        return { label: 'Poor', class: 'quality-poor' };
+    }
+}
+
+/**
+ * Format file size in human-readable format
+ */
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+/**
+ * Initialize multi-cover selection event handlers
+ */
+function initializeMultiCoverSelection() {
+    // Card click to select
+    document.querySelectorAll('.cover-card').forEach((card) => {
+        card.addEventListener('click', function (e) {
+            if (e.target.classList.contains('btn')) return; // Skip button clicks
+
+            const radio = this.querySelector('.cover-radio');
+            radio.checked = true;
+            handleCoverSelection(radio);
+        });
+    });
+
+    // Radio change
+    document.querySelectorAll('.cover-radio').forEach((radio) => {
+        radio.addEventListener('change', function () {
+            handleCoverSelection(this);
+        });
+    });
+
+    // Filter checkbox
+    document.getElementById('showOnlyLargeImages').addEventListener('change', function () {
+        const showOnlyLarge = this.checked;
+        document.querySelectorAll('.cover-card-wrapper').forEach((wrapper) => {
+            const minDim = parseInt(wrapper.dataset.minDimension);
+            if (showOnlyLarge && minDim < 800) {
+                wrapper.classList.add('filtered-out');
+            } else {
+                wrapper.classList.remove('filtered-out');
+            }
+        });
+    });
+
+    // Confirm selection
+    document.getElementById('confirmCoverSelection').addEventListener('click', function () {
+        if (selectedInternalCoverPath) {
+            selectInternalCover(selectedInternalCoverPath);
+        }
+    });
+}
+
+/**
+ * Handle cover selection change
+ */
+function handleCoverSelection(radio) {
+    // Remove selected class from all cards
+    document.querySelectorAll('.cover-card').forEach((c) => c.classList.remove('selected'));
+
+    // Add selected class to this card
+    const card = radio.closest('.cover-card');
+    card.classList.add('selected');
+
+    // Store selection
+    selectedInternalCoverPath = radio.value;
+
+    // Enable confirm button
+    document.getElementById('confirmCoverSelection').disabled = false;
+}
+
+/**
+ * Select an internal cover and update the unified cover selection
+ */
+function selectInternalCover(internalPath) {
+    // Update the final_cover_path hidden input or radio selection
+    // This integrates with the existing unified cover selection system
+
+    // Find if there's already an internal cover radio button
+    const internalCoverRadio = document.querySelector(`input[name="final_cover_path"][value="${internalPath}"]`);
+
+    if (internalCoverRadio) {
+        internalCoverRadio.checked = true;
+        updateCoverSelection(); // Call existing function
+    } else {
+        // If not found in unified grid, set it directly
+        const hiddenInput = document.getElementById('final_cover_path_input');
+        if (hiddenInput) {
+            hiddenInput.value = internalPath;
+        }
+    }
+
+    // Show success message
+    showToast('success', 'Internal cover selected: ' + internalPath.split('/').pop());
+
+    // Close modal
+    bootstrap.Modal.getInstance(document.getElementById('multiCoverSelectorModal')).hide();
+}
+
+/**
+ * Get CSRF token
+ */
+function getCsrfToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+}
+
+/**
+ * Show toast notification
+ */
+function showToast(type, message) {
+    // Use existing toast system or create simple alert
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+    const alert = document.createElement('div');
+    alert.className = `alert ${alertClass} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+    alert.style.zIndex = '9999';
+    alert.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(alert);
+
+    setTimeout(() => {
+        alert.remove();
+    }, 3000);
 }

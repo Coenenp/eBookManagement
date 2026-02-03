@@ -85,21 +85,122 @@ class BookMetadataView(LoginRequiredMixin, DetailView, SimpleNavigationMixin, Me
         return context
 
     def _get_cover_selection_context(self, book):
-        """Get context for cover selection grid."""
-        covers = [
-            {
-                "id": cover.id,
-                "url": cover.cover_path,
-                "source": cover.source.name,
-                "width": cover.width,
-                "height": cover.height,
-                "confidence": cover.confidence,
-                "is_active": cover.is_active,
-            }
-            for cover in book.covers.filter(is_active=True).select_related("source")
-        ]
+        """Get context for comprehensive cover selection grid with all sources."""
 
-        return {"covers": covers}
+        all_covers = []
+        current_final_cover = book.finalmetadata.final_cover_path if hasattr(book, "finalmetadata") else ""
+
+        # 1. Original/Internal Cover from BookFile
+        book_file = book.primary_file
+        if book_file and book_file.cover_path:
+            source_type = book_file.cover_source_type or "external"
+            source_label, source_icon, badge_class = self._get_source_display(source_type)
+
+            all_covers.append(
+                {
+                    "id": f"original_{book_file.id}",
+                    "path": book_file.cover_path,
+                    "url": self._get_cover_url(book_file.cover_path),
+                    "source_type": source_type,
+                    "source_label": source_label,
+                    "source_icon": source_icon,
+                    "source_badge_class": badge_class,
+                    "width": book_file.cover_width,
+                    "height": book_file.cover_height,
+                    "quality_score": book_file.cover_quality_score,
+                    "confidence": None,  # Original doesn't have confidence
+                    "is_final": book_file.cover_path == current_final_cover,
+                    "can_download": False,  # Already local
+                    "is_downloaded": True,
+                }
+            )
+
+        # 2. Manually Uploaded Cover (if different from original)
+        if book_file and book_file.original_cover_path and book_file.original_cover_path != book_file.cover_path:
+            all_covers.append(
+                {
+                    "id": f"uploaded_{book_file.id}",
+                    "path": book_file.cover_path,
+                    "url": self._get_cover_url(book_file.cover_path),
+                    "source_type": "manual",
+                    "source_label": "Manual Upload",
+                    "source_icon": "fa-upload",
+                    "source_badge_class": "bg-primary",
+                    "width": book_file.cover_width,
+                    "height": book_file.cover_height,
+                    "quality_score": book_file.cover_quality_score,
+                    "confidence": None,
+                    "is_final": book_file.cover_path == current_final_cover,
+                    "can_download": False,
+                    "is_downloaded": True,
+                }
+            )
+
+        # 3. External/API Covers from BookCover model
+        for cover in book.covers.filter(is_active=True).select_related("source").order_by("-confidence", "-is_high_resolution"):
+            source_name = cover.source.name if cover.source else "Unknown"
+
+            all_covers.append(
+                {
+                    "id": cover.id,
+                    "path": cover.cover_path,
+                    "url": cover.cover_path,  # BookCover already has full URL/path
+                    "source_type": "api",
+                    "source_label": source_name,
+                    "source_icon": self._get_api_icon(source_name),
+                    "source_badge_class": "bg-info",
+                    "width": cover.width,
+                    "height": cover.height,
+                    "quality_score": None,  # Can add quality detection later
+                    "confidence": cover.confidence,
+                    "is_final": cover.cover_path == current_final_cover,
+                    "can_download": not cover.is_local_file(),  # Can download if it's a URL
+                    "is_downloaded": cover.is_local_file(),
+                }
+            )
+
+        return {"all_covers": all_covers, "book": book}
+
+    def _get_source_display(self, source_type):
+        """Get display info for cover source type."""
+        source_mapping = {
+            "epub_internal": ("EPUB Internal", "fa-book", "bg-success"),
+            "pdf_page": ("PDF Page", "fa-file-pdf", "bg-danger"),
+            "archive_first": ("CBZ/CBR", "fa-file-archive", "bg-warning"),
+            "mobi_internal": ("MOBI Internal", "fa-book-reader", "bg-secondary"),
+            "manual": ("Manual Upload", "fa-upload", "bg-primary"),
+            "external": ("External File", "fa-image", "bg-secondary"),
+        }
+        return source_mapping.get(source_type, ("Unknown", "fa-question", "bg-secondary"))
+
+    def _get_api_icon(self, source_name):
+        """Get icon for API source."""
+        icons = {
+            "Google Books": "fa-google",
+            "Open Library": "fa-book-open",
+            "Goodreads": "fa-book",
+            "ComicVine": "fa-mask",
+        }
+        return icons.get(source_name, "fa-cloud")
+
+    def _get_cover_url(self, cover_path):
+        """Convert cover path to URL for display."""
+        from django.conf import settings
+
+        if not cover_path:
+            return ""
+
+        # Already a URL
+        if cover_path.startswith("http://") or cover_path.startswith("https://"):
+            return cover_path
+
+        # Convert local path to media URL
+        if cover_path.startswith(settings.MEDIA_ROOT):
+            relative_path = cover_path[len(settings.MEDIA_ROOT) :].lstrip("\\/")
+            return settings.MEDIA_URL + relative_path.replace("\\", "/")
+
+        # Assume it's already a media URL
+        return cover_path
 
     def _get_file_operations_context(self, book):
         """Get context for file rename/move operations."""

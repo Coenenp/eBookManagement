@@ -6,7 +6,7 @@ import json
 import logging
 from functools import wraps
 
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 
 logger = logging.getLogger("books.scanner")
 
@@ -42,6 +42,9 @@ def ajax_response_handler(view_func):
                 return JsonResponse(result)
             return result
 
+        except Http404:
+            # Re-raise Http404 to let Django handle it properly
+            raise
         except json.JSONDecodeError:
             return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
         except Exception as e:

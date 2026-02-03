@@ -19,6 +19,11 @@ from books.models import (
 )
 from books.scanner.file_ops import get_file_format
 from books.scanner.grouping import AudiobookFileGrouper, ComicFileGrouper
+from books.utils.cover_cache import CoverCache
+from books.utils.cover_extractor import (
+    ArchiveCoverExtractor,
+    CoverExtractionError,
+)
 
 logger = logging.getLogger("books.scanner")
 
@@ -142,13 +147,35 @@ def _process_comic_issue(
     # Store comic-specific metadata
     _store_comic_metadata(book, issue_info)
 
-    # Find associated cover file
+    # Detect and extract cover (external or internal from archive)
     from books.scanner.file_ops import find_cover_file
 
+    # Check for external companion cover first
     cover_path = find_cover_file(file_path, cover_files)
+
     if cover_path:
+        # External companion cover found
         book_file.cover_path = cover_path
-        book_file.save()
+        book_file.cover_source_type = "external"
+        book_file.cover_internal_path = ""
+        book_file.has_internal_cover = False
+    else:
+        # Try to extract first image from archive as cover
+        try:
+            cover_data, internal_path = ArchiveCoverExtractor.extract_cover(file_path)
+            if cover_data and internal_path:
+                # Cache the extracted cover
+                success, cache_path = CoverCache.save_cover(file_path, cover_data, internal_path)
+                if success:
+                    logger.info(f"Extracted and cached comic cover: {internal_path}")
+                    book_file.cover_path = cache_path
+                    book_file.cover_source_type = "archive_first"
+                    book_file.cover_internal_path = internal_path
+                    book_file.has_internal_cover = True
+        except CoverExtractionError as e:
+            logger.warning(f"Failed to extract comic cover from {file_path}: {e}")
+
+    book_file.save()
 
 
 def _store_comic_metadata(book: Book, issue_info: dict):

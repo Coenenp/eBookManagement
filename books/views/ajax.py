@@ -82,6 +82,87 @@ def ajax_manage_cover(request, book_id):
     return CoverManager.manage_cover_action(request, book_id)
 
 
+@require_http_methods(["GET"])
+@login_required
+def ajax_list_internal_covers(request, book_id):
+    """
+    List all internal images from an EPUB file.
+
+    Returns JSON with all internal images, their metadata, and preview URLs.
+    Used for multi-cover selection feature.
+    """
+    try:
+        from books.models import BookFile
+        from books.utils.cover_extractor import EPUBCoverExtractor
+        from books.utils.cover_cache import CoverCache
+        from django.conf import settings
+        import base64
+
+        book = get_object_or_404(Book, pk=book_id)
+
+        # Get primary EPUB file
+        epub_file = BookFile.objects.filter(book=book, file_format="epub").first()
+
+        if not epub_file:
+            return JsonResponse({"success": False, "error": "No EPUB file found for this book"}, status=404)
+
+        epub_path = epub_file.file_path
+
+        # Check if file exists
+        if not os.path.exists(epub_path):
+            return JsonResponse({"success": False, "error": "EPUB file not found on disk"}, status=404)
+
+        # Extract all covers with metadata
+        covers_data = EPUBCoverExtractor.list_all_covers(epub_path)
+
+        if not covers_data:
+            return JsonResponse({"success": False, "error": "No images found in EPUB"})
+
+        # Prepare response data
+        covers_list = []
+        current_cover_path = book.finalmetadata.final_cover_path if hasattr(book, "finalmetadata") else None
+
+        for cover_info in covers_data:
+            # Try to cache the image for preview
+            cache_success, cache_path = CoverCache.save_cover(epub_path, cover_info["image_data"], cover_info["internal_path"])
+
+            # Generate preview URL
+            if cache_success and cache_path:
+                preview_url = f"{settings.MEDIA_URL}{cache_path}"
+            else:
+                # Fallback: base64 encode for small images
+                if cover_info["file_size"] < 100 * 1024:  # < 100KB
+                    img_base64 = base64.b64encode(cover_info["image_data"]).decode("utf-8")
+                    img_format = cover_info["format"].lower()
+                    preview_url = f"data:image/{img_format};base64,{img_base64}"
+                else:
+                    preview_url = None
+
+            # Check if this is the currently selected cover
+            is_current = (epub_file.cover_path == cover_info["internal_path"]) if epub_file.cover_path else False
+
+            covers_list.append(
+                {
+                    "internal_path": cover_info["internal_path"],
+                    "width": cover_info["width"],
+                    "height": cover_info["height"],
+                    "file_size": cover_info["file_size"],
+                    "format": cover_info["format"],
+                    "is_opf_cover": cover_info["is_opf_cover"],
+                    "position": cover_info["position"],
+                    "preview_url": preview_url,
+                    "is_current": is_current,
+                    "display_name": os.path.basename(cover_info["internal_path"]),
+                }
+            )
+
+        return JsonResponse({"success": True, "covers": covers_list, "total_count": len(covers_list), "epub_path": epub_path, "current_cover": current_cover_path})
+
+    except Exception as e:
+        logger.error(f"Error listing internal covers for book {book_id}: {e}", exc_info=True)
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+
 @ajax_response_handler
 @csrf_exempt
 @login_required
@@ -2002,6 +2083,7 @@ __all__ = [
     "update_trust",
     "ajax_rescan_external_metadata",
     "isbn_lookup",
+    "ajax_preview_epub_changes",
     # Integration test placeholders
     "ajax_create_backup",
     "ajax_detect_duplicates",
@@ -2250,6 +2332,8 @@ def ajax_preview_epub_changes(request, book_id):
                 "opf_diff": opf_diff,
                 "files_to_add": preview.files_to_add,
                 "files_to_modify": preview.files_to_modify,
+                "files_to_remove": preview.files_to_remove,
+                "orphaned_images_count": len(preview.files_to_remove),
                 "cover_will_be_embedded": preview.cover_path is not None,
             }
         )
