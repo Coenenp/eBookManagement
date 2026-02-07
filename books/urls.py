@@ -55,14 +55,11 @@ urlpatterns = [
     path("ebooks/", views.EbooksMainView.as_view(), name="ebooks_main"),
     path("ebooks/ajax/list/", views.ebooks_ajax_list, name="ebooks_ajax_list"),
     path("ebooks/ajax/detail/<int:book_id>/", views.ebooks_ajax_detail, name="ebooks_ajax_detail"),
-    path("ebooks/ajax/toggle_read/", sections_views.ebooks_ajax_toggle_read, name="ebooks_ajax_toggle_read"),
     path("ebooks/ajax/download/<int:book_id>/", sections_views.ebooks_ajax_download, name="ebooks_ajax_download"),
     path("ebooks/ajax/companion_files/<int:book_id>/", sections_views.ebooks_ajax_companion_files, name="ebooks_ajax_companion_files"),
     path("series/", views.SeriesMainView.as_view(), name="series_main"),
     path("series/ajax/list/", views.series_ajax_list, name="series_ajax_list"),
     path("series/ajax/detail/<str:series_name>/", sections_views.series_ajax_detail, name="series_ajax_detail"),
-    path("series/ajax/toggle_read/", sections_views.series_ajax_toggle_read, name="series_ajax_toggle_read"),
-    path("series/ajax/mark_read/", sections_views.series_ajax_mark_read, name="series_ajax_mark_read"),
     path("series/ajax/download/<int:series_id>/", sections_views.series_ajax_download, name="series_ajax_download"),
     path("series/ajax/download_book/<int:book_id>/", sections_views.series_ajax_download_book, name="series_ajax_download_book"),
     # Management-oriented series list/detail expected by tests
@@ -71,16 +68,13 @@ urlpatterns = [
     path("comics/", views.ComicsMainView.as_view(), name="comics_main"),
     path("comics/ajax/list/", views.comics_ajax_list, name="comics_ajax_list"),
     path("comics/ajax/detail/<int:book_id>/", views.comics_ajax_detail, name="comics_ajax_detail"),
-    path("comics/ajax/toggle_read/", views.comics_ajax_toggle_read, name="comics_ajax_toggle_read"),
     path("comics/ajax/download/<int:book_id>/", views.comics_ajax_download, name="comics_ajax_download"),
     # Comics endpoints now use integrated functionality directly
     path("audiobooks/", views.AudiobooksMainView.as_view(), name="audiobooks_main"),
     path("audiobooks/ajax/list/", views.audiobooks_ajax_list, name="audiobooks_ajax_list"),
     path("audiobooks/ajax/detail/<int:book_id>/", views.audiobooks_ajax_detail, name="audiobooks_ajax_detail"),
-    path("audiobooks/ajax/toggle_read/", views.audiobooks_ajax_toggle_read, name="audiobooks_ajax_toggle_read"),
     path("audiobooks/ajax/download/<int:book_id>/", views.audiobooks_ajax_download, name="audiobooks_ajax_download"),
-    # Audiobooks endpoints now use integrated functionality directly
-    path("audiobooks/ajax/update_progress/", views.audiobooks_ajax_update_progress, name="audiobooks_ajax_update_progress"),
+    # Book detail and metadata
     path("book/<int:pk>/", views.BookDetailView.as_view(), name="book_detail"),
     path("book/<int:pk>/metadata/", views.BookMetadataView.as_view(), name="book_metadata"),
     path("book/<int:pk>/metadata/update/", views.BookMetadataUpdateView.as_view(), name="book_metadata_update"),

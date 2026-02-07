@@ -35,6 +35,10 @@
 {% block extra_js %}
 {{ block.super }}
 <script>
+// User preferences from profile
+window.userItemsPerPage = {{ items_per_page }};
+window.userDefaultViewMode = '{{ default_view_mode }}';
+
 // Configuration for the comics section - SET BEFORE loading JS files
 window.comicsConfig = {
     ajax_urls: {

@@ -69,7 +69,6 @@ def ajax_upload_bookfile_cover(request, bookfile_id):
             bookfile.original_cover_path = bookfile.cover_path
 
         # Save to cache with special key for manual uploads
-        cache_key = f"{bookfile.file_path}::manual_upload"
         cache_path = CoverCache.save_cover(bookfile.file_path, cover_data, internal_path="manual_upload")
 
         if not cache_path:

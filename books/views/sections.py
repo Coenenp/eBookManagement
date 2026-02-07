@@ -6,12 +6,13 @@ import os
 from django.apps import apps
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.generic import TemplateView
 
-from books.models import AUDIOBOOK_FORMATS, COMIC_FORMATS, EBOOK_FORMATS, Book
+from books.models import AUDIOBOOK_FORMATS, COMIC_FORMATS, EBOOK_FORMATS, Book, UserProfile
 from books.utils.decorators import ajax_response_handler
 from books.utils.metadata_helpers import (
     format_book_detail_for_json,
@@ -53,6 +54,15 @@ def ebooks_ajax_list(request):
     """AJAX endpoint for ebooks list"""
     Book = apps.get_model("books", "Book")
 
+    # Get pagination parameters from user profile
+    try:
+        profile = UserProfile.get_or_create_for_user(request.user)
+        per_page = int(request.GET.get("per_page", profile.items_per_page))
+    except Exception:
+        per_page = int(request.GET.get("per_page", 50))
+
+    page = int(request.GET.get("page", 1))
+
     # Get ebooks from scan folders designated as 'ebooks'
     ebooks_query = (
         Book.objects.filter(scan_folder__content_type="ebooks", scan_folder__is_active=True, files__file_format__in=EBOOK_FORMATS)  # Use EBOOK_FORMATS for consistency
@@ -85,12 +95,13 @@ def ebooks_ajax_list(request):
     else:
         ebooks_query = ebooks_query.order_by("id")  # Simple default sort
 
-    # Limit results for performance
-    ebooks = ebooks_query[:500]  # Limit to 500 items
+    # Paginate results
+    paginator = Paginator(ebooks_query, per_page)
+    page_obj = paginator.get_page(page)
 
     # Build response data
     ebooks_data = []
-    for book in ebooks:
+    for book in page_obj:
         # Get the best metadata
         metadata = get_book_metadata_dict(book)
 
@@ -123,13 +134,20 @@ def ebooks_ajax_list(request):
                 "series_position": series_info.series_number if series_info else None,
                 "cover_url": cover_path,
                 "scan_folder": book.scan_folder.path if book.scan_folder else "",
-                # Add reading status from metadata
-                "is_read": metadata.get("is_read", False),
-                "reading_progress": metadata.get("reading_progress", 0),
             }
         )
 
-    return {"success": True, "ebooks": ebooks_data, "books": ebooks_data, "total_count": len(ebooks_data)}  # Tests expect this field
+    return {
+        "success": True,
+        "ebooks": ebooks_data,
+        "books": ebooks_data,  # Tests expect this field
+        "total_count": paginator.count,
+        "page": page,
+        "per_page": per_page,
+        "num_pages": paginator.num_pages,
+        "has_next": page_obj.has_next(),
+        "has_previous": page_obj.has_previous(),
+    }
 
 
 @login_required
@@ -231,7 +249,25 @@ def series_ajax_list(request):
 
     series_list.sort(key=lambda x: x["name"])
 
-    return {"success": True, "series": series_list, "total_count": len(series_list)}
+    # Get user's items_per_page setting and apply pagination to series
+    profile = UserProfile.get_or_create_for_user(request.user)
+    per_page = int(request.GET.get("per_page", profile.items_per_page))
+    page = int(request.GET.get("page", 1))
+
+    # Paginate the series list
+    paginator = Paginator(series_list, per_page)
+    page_obj = paginator.get_page(page)
+
+    return {
+        "success": True,
+        "series": list(page_obj),
+        "total_count": paginator.count,
+        "page": page,
+        "per_page": per_page,
+        "num_pages": paginator.num_pages,
+        "has_next": page_obj.has_next(),
+        "has_previous": page_obj.has_previous(),
+    }
 
 
 class ComicsMainView(LoginRequiredMixin, TemplateView):
@@ -287,11 +323,20 @@ def comics_ajax_list(request):
         .distinct()
     )
 
+    # Get user's items_per_page setting and apply pagination
+    profile = UserProfile.get_or_create_for_user(request.user)
+    per_page = int(request.GET.get("per_page", profile.items_per_page))
+    page = int(request.GET.get("page", 1))
+
+    # Paginate the queryset
+    paginator = Paginator(comics_query, per_page)
+    page_obj = paginator.get_page(page)
+
     # Group comics by series
     series_dict = {}
     standalone_comics = []
 
-    for book in comics_query:
+    for book in page_obj:
         # Get the first file for this book
         first_file = book.files.first()
         if not first_file:
@@ -354,8 +399,6 @@ def comics_ajax_list(request):
             "file_format": first_file.file_format,
             "file_size": first_file.file_size or 0,
             "page_count": getattr(metadata, "page_count", None) if metadata else None,
-            "is_read": getattr(book, "is_read", False),
-            "read_date": getattr(book, "read_date", None),
             "date_added": book.first_scanned.isoformat() if book.first_scanned else None,
             "scan_folder": book.scan_folder.path if book.scan_folder else "",
             "cover_url": get_book_cover_url(book),
@@ -409,7 +452,19 @@ def comics_ajax_list(request):
         all_comics.extend(series["books"])
     all_comics.extend(standalone_comics)
 
-    return {"success": True, "comics": all_comics, "series": series_list, "standalone": standalone_comics, "total_count": len(all_comics), "version": "unified"}
+    return {
+        "success": True,
+        "comics": all_comics,
+        "series": series_list,
+        "standalone": standalone_comics,
+        "total_count": paginator.count,
+        "page": page,
+        "per_page": per_page,
+        "num_pages": paginator.num_pages,
+        "has_next": page_obj.has_next(),
+        "has_previous": page_obj.has_previous(),
+        "version": "unified",
+    }
 
 
 @login_required
@@ -421,30 +476,6 @@ def comics_ajax_detail(request, comic_id):
     comic_detail = format_book_detail_for_json(book)
 
     return {"success": True, "comic": comic_detail, "version": "unified"}
-
-
-@login_required
-@ajax_response_handler
-def comics_ajax_toggle_read(request):
-    """AJAX endpoint to toggle read status for comic books"""
-    from django.utils import timezone
-
-    book_id = request.POST.get("book_id") or request.POST.get("issue_id")
-    if not book_id:
-        return {"success": False, "error": "Missing book_id"}
-
-    Book = apps.get_model("books", "Book")
-    book = get_object_or_404(Book, id=book_id)
-
-    # Toggle read status
-    book.is_read = not book.is_read
-    if book.is_read:
-        book.read_date = timezone.now()
-    else:
-        book.read_date = None
-    book.save()
-
-    return {"success": True, "is_read": book.is_read, "read_date": book.read_date.isoformat() if book.read_date else None}
 
 
 @login_required
@@ -524,12 +555,18 @@ def audiobooks_ajax_list(request):
     else:
         audiobooks_query = audiobooks_query.order_by("id")  # Simple default sort
 
-    # Limit results for performance
-    audiobooks = audiobooks_query[:500]  # Limit to 500 items
+    # Get user's items_per_page setting and apply pagination
+    profile = UserProfile.get_or_create_for_user(request.user)
+    per_page = int(request.GET.get("per_page", profile.items_per_page))
+    page = int(request.GET.get("page", 1))
+
+    # Paginate the queryset
+    paginator = Paginator(audiobooks_query, per_page)
+    page_obj = paginator.get_page(page)
 
     # Build response data
     audiobooks_data = []
-    for book in audiobooks:
+    for book in page_obj:
         # Get the best metadata
         metadata = get_book_metadata_dict(book)
 
@@ -562,12 +599,20 @@ def audiobooks_ajax_list(request):
                 "series_name": series_info.series.name if series_info and series_info.series else "",
                 "series_position": series_info.series_number if series_info else None,
                 "cover_url": cover_path,
-                "is_finished": getattr(book, "is_finished", False),
-                "reading_progress": getattr(book, "reading_progress", 0),
             }
         )
 
-    return {"success": True, "audiobooks": audiobooks_data, "books": audiobooks_data, "total_count": len(audiobooks_data)}  # For compatibility with base class expectation
+    return {
+        "success": True,
+        "audiobooks": audiobooks_data,
+        "books": audiobooks_data,  # For compatibility with base class expectation
+        "total_count": paginator.count,
+        "page": page,
+        "per_page": per_page,
+        "num_pages": paginator.num_pages,
+        "has_next": page_obj.has_next(),
+        "has_previous": page_obj.has_previous(),
+    }
 
 
 @ajax_response_handler
@@ -597,28 +642,6 @@ def audiobooks_ajax_detail(request, book_id):
 
 @login_required
 @ajax_response_handler
-def audiobooks_ajax_toggle_read(request):
-    """AJAX endpoint for toggling audiobook read status"""
-    if request.method != "POST":
-        return {"success": False, "error": "POST method required"}
-
-    book_id = request.json_data.get("audiobook_id") or request.json_data.get("book_id")
-
-    if not book_id:
-        return {"success": False, "error": "Audiobook ID required"}
-
-    Book = apps.get_model("books", "Book")
-    book = get_object_or_404(Book, id=book_id)
-
-    # Toggle read status
-    book.is_read = not getattr(book, "is_read", False)
-    book.save()
-
-    return {"success": True, "is_read": book.is_read, "message": f'Audiobook marked as {"read" if book.is_read else "unread"}'}
-
-
-@login_required
-@ajax_response_handler
 def audiobooks_ajax_download(request, book_id):
     """AJAX endpoint for audiobook download"""
     Book = apps.get_model("books", "Book")
@@ -631,49 +654,6 @@ def audiobooks_ajax_download(request, book_id):
     # For now, return the file path - actual download implementation may vary
     filename = os.path.basename(first_file.file_path)
     return {"success": True, "download_url": f"/books/download/{book_id}/", "filename": filename}
-
-
-@login_required
-@ajax_response_handler
-def ebooks_ajax_toggle_read(request):
-    """AJAX endpoint to toggle read status for ebooks"""
-    from django.utils import timezone
-
-    if request.method != "POST":
-        return {"success": False, "error": "Only POST method allowed"}
-
-    # The decorator handles JSON parsing, so data is available in request.json_data
-    book_id = request.json_data.get("ebook_id") or request.json_data.get("book_id")
-
-    if not book_id:
-        return {"success": False, "error": "Book ID is required"}
-
-    # Get the book
-    Book = apps.get_model("books", "Book")
-    book = get_object_or_404(Book, id=book_id)
-
-    # Toggle read status using FinalMetadata
-    try:
-        final_meta = book.finalmetadata
-        current_read_status = getattr(final_meta, "is_read", False)
-        final_meta.is_read = not current_read_status
-
-        # Update read_date if marking as read
-        if final_meta.is_read:
-            final_meta.read_date = timezone.now()
-        else:
-            final_meta.read_date = None
-
-        final_meta.save()
-        is_read = final_meta.is_read
-
-    except AttributeError:
-        # FinalMetadata doesn't exist, create it
-        FinalMetadata = apps.get_model("books", "FinalMetadata")
-        final_meta = FinalMetadata.objects.create(book=book, is_read=True, read_date=timezone.now())
-        is_read = True
-
-    return {"success": True, "is_read": is_read, "message": f'Book marked as {"read" if is_read else "unread"}'}
 
 
 @login_required
@@ -783,23 +763,6 @@ def series_ajax_detail(request, series_name):
 
 @login_required
 @ajax_response_handler
-def series_ajax_toggle_read(request):
-    """AJAX endpoint to toggle read status for series"""
-    return {"success": True, "message": "Series read status toggled"}
-
-
-@login_required
-@ajax_response_handler
-def series_ajax_mark_read(request):
-    """AJAX endpoint to mark series as read"""
-    # Mock updating some books count for the test
-    books_updated = 2  # Would be actual count in real implementation
-
-    return {"success": True, "message": "Series marked as read", "books_updated": books_updated}
-
-
-@login_required
-@ajax_response_handler
 def series_ajax_download(request, series_id):
     """AJAX endpoint to download entire series"""
     return {"success": True, "message": "Series download initiated"}
@@ -810,55 +773,3 @@ def series_ajax_download(request, series_id):
 def series_ajax_download_book(request, book_id):
     """AJAX endpoint to download book from series"""
     return {"success": True, "message": "Book download initiated"}
-
-
-@login_required
-@ajax_response_handler
-def audiobooks_ajax_update_progress(request):
-    """Endpoint to update listening progress for audiobooks"""
-    from django.utils import timezone
-
-    if request.method != "POST":
-        return {"success": False, "error": "Only POST method allowed"}
-
-    audiobook_id = request.json_data.get("audiobook_id") or request.json_data.get("book_id")
-    position_seconds = request.json_data.get("position_seconds")
-
-    if not audiobook_id or position_seconds is None:
-        return {"success": False, "error": "Missing required parameters"}
-
-    # Get the book
-    Book = apps.get_model("books", "Book")
-    book = get_object_or_404(Book, id=audiobook_id)
-
-    # Update position in FinalMetadata
-    try:
-        final_meta = book.finalmetadata
-        position_seconds = int(position_seconds)
-
-        # Calculate progress percentage (if we have duration info)
-        # For now, just store the position
-        final_meta.current_position_seconds = position_seconds
-        final_meta.last_played = timezone.now()
-
-        # Check if finished (you may need to add total_duration field)
-        if hasattr(final_meta, "total_duration_seconds") and final_meta.total_duration_seconds:
-            remaining = final_meta.total_duration_seconds - position_seconds
-            final_meta.is_finished = remaining <= 30
-            progress_percentage = int((position_seconds / final_meta.total_duration_seconds) * 100)
-        else:
-            progress_percentage = 0
-
-        final_meta.save()
-
-        return {
-            "success": True,
-            "current_position_seconds": position_seconds,
-            "progress_percentage": progress_percentage,
-            "is_finished": getattr(final_meta, "is_finished", False),
-            "last_played": final_meta.last_played.isoformat() if hasattr(final_meta, "last_played") else None,
-        }
-
-    except AttributeError:
-        # FinalMetadata doesn't exist
-        return {"success": False, "error": "Metadata not found for this audiobook"}

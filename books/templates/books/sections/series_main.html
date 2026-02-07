@@ -40,6 +40,10 @@
 {% block extra_js %}
 {{ block.super }}
 <script>
+// User preferences from profile
+window.userItemsPerPage = {{ items_per_page }};
+window.userDefaultViewMode = '{{ default_view_mode }}';
+
 // Configuration for series section
 window.seriesConfig = {
     ajax_urls: {

@@ -20,8 +20,8 @@
     {% for folder in folder_analysis %}
     <div class="content-type-assignment card">
         <div class="card-header">
-            <div class="d-flex justify-content-between align-items-center">
-                <div class="folder-info">
+            <div class="d-flex justify-content-between align-items-center flex-wrap">
+                <div class="folder-info flex-grow-1 mb-2 mb-md-0">
                     <h5 class="mb-1 text-truncate">
                         <i class="fas fa-folder text-warning me-2"></i>
                         {{ folder.name }}
@@ -29,21 +29,40 @@
                     <div class="folder-path text-muted small">{{ folder.path }}</div>
                 </div>
                 
-                <div class="content-selector">
-                    <label for="folder_{{ forloop.counter }}" class="form-label small text-muted mb-1">
-                        Content Type
-                    </label>
-                    <select class="form-select form-select-sm" name="folder_{{ folder.path|hash }}" 
-                            id="folder_{{ forloop.counter }}"
-                            aria-label="Content type for {{ folder.name }}"
-                            title="Select content type for {{ folder.name }}">
-                        {% for choice_value, choice_display in content_type_choices %}
-                        <option value="{{ choice_value }}" 
-                                {% if choice_value == folder.current_assignment %}selected{% endif %}>
-                            {{ choice_display }}
-                        </option>
-                        {% endfor %}
-                    </select>
+                <div class="d-flex gap-3">
+                    <div class="content-selector">
+                        <label for="folder_{{ forloop.counter }}" class="form-label small text-muted mb-1">
+                            Content Type
+                        </label>
+                        <select class="form-select form-select-sm" name="folder_{{ folder.path|hash }}" 
+                                id="folder_{{ forloop.counter }}"
+                                aria-label="Content type for {{ folder.name }}"
+                                title="Select content type for {{ folder.name }}">
+                            {% for choice_value, choice_display in content_type_choices %}
+                            <option value="{{ choice_value }}" 
+                                    {% if choice_value == folder.current_assignment %}selected{% endif %}>
+                                {{ choice_display }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="language-selector">
+                        <label for="language_{{ forloop.counter }}" class="form-label small text-muted mb-1">
+                            Default Language
+                        </label>
+                        <select class="form-select form-select-sm" name="language_{{ folder.path|hash }}" 
+                                id="language_{{ forloop.counter }}"
+                                aria-label="Default language for {{ folder.name }}"
+                                title="Default language for books in {{ folder.name }}">
+                            {% for choice_value, choice_display in language_choices %}
+                            <option value="{{ choice_value }}" 
+                                    {% if choice_value == folder.current_language %}selected{% endif %}>
+                                {{ choice_display }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
                 </div>
             </div>
         </div>

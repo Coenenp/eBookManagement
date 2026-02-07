@@ -234,7 +234,18 @@ class DeletedBooksView(LoginRequiredMixin, ListView):
     model = Book
     template_name = "books/deleted_books.html"
     context_object_name = "deleted_books"
-    paginate_by = PAGINATION["book_list"]
+
+    def get_paginate_by(self, queryset):
+        """Get pagination count from user profile"""
+        if self.request.user.is_authenticated:
+            try:
+                from books.models import UserProfile
+
+                profile = UserProfile.get_or_create_for_user(self.request.user)
+                return profile.items_per_page
+            except Exception:
+                pass
+        return PAGINATION["book_list"]
 
     def get_queryset(self):
         """Get all soft-deleted books."""
@@ -268,7 +279,18 @@ class BookListView(LoginRequiredMixin, ListView, BookListContextMixin):
     model = Book
     template_name = "books/book_list.html"
     context_object_name = "books"
-    paginate_by = PAGINATION["book_library"]
+
+    def get_paginate_by(self, queryset):
+        """Get pagination count from user profile"""
+        if self.request.user.is_authenticated:
+            try:
+                from books.models import UserProfile
+
+                profile = UserProfile.get_or_create_for_user(self.request.user)
+                return profile.items_per_page
+            except Exception:
+                pass
+        return PAGINATION["book_library"]
 
     def get_queryset(self):
         qs = build_book_queryset(self.request.GET)

@@ -14,6 +14,12 @@ if (typeof EbooksSectionManager === 'undefined') {
 
             this.expandedEbooks = new Set();
 
+            // Pagination state
+            this.currentPage = 1;
+            this.itemsPerPage = window.userItemsPerPage || 50;
+            this.totalPages = 1;
+            this.totalCount = 0;
+
             // Create safe utility accessors
             this.utils = this.getUtils();
         }
@@ -262,8 +268,13 @@ if (typeof EbooksSectionManager === 'undefined') {
                     throw new Error('makeRequest function not found in utils object');
                 }
 
-                console.log('Loading ebooks from:', this.config.apiEndpoint);
-                const response = await makeRequest(this.config.apiEndpoint);
+                // Build URL with pagination parameters
+                const url = new URL(this.config.apiEndpoint, window.location.origin);
+                url.searchParams.set('page', this.currentPage);
+                url.searchParams.set('per_page', this.itemsPerPage);
+
+                console.log('Loading ebooks from:', url.toString());
+                const response = await makeRequest(url.toString());
 
                 console.log('Ebooks loaded:', response);
 
@@ -271,13 +282,22 @@ if (typeof EbooksSectionManager === 'undefined') {
                     this.currentData = response.ebooks;
                     this.filteredData = [...this.currentData];
 
-                    // Update count badge
+                    // Update pagination state
+                    this.totalCount = response.total_count || response.ebooks.length;
+                    this.totalPages = response.num_pages || 1;
+
+                    // Update count badge to show total count
                     const countBadge = document.getElementById('item-count');
                     if (countBadge) {
-                        countBadge.textContent = this.currentData.length;
+                        countBadge.textContent = this.totalCount;
                     }
 
-                    console.log(`Loaded ${this.currentData.length} ebooks`);
+                    console.log(
+                        `Loaded ${this.currentData.length} ebooks (page ${this.currentPage} of ${this.totalPages}, total: ${this.totalCount})`
+                    );
+
+                    // Render pagination controls
+                    this.renderPaginationControls(response);
 
                     // Render the list after loading data
                     this.renderList();
@@ -1190,6 +1210,47 @@ if (typeof EbooksSectionManager === 'undefined') {
                 </div>
             `;
             container.innerHTML = html;
+        }
+
+        renderPaginationControls(response) {
+            const container = document.querySelector(this.config.listContainer);
+            if (!container) return;
+
+            // Remove existing pagination if present
+            const existingPagination = container.querySelector('.pagination-controls');
+            if (existingPagination) {
+                existingPagination.remove();
+            }
+
+            // Only show pagination if there's more than one page
+            if (this.totalPages <= 1) return;
+
+            const paginationHtml = `
+                <div class="pagination-controls d-flex justify-content-between align-items-center mt-3 mb-3">
+                    <button class="btn btn-sm btn-outline-primary" 
+                            onclick="window.ebookManager.goToPage(${this.currentPage - 1})"
+                            ${this.currentPage <= 1 ? 'disabled' : ''}>
+                        <i class="fas fa-chevron-left"></i> Previous
+                    </button>
+                    <span class="text-muted">
+                        Page ${this.currentPage} of ${this.totalPages} (${this.totalCount} total)
+                    </span>
+                    <button class="btn btn-sm btn-outline-primary" 
+                            onclick="window.ebookManager.goToPage(${this.currentPage + 1})"
+                            ${this.currentPage >= this.totalPages ? 'disabled' : ''}>
+                        Next <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            `;
+
+            // Add pagination at top of container
+            container.insertAdjacentHTML('afterbegin', paginationHtml);
+        }
+
+        async goToPage(page) {
+            if (page < 1 || page > this.totalPages) return;
+            this.currentPage = page;
+            await this.loadData();
         }
     };
 }

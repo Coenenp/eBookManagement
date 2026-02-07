@@ -78,6 +78,10 @@ def resolve_final_metadata(book):
                     logger.warning(f"[YEAR CAST ERROR] field_value='{value}' — {e}")
             else:
                 setattr(final_metadata, attr_name, value)
+        elif field_name == "language" and book.scan_folder and book.scan_folder.language:
+            # Inherit language from scan folder if not found in metadata
+            final_metadata.language = book.scan_folder.language
+            logger.info(f"[LANGUAGE INHERIT] Book {book.id} inheriting language '{book.scan_folder.language}' from scan folder")
 
     # 🔢 Confidence aggregation
     final_metadata.calculate_overall_confidence()

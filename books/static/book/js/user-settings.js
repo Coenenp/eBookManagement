@@ -434,11 +434,6 @@ class UserSettingsManager {
                             viewModeField.value = data.defaults.default_view_mode;
                         }
 
-                        const shareProgressField = this.form.querySelector('#id_share_reading_progress');
-                        if (shareProgressField) {
-                            shareProgressField.checked = data.defaults.share_reading_progress;
-                        }
-
                         // Update theme cards active state
                         this.previewCards.forEach((card) => card.classList.remove('active'));
                         const defaultThemeCard = document.querySelector(`[data-theme="${data.defaults.theme}"]`);

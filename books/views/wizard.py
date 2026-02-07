@@ -14,7 +14,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import TemplateView
 
-from books.models import AUDIOBOOK_FORMATS, COMIC_FORMATS, EBOOK_FORMATS, ScanFolder, SetupWizard
+from books.models import AUDIOBOOK_FORMATS, COMIC_FORMATS, EBOOK_FORMATS, LANGUAGE_CHOICES, ScanFolder, SetupWizard
 
 logger = logging.getLogger("books.scanner")
 
@@ -296,31 +296,43 @@ class WizardContentTypesView(SetupWizardView):
         context = super().get_context_data(**kwargs)
         wizard, created = SetupWizard.get_or_create_for_user(self.request.user)
 
-        # Get existing content type assignments
+        # Get existing content type and language assignments from wizard state
         existing_assignments = wizard.folder_content_types or {}
+        existing_languages = wizard.folder_languages or {}
 
         # Analyze folders for suggested content types
         folder_analysis = []
         for folder_path in wizard.selected_folders:
             analysis = self._analyze_folder_content(folder_path)
 
-            # Use existing assignment if available, otherwise use suggested type
-            current_assignment = existing_assignments.get(folder_path)
-            suggested_type = analysis.get("suggested_type", "ebooks")
+            # Check if ScanFolder already exists in database for this path
+            try:
+                existing_scan_folder = ScanFolder.objects.get(path=folder_path)
+                # Use database values as priority
+                current_assignment = existing_assignments.get(folder_path) or existing_scan_folder.content_type
+                current_language = existing_languages.get(folder_path) or existing_scan_folder.language or ""
+            except ScanFolder.DoesNotExist:
+                # Use wizard state or suggested values
+                current_assignment = existing_assignments.get(folder_path)
+                suggested_type = analysis.get("suggested_type", "ebooks")
+                current_language = existing_languages.get(folder_path, "")
+                current_assignment = current_assignment or suggested_type
 
             folder_analysis.append(
                 {
                     "path": folder_path,
                     "name": os.path.basename(folder_path) or folder_path,
                     "analysis": analysis,
-                    "suggested_type": suggested_type,
-                    "current_assignment": current_assignment or suggested_type,
+                    "suggested_type": analysis.get("suggested_type", "ebooks"),
+                    "current_assignment": current_assignment,
+                    "current_language": current_language,
                 }
             )
 
         context["folder_analysis"] = folder_analysis
         context["folders"] = folder_analysis  # For test compatibility
         context["content_type_choices"] = ScanFolder.CONTENT_TYPE_CHOICES
+        context["language_choices"] = LANGUAGE_CHOICES
 
         return context
 
@@ -331,18 +343,27 @@ class WizardContentTypesView(SetupWizardView):
             wizard.skip_wizard()
             return redirect("books:dashboard")
 
-        # Process content type assignments
+        # Process content type and language assignments
         folder_content_types = {}
+        folder_languages = {}
 
         # The template uses folder_{{ folder.path|hash }} as the field name
         for folder_path in wizard.selected_folders:
             folder_hash = str(abs(hash(str(folder_path))))
+
+            # Get content type
             folder_key = f"folder_{folder_hash}"
             content_type = request.POST.get(folder_key, "ebooks")
             folder_content_types[folder_path] = content_type
 
-        # Save content type assignments
+            # Get language
+            language_key = f"language_{folder_hash}"
+            language = request.POST.get(language_key, "")
+            folder_languages[folder_path] = language
+
+        # Save content type and language assignments
         wizard.folder_content_types = folder_content_types
+        wizard.folder_languages = folder_languages
         wizard.mark_step_completed("content_types")
         wizard.save()
 
@@ -582,6 +603,7 @@ class WizardCompleteView(SetupWizardView):
         """Create ScanFolder objects from wizard configuration."""
         for folder_path in wizard.selected_folders:
             content_type = wizard.folder_content_types.get(folder_path, "ebooks")
+            language = wizard.folder_languages.get(folder_path, "")  # Get language from wizard
 
             # Create scan folder if it doesn't exist
             folder_name = os.path.basename(folder_path) or f"Folder {folder_path}"
@@ -591,13 +613,13 @@ class WizardCompleteView(SetupWizardView):
                 defaults={
                     "name": folder_name,
                     "content_type": content_type,
-                    "language": "en",  # Default language
+                    "language": language,  # Use language from wizard
                     "is_active": True,
                 },
             )
 
             if created:
-                logger.info(f"Created scan folder: {scan_folder.name} ({content_type})")
+                logger.info(f"Created scan folder: {scan_folder.name} ({content_type}, language: {language or 'not defined'})")
 
 
 # AJAX endpoints for wizard

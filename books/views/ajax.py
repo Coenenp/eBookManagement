@@ -205,8 +205,6 @@ def ajax_update_display_options(request):
         # Update available fields that exist in the model
         if "items_per_page" in data:
             profile.items_per_page = data["items_per_page"]
-        if "show_covers_in_list" in data:
-            profile.show_covers_in_list = data["show_covers_in_list"]
         if "default_view_mode" in data:
             profile.default_view_mode = data["default_view_mode"]
 

@@ -61,6 +61,7 @@ STANDARD_METADATA_FIELDS = {
 }
 
 LANGUAGE_CHOICES = [
+    ("", "Not defined"),
     ("en", "English"),
     ("fr", "French"),
     ("de", "German"),
@@ -179,7 +180,13 @@ class ScanFolder(HashFieldMixin, models.Model):
         default="ebooks",
         help_text="Type of content in this scan folder",
     )
-    language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, default="en")
+    language = models.CharField(
+        max_length=10,
+        choices=LANGUAGE_CHOICES,
+        default="",
+        blank=True,
+        help_text="Default language for books in this folder (used for API searches if not specified in metadata)",
+    )
     is_active = models.BooleanField(default=True)
     last_scanned = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -530,11 +537,6 @@ class BookFile(HashFieldMixin, models.Model):
 
     # Comic file properties
     page_count = models.IntegerField(null=True, blank=True)
-
-    # Reading/Progress tracking
-    is_read = models.BooleanField(default=False)
-    read_date = models.DateTimeField(null=True, blank=True)
-    current_position = models.IntegerField(default=0)
 
     # Companion files
     cover_path = models.CharField(max_length=1000, blank=True)
@@ -985,16 +987,8 @@ class FinalMetadata(models.Model):
     publication_year = models.IntegerField(null=True, blank=True)
     description = models.TextField(blank=True)
 
-    # Reading tracking fields
-    is_read = models.BooleanField(default=False, help_text="Whether this book has been read")
-    read_date = models.DateTimeField(null=True, blank=True, help_text="When the book was marked as read")
-    reading_progress = models.IntegerField(default=0, help_text="Reading progress percentage (0-100)")
-
-    # Audiobook-specific tracking fields
-    current_position_seconds = models.IntegerField(default=0, help_text="Current playback position in seconds")
+    # Audiobook-specific metadata
     total_duration_seconds = models.IntegerField(null=True, blank=True, help_text="Total duration in seconds")
-    last_played = models.DateTimeField(null=True, blank=True, help_text="When the audiobook was last played")
-    is_finished = models.BooleanField(default=False, help_text="Whether the audiobook has been finished")
 
     # Overall metrics
     overall_confidence = models.FloatField(default=0.0)
@@ -1710,11 +1704,7 @@ class UserProfile(models.Model):
 
     # UI preferences
     items_per_page = models.IntegerField(default=50)
-    show_covers_in_list = models.BooleanField(default=True)
     default_view_mode = models.CharField(max_length=10, choices=[("table", "Table"), ("grid", "Grid")], default="table")
-
-    # Privacy
-    share_reading_progress = models.BooleanField(default=False)
 
     # Renaming preferences
     default_folder_pattern = models.CharField(
@@ -1804,6 +1794,7 @@ class SetupWizard(models.Model):
     # Configuration data
     selected_folders = models.JSONField(default=list, blank=True)
     folder_content_types = models.JSONField(default=dict, blank=True)
+    folder_languages = models.JSONField(default=dict, blank=True, help_text="Language preferences for each folder")
     scraper_config = models.JSONField(default=dict, blank=True)
 
     # Timestamps

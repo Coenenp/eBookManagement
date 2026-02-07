@@ -53,7 +53,7 @@ class UnifiedCoverSelectionContextTestCase(TestCase):
     def test_cover_context_includes_original_cover(self):
         """Test that original EPUB internal cover is included."""
         # Create BookFile with internal cover
-        book_file = BookFile.objects.create(
+        _book_file = BookFile.objects.create(
             book=self.book,
             file_path="/test/book.epub",
             file_format="epub",
@@ -83,7 +83,7 @@ class UnifiedCoverSelectionContextTestCase(TestCase):
 
     def test_cover_context_includes_uploaded_cover(self):
         """Test that manually uploaded cover is included."""
-        book_file = BookFile.objects.create(
+        _book_file = BookFile.objects.create(
             book=self.book,
             file_path="/test/book.epub",
             file_format="epub",
@@ -109,7 +109,7 @@ class UnifiedCoverSelectionContextTestCase(TestCase):
         BookFile.objects.create(book=self.book, file_path="/test/book.epub", file_format="epub")
 
         # Create API covers
-        cover1 = BookCover.objects.create(
+        _cover1 = BookCover.objects.create(
             book=self.book, source=self.source_google, cover_path="https://books.google.com/cover1.jpg", width=800, height=1200, confidence=0.85, is_active=True
         )
 
@@ -123,7 +123,7 @@ class UnifiedCoverSelectionContextTestCase(TestCase):
 
     def test_final_cover_is_marked(self):
         """Test that currently selected final cover is marked."""
-        book_file = BookFile.objects.create(book=self.book, file_path="/test/book.epub", file_format="epub", cover_path="/test/covers/original.jpg")
+        _book_file = BookFile.objects.create(book=self.book, file_path="/test/book.epub", file_format="epub", cover_path="/test/covers/original.jpg")
 
         # Set as final cover
         self.final_metadata.final_cover_path = "/test/covers/original.jpg"
@@ -158,7 +158,7 @@ class CoverSelectionPostTestCase(TestCase):
             "final_title": "Test",
         }
 
-        response = self.client.post(reverse("books:book_metadata_update", kwargs={"pk": self.book.id}), data=post_data)
+        _response = self.client.post(reverse("books:book_metadata_update", kwargs={"pk": self.book.id}), data=post_data)
 
         # Refresh from DB
         self.final_metadata.refresh_from_db()
@@ -500,7 +500,7 @@ class WorkflowIntegrationTestCase(TestCase):
         }
 
         with patch("books.views.metadata.BookMetadataUpdateView._download_covers"):
-            response = self.client.post(reverse("books:book_metadata_update", kwargs={"pk": self.book.id}), data=post_data)
+            _response = self.client.post(reverse("books:book_metadata_update", kwargs={"pk": self.book.id}), data=post_data)
 
         # Step 3: Verify final_cover_path saved
         self.final_metadata.refresh_from_db()
@@ -515,7 +515,7 @@ class WorkflowIntegrationTestCase(TestCase):
             "final_title": "Test",
         }
 
-        response = self.client.post(reverse("books:book_metadata_update", kwargs={"pk": self.book.id}), data=post_data)
+        _response = self.client.post(reverse("books:book_metadata_update", kwargs={"pk": self.book.id}), data=post_data)
 
         # Verify saved successfully
         self.final_metadata.refresh_from_db()

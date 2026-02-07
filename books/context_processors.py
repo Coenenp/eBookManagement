@@ -68,3 +68,27 @@ def language_context(request):
         "language_choices_with_empty": LanguageManager.get_language_choices_with_empty(),
         "language_choices_with_all": LanguageManager.get_language_choices_with_all(),
     }
+
+
+def user_preferences(request):
+    """Add user preferences to all templates"""
+    if request.user.is_authenticated:
+        try:
+            from books.models import UserProfile
+
+            profile = UserProfile.get_or_create_for_user(request.user)
+            return {
+                "user_profile": profile,
+                "items_per_page": profile.items_per_page,
+                "default_view_mode": profile.default_view_mode,
+            }
+        except Exception:
+            pass
+
+    # Return defaults for anonymous users
+    return {
+        "user_profile": None,
+        "items_per_page": 50,
+        "show_covers_in_list": True,
+        "default_view_mode": "table",
+    }

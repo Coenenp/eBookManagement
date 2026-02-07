@@ -12,18 +12,18 @@ if (typeof BaseSectionManager === 'undefined') {
                 detailContainer: '#detail-container',
                 apiEndpoint: '/ajax/',
                 detailEndpoint: '/ajax/',
-                ...config
+                ...config,
             };
-            
+
             this.currentData = [];
             this.filteredData = [];
             this.selectedItemId = null;
             this.isLoading = false;
             this.expandedItems = new Set(); // Universal expanded items tracker
-            
+
             // Field mapping for different content types
             this.fieldMap = this.getFieldMapping();
-            
+
             this.initialize();
         }
 
@@ -33,34 +33,34 @@ if (typeof BaseSectionManager === 'undefined') {
          */
         getFieldMapping() {
             const mappings = {
-                'series': {
+                series: {
                     title: 'name',
                     author: 'authors[0]',
                     format: 'formats',
                     isArray: { authors: true, formats: true },
-                    books: 'books'
+                    books: 'books',
                 },
-                'ebooks': {
-                    title: 'title', 
+                ebooks: {
+                    title: 'title',
                     author: 'author',
                     format: 'file_format',
                     isArray: {},
-                    books: null
+                    books: null,
                 },
-                'audiobooks': {
+                audiobooks: {
                     title: 'title',
-                    author: 'author', 
+                    author: 'author',
                     format: 'file_format',
                     isArray: {},
-                    books: null
+                    books: null,
                 },
-                'comics': {
+                comics: {
                     title: 'name',
                     author: 'books[0].author',
-                    format: 'books[0].file_format', 
+                    format: 'books[0].file_format',
                     isArray: {},
-                    books: 'books'
-                }
+                    books: 'books',
+                },
             };
             return mappings[this.sectionType] || mappings['ebooks'];
         }
@@ -71,7 +71,7 @@ if (typeof BaseSectionManager === 'undefined') {
         getFieldValue(item, fieldType) {
             const fieldPath = this.fieldMap[fieldType];
             if (!fieldPath) return '';
-            
+
             return this.getNestedValue(item, fieldPath) || '';
         }
 
@@ -80,11 +80,11 @@ if (typeof BaseSectionManager === 'undefined') {
          */
         getNestedValue(obj, path) {
             if (!path) return '';
-            
+
             // Handle array access like 'authors[0]' or 'books[0].title'
             return path.split('.').reduce((current, key) => {
                 if (!current) return '';
-                
+
                 // Handle array indexing
                 const arrayMatch = key.match(/^(.+)\[(\d+)\]$/);
                 if (arrayMatch) {
@@ -92,7 +92,7 @@ if (typeof BaseSectionManager === 'undefined') {
                     const array = current[arrayKey];
                     return Array.isArray(array) ? array[parseInt(index)] : '';
                 }
-                
+
                 return current[key];
             }, obj);
         }
@@ -106,9 +106,12 @@ if (typeof BaseSectionManager === 'undefined') {
             // Search functionality
             const searchInput = document.getElementById('search-filter');
             if (searchInput) {
-                searchInput.addEventListener('input', this.debounce(() => {
-                    this.handleSearch();
-                }, 300));
+                searchInput.addEventListener(
+                    'input',
+                    this.debounce(() => {
+                        this.handleSearch();
+                    }, 300)
+                );
             }
 
             // Sort functionality
@@ -136,14 +139,14 @@ if (typeof BaseSectionManager === 'undefined') {
             }
 
             // View toggle buttons
-            document.querySelectorAll('[data-view-type]').forEach(button => {
+            document.querySelectorAll('[data-view-type]').forEach((button) => {
                 button.addEventListener('click', (e) => {
                     const viewType = e.target.dataset.viewType;
                     this.setViewType(viewType);
                     this.renderList(viewType);
-                    
+
                     // Update button states
-                    document.querySelectorAll('[data-view-type]').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('[data-view-type]').forEach((b) => b.classList.remove('active'));
                     e.target.classList.add('active');
                 });
             });
@@ -166,7 +169,7 @@ if (typeof BaseSectionManager === 'undefined') {
             const sortBy = document.getElementById('sort-filter')?.value || 'title';
             const formatFilter = document.getElementById('format-filter')?.value || '';
             const statusFilter = document.getElementById('status-filter')?.value || '';
-            
+
             this.filterItems(searchTerm, sortBy, formatFilter, statusFilter);
         }
 
@@ -176,39 +179,47 @@ if (typeof BaseSectionManager === 'undefined') {
 
         loadData() {
             if (this.isLoading) return;
-            
+
             const container = document.querySelector(this.config.listContainer);
             this.showLoadingState(container, `Loading ${this.sectionType}...`);
-            
+
             this.isLoading = true;
-            
+
             fetch(this.config.apiEndpoint, {
                 method: 'GET',
                 headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    this.currentData = data[this.sectionType] || data.items || [];
-                    this.filteredData = [...this.currentData];
-                    this.renderList();
-                    this.updateItemCount(this.currentData.length);
-                } else {
-                    // Use friendly error messages instead of generic ones
+                .then((response) => response.json())
+                .then((data) => {
+                    if (data.success) {
+                        this.currentData = data[this.sectionType] || data.items || [];
+                        this.filteredData = [...this.currentData];
+                        this.renderList();
+                        this.updateItemCount(this.currentData.length);
+                    } else {
+                        // Use friendly error messages instead of generic ones
+                        const sectionName = this.sectionType.charAt(0).toUpperCase() + this.sectionType.slice(1);
+                        this.showFriendlyEmptyState(
+                            container,
+                            `No ${sectionName} Found`,
+                            `No ${this.sectionType} match your current filters.`
+                        );
+                    }
+                })
+                .catch((error) => {
+                    console.error(`Error loading ${this.sectionType}:`, error);
                     const sectionName = this.sectionType.charAt(0).toUpperCase() + this.sectionType.slice(1);
-                    this.showFriendlyEmptyState(container, `No ${sectionName} Found`, `No ${this.sectionType} match your current filters.`);
-                }
-            })
-            .catch(error => {
-                console.error(`Error loading ${this.sectionType}:`, error);
-                const sectionName = this.sectionType.charAt(0).toUpperCase() + this.sectionType.slice(1);
-                this.showFriendlyEmptyState(container, `Unable to Load ${sectionName}`, `There was a problem loading ${this.sectionType}. Please try again.`);
-            })
-            .finally(() => {
-                this.isLoading = false;
-            });
+                    this.showFriendlyEmptyState(
+                        container,
+                        `Unable to Load ${sectionName}`,
+                        `There was a problem loading ${this.sectionType}. Please try again.`
+                    );
+                })
+                .finally(() => {
+                    this.isLoading = false;
+                });
         }
 
         /**
@@ -216,22 +227,22 @@ if (typeof BaseSectionManager === 'undefined') {
          * Works for all section types using field mapping
          */
         filterItems(searchTerm, sortBy, formatFilter, statusFilter) {
-            this.filteredData = this.currentData.filter(item => {
+            this.filteredData = this.currentData.filter((item) => {
                 // Search filter - works across all content types
                 const matchesSearch = !searchTerm || this.matchesSearchTerm(item, searchTerm);
-                
+
                 // Format filter - unified approach
                 const matchesFormat = !formatFilter || this.matchesFormat(item, formatFilter);
-                
+
                 // Status filter - unified approach
                 const matchesStatus = !statusFilter || this.matchesStatus(item, statusFilter);
-                
+
                 return matchesSearch && matchesFormat && matchesStatus;
             });
-            
+
             // Sort results using unified sorting
             this.sortData(sortBy);
-            
+
             this.renderList();
             this.updateItemCount(this.filteredData.length);
         }
@@ -241,28 +252,29 @@ if (typeof BaseSectionManager === 'undefined') {
          */
         matchesSearchTerm(item, searchTerm) {
             const term = searchTerm.toLowerCase();
-            
+
             // Check title field
             const title = this.getFieldValue(item, 'title').toLowerCase();
             if (title.includes(term)) return true;
-            
+
             // Check author field(s)
             const author = this.getFieldValue(item, 'author');
             if (Array.isArray(author)) {
-                if (author.some(a => a.toLowerCase().includes(term))) return true;
+                if (author.some((a) => a.toLowerCase().includes(term))) return true;
             } else if (typeof author === 'string') {
                 if (author.toLowerCase().includes(term)) return true;
             }
-            
+
             // For series/comics, also search within books
             const books = item[this.fieldMap.books];
             if (Array.isArray(books)) {
-                return books.some(book => 
-                    (book.title && book.title.toLowerCase().includes(term)) ||
-                    (book.author && book.author.toLowerCase().includes(term))
+                return books.some(
+                    (book) =>
+                        (book.title && book.title.toLowerCase().includes(term)) ||
+                        (book.author && book.author.toLowerCase().includes(term))
                 );
             }
-            
+
             return false;
         }
 
@@ -271,24 +283,22 @@ if (typeof BaseSectionManager === 'undefined') {
          */
         matchesFormat(item, formatFilter) {
             const format = this.getFieldValue(item, 'format');
-            
+
             // Normalize both values to lowercase for comparison
             const normalizedFilter = formatFilter.toLowerCase();
-            
+
             if (Array.isArray(format)) {
-                return format.some(f => f.toLowerCase() === normalizedFilter);
+                return format.some((f) => f.toLowerCase() === normalizedFilter);
             } else if (typeof format === 'string') {
                 return format.toLowerCase() === normalizedFilter;
             }
-            
+
             // For series/comics, check books
             const books = item[this.fieldMap.books];
             if (Array.isArray(books)) {
-                return books.some(book => 
-                    book.file_format && book.file_format.toLowerCase() === normalizedFilter
-                );
+                return books.some((book) => book.file_format && book.file_format.toLowerCase() === normalizedFilter);
             }
-            
+
             return false;
         }
 
@@ -313,13 +323,13 @@ if (typeof BaseSectionManager === 'undefined') {
             if (item.is_read !== undefined) {
                 return item.is_read;
             }
-            
+
             // For series/comics, check if all books are read
             const books = item[this.fieldMap.books];
             if (Array.isArray(books)) {
-                return books.length > 0 && books.every(book => book.is_read);
+                return books.length > 0 && books.every((book) => book.is_read);
             }
-            
+
             return false;
         }
 
@@ -327,13 +337,13 @@ if (typeof BaseSectionManager === 'undefined') {
             if (item.reading_progress > 0 || item.listening_progress > 0) {
                 return !item.is_read;
             }
-            
+
             // For series/comics, check if any books are in progress
             const books = item[this.fieldMap.books];
             if (Array.isArray(books)) {
-                return books.some(book => (book.reading_progress > 0) && !book.is_read);
+                return books.some((book) => book.reading_progress > 0 && !book.is_read);
             }
-            
+
             return false;
         }
 
@@ -343,28 +353,28 @@ if (typeof BaseSectionManager === 'undefined') {
          */
         sortData(sortBy) {
             this.filteredData.sort((a, b) => {
-                switch(sortBy) {
+                switch (sortBy) {
                     case 'title':
                         const titleA = this.getFieldValue(a, 'title');
                         const titleB = this.getFieldValue(b, 'title');
                         return titleA.localeCompare(titleB);
-                        
+
                     case 'author':
                         const authorA = this.getFieldValue(a, 'author');
                         const authorB = this.getFieldValue(b, 'author');
                         const authStrA = Array.isArray(authorA) ? authorA[0] || '' : authorA;
                         const authStrB = Array.isArray(authorB) ? authorB[0] || '' : authorB;
                         return authStrA.localeCompare(authStrB);
-                        
+
                     case 'date':
                         return this.compareDates(a, b);
-                        
+
                     case 'size':
                         return this.compareSizes(a, b);
-                        
+
                     case 'duration':
                         return (b.duration_seconds || 0) - (a.duration_seconds || 0);
-                        
+
                     default:
                         const defTitleA = this.getFieldValue(a, 'title');
                         const defTitleB = this.getFieldValue(b, 'title');
@@ -377,13 +387,13 @@ if (typeof BaseSectionManager === 'undefined') {
             // For series/comics, compare most recent book
             const booksA = a[this.fieldMap.books];
             const booksB = b[this.fieldMap.books];
-            
+
             if (Array.isArray(booksA) && Array.isArray(booksB)) {
-                const aLatest = Math.max(...booksA.map(book => new Date(book.last_scanned || 0)));
-                const bLatest = Math.max(...booksB.map(book => new Date(book.last_scanned || 0)));
+                const aLatest = Math.max(...booksA.map((book) => new Date(book.last_scanned || 0)));
+                const bLatest = Math.max(...booksB.map((book) => new Date(book.last_scanned || 0)));
                 return bLatest - aLatest;
             }
-            
+
             // For individual items
             return new Date(b.last_scanned || 0) - new Date(a.last_scanned || 0);
         }
@@ -393,7 +403,7 @@ if (typeof BaseSectionManager === 'undefined') {
             if (a.total_size !== undefined && b.total_size !== undefined) {
                 return b.total_size - a.total_size;
             }
-            
+
             // For individual items
             return (b.file_size || 0) - (a.file_size || 0);
         }
@@ -405,13 +415,13 @@ if (typeof BaseSectionManager === 'undefined') {
 
         selectItem(itemId) {
             this.selectedItemId = itemId;
-            
+
             // Update UI selection
             this.updateItemSelection(itemId);
-            
+
             // Load detail view
             this.loadDetail(itemId);
-            
+
             // Store selection for mobile navigation
             if (window.innerWidth <= 768) {
                 this.handleMobileLayout();
@@ -420,10 +430,10 @@ if (typeof BaseSectionManager === 'undefined') {
 
         updateItemSelection(itemId) {
             // Remove previous selection
-            document.querySelectorAll('.list-item.selected').forEach(el => {
+            document.querySelectorAll('.list-item.selected').forEach((el) => {
                 el.classList.remove('selected');
             });
-            
+
             // Add selection to new item
             const newItem = document.querySelector(`[data-item-id="${itemId}"]`);
             if (newItem) {
@@ -435,12 +445,12 @@ if (typeof BaseSectionManager === 'undefined') {
             try {
                 const container = document.querySelector(this.config.detailContainer);
                 this.showLoadingState(container, 'Loading details...');
-                
+
                 const endpoint = this.config.detailEndpoint.replace('{id}', itemId).replace('0', itemId);
                 const data = await fetch(endpoint, {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                }).then(r => r.json());
-                
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                }).then((r) => r.json());
+
                 if (data.success) {
                     this.renderDetail(data);
                 } else {
@@ -449,7 +459,11 @@ if (typeof BaseSectionManager === 'undefined') {
             } catch (error) {
                 console.error(`Error loading ${this.sectionType} details:`, error);
                 const container = document.querySelector(this.config.detailContainer);
-                this.showFriendlyEmptyState(container, 'Unable to Load Details', `There was a problem loading details. Please try again.`);
+                this.showFriendlyEmptyState(
+                    container,
+                    'Unable to Load Details',
+                    `There was a problem loading details. Please try again.`
+                );
             }
         }
 
@@ -460,7 +474,7 @@ if (typeof BaseSectionManager === 'undefined') {
 
         showLoadingState(container, message = 'Loading...') {
             if (!container) return;
-            
+
             container.innerHTML = `
                 <div class="d-flex justify-content-center align-items-center py-5">
                     <div class="text-center">
@@ -475,7 +489,7 @@ if (typeof BaseSectionManager === 'undefined') {
 
         showErrorState(container, message) {
             if (!container) return;
-            
+
             container.innerHTML = `
                 <div class="alert alert-danger m-3">
                     <i class="fas fa-exclamation-triangle me-2"></i>
@@ -502,10 +516,10 @@ if (typeof BaseSectionManager === 'undefined') {
 
         getSectionIcon() {
             const icons = {
-                'ebooks': 'fas fa-book',
-                'audiobooks': 'fas fa-headphones', 
-                'comics': 'fas fa-mask',
-                'series': 'fas fa-layer-group'
+                ebooks: 'fas fa-book',
+                audiobooks: 'fas fa-headphones',
+                comics: 'fas fa-mask',
+                series: 'fas fa-layer-group',
             };
             return icons[this.sectionType] || 'fas fa-inbox';
         }
@@ -518,7 +532,17 @@ if (typeof BaseSectionManager === 'undefined') {
         }
 
         getCurrentViewType() {
-            return localStorage.getItem(`${this.sectionType}-view-type`) || 'list';
+            // Check localStorage first (user override)
+            let saved = localStorage.getItem(`${this.sectionType}-view-type`);
+            if (saved) {
+                return saved;
+            }
+            // Fall back to user profile default if available
+            if (window.userDefaultViewMode) {
+                return window.userDefaultViewMode;
+            }
+            // Final fallback to 'list'
+            return 'list';
         }
 
         setViewType(viewType) {
@@ -533,7 +557,7 @@ if (typeof BaseSectionManager === 'undefined') {
             // Hide list pane and show detail pane on mobile
             const listPane = document.getElementById('list-pane');
             const detailPane = document.getElementById('detail-pane');
-            
+
             if (listPane && detailPane) {
                 listPane.classList.add('d-none');
                 detailPane.classList.remove('d-none');
@@ -543,13 +567,13 @@ if (typeof BaseSectionManager === 'undefined') {
         addMobileBackButton() {
             const detailContainer = document.querySelector(this.config.detailContainer);
             if (!detailContainer) return;
-            
+
             // Remove existing back button
             const existingButton = detailContainer.querySelector('.mobile-back-button');
             if (existingButton) {
                 existingButton.remove();
             }
-            
+
             // Add new back button
             const backButton = document.createElement('div');
             backButton.className = 'mobile-back-button d-md-none mb-3';
@@ -558,7 +582,7 @@ if (typeof BaseSectionManager === 'undefined') {
                     <i class="fas fa-arrow-left me-2"></i>Back to List
                 </button>
             `;
-            
+
             detailContainer.insertBefore(backButton, detailContainer.firstChild);
         }
 
@@ -566,7 +590,7 @@ if (typeof BaseSectionManager === 'undefined') {
             // Show list pane and hide detail pane on mobile
             const listPane = document.getElementById('list-pane');
             const detailPane = document.getElementById('detail-pane');
-            
+
             if (listPane && detailPane) {
                 listPane.classList.remove('d-none');
                 detailPane.classList.add('d-none');
@@ -579,7 +603,7 @@ if (typeof BaseSectionManager === 'undefined') {
             if (metaToken) {
                 return metaToken.getAttribute('content');
             }
-            
+
             // Fallback to cookie method
             const cookies = document.cookie.split(';');
             for (let cookie of cookies) {
@@ -610,7 +634,7 @@ if (typeof BaseSectionManager === 'undefined') {
             this.currentData = [];
             this.filteredData = [];
             this.selectedItem = null;
-            
+
             // Auto-initialize
             console.log(`Auto-initializing ${sectionType} manager`);
             this.initialize();
@@ -622,21 +646,20 @@ if (typeof BaseSectionManager === 'undefined') {
                 // Load initial data
                 console.log(`Loading data for ${this.sectionType}`);
                 await this.loadInitialData();
-                
+
                 // Initialize filters
                 console.log(`Initializing filters for ${this.sectionType}`);
                 this.initializeFilters();
-                
+
                 // Bind events
                 console.log(`Binding events for ${this.sectionType}`);
                 this.bindEvents();
-                
+
                 // Render initial view
                 console.log(`Rendering initial view for ${this.sectionType}`);
                 this.renderList();
-                
+
                 console.log(`${this.sectionType} manager initialized successfully`);
-                
             } catch (error) {
                 console.error(`Error initializing ${this.sectionType}:`, error);
                 const container = document.querySelector(this.config.listContainer);
@@ -653,7 +676,7 @@ if (typeof BaseSectionManager === 'undefined') {
                 if (this.loadData) {
                     await this.loadData();
                     console.log(`Data loaded for ${this.sectionType}, now calling renderList`);
-                    
+
                     // IMPORTANT: Render the list after data loads
                     if (this.renderList) {
                         this.renderList();
@@ -676,34 +699,34 @@ if (typeof BaseSectionManager === 'undefined') {
          */
         getFieldMapping() {
             const mappings = {
-                'series': {
+                series: {
                     title: 'name',
                     author: 'authors[0]',
                     format: 'formats',
                     isArray: { authors: true, formats: true },
-                    books: 'books'
+                    books: 'books',
                 },
-                'ebooks': {
-                    title: 'title', 
+                ebooks: {
+                    title: 'title',
                     author: 'author',
                     format: 'file_format',
                     isArray: {},
-                    books: null
+                    books: null,
                 },
-                'audiobooks': {
+                audiobooks: {
                     title: 'title',
-                    author: 'author', 
+                    author: 'author',
                     format: 'file_format',
                     isArray: {},
-                    books: null
+                    books: null,
                 },
-                'comics': {
+                comics: {
                     title: 'name',
                     author: 'books[0].author',
-                    format: 'books[0].file_format', 
+                    format: 'books[0].file_format',
                     isArray: {},
-                    books: 'books'
-                }
+                    books: 'books',
+                },
             };
             return mappings[this.sectionType] || mappings['ebooks'];
         }
@@ -714,7 +737,7 @@ if (typeof BaseSectionManager === 'undefined') {
         getFieldValue(item, fieldType) {
             const fieldPath = this.fieldMap[fieldType];
             if (!fieldPath) return '';
-            
+
             return this.getNestedValue(item, fieldPath) || '';
         }
 
@@ -723,11 +746,11 @@ if (typeof BaseSectionManager === 'undefined') {
          */
         getNestedValue(obj, path) {
             if (!path) return '';
-            
+
             // Handle array access like 'authors[0]' or 'books[0].title'
             return path.split('.').reduce((current, key) => {
                 if (!current) return '';
-                
+
                 // Handle array indexing
                 const arrayMatch = key.match(/^(.+)\[(\d+)\]$/);
                 if (arrayMatch) {
@@ -735,7 +758,7 @@ if (typeof BaseSectionManager === 'undefined') {
                     const array = current[arrayKey];
                     return Array.isArray(array) ? array[parseInt(index)] : '';
                 }
-                
+
                 return current[key];
             }, obj);
         }
@@ -749,9 +772,12 @@ if (typeof BaseSectionManager === 'undefined') {
             // Search functionality
             const searchInput = document.getElementById('search-filter');
             if (searchInput) {
-                searchInput.addEventListener('input', this.debounce(() => {
-                    this.handleSearch();
-                }, 300));
+                searchInput.addEventListener(
+                    'input',
+                    this.debounce(() => {
+                        this.handleSearch();
+                    }, 300)
+                );
             }
 
             // Sort functionality
@@ -779,14 +805,14 @@ if (typeof BaseSectionManager === 'undefined') {
             }
 
             // View toggle buttons
-            document.querySelectorAll('[data-view-type]').forEach(button => {
+            document.querySelectorAll('[data-view-type]').forEach((button) => {
                 button.addEventListener('click', (e) => {
                     const viewType = e.target.dataset.viewType;
                     this.setViewType(viewType);
                     this.renderList(viewType);
-                    
+
                     // Update button states
-                    document.querySelectorAll('[data-view-type]').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('[data-view-type]').forEach((b) => b.classList.remove('active'));
                     e.target.classList.add('active');
                 });
             });
@@ -809,7 +835,7 @@ if (typeof BaseSectionManager === 'undefined') {
             const sortBy = document.getElementById('sort-filter')?.value || 'title';
             const formatFilter = document.getElementById('format-filter')?.value || '';
             const statusFilter = document.getElementById('status-filter')?.value || '';
-            
+
             this.filterItems(searchTerm, sortBy, formatFilter, statusFilter);
         }
 
@@ -819,39 +845,47 @@ if (typeof BaseSectionManager === 'undefined') {
 
         loadData() {
             if (this.isLoading) return;
-            
+
             const container = document.querySelector(this.config.listContainer);
             this.showLoadingState(container, `Loading ${this.sectionType}...`);
-            
+
             this.isLoading = true;
-            
+
             fetch(this.config.apiEndpoint, {
                 method: 'GET',
                 headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    this.currentData = data[this.sectionType] || data.items || [];
-                    this.filteredData = [...this.currentData];
-                    this.renderList();
-                    this.updateItemCount(this.currentData.length);
-                } else {
-                    // Use friendly error messages instead of generic ones
+                .then((response) => response.json())
+                .then((data) => {
+                    if (data.success) {
+                        this.currentData = data[this.sectionType] || data.items || [];
+                        this.filteredData = [...this.currentData];
+                        this.renderList();
+                        this.updateItemCount(this.currentData.length);
+                    } else {
+                        // Use friendly error messages instead of generic ones
+                        const sectionName = this.sectionType.charAt(0).toUpperCase() + this.sectionType.slice(1);
+                        this.showFriendlyEmptyState(
+                            container,
+                            `No ${sectionName} Found`,
+                            `No ${this.sectionType} match your current filters.`
+                        );
+                    }
+                })
+                .catch((error) => {
+                    console.error(`Error loading ${this.sectionType}:`, error);
                     const sectionName = this.sectionType.charAt(0).toUpperCase() + this.sectionType.slice(1);
-                    this.showFriendlyEmptyState(container, `No ${sectionName} Found`, `No ${this.sectionType} match your current filters.`);
-                }
-            })
-            .catch(error => {
-                console.error(`Error loading ${this.sectionType}:`, error);
-                const sectionName = this.sectionType.charAt(0).toUpperCase() + this.sectionType.slice(1);
-                this.showFriendlyEmptyState(container, `Unable to Load ${sectionName}`, `There was a problem loading ${this.sectionType}. Please try again.`);
-            })
-            .finally(() => {
-                this.isLoading = false;
-            });
+                    this.showFriendlyEmptyState(
+                        container,
+                        `Unable to Load ${sectionName}`,
+                        `There was a problem loading ${this.sectionType}. Please try again.`
+                    );
+                })
+                .finally(() => {
+                    this.isLoading = false;
+                });
         }
 
         /**
@@ -859,22 +893,22 @@ if (typeof BaseSectionManager === 'undefined') {
          * Works for all section types using field mapping
          */
         filterItems(searchTerm, sortBy, formatFilter, statusFilter) {
-            this.filteredData = this.currentData.filter(item => {
+            this.filteredData = this.currentData.filter((item) => {
                 // Search filter - works across all content types
                 const matchesSearch = !searchTerm || this.matchesSearchTerm(item, searchTerm);
-                
+
                 // Format filter - unified approach
                 const matchesFormat = !formatFilter || this.matchesFormat(item, formatFilter);
-                
+
                 // Status filter - unified approach
                 const matchesStatus = !statusFilter || this.matchesStatus(item, statusFilter);
-                
+
                 return matchesSearch && matchesFormat && matchesStatus;
             });
-            
+
             // Sort results using unified sorting
             this.sortData(sortBy);
-            
+
             this.renderList();
             this.updateItemCount(this.filteredData.length);
         }
@@ -884,28 +918,29 @@ if (typeof BaseSectionManager === 'undefined') {
          */
         matchesSearchTerm(item, searchTerm) {
             const term = searchTerm.toLowerCase();
-            
+
             // Check title field
             const title = this.getFieldValue(item, 'title').toLowerCase();
             if (title.includes(term)) return true;
-            
+
             // Check author field(s)
             const author = this.getFieldValue(item, 'author');
             if (Array.isArray(author)) {
-                if (author.some(a => a.toLowerCase().includes(term))) return true;
+                if (author.some((a) => a.toLowerCase().includes(term))) return true;
             } else if (typeof author === 'string') {
                 if (author.toLowerCase().includes(term)) return true;
             }
-            
+
             // For series/comics, also search within books
             const books = item[this.fieldMap.books];
             if (Array.isArray(books)) {
-                return books.some(book => 
-                    (book.title && book.title.toLowerCase().includes(term)) ||
-                    (book.author && book.author.toLowerCase().includes(term))
+                return books.some(
+                    (book) =>
+                        (book.title && book.title.toLowerCase().includes(term)) ||
+                        (book.author && book.author.toLowerCase().includes(term))
                 );
             }
-            
+
             return false;
         }
 
@@ -914,24 +949,22 @@ if (typeof BaseSectionManager === 'undefined') {
          */
         matchesFormat(item, formatFilter) {
             const format = this.getFieldValue(item, 'format');
-            
+
             // Normalize both values to lowercase for comparison
             const normalizedFilter = formatFilter.toLowerCase();
-            
+
             if (Array.isArray(format)) {
-                return format.some(f => f.toLowerCase() === normalizedFilter);
+                return format.some((f) => f.toLowerCase() === normalizedFilter);
             } else if (typeof format === 'string') {
                 return format.toLowerCase() === normalizedFilter;
             }
-            
+
             // For series/comics, check books
             const books = item[this.fieldMap.books];
             if (Array.isArray(books)) {
-                return books.some(book => 
-                    book.file_format && book.file_format.toLowerCase() === normalizedFilter
-                );
+                return books.some((book) => book.file_format && book.file_format.toLowerCase() === normalizedFilter);
             }
-            
+
             return false;
         }
 
@@ -956,13 +989,13 @@ if (typeof BaseSectionManager === 'undefined') {
             if (item.is_read !== undefined) {
                 return item.is_read;
             }
-            
+
             // For series/comics, check if all books are read
             const books = item[this.fieldMap.books];
             if (Array.isArray(books)) {
-                return books.length > 0 && books.every(book => book.is_read);
+                return books.length > 0 && books.every((book) => book.is_read);
             }
-            
+
             return false;
         }
 
@@ -970,13 +1003,13 @@ if (typeof BaseSectionManager === 'undefined') {
             if (item.reading_progress > 0 || item.listening_progress > 0) {
                 return !item.is_read;
             }
-            
+
             // For series/comics, check if any books are in progress
             const books = item[this.fieldMap.books];
             if (Array.isArray(books)) {
-                return books.some(book => (book.reading_progress > 0) && !book.is_read);
+                return books.some((book) => book.reading_progress > 0 && !book.is_read);
             }
-            
+
             return false;
         }
 
@@ -986,28 +1019,28 @@ if (typeof BaseSectionManager === 'undefined') {
          */
         sortData(sortBy) {
             this.filteredData.sort((a, b) => {
-                switch(sortBy) {
+                switch (sortBy) {
                     case 'title':
                         const titleA = this.getFieldValue(a, 'title');
                         const titleB = this.getFieldValue(b, 'title');
                         return titleA.localeCompare(titleB);
-                        
+
                     case 'author':
                         const authorA = this.getFieldValue(a, 'author');
                         const authorB = this.getFieldValue(b, 'author');
                         const authStrA = Array.isArray(authorA) ? authorA[0] || '' : authorA;
                         const authStrB = Array.isArray(authorB) ? authorB[0] || '' : authorB;
                         return authStrA.localeCompare(authStrB);
-                        
+
                     case 'date':
                         return this.compareDates(a, b);
-                        
+
                     case 'size':
                         return this.compareSizes(a, b);
-                        
+
                     case 'duration':
                         return (b.duration_seconds || 0) - (a.duration_seconds || 0);
-                        
+
                     default:
                         const defTitleA = this.getFieldValue(a, 'title');
                         const defTitleB = this.getFieldValue(b, 'title');
@@ -1020,13 +1053,13 @@ if (typeof BaseSectionManager === 'undefined') {
             // For series/comics, compare most recent book
             const booksA = a[this.fieldMap.books];
             const booksB = b[this.fieldMap.books];
-            
+
             if (Array.isArray(booksA) && Array.isArray(booksB)) {
-                const aLatest = Math.max(...booksA.map(book => new Date(book.last_scanned || 0)));
-                const bLatest = Math.max(...booksB.map(book => new Date(book.last_scanned || 0)));
+                const aLatest = Math.max(...booksA.map((book) => new Date(book.last_scanned || 0)));
+                const bLatest = Math.max(...booksB.map((book) => new Date(book.last_scanned || 0)));
                 return bLatest - aLatest;
             }
-            
+
             // For individual items
             return new Date(b.last_scanned || 0) - new Date(a.last_scanned || 0);
         }
@@ -1036,7 +1069,7 @@ if (typeof BaseSectionManager === 'undefined') {
             if (a.total_size !== undefined && b.total_size !== undefined) {
                 return b.total_size - a.total_size;
             }
-            
+
             // For individual items
             return (b.file_size || 0) - (a.file_size || 0);
         }
@@ -1048,13 +1081,13 @@ if (typeof BaseSectionManager === 'undefined') {
 
         selectItem(itemId) {
             this.selectedItemId = itemId;
-            
+
             // Update UI selection
             this.updateItemSelection(itemId);
-            
+
             // Load detail view
             this.loadDetail(itemId);
-            
+
             // Store selection for mobile navigation
             if (window.innerWidth <= 768) {
                 this.handleMobileLayout();
@@ -1063,10 +1096,10 @@ if (typeof BaseSectionManager === 'undefined') {
 
         updateItemSelection(itemId) {
             // Remove previous selection
-            document.querySelectorAll('.list-item.selected').forEach(el => {
+            document.querySelectorAll('.list-item.selected').forEach((el) => {
                 el.classList.remove('selected');
             });
-            
+
             // Add selection to new item
             const newItem = document.querySelector(`[data-item-id="${itemId}"]`);
             if (newItem) {
@@ -1078,12 +1111,12 @@ if (typeof BaseSectionManager === 'undefined') {
             try {
                 const container = document.querySelector(this.config.detailContainer);
                 this.showLoadingState(container, 'Loading details...');
-                
+
                 const endpoint = this.config.detailEndpoint.replace('{id}', itemId).replace('0', itemId);
                 const data = await fetch(endpoint, {
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                }).then(r => r.json());
-                
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                }).then((r) => r.json());
+
                 if (data.success) {
                     this.renderDetail(data);
                 } else {
@@ -1092,7 +1125,11 @@ if (typeof BaseSectionManager === 'undefined') {
             } catch (error) {
                 console.error(`Error loading ${this.sectionType} details:`, error);
                 const container = document.querySelector(this.config.detailContainer);
-                this.showFriendlyEmptyState(container, 'Unable to Load Details', `There was a problem loading details. Please try again.`);
+                this.showFriendlyEmptyState(
+                    container,
+                    'Unable to Load Details',
+                    `There was a problem loading details. Please try again.`
+                );
             }
         }
 
@@ -1103,7 +1140,7 @@ if (typeof BaseSectionManager === 'undefined') {
 
         showLoadingState(container, message = 'Loading...') {
             if (!container) return;
-            
+
             container.innerHTML = `
                 <div class="d-flex justify-content-center align-items-center py-5">
                     <div class="text-center">
@@ -1118,7 +1155,7 @@ if (typeof BaseSectionManager === 'undefined') {
 
         showErrorState(container, message) {
             if (!container) return;
-            
+
             container.innerHTML = `
                 <div class="alert alert-danger m-3">
                     <i class="fas fa-exclamation-triangle me-2"></i>
@@ -1145,10 +1182,10 @@ if (typeof BaseSectionManager === 'undefined') {
 
         getSectionIcon() {
             const icons = {
-                'ebooks': 'fas fa-book',
-                'audiobooks': 'fas fa-headphones', 
-                'comics': 'fas fa-mask',
-                'series': 'fas fa-layer-group'
+                ebooks: 'fas fa-book',
+                audiobooks: 'fas fa-headphones',
+                comics: 'fas fa-mask',
+                series: 'fas fa-layer-group',
             };
             return icons[this.sectionType] || 'fas fa-inbox';
         }
@@ -1161,7 +1198,17 @@ if (typeof BaseSectionManager === 'undefined') {
         }
 
         getCurrentViewType() {
-            return localStorage.getItem(`${this.sectionType}-view-type`) || 'list';
+            // Check localStorage first (user override)
+            let saved = localStorage.getItem(`${this.sectionType}-view-type`);
+            if (saved) {
+                return saved;
+            }
+            // Fall back to user profile default if available
+            if (window.userDefaultViewMode) {
+                return window.userDefaultViewMode;
+            }
+            // Final fallback to 'list'
+            return 'list';
         }
 
         setViewType(viewType) {
@@ -1176,7 +1223,7 @@ if (typeof BaseSectionManager === 'undefined') {
             // Hide list pane and show detail pane on mobile
             const listPane = document.getElementById('list-pane');
             const detailPane = document.getElementById('detail-pane');
-            
+
             if (listPane && detailPane) {
                 listPane.classList.add('d-none');
                 detailPane.classList.remove('d-none');
@@ -1186,13 +1233,13 @@ if (typeof BaseSectionManager === 'undefined') {
         addMobileBackButton() {
             const detailContainer = document.querySelector(this.config.detailContainer);
             if (!detailContainer) return;
-            
+
             // Remove existing back button
             const existingButton = detailContainer.querySelector('.mobile-back-button');
             if (existingButton) {
                 existingButton.remove();
             }
-            
+
             // Add new back button
             const backButton = document.createElement('div');
             backButton.className = 'mobile-back-button d-md-none mb-3';
@@ -1201,7 +1248,7 @@ if (typeof BaseSectionManager === 'undefined') {
                     <i class="fas fa-arrow-left me-2"></i>Back to List
                 </button>
             `;
-            
+
             detailContainer.insertBefore(backButton, detailContainer.firstChild);
         }
 
@@ -1209,7 +1256,7 @@ if (typeof BaseSectionManager === 'undefined') {
             // Show list pane and hide detail pane on mobile
             const listPane = document.getElementById('list-pane');
             const detailPane = document.getElementById('detail-pane');
-            
+
             if (listPane && detailPane) {
                 listPane.classList.remove('d-none');
                 detailPane.classList.add('d-none');
@@ -1222,7 +1269,7 @@ if (typeof BaseSectionManager === 'undefined') {
             if (metaToken) {
                 return metaToken.getAttribute('content');
             }
-            
+
             // Fallback to cookie method
             const cookies = document.cookie.split(';');
             for (let cookie of cookies) {
@@ -1286,12 +1333,12 @@ function selectItem(itemId) {
 
 function getManagerForCurrentSection() {
     const path = window.location.pathname;
-    
+
     if (path.includes('/ebooks/')) return window.ebooksManager;
-    if (path.includes('/comics/')) return window.comicsManager;  
+    if (path.includes('/comics/')) return window.comicsManager;
     if (path.includes('/audiobooks/')) return window.audiobooksManager;
     if (path.includes('/series/')) return window.seriesManager;
-    
+
     return null;
 }
 
@@ -1304,7 +1351,7 @@ window.SectionUtils = {
     customRefreshItems,
     customLoadDetail,
     selectItem,
-    getManagerForCurrentSection
+    getManagerForCurrentSection,
 };
 
 // Export for use in other modules

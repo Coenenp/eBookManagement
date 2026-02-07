@@ -20,7 +20,7 @@ def get_book_metadata_dict(book):
 
     Returns:
         dict: Metadata dictionary with keys: title, author, publisher, description,
-              isbn, language, publication_date, is_read, read_date, reading_progress
+              isbn, language, publication_date
     """
     try:
         final_meta = book.finalmetadata
@@ -33,10 +33,6 @@ def get_book_metadata_dict(book):
                 "isbn": final_meta.isbn or "",
                 "language": final_meta.language or "",
                 "publication_date": final_meta.publication_year,
-                # Reading status fields
-                "is_read": getattr(final_meta, "is_read", False),
-                "read_date": getattr(final_meta, "read_date", None),
-                "reading_progress": getattr(final_meta, "reading_progress", 0),
             }
             return metadata
     except Exception:
@@ -51,9 +47,6 @@ def get_book_metadata_dict(book):
         "isbn": "",
         "language": "",
         "publication_date": None,
-        "is_read": False,
-        "read_date": None,
-        "reading_progress": 0,
     }
 
     # Get metadata entries
@@ -247,8 +240,6 @@ def format_book_detail_for_json(book):
         "series_name": series_name,
         "series_position": series_position,
         "cover_url": cover_url,
-        "is_read": metadata.get("is_read", False),
-        "reading_progress": metadata.get("reading_progress", 0),
         "last_scanned": book.last_scanned.isoformat() if book.last_scanned else None,
         # Add top-level file info for easy access
         "file_format": file_format,
