@@ -43,15 +43,14 @@
 <script src="{% static 'book/js/ebooks-section.js' %}"></script>
 <script>
 // User preferences from profile
-window.userItemsPerPage = {{ items_per_page }};
-window.userDefaultViewMode = '{{ default_view_mode }}';
+window.userItemsPerPage = {{ items_per_page|default:50 }};
+window.userDefaultViewMode = '{{ default_view_mode|default:"table" }}';
 
 // Configuration for ebooks section
 window.ebooksConfig = {
     ajax_urls: {
         list: '{% url "books:ebooks_ajax_list" %}',
         detail: '/ebooks/ajax/detail/{id}/',
-        toggle_read: '{% url "books:ebooks_ajax_toggle_read" %}',
         download: '/ebooks/ajax/download/{id}/',
         companion_files: '/ebooks/ajax/companion_files/{id}/'
     },

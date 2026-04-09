@@ -4,9 +4,16 @@
     "private": true,
     "scripts": {
         "format": "prettier --write .",
-        "prepare": "husky install"
+        "prepare": "husky install",
+        "test:e2e": "playwright test",
+        "test:e2e:headed": "playwright test --headed",
+        "test:e2e:ui": "playwright test --ui",
+        "test:e2e:debug": "playwright test --debug",
+        "test:e2e:codegen": "playwright codegen http://localhost:8000",
+        "test:e2e:record": "playwright codegen http://localhost:8000"
     },
     "devDependencies": {
+        "@playwright/test": "^1.48.0",
         "prettier": "^3.7.4",
         "husky": "^9.0.0",
         "lint-staged": "^15.0.0"

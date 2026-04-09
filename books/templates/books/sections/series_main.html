@@ -41,16 +41,14 @@
 {{ block.super }}
 <script>
 // User preferences from profile
-window.userItemsPerPage = {{ items_per_page }};
-window.userDefaultViewMode = '{{ default_view_mode }}';
+window.userItemsPerPage = {{ items_per_page|default:50 }};
+window.userDefaultViewMode = '{{ default_view_mode|default:"table" }}';
 
 // Configuration for series section
 window.seriesConfig = {
     ajax_urls: {
         list: '{% url "books:series_ajax_list" %}',
         detail: '/series/ajax/detail/{id}/',
-        mark_read: '{% url "books:series_ajax_mark_read" %}',
-        toggle_read: '{% url "books:ebooks_ajax_toggle_read" %}',
         book_detail: '/ebooks/ajax/detail/{id}/',
         download_book: '/ebooks/ajax/download/{id}/',
         book_list: '{% url "books:book_list" %}'

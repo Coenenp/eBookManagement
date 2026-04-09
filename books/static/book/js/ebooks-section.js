@@ -14,9 +14,9 @@ if (typeof EbooksSectionManager === 'undefined') {
 
             this.expandedEbooks = new Set();
 
-            // Pagination state
+            // Pagination state - ensure valid numbers
             this.currentPage = 1;
-            this.itemsPerPage = window.userItemsPerPage || 50;
+            this.itemsPerPage = parseInt(window.userItemsPerPage) || 50;
             this.totalPages = 1;
             this.totalCount = 0;
 

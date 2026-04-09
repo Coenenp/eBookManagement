@@ -457,7 +457,7 @@ def scan_queue(request):
 
 def _check_and_process_queue():
     """Check if any queued scans can be processed."""
-    from books.models import ScanQueue
+    from books.models import ScanFolder, ScanQueue
 
     # Check current active scans
     active_scans = get_all_active_scans()
@@ -484,22 +484,35 @@ def _check_and_process_queue():
             if next_scan.scan_type == "folder" and next_scan.folder_paths:
                 folder_path = next_scan.folder_paths[0]  # Use first folder
 
+                # Get language and content_type from ScanFolder if it exists
+                language = "en"  # Default
+                content_type = "ebooks"  # Default
+
+                try:
+                    scan_folder = ScanFolder.objects.get(path=folder_path)
+                    language = scan_folder.language or "en"
+                    content_type = scan_folder.content_type or "ebooks"
+                except ScanFolder.DoesNotExist:
+                    pass
+
+                # Use deep_scan flag (enables ISBN extraction and external API usage)
+                enable_external_apis = next_scan.deep_scan
+
                 thread = threading.Thread(
                     target=background_scan_folder,
                     args=(
                         job_id,
                         folder_path,
-                        "en",  # Default language
-                        next_scan.fetch_covers,
-                        "ebooks",  # Default content type
-                        next_scan.name,
-                        next_scan.rescan_existing,
-                        None,  # resume_from=None
+                        language,
+                        enable_external_apis,  # Use deep_scan flag
+                        content_type,
                     ),
                     daemon=True,
                 )
                 thread.start()
-                logger.info(f"[QUEUE] Started queued scan {next_scan.name} (Job ID: {job_id})")
+                logger.info(
+                    f"[QUEUE] Started queued scan {next_scan.name} (Job ID: {job_id}), " f"deep_scan={next_scan.deep_scan}, language={language}, content_type={content_type}"
+                )
 
         except Exception as e:
             # Mark as failed if something went wrong

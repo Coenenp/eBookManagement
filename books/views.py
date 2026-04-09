@@ -90,23 +90,17 @@ from .views.sections import (  # noqa: F401
     audiobooks_ajax_detail,
     audiobooks_ajax_download,
     audiobooks_ajax_list,
-    audiobooks_ajax_toggle_read,
-    audiobooks_ajax_update_progress,
     comics_ajax_detail,
     comics_ajax_download,
     comics_ajax_list,
-    comics_ajax_toggle_read,
     ebooks_ajax_companion_files,
     ebooks_ajax_detail,
     ebooks_ajax_download,
     ebooks_ajax_list,
-    ebooks_ajax_toggle_read,
     series_ajax_detail,
     series_ajax_download,
     series_ajax_download_book,
     series_ajax_list,
-    series_ajax_mark_read,
-    series_ajax_toggle_read,
 )
 
 # Simple utility views

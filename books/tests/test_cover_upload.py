@@ -109,7 +109,7 @@ class CoverUploadEndpointTestCase(TestCase):
         # Clear cover cache
         try:
             CoverCache.clear_all()
-        except:
+        except Exception:
             pass
 
     def create_test_image(self, width=800, height=1200):

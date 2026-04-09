@@ -258,7 +258,7 @@
                                 <th>Language</th>
                                 <th>Progress <small class="text-muted">(scanned/total)</small></th>
                                 <th>Last Scanned</th>
-                                <th>Scan Options <small class="text-muted">(Quick: metadata only | Full: with external APIs)</small></th>
+                                <th>Scan Options <small class="text-muted">(Quick: file metadata only | Deep: with ISBN + external APIs)</small></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -357,8 +357,8 @@
                                                     data-folder-id="{{ folder.id }}" 
                                                     data-folder-name="{{ folder.name }}"
                                                     data-external-apis="true"
-                                                    title="Comprehensive rescan with external metadata sources">
-                                                <i class="fas fa-cloud me-1"></i>Full Rescan
+                                                    title="Deep rescan with ISBN extraction and external metadata sources">
+                                                <i class="fas fa-cloud me-1"></i>Deep Rescan
                                             </button>
                                         {% else %}
                                             <!-- Two clear scan options -->
@@ -373,8 +373,8 @@
                                                     data-folder-id="{{ folder.id }}" 
                                                     data-folder-name="{{ folder.name }}"
                                                     data-external-apis="true"
-                                                    title="Comprehensive scan with external metadata sources">
-                                                <i class="fas fa-cloud me-1"></i>Full Scan
+                                                    title="Deep scan with ISBN extraction and external metadata sources">
+                                                <i class="fas fa-cloud me-1"></i>Deep Scan
                                             </button>
                                         {% endif %}
                                     </div>
@@ -458,7 +458,7 @@
                                     <input class="form-check-input" type="checkbox" id="enable_external_apis" 
                                            name="enable_external_apis" checked>
                                     <label class="form-check-label" for="enable_external_apis">
-                                        Query external APIs for metadata
+                                        Deep Scan (ISBN + external APIs)
                                     </label>
                                 </div>
                             </div>
@@ -538,7 +538,7 @@
                                     <input class="form-check-input" type="checkbox" id="enable_external_apis_rescan" 
                                            name="enable_external_apis" checked>
                                     <label class="form-check-label" for="enable_external_apis_rescan">
-                                        Query external APIs for updated metadata
+                                        Deep Scan (ISBN + external APIs for updated metadata)
                                     </label>
                                 </div>
                             </div>

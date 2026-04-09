@@ -92,7 +92,7 @@ class ScanningDashboard {
 
         // Handle scan folder buttons and dropdown options
         document.addEventListener('click', (e) => {
-            // Handle main scan buttons (default with external APIs)
+            // Handle main scan buttons (default: deep scan with external APIs)
             if (e.target.classList.contains('scan-folder-btn') || e.target.closest('.scan-folder-btn')) {
                 const btn = e.target.classList.contains('scan-folder-btn')
                     ? e.target
@@ -101,11 +101,11 @@ class ScanningDashboard {
                 const folderName = btn.getAttribute('data-folder-name');
 
                 if (confirm(`Start scanning folder "${folderName}"?`)) {
-                    this.startScan(folderId, true); // with external APIs
+                    this.startScan(folderId, true); // deep scan
                 }
             }
 
-            // Handle fast scan buttons (no external APIs)
+            // Handle quick scan buttons (file metadata only)
             if (e.target.classList.contains('fast-scan-btn') || e.target.closest('.fast-scan-btn')) {
                 const btn = e.target.classList.contains('fast-scan-btn')
                     ? e.target
@@ -113,8 +113,8 @@ class ScanningDashboard {
                 const folderId = btn.getAttribute('data-folder-id');
                 const folderName = btn.getAttribute('data-folder-name');
 
-                if (confirm(`Start fast scanning folder "${folderName}"? (No external API calls)`)) {
-                    this.startScan(folderId, false); // without external APIs
+                if (confirm(`Start quick scan of folder "${folderName}"? (File metadata only)`)) {
+                    this.startScan(folderId, false); // quick scan
                 }
             }
 

@@ -44,7 +44,7 @@
                     <a href="{{ wizard_step_url }}" class="btn btn-primary btn-sm">
                         <i class="fas fa-arrow-right me-1"></i>Start Setup Wizard
                     </a>
-                    <button type="button" class="btn btn-outline-secondary btn-sm skip-wizard-btn">
+                    <button type="button" class="btn btn-outline-secondary btn-sm skip-wizard-btn" data-wizard-url="{% url 'books:wizard' %}">
                         <i class="fas fa-skip-forward me-1"></i>Skip for Now
                     </button>
                 </div>
@@ -90,6 +90,7 @@
         
         <!-- Finally load page-specific scripts -->
         <script src="{% static 'book/js/script.js' %}"></script>
+        <script src="{% static 'book/js/wizard-banner.js' %}"></script>
         
         <!-- Additional scripts from child templates -->
         {% block extra_js %}{% endblock %}

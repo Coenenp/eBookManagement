@@ -39,15 +39,14 @@
 {{ block.super }}
 <script>
 // User preferences from profile
-window.userItemsPerPage = {{ items_per_page }};
-window.userDefaultViewMode = '{{ default_view_mode }}';
+window.userItemsPerPage = {{ items_per_page|default:50 }};
+window.userDefaultViewMode = '{{ default_view_mode|default:"table" }}';
 
 // Configuration for audiobooks section - SET BEFORE loading JS files
 window.audiobooksConfig = {
     ajax_urls: {
         list: '{% url "books:audiobooks_ajax_list" %}',
         detail: '{% url "books:audiobooks_ajax_detail" 0 %}'.replace('0', '{id}'),
-        toggle_read: '{% url "books:audiobooks_ajax_toggle_read" %}',
         download: '{% url "books:audiobooks_ajax_download" 0 %}'.replace('0', '{id}'),
         rescan: '{% url "books:ajax_rescan_external_metadata" 0 %}'.replace('0', '{id}'),
         book_detail: '{% url "books:book_detail" 0 %}'.replace('0', '{id}'),

@@ -79,8 +79,8 @@ def user_preferences(request):
             profile = UserProfile.get_or_create_for_user(request.user)
             return {
                 "user_profile": profile,
-                "items_per_page": profile.items_per_page,
-                "default_view_mode": profile.default_view_mode,
+                "items_per_page": profile.items_per_page or 50,
+                "default_view_mode": profile.default_view_mode or "table",
             }
         except Exception:
             pass

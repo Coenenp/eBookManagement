@@ -164,8 +164,8 @@ class TriggerScanForm(forms.Form):
     query_external_apis = forms.BooleanField(
         required=False,
         initial=True,
-        label="Query external APIs for metadata",
-        help_text="Enable this to fetch metadata from external sources during scanning",
+        label="Deep Scan (with external APIs)",
+        help_text="Enable deep scan to use ISBN extraction and external metadata sources (Google Books, Open Library)",
         widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
     )
 

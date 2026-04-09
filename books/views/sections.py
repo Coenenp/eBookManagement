@@ -54,14 +54,25 @@ def ebooks_ajax_list(request):
     """AJAX endpoint for ebooks list"""
     Book = apps.get_model("books", "Book")
 
+    # Helper function for safe parameter conversion
+    def safe_int(value, default):
+        """Safely convert value to int, handling 'undefined', None, and invalid values."""
+        if value is None or value == "" or value == "undefined":
+            return default
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+
     # Get pagination parameters from user profile
     try:
         profile = UserProfile.get_or_create_for_user(request.user)
-        per_page = int(request.GET.get("per_page", profile.items_per_page))
+        default_per_page = profile.items_per_page or 50
     except Exception:
-        per_page = int(request.GET.get("per_page", 50))
+        default_per_page = 50
 
-    page = int(request.GET.get("page", 1))
+    per_page = safe_int(request.GET.get("per_page"), default_per_page)
+    page = safe_int(request.GET.get("page"), 1)
 
     # Get ebooks from scan folders designated as 'ebooks'
     ebooks_query = (
@@ -250,9 +261,18 @@ def series_ajax_list(request):
     series_list.sort(key=lambda x: x["name"])
 
     # Get user's items_per_page setting and apply pagination to series
+    def safe_int(value, default):
+        """Safely convert value to int, handling 'undefined', None, and invalid values."""
+        if value is None or value == "" or value == "undefined":
+            return default
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+
     profile = UserProfile.get_or_create_for_user(request.user)
-    per_page = int(request.GET.get("per_page", profile.items_per_page))
-    page = int(request.GET.get("page", 1))
+    per_page = safe_int(request.GET.get("per_page"), profile.items_per_page or 50)
+    page = safe_int(request.GET.get("page"), 1)
 
     # Paginate the series list
     paginator = Paginator(series_list, per_page)
@@ -324,9 +344,18 @@ def comics_ajax_list(request):
     )
 
     # Get user's items_per_page setting and apply pagination
+    def safe_int(value, default):
+        """Safely convert value to int, handling 'undefined', None, and invalid values."""
+        if value is None or value == "" or value == "undefined":
+            return default
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+
     profile = UserProfile.get_or_create_for_user(request.user)
-    per_page = int(request.GET.get("per_page", profile.items_per_page))
-    page = int(request.GET.get("page", 1))
+    per_page = safe_int(request.GET.get("per_page"), profile.items_per_page or 50)
+    page = safe_int(request.GET.get("page"), 1)
 
     # Paginate the queryset
     paginator = Paginator(comics_query, per_page)
@@ -414,7 +443,6 @@ def comics_ajax_list(request):
                     "name": series_name,
                     "books": [],
                     "total_books": 0,
-                    "read_books": 0,
                     "total_size": 0,
                     "authors": set(),
                     "formats": set(),
@@ -425,8 +453,6 @@ def comics_ajax_list(request):
             if comic_data["author"]:
                 series_dict[series_name]["authors"].add(comic_data["author"])
             series_dict[series_name]["formats"].add(comic_data["file_format"])
-            if comic_data["is_read"]:
-                series_dict[series_name]["read_books"] += 1
         else:
             # Standalone comic
             standalone_comics.append(comic_data)
@@ -556,9 +582,18 @@ def audiobooks_ajax_list(request):
         audiobooks_query = audiobooks_query.order_by("id")  # Simple default sort
 
     # Get user's items_per_page setting and apply pagination
+    def safe_int(value, default):
+        """Safely convert value to int, handling 'undefined', None, and invalid values."""
+        if value is None or value == "" or value == "undefined":
+            return default
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+
     profile = UserProfile.get_or_create_for_user(request.user)
-    per_page = int(request.GET.get("per_page", profile.items_per_page))
-    page = int(request.GET.get("page", 1))
+    per_page = safe_int(request.GET.get("per_page"), profile.items_per_page or 50)
+    page = safe_int(request.GET.get("page"), 1)
 
     # Paginate the queryset
     paginator = Paginator(audiobooks_query, per_page)
@@ -745,8 +780,6 @@ def series_ajax_detail(request, series_name):
                 "cover_url": get_book_cover_url(book),
                 "file_format": book.file_format or "",
                 "file_size": book.file_size or 0,
-                "is_read": getattr(book, "is_read", False),
-                "reading_progress": getattr(book, "reading_progress", 0),
             }
         )
 

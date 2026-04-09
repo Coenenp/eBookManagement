@@ -29,7 +29,7 @@ if "USE_SQLITE_TEMPORARILY" in env_file_values:
     old_value = os.getenv("USE_SQLITE_TEMPORARILY", "unset")
     env_value = env_file_values["USE_SQLITE_TEMPORARILY"]
     os.environ["USE_SQLITE_TEMPORARILY"] = str(env_value).lower()
-    print(f"🔧 Force overriding USE_SQLITE_TEMPORARILY: " f"system had '{old_value}', " f".env has '{env_value}', setting to '{str(env_value).lower()}'")
+    print(f"[CONFIG] Force overriding USE_SQLITE_TEMPORARILY: " f"system had '{old_value}', " f".env has '{env_value}', setting to '{str(env_value).lower()}'")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent

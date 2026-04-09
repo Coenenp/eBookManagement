@@ -3,7 +3,7 @@
  * Handles functionality for the final wizard completion step
  */
 
-(function() {
+(function () {
     'use strict';
 
     // Ensure Wizard namespace exists
@@ -28,8 +28,8 @@
          */
         fixButtonSpinners() {
             const buttons = document.querySelectorAll('.wizard-navigation button');
-            
-            buttons.forEach(button => {
+
+            buttons.forEach((button) => {
                 // Remove disabled attribute if present
                 if (button.hasAttribute('disabled')) {
                     button.removeAttribute('disabled');
@@ -37,10 +37,10 @@
 
                 // Fix spinner icons and ensure correct icons
                 const icons = button.querySelectorAll('i');
-                icons.forEach(icon => {
+                icons.forEach((icon) => {
                     // Remove any spinning or spinner classes
                     icon.classList.remove('fa-spin', 'fa-spinner');
-                    
+
                     // Set appropriate icon based on button type
                     if (button.name === 'start_scan') {
                         icon.className = 'fas fa-search me-2';
@@ -63,16 +63,11 @@
 
             form.addEventListener('submit', (e) => {
                 const submitButton = document.activeElement;
-                
+
                 if (submitButton && submitButton.type === 'submit') {
+                    // Show loading state but allow form to submit normally
                     this.setButtonLoadingState(submitButton, true);
-                    
-                    // Determine action based on button
-                    if (submitButton.name === 'start_scan') {
-                        this.handleScanSubmission(submitButton);
-                    } else {
-                        this.handleCompleteSubmission(submitButton);
-                    }
+                    // Form will submit normally and Django will handle the redirect
                 }
             });
         },
@@ -84,36 +79,36 @@
          */
         setButtonLoadingState(button, loading) {
             const icon = button.querySelector('i');
-            
+
             if (loading) {
                 // Add loading class to button
                 button.classList.add('loading');
-                
+
                 // Store original icon classes and text
                 if (icon && !button.dataset.originalIcon) {
                     button.dataset.originalIcon = icon.className;
                 }
-                
+
                 const originalText = button.textContent.trim();
                 if (!button.dataset.originalText) {
                     button.dataset.originalText = originalText;
                 }
-                
+
                 // Set loading state
                 button.disabled = true;
-                
+
                 if (button.name === 'start_scan') {
-                    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Starting Scan...';
+                    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Starting...';
                 } else {
-                    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Completing Setup...';
+                    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Completing...';
                 }
             } else {
                 // Remove loading class
                 button.classList.remove('loading');
-                
+
                 // Restore original state
                 button.disabled = false;
-                
+
                 if (button.dataset.originalText && button.dataset.originalIcon) {
                     button.innerHTML = `<i class="${button.dataset.originalIcon}"></i>${button.dataset.originalText}`;
                 }
@@ -121,57 +116,12 @@
         },
 
         /**
-         * Handle scan submission
-         * @param {HTMLElement} button - Submit button
-         */
-        handleScanSubmission(button) {
-            // Call AJAX endpoint to trigger scanning of all folders
-            this.triggerScanAllFolders()
-                .then(() => {
-                    // Show success message after AJAX call succeeds
-                    setTimeout(() => {
-                        const icon = button.querySelector('i');
-                        if (icon) {
-                            icon.className = 'fas fa-check-circle me-2 text-success';
-                        }
-                        button.innerHTML = '<i class="fas fa-check-circle me-2 text-success"></i>Scan Started!';
-                    }, 500);
-                })
-                .catch((error) => {
-                    console.error('Failed to start scan:', error);
-                    // Show error state
-                    setTimeout(() => {
-                        const icon = button.querySelector('i');
-                        if (icon) {
-                            icon.className = 'fas fa-exclamation-circle me-2 text-warning';
-                        }
-                        button.innerHTML = '<i class="fas fa-exclamation-circle me-2 text-warning"></i>Scan will start on page load';
-                    }, 500);
-                });
-        },
-
-        /**
-         * Handle complete submission
-         * @param {HTMLElement} button - Submit button
-         */
-        handleCompleteSubmission(button) {
-            // Show completion message
-            setTimeout(() => {
-                const icon = button.querySelector('i');
-                if (icon) {
-                    icon.className = 'fas fa-check-circle me-2 text-success';
-                }
-                button.innerHTML = '<i class="fas fa-check-circle me-2 text-success"></i>Setup Complete!';
-            }, 800);
-        },
-
-        /**
          * Setup interactive action cards
          */
         setupActionCards() {
             const actionCards = document.querySelectorAll('.action-card-clickable');
-            
-            actionCards.forEach(card => {
+
+            actionCards.forEach((card) => {
                 // Add hover effects
                 card.addEventListener('mouseenter', () => {
                     card.classList.add('shadow-sm');
@@ -195,7 +145,7 @@
                     // Add brief scale effect
                     card.style.transform = 'scale(0.98)';
                     card.style.transition = 'transform 0.1s ease';
-                    
+
                     setTimeout(() => {
                         card.style.transform = 'scale(1)';
                     }, 100);
@@ -221,7 +171,7 @@
                 feature.style.opacity = '0';
                 feature.style.transform = 'translateY(20px)';
                 feature.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-                
+
                 setTimeout(() => {
                     feature.style.opacity = '1';
                     feature.style.transform = 'translateY(0)';
@@ -234,103 +184,25 @@
                 card.style.opacity = '0';
                 card.style.transform = 'translateX(-20px)';
                 card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-                
+
                 setTimeout(() => {
                     card.style.opacity = '1';
                     card.style.transform = 'translateX(0)';
                 }, 100 * index);
             });
         },
-
-        /**
-         * Trigger scanning of all configured folders via AJAX
-         * @returns {Promise} - Promise that resolves when scan is started
-         */
-        triggerScanAllFolders() {
-            return new Promise((resolve, reject) => {
-                fetch('/books/ajax/trigger-scan-all-folders/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': this.getCSRFToken(),
-                    },
-                    credentials: 'same-origin'
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success) {
-                        console.log('Successfully started scans for all folders:', data.message);
-                        resolve(data);
-                    } else {
-                        throw new Error(data.error || 'Unknown error starting scans');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error triggering scan all folders:', error);
-                    reject(error);
-                });
-            });
-        },
-
-        /**
-         * Get CSRF token from cookies or meta tag
-         * @returns {string} - CSRF token
-         */
-        getCSRFToken() {
-            // Try to get from meta tag first
-            const metaTag = document.querySelector('meta[name="csrf-token"]');
-            if (metaTag) {
-                return metaTag.getAttribute('content');
-            }
-
-            // Fallback to cookie
-            const cookieValue = document.cookie
-                .split('; ')
-                .find(row => row.startsWith('csrftoken='));
-            
-            return cookieValue ? cookieValue.split('=')[1] : '';
-        },
-
-        /**
-         * Show success message
-         * @param {string} message - Message to show
-         */
-        showSuccessMessage(message) {
-            // Create temporary success alert
-            const alert = document.createElement('div');
-            alert.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
-            alert.style.zIndex = '9999';
-            alert.innerHTML = `
-                <i class="fas fa-check-circle me-2"></i>${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            
-            document.body.appendChild(alert);
-            
-            // Auto-hide after 3 seconds
-            setTimeout(() => {
-                if (alert.parentNode) {
-                    alert.remove();
-                }
-            }, 3000);
-        }
     };
 
     // Fix buttons immediately (before DOM loaded) to prevent spinning
     function fixButtonsImmediately() {
         const buttons = document.querySelectorAll('.wizard-navigation button');
-        buttons.forEach(button => {
+        buttons.forEach((button) => {
             if (button.hasAttribute('disabled')) {
                 button.removeAttribute('disabled');
             }
-            
+
             const icons = button.querySelectorAll('i.fa-spin, i.fa-spinner');
-            icons.forEach(icon => {
+            icons.forEach((icon) => {
                 icon.classList.remove('fa-spin', 'fa-spinner');
                 if (button.name === 'start_scan') {
                     icon.className = 'fas fa-search me-2';
@@ -358,5 +230,4 @@
 
     // Export to window for external access
     window.Wizard.Complete = Wizard.Complete;
-
 })();

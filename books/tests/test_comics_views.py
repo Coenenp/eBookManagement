@@ -297,7 +297,7 @@ class ComicsIntegrationTests(ComicsViewsTestCase):
 
         # 3. Verify data consistency
         view_count = main_response.context["comics_count"]
-        ajax_total = ajax_data["total_count"]
+        ajax_total = len(ajax_data["series"]) + len(ajax_data["standalone"])
         self.assertEqual(view_count, ajax_total)
 
     def test_comics_with_mixed_metadata_sources(self):

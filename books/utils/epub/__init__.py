@@ -32,12 +32,18 @@ from .structure_fixer import (
     repair_epub_structure,
     validate_epub_structure,
 )
+from .version_upgrader import (
+    detect_epub_version,
+    upgrade_epub_to_3,
+)
 
 __all__ = [
     "embed_metadata_in_epub",
     "validate_epub_structure",
     "repair_epub_structure",
     "EPUBValidationIssues",
+    "detect_epub_version",
+    "upgrade_epub_to_3",
     "inspect_epub",
     "EPUBStructure",
     "EPUBFile",

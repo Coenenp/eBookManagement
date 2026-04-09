@@ -15,6 +15,7 @@ from typing import Dict, Optional
 
 from books.models import Book
 from books.utils.epub.structure_fixer import repair_epub_structure, validate_epub_structure
+from books.utils.epub.version_upgrader import detect_epub_version, upgrade_epub_to_3
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,18 @@ def embed_metadata_in_epub(epub_path: Path, book: Book, cover_path: Optional[Pat
                 return False
 
             logger.debug(f"Found OPF: {opf_path.relative_to(extract_dir)}")
+
+            # Detect and upgrade EPUB version if needed
+            current_version = detect_epub_version(opf_path)
+            logger.info(f"Detected EPUB version: {current_version}")
+
+            if current_version in ["1.0", "2.0", None]:
+                logger.info(f"Upgrading EPUB {current_version or 'unknown'} → 3.0")
+                upgrade_success = upgrade_epub_to_3(extract_dir, opf_path)
+                if upgrade_success:
+                    logger.info("EPUB upgraded to 3.0")
+                else:
+                    logger.warning("EPUB upgrade failed, continuing with original version")
 
             # Update OPF metadata
             logger.debug("Updating OPF metadata...")

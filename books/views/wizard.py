@@ -592,8 +592,12 @@ class WizardCompleteView(SetupWizardView):
         if request.POST.get("start_scan") == "true":
             # Create scan folders first
             self._create_scan_folders(wizard)
-            # Redirect to scanning dashboard with auto-start parameter
-            messages.success(request, "Setup complete! Starting scan for all configured folders...")
+
+            # Create scan queue entries for deep scanning
+            self._create_scan_queue(wizard, request.user)
+
+            # Redirect to scanning dashboard
+            messages.success(request, "Setup complete! Starting deep scan for all configured folders...")
             return redirect("books:scan_dashboard")
 
         messages.success(request, "Setup complete! Welcome to your ebook library.")
@@ -620,6 +624,41 @@ class WizardCompleteView(SetupWizardView):
 
             if created:
                 logger.info(f"Created scan folder: {scan_folder.name} ({content_type}, language: {language or 'not defined'})")
+
+    def _create_scan_queue(self, wizard, user):
+        """Create ScanQueue entries for deep scanning with priority ordering."""
+        from books.models import ScanQueue
+
+        # Create queue entry for each folder with priority
+        for idx, folder_path in enumerate(wizard.selected_folders, start=1):
+            content_type = wizard.folder_content_types.get(folder_path, "ebooks")
+            language = wizard.folder_languages.get(folder_path, "en")
+            folder_name = os.path.basename(folder_path) or f"Folder {folder_path}"
+
+            # Create scan queue entry with deep_scan=True (enables ISBN extraction and external APIs)
+            queue_item = ScanQueue.objects.create(
+                name=f"Initial Deep Scan: {folder_name}",
+                scan_type="folder",
+                folder_paths=[folder_path],  # Store as list
+                deep_scan=True,  # Deep scan: enables ISBN extraction and external API usage
+                priority=4 if idx == 1 else 2,  # First folder is urgent (4), others normal (2)
+                status="pending",
+                created_by=user,
+                rescan_existing=False,
+                update_metadata=True,
+                fetch_covers=True,
+            )
+
+            logger.info(
+                f"Created scan queue entry: {queue_item.name} "
+                f"(priority={queue_item.get_priority_display()}, deep_scan=True, "
+                f"content_type={content_type}, language={language})"
+            )
+
+        # Trigger queue processing to start first scan
+        from books.views.scanning import _check_and_process_queue
+
+        _check_and_process_queue()
 
 
 # AJAX endpoints for wizard

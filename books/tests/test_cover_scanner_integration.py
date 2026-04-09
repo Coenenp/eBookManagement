@@ -14,7 +14,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from PIL import Image
 
-from books.models import Book, BookFile, ScanFolder
+from books.models import Book, BookFile, DataSource, ScanFolder
 from books.scanner.folder import _detect_and_extract_cover
 from books.utils.cover_cache import CoverCache
 
@@ -199,10 +199,12 @@ class BookFileCoverFieldsTestCase(TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.scan_folder = ScanFolder.objects.create(name="Test Folder", path="/test/path", content_type="ebooks")
+        # Create DataSource required by Book.create_with_title()
+        DataSource.objects.get_or_create(name=DataSource.INITIAL_SCAN, defaults={"trust_level": 0.2})
 
     def test_book_file_cover_fields_external(self):
         """Test BookFile fields for external cover."""
-        book = Book.objects.create(title="Test Book")
+        book = Book.create_with_title("Test Book")
         book_file = BookFile.objects.create(
             book=book, file_path="/test/book.epub", file_format="epub", cover_path="/test/book.jpg", cover_source_type="external", cover_internal_path="", has_internal_cover=False
         )
@@ -213,7 +215,7 @@ class BookFileCoverFieldsTestCase(TestCase):
 
     def test_book_file_cover_fields_epub_internal(self):
         """Test BookFile fields for EPUB internal cover."""
-        book = Book.objects.create(title="Test Book")
+        book = Book.create_with_title("Test Book")
         book_file = BookFile.objects.create(
             book=book,
             file_path="/test/book.epub",
@@ -230,7 +232,7 @@ class BookFileCoverFieldsTestCase(TestCase):
 
     def test_book_file_cover_source_choices(self):
         """Test that cover_source_type uses valid choices."""
-        book = Book.objects.create(title="Test Book")
+        book = Book.create_with_title("Test Book")
 
         # Test all valid source types
         for source_type in ["external", "epub_internal", "pdf_page", "archive_first", "mobi_internal"]:
@@ -239,11 +241,11 @@ class BookFileCoverFieldsTestCase(TestCase):
 
     def test_book_file_cover_fields_nullable(self):
         """Test that cover fields can be null/empty."""
-        book = Book.objects.create(title="Test Book")
+        book = Book.create_with_title("Test Book")
         book_file = BookFile.objects.create(book=book, file_path="/test/book.epub", file_format="epub")
 
         # Fields should be empty/null by default
         self.assertEqual(book_file.cover_path, "")
-        self.assertIsNone(book_file.cover_source_type)
+        self.assertEqual(book_file.cover_source_type, "external")  # Default value from model
         self.assertEqual(book_file.cover_internal_path, "")
         self.assertFalse(book_file.has_internal_cover)
