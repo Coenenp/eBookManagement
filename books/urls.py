@@ -118,6 +118,7 @@ urlpatterns = [
     path("scanning/cancel/<str:job_id>/", views.cancel_scan_ajax, name="cancel_scan_ajax"),
     path("scanning/history/", views.scan_history, name="scan_history"),
     path("scanning/queue/", scanning_views.scan_queue, name="scan_queue"),
+    path("scanning/process-queue/", views.process_scan_queue, name="process_scan_queue"),
     path("scanning/help/", views.scanning_help, name="scanning_help"),
     # Scan folder management
     path("scan_folders/", views.ScanFolderListView.as_view(), name="scan_folder_list"),

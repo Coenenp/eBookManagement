@@ -263,10 +263,25 @@ def debug_view_info(request):
 
 
 @login_required
+@require_POST
 def toggle_needs_review(request, book_id):
     """Toggle needs review status for a book."""
-    # TODO: Implement toggle needs review functionality
-    return JsonResponse({"status": "success", "message": "Toggle needs review not yet implemented"})
+    from books.models import Book, FinalMetadata
+
+    try:
+        book = Book.objects.get(id=book_id)
+        final_metadata, _ = FinalMetadata.objects.get_or_create(book=book)
+        final_metadata.is_reviewed = not final_metadata.is_reviewed
+        final_metadata.save(update_fields=["is_reviewed"])
+        return JsonResponse(
+            {
+                "status": "success",
+                "is_reviewed": final_metadata.is_reviewed,
+                "message": f"Book marked as {'reviewed' if final_metadata.is_reviewed else 'needs review'}",
+            }
+        )
+    except Book.DoesNotExist:
+        return JsonResponse({"status": "error", "message": "Book not found"}, status=404)
 
 
 @login_required

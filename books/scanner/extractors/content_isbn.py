@@ -97,26 +97,32 @@ def _extract_from_pdf(book, page_limit):
         isbn_candidates = []
         total_pages = len(reader.pages)
 
+        # Limit to at most 3 pages from start and end to avoid hanging on large/corrupt PDFs
+        effective_limit = min(page_limit, 3)
+
         # Scan first pages
-        for i in range(min(page_limit, total_pages)):
+        for i in range(min(effective_limit, total_pages)):
             try:
                 page = reader.pages[i]
                 text = page.extract_text()
-                isbn_candidates.extend(_find_isbn_patterns(text))
+                if text:
+                    isbn_candidates.extend(_find_isbn_patterns(text))
             except Exception as e:
                 logger.debug(f"Failed to extract text from PDF page {i}: {e}")
                 continue
 
-        # Scan last pages
-        start_page = max(total_pages - page_limit, page_limit)  # Avoid double-scanning
-        for i in range(start_page, total_pages):
-            try:
-                page = reader.pages[i]
-                text = page.extract_text()
-                isbn_candidates.extend(_find_isbn_patterns(text))
-            except Exception as e:
-                logger.debug(f"Failed to extract text from PDF page {i}: {e}")
-                continue
+        # Scan last pages (only if PDF has more pages than we scanned from front)
+        if total_pages > effective_limit:
+            start_page = max(total_pages - effective_limit, effective_limit)
+            for i in range(start_page, total_pages):
+                try:
+                    page = reader.pages[i]
+                    text = page.extract_text()
+                    if text:
+                        isbn_candidates.extend(_find_isbn_patterns(text))
+                except Exception as e:
+                    logger.debug(f"Failed to extract text from PDF page {i}: {e}")
+                    continue
 
         return _validate_and_dedupe_isbns(isbn_candidates)
 

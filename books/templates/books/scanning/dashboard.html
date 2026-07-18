@@ -166,9 +166,24 @@
                 </div>
                 {% endfor %}
             {% else %}
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i>
-                    No active scan jobs. Use the "Start New Scan" button to begin scanning.
+                <div class="alert alert-info d-flex justify-content-between align-items-center">
+                    <span>
+                        <i class="fas fa-info-circle me-2"></i>
+                        No active scan jobs.
+                        {% if scan_queue %}
+                            <strong>{{ scan_queue|length }} scan{{ scan_queue|length|pluralize }} queued</strong> and ready to process.
+                        {% else %}
+                            Use the "Start New Scan" button to begin scanning.
+                        {% endif %}
+                    </span>
+                    {% if scan_queue %}
+                    <form method="post" action="{% url 'books:process_scan_queue' %}" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-play me-2"></i>Process Queue Now
+                        </button>
+                    </form>
+                    {% endif %}
                 </div>
             {% endif %}
         </div>

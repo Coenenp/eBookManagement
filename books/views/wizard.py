@@ -176,6 +176,13 @@ class WizardFoldersView(SetupWizardView):
         common_folders = self._get_suggested_folders()
         context["suggested_folders"] = common_folders
 
+        # Pass existing DB folder paths for client-side duplicate detection
+        import json
+
+        from books.models import ScanFolder
+
+        context["existing_db_paths"] = json.dumps([folder.path for folder in ScanFolder.objects.all()])
+
         # Prefill with previously selected folders if returning to this step
         selected_folders = wizard.selected_folders or []
         context["selected_folders"] = selected_folders
@@ -662,6 +669,8 @@ class WizardCompleteView(SetupWizardView):
 
 
 # AJAX endpoints for wizard
+
+
 @login_required
 def wizard_validate_folder(request):
     """AJAX endpoint to validate a folder path with optimized performance."""

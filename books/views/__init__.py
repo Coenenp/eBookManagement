@@ -108,6 +108,7 @@ from .scanning import (  # noqa: F401
     active_scans_ajax,
     api_status_ajax,
     cancel_scan_ajax,
+    process_scan_queue,
     scan_dashboard,
     scan_folder_progress_ajax,
     scan_history,

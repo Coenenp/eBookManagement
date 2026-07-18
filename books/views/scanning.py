@@ -177,7 +177,7 @@ def start_folder_scan(request):
             rescan_existing=False,
             update_metadata=True,
             fetch_covers=enable_external_apis,
-            deep_scan=False,
+            deep_scan=enable_external_apis,  # Preserve user's Quick/Deep scan choice
             created_by=request.user,
         )
 
@@ -199,7 +199,7 @@ def start_folder_scan(request):
         logger.info(f"[THREAD START] Creating background thread for job {job_id}")
         thread = threading.Thread(
             target=background_scan_folder,
-            args=(job_id, folder_path, language, enable_external_apis, content_type, folder_name, False, None),  # rescan=False  # resume_from=None
+            args=(job_id, folder_path, language, enable_external_apis, content_type),
             daemon=True,
         )
         thread.start()
@@ -247,7 +247,7 @@ def start_book_rescan(request):
                     rescan_existing=True,
                     update_metadata=True,
                     fetch_covers=enable_external_apis,
-                    deep_scan=False,
+                    deep_scan=enable_external_apis,  # Preserve user's Quick/Deep scan choice
                     created_by=request.user,
                 )
 
@@ -518,6 +518,20 @@ def _check_and_process_queue():
             # Mark as failed if something went wrong
             next_scan.mark_failed(str(e))
             logger.error(f"[QUEUE] Failed to start queued scan {next_scan.name}: {e}")
+
+
+@login_required
+@require_http_methods(["POST"])
+def process_scan_queue(request):
+    """Manually trigger scan queue processing."""
+    try:
+        _check_and_process_queue()
+        messages.success(request, "Queue processing started. Pending scans will begin shortly.")
+    except Exception as e:
+        logger.error(f"Failed to process queue: {e}")
+        messages.error(request, f"Failed to start queue processing: {str(e)}")
+
+    return redirect("books:scan_dashboard")
 
 
 @login_required

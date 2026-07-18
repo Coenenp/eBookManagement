@@ -28,6 +28,72 @@ from books.utils.cover_extractor import (
 logger = logging.getLogger("books.scanner")
 
 
+def _get_or_create_comic_book_by_path(file_path, scan_folder, fallback_title):
+    """Get or create a comic Book by file path (one book per file).
+
+    Uses the existing _get_or_create_book_by_path from folder.py which
+    ensures each unique file path gets its own Book record.
+    """
+    from books.scanner.folder import _get_or_create_book_by_path
+
+    return _get_or_create_book_by_path(
+        file_path=file_path,
+        scan_folder=scan_folder,
+        content_type="comic",
+    )
+
+
+def _apply_comic_filename_metadata(book, file_path):
+    """Apply filename-based metadata parsing to a comic book.
+
+    Uses parse_comic_metadata to extract proper title, series, authors,
+    and series number from the filename, overriding the generic ComicGrouper title.
+    """
+    try:
+        from books.models import BookTitle
+        from books.scanner.folder import _get_initial_scan_source
+        from books.scanner.parsing import parse_comic_metadata
+        from books.utils.author import attach_authors
+
+        parsed = parse_comic_metadata(file_path)
+        source = _get_initial_scan_source()
+
+        if parsed.get("title"):
+            # Deactivate the generic ComicGrouper title and create the real one
+            BookTitle.objects.filter(book=book, is_active=True).update(is_active=False)
+            BookTitle.objects.create(
+                book=book,
+                title=parsed["title"],
+                source=source,
+                confidence=source.trust_level,
+                is_active=True,
+            )
+            logger.info(f"[COMIC PARSE] Title: {parsed['title']}")
+
+        if parsed.get("series"):
+            from books.models import BookSeries, Series
+
+            series_obj, _ = Series.objects.get_or_create(name=parsed["series"])
+            BookSeries.objects.update_or_create(
+                book=book,
+                series=series_obj,
+                source=source,
+                defaults={
+                    "series_number": str(parsed.get("series_number", "")),
+                    "confidence": 0.6,
+                    "is_active": True,
+                },
+            )
+            logger.info(f"[COMIC PARSE] Series: {parsed['series']} #{parsed.get('series_number')}")
+
+        if parsed.get("authors"):
+            attach_authors(book, parsed["authors"], source, confidence=source.trust_level)
+            logger.info(f"[COMIC PARSE] Authors: {parsed['authors']}")
+
+    except Exception as e:
+        logger.warning(f"[COMIC PARSE] Failed to parse comic metadata from {file_path}: {e}")
+
+
 def _get_file_scanner_source():
     """Get or create the file_scanner DataSource object"""
     source, _ = DataSource.objects.get_or_create(name="file_scanner", defaults={"priority": 1})
@@ -108,22 +174,17 @@ def _process_comic_issue(
     issue_number = issue_info.get("issue_number", "1")
     issue_title = f"{series_name} #{issue_number}"
 
-    # Get or create the Book (comic issue)
-    book = Book.find_by_title(issue_title, content_type="comic")
-    if book:
-        created = False
-    else:
-        book = Book.create_with_title(
-            title=issue_title,
-            content_type="comic",
-            scan_folder=scan_folder,
-        )
-        created = True
+    # Get or create the Book by file path (one book per file, not per series)
+    book, created = _get_or_create_comic_book_by_path(file_path, scan_folder, issue_title)
 
     if created:
         logger.info(f"Created comic issue: {issue_title}")
     else:
         logger.info(f"Found existing comic issue: {issue_title}")
+
+    # Always apply filename metadata parsing (not just on creation)
+    # This fixes titles for books from previous incomplete scans
+    _apply_comic_filename_metadata(book, file_path)
 
     # Get or create the BookFile
     book_file, file_created = BookFile.objects.get_or_create(
@@ -174,6 +235,11 @@ def _process_comic_issue(
                     book_file.has_internal_cover = True
         except CoverExtractionError as e:
             logger.warning(f"Failed to extract comic cover from {file_path}: {e}")
+
+    # Ensure cover_source_type is always set before save (MySQL NOT NULL constraint)
+    if not book_file.cover_source_type:
+        book_file.cover_source_type = "external"
+        book_file.has_internal_cover = False
 
     book_file.save()
 

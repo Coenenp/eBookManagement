@@ -59,8 +59,27 @@ def resolve_title_author_ambiguity(part1: str, part2: str) -> Tuple[str, List[st
         elif punc_score_2 > punc_score_1:
             return part1_clean, normalize_surnames(split_authors(part2_clean))
         else:
-            # Equal punctuation: default to second part as title
-            return part2_clean, normalize_surnames(split_authors(part1_clean))
+            # Smart tiebreaker: the side with more words or starting with
+            # an article (The/A/An) is likely the title, not the author
+            words_1 = len(part1_clean.split())
+            words_2 = len(part2_clean.split())
+
+            # Check for article starters (strong title indicator)
+            starts_with_article_1 = part1_clean.lower().startswith(("the ", "a ", "an "))
+            starts_with_article_2 = part2_clean.lower().startswith(("the ", "a ", "an "))
+
+            if starts_with_article_1 and not starts_with_article_2:
+                return part1_clean, normalize_surnames(split_authors(part2_clean))
+            elif starts_with_article_2 and not starts_with_article_1:
+                return part2_clean, normalize_surnames(split_authors(part1_clean))
+            elif words_1 > words_2:
+                # Longer side is more likely the title
+                return part1_clean, normalize_surnames(split_authors(part2_clean))
+            elif words_2 > words_1:
+                return part2_clean, normalize_surnames(split_authors(part1_clean))
+            else:
+                # Default: second part as title
+                return part2_clean, normalize_surnames(split_authors(part1_clean))
 
 
 def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
@@ -97,8 +116,14 @@ def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
         # Intelligent resolution
         if "title" in groups and "author" in groups:
             title, authors = resolve_title_author_ambiguity(groups["title"], groups["author"])
+            # Reject patterns that produce nonsense: single lowercase "title" with
+            # multi-word "authors" that don't look like real names (e.g., "medisch - Drugs and alcohol")
+            if len(title.split()) == 1 and title.islower() and len(authors) >= 1 and not is_probable_author(title):
+                continue  # Skip this pattern, try next one
             metadata["title"] = title
             metadata["authors"] = authors
+        elif "title" in groups:
+            metadata["title"] = groups["title"]
         elif "author" in groups:
             metadata["authors"] = normalize_surnames(split_authors(groups["author"]))
         elif "author_first" in groups and "author_last" in groups:
@@ -155,12 +180,16 @@ def parse_comic_metadata(file_path: str) -> Dict[str, Optional[str]]:
 
     metadata = {"title": None, "authors": [], "series": None, "series_number": None}
 
-    # Comic-specific patterns
+    # Comic-specific patterns (ordered by specificity - most specific first)
     comic_patterns = [
+        # "01 - Asterix the Gaul (1961) (Digital-Empire) (WebP by Doc MaKS)"
+        r"^(?P<num>\d{1,3}(?:\.\d+)?)\s+-\s+(?P<title>[^(]+?)(?:\s*\([^)]*\))*\s*$",
         # "De Rode Ridder - 271 - De kruisvaarder (Digitale rip)"
         r"^(?P<series>.+?)\s+-\s+(?P<num>\d{1,3}(?:\.\d+)?)\s+-\s+(?P<title>.+?)(?:\s+\([^)]*\))?$",
         # "Batman 15 - The Dark Knight Returns"
         r"^(?P<series>.+?)\s+(?P<num>\d{1,3}(?:\.\d+)?)\s+-\s+(?P<title>.+)$",
+        # "Largo Winch 01 - The Heir - The W Group (1990-1991)" (greedy series capture)
+        r"^(?P<series>.+)\s+(?P<num>\d{1,3}(?:\.\d+)?)\s*-\s*(?P<title>.+)$",
         # "Superman #42 Return of Doomsday"
         r"^(?P<series>.+?)\s+#(?P<num>\d{1,3}(?:\.\d+)?)\s+(?P<title>.+)$",
         # "X-Men Issue 100"

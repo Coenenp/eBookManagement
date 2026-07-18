@@ -214,35 +214,35 @@
             <i class="fas fa-file-alt text-primary me-2"></i>
             Supported File Formats
         </h6>
-        <div class="row g-3">
-            <div class="col-md-4">
-                <div class="card border-0 bg-light h-100">
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <div class="card h-100 bg-light border-0">
                     <div class="card-body text-center">
-                        <i class="fas fa-book text-primary fa-2x mb-2"></i>
-                        <h6 class="card-title">Ebooks</h6>
-                        <p class="card-text small text-muted">
-                            EPUB, MOBI, AZW, AZW3, PDF, FB2, LIT, PRC
+                        <i class="fas fa-book fa-2x text-primary mb-3"></i>
+                        <h6>Ebooks</h6>
+                        <p class="text-muted small">
+                            EPUB, MOBI, AZW, AZW3, PDF, FB2, LIT, PRC, CBR, CBZ
                         </p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card border-0 bg-light h-100">
+            <div class="col-md-4 mb-3">
+                <div class="card h-100 bg-light border-0">
                     <div class="card-body text-center">
-                        <i class="fas fa-images text-success fa-2x mb-2"></i>
-                        <h6 class="card-title">Comics</h6>
-                        <p class="card-text small text-muted">
-                            CBR, CBZ, CB7, CBT, PDF
+                        <i class="fas fa-images fa-2x text-success mb-3"></i>
+                        <h6>Comics</h6>
+                        <p class="text-muted small">
+                            CBR, CBZ, CB7, CBT, PDF, EPUB, MOBI, AZW3
                         </p>
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card border-0 bg-light h-100">
+            <div class="col-md-4 mb-3">
+                <div class="card h-100 bg-light border-0">
                     <div class="card-body text-center">
-                        <i class="fas fa-headphones text-info fa-2x mb-2"></i>
-                        <h6 class="card-title">Audiobooks</h6>
-                        <p class="card-text small text-muted">
+                        <i class="fas fa-headphones fa-2x text-info mb-3"></i>
+                        <h6>Audiobooks</h6>
+                        <p class="text-muted small">
                             MP3, M4A, M4B, AAC, FLAC, OGG, WAV
                         </p>
                     </div>
@@ -278,7 +278,8 @@
 <script>
 // Configuration for the wizard folders JavaScript
 window.wizardFoldersConfig = {
-    validateUrl: '{% url "books:wizard_validate_folder" %}'
+    validateUrl: '{% url "books:wizard_validate_folder" %}',
+    existingDbPaths: {{ existing_db_paths|safe }}
 };
 </script>
 <script src="{% static 'book/js/wizard-folders.js' %}"></script>

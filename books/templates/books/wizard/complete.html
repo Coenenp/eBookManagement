@@ -88,10 +88,10 @@
             {% if folder_count > 0 %}
             <a href="{% url 'books:scan_dashboard' %}" class="action-card action-card-clickable mb-3 text-decoration-none">
                 <div class="d-flex align-items-center">
-                    <i class="fas fa-search text-primary me-3 icon-sm"></i>
+                    <i class="fas fa-tachometer-alt text-primary me-3 icon-sm"></i>
                     <div>
-                        <h6 class="mb-1">Start Initial Scan</h6>
-                        <p class="small text-muted mb-0">Scan configured folders for books</p>
+                        <h6 class="mb-1">Scan Dashboard</h6>
+                        <p class="small text-muted mb-0">Manually start scans from dashboard</p>
                     </div>
                     <i class="fas fa-chevron-right ms-auto text-muted"></i>
                 </div>
@@ -99,9 +99,9 @@
             {% else %}
             <div class="action-card action-card-disabled mb-3">
                 <div class="d-flex align-items-center">
-                    <i class="fas fa-search text-muted me-3 icon-sm"></i>
+                    <i class="fas fa-tachometer-alt text-muted me-3 icon-sm"></i>
                     <div>
-                        <h6 class="mb-1 text-muted">Start Initial Scan</h6>
+                        <h6 class="mb-1 text-muted">Go to Scan Dashboard</h6>
                         <p class="small text-muted mb-0">Configure folders first</p>
                     </div>
                 </div>
@@ -167,9 +167,10 @@
 </div>
 
 <!-- Action Buttons -->
-<form method="post">
+<form method="post" id="wizard-complete-form">
     {% csrf_token %}
     <input type="hidden" name="action" value="complete">
+    <input type="hidden" name="start_scan" value="" id="start-scan-input">
     
     <div class="wizard-navigation">
         <div>
@@ -181,13 +182,13 @@
         
         <div>
             {% if folder_count > 0 %}
-            <button type="submit" name="start_scan" value="true" class="btn btn-success me-2">
+            <button type="submit" onclick="document.getElementById('start-scan-input').value='true'" class="btn btn-success me-2">
                 <i class="fas fa-search me-2"></i>
                 Complete Setup & Scan Now
             </button>
             {% endif %}
             
-            <button type="submit" class="btn btn-primary">
+            <button type="submit" onclick="document.getElementById('start-scan-input').value=''" class="btn btn-primary">
                 <i class="fas fa-check me-2"></i>
                 Complete Setup
             </button>

@@ -158,25 +158,11 @@ def _get_or_create_book_by_path(file_path, scan_folder, file_format=None, file_s
 
     # Create new Book and BookFile
     with transaction.atomic():
-        # Determine content type from file format if not specified
         if not file_format:
             file_format = get_file_format(file_path)
 
-        if content_type == "ebook":
-            if file_format.lower() in ["cbr", "cbz", "cb7", "cbt"]:
-                content_type = "comic"
-            elif file_format.lower() in [
-                "mp3",
-                "m4a",
-                "m4b",
-                "aac",
-                "flac",
-                "ogg",
-                "wav",
-            ]:
-                content_type = "audiobook"
-
-        # Create the book
+        # The folder's content_type is authoritative (set by the user).
+        # Do NOT override it based on file extension.
         book = Book.objects.create(content_type=content_type, scan_folder=scan_folder)
 
         # Create the book file
@@ -242,6 +228,11 @@ def scan_directory(
 
     # Use existing total_files from scan_status (set by scanner_engine)
     total_files = scan_status.total_files or len(ebook_files)
+
+    # Update scan_status with total_files so progress tracking works correctly
+    scan_status.total_files = total_files
+    scan_status.save()
+
     logger.info(f"Processing {len(ebook_files)} files in {directory}")
 
     # Phase 1 Enhancement: Use content-type specific processing if enabled
@@ -249,10 +240,12 @@ def scan_directory(
         from books.scanner.content_processing import process_files_by_type
 
         # Check if this folder should use content-type specific processing
+        # Only use content-type processing for explicitly configured folders,
+        # NOT for folders where auto-detection would incorrectly route PDFs as comics.
         if scan_folder.content_type in [
             "comics",
             "audiobooks",
-        ] or _should_use_content_type_processing(ebook_files):
+        ]:
             logger.info(f"Using content-type specific processing for {scan_folder.content_type}")
             process_files_by_type(ebook_files, scan_folder, cover_files, opf_files, rescan)
 
@@ -452,7 +445,7 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
         cover_path, cover_source_type, cover_internal_path, has_internal_cover = _detect_and_extract_cover(file_path, primary_file.file_format, cover_files)
 
         primary_file.cover_path = cover_path or ""
-        primary_file.cover_source_type = cover_source_type
+        primary_file.cover_source_type = cover_source_type or "external"
         primary_file.cover_internal_path = cover_internal_path or ""
         primary_file.has_internal_cover = has_internal_cover
 
@@ -469,11 +462,9 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
         book.is_corrupted = True
         book.save()
 
-    logger.info(f"[INTERNAL METADATA PARSE] Path: {book.primary_file.file_path if book.primary_file else 'No file'}")
-    _extract_internal_metadata(book)
-
     # Skip ISBN scanning for comic books (comics don't typically have ISBNs)
-    is_comic = book.primary_file.file_format.lower() in COMIC_FORMATS if book.primary_file else False
+    # Use the book's content_type (set by the folder), not file extension
+    is_comic = book.content_type == "comic"
 
     if not is_comic:
         logger.info(f"[CONTENT ISBN SCAN] Path: {book.primary_file.file_path if book.primary_file else 'No file'}")

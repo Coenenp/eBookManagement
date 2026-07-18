@@ -536,9 +536,54 @@ class BookRenamerPreviewView(LoginRequiredMixin, TemplateView):
 
     template_name = "books/book_renamer_preview.html"
 
+    def post(self, request, *args, **kwargs):
+        """Generate preview of renaming operations."""
+        selected_books = request.POST.getlist("selected_books")
+        folder_pattern = request.POST.get("folder_pattern", "")
+        filename_pattern = request.POST.get("filename_pattern", "")
+
+        if not selected_books:
+            return JsonResponse({"status": "error", "message": "No books selected"}, status=400)
+
+        Book = get_model("Book")
+        preview_items = []
+
+        for book_id in selected_books:
+            try:
+                book = Book.objects.get(id=book_id)
+                old_path = book.file_path if book.file_path else f"Book {book_id}"
+
+                # Generate preview using RenamingEngine
+                from books.utils.renaming_engine import RenamingEngine
+
+                engine = RenamingEngine()
+                target_folder = engine.process_template(folder_pattern, book) if folder_pattern else ""
+                target_filename = engine.process_template(filename_pattern, book)
+                new_path = f"{target_folder}/{target_filename}" if target_folder else target_filename
+
+                preview_items.append(
+                    {
+                        "book_id": book_id,
+                        "old_path": old_path,
+                        "new_path": new_path,
+                        "title": getattr(book, "final_title", f"Book {book_id}"),
+                    }
+                )
+            except Book.DoesNotExist:
+                preview_items.append({"book_id": book_id, "error": "Book not found"})
+            except Exception as e:
+                preview_items.append({"book_id": book_id, "error": str(e)})
+
+        return JsonResponse(
+            {
+                "status": "success",
+                "preview_items": preview_items,
+                "total": len(preview_items),
+            }
+        )
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # TODO: Implement preview logic
         context["preview_items"] = []
         return context
 
@@ -566,10 +611,14 @@ class BookRenamerExecuteView(LoginRequiredMixin, TemplateView):
         results = []
         Book = get_model("Book")
 
+        # Get rename patterns from POST data
+        folder_pattern = request.POST.get("folder_pattern", "")
+        filename_pattern = request.POST.get("filename_pattern", "")
+
         for book_id in selected_books:
             try:
                 book = Book.objects.get(id=book_id)
-                result = self._rename_book_files(book, request.user, file_actions)
+                result = self._rename_book_files(book, request.user, file_actions, folder_pattern, filename_pattern)
 
                 # Create FileOperation for tracking
                 FileOperation = get_model("FileOperation")
@@ -605,13 +654,31 @@ class BookRenamerExecuteView(LoginRequiredMixin, TemplateView):
             }
         )
 
-    def _rename_book_files(self, book, user, file_actions):
-        """Rename book files based on final metadata."""
-        # For now, return a mock result
-        # TODO: Implement actual file renaming logic
-        new_path = f"/new/path/{book.id}/renamed_book.epub"
+    def _rename_book_files(self, book, user, file_actions, folder_pattern="", filename_pattern=""):
+        """Rename book files based on final metadata using BatchRenamer."""
+        from books.utils.batch_renamer import BatchRenamer
 
-        return {"new_path": new_path, "additional_files": [], "old_path": getattr(book, "file_path", ""), "status": "renamed"}
+        renamer = BatchRenamer(dry_run=False)
+        renamer.add_book(book, folder_pattern, filename_pattern, embed_metadata=True)
+
+        if not renamer.operations:
+            return {"new_path": book.file_path, "additional_files": [], "old_path": book.file_path, "status": "no_operations"}
+
+        result = renamer.execute()
+
+        new_path = getattr(book, "file_path", "")
+        if result.successful > 0:
+            # Refresh book to get updated file path after rename
+            book.refresh_from_db()
+            new_path = book.file_path
+
+        return {
+            "new_path": new_path,
+            "additional_files": [],
+            "old_path": getattr(book, "file_path", ""),
+            "status": "renamed" if result.successful > 0 else "failed",
+            "errors": result.errors,
+        }
 
     def _get_file_action(self, file_index, file_actions):
         """Get the action for a specific file index."""

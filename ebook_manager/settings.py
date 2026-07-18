@@ -145,6 +145,20 @@ if "test" in sys.argv or "pytest" in sys.modules:
     }
 
 
+# Cache configuration
+# Use file-based cache to share data between processes/threads
+# This is crucial for scan progress tracking across background threads
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": os.path.join(BASE_DIR, "cache_storage"),
+        "OPTIONS": {
+            "MAX_ENTRIES": 1000,
+        },
+    }
+}
+
+
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 

@@ -212,6 +212,13 @@ def is_probable_author(name: str) -> bool:
         return False
 
     # If it's 1–3 words and doesn't contain typical title terms, assume it's a name
+    # But reject single all-lowercase words (like "medisch") - these are category
+    # prefixes, not author names. Also reject names shorter than 3 chars.
+    if len(words) == 1 and len(words[0]) < 3:
+        return False
+    if len(words) == 1 and words[0].islower():
+        return False
+
     return 1 <= len(words) <= 3 or "unknown" in name_lower
 
 

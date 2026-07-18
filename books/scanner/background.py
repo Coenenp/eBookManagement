@@ -80,6 +80,70 @@ class ScanProgress:
         return cache.get(self.cache_key, {})
 
 
+class ProgressBridge:
+    """Bridge between folder_scanner's ScanStatus and cache-based ScanProgress.
+
+    This allows the folder scanner to update progress that the UI can see.
+    """
+
+    def __init__(self, scan_progress: ScanProgress):
+        self.scan_progress = scan_progress
+        self._progress = 0
+        self._message = ""
+        self._processed_files = 0
+        self._total_files = 0
+        self.last_processed_file = None
+
+    @property
+    def processed_files(self):
+        return self._processed_files
+
+    @processed_files.setter
+    def processed_files(self, value):
+        """Update processed files count."""
+        self._processed_files = value
+        # Note: Cache update happens in progress.setter when update_scan_progress() is called
+
+    @property
+    def total_files(self):
+        return self._total_files
+
+    @total_files.setter
+    def total_files(self, value):
+        """Update total files count."""
+        self._total_files = value
+
+    @property
+    def progress(self):
+        return self._progress
+
+    @progress.setter
+    def progress(self, value):
+        """Update progress percentage (0-100)."""
+        self._progress = value
+        # Use actual file counts if available, otherwise use percentage
+        if self._total_files > 0 and self._processed_files > 0:
+            # Update with actual file counts
+            self.scan_progress.update(self._processed_files, self._total_files, "Scanning folder", self._message or f"Processing file {self._processed_files}/{self._total_files}")
+        else:
+            # Fallback to percentage-based progress
+            mapped_progress = 10 + int(value * 0.85)
+            self.scan_progress.update(mapped_progress, 100, "Scanning folder", self._message or f"{self._progress}% complete")
+
+    @property
+    def message(self):
+        return self._message
+
+    @message.setter
+    def message(self, value):
+        """Update status message."""
+        self._message = value
+
+    def save(self):
+        """No-op save method to match ScanStatus interface."""
+        pass
+
+
 class BackgroundScanner:
     """Background scanner for processing books with intelligent API management."""
 
@@ -152,29 +216,24 @@ class BackgroundScanner:
             # Use proper folder scanning with content-type support
             self.progress.update(10, 100, "Scanning folder", "Processing files by content type...")
 
+            # Create progress bridge to forward folder scanner progress updates to cache
+            progress_bridge = ProgressBridge(self.progress)
+
+            # Initialize progress bridge fields for folder scanner
+            progress_bridge.processed_files = 0
+            progress_bridge.total_files = 0
+
             try:
                 # Use the folder scanner directly which supports content-type processing
                 folder_scanner.scan_directory(
                     directory=folder_path,
                     scan_folder=scan_folder,
                     rescan=False,  # This is a new scan, not a rescan
+                    scan_status=progress_bridge,  # Pass bridge to enable live progress updates
                 )
 
                 # Count processed books for the progress report
                 processed_count = Book.objects.filter(scan_folder=scan_folder).count()
-
-                # If content-type specific processing was used, count those objects too
-                if scan_folder.content_type == "audiobooks":
-                    from books.models import Audiobook
-
-                    audiobook_count = Audiobook.objects.filter(scan_folder=scan_folder).count()
-                    logger.info(f"[BACKGROUND SCAN] Created {audiobook_count} audiobook objects")
-
-                elif scan_folder.content_type == "comics":
-                    from books.models import Comic
-
-                    comic_count = Comic.objects.filter(scan_folder=scan_folder).count()
-                    logger.info(f"[BACKGROUND SCAN] Created {comic_count} comic objects")
 
                 error_count = 0  # folder_scanner handles errors internally
 
@@ -186,6 +245,20 @@ class BackgroundScanner:
             # Complete the intelligent scan session
             if self.intelligent_scanner:
                 self.intelligent_scanner.complete_session()
+
+            # Update scan folder's last_scanned timestamp
+            from django.utils import timezone
+
+            scan_folder.last_scanned = timezone.now()
+            scan_folder.save(update_fields=["last_scanned"])
+
+            # Create ScanHistory record for the dashboard
+            self._create_scan_history(
+                scan_folder=scan_folder,
+                status="completed",
+                books_added=processed_count,
+                errors_count=error_count,
+            )
 
             # Finalize
             self.progress.update(95, 100, "Finalizing", "Cleaning up...")
@@ -199,6 +272,15 @@ class BackgroundScanner:
                 success_message,
                 f"{error_count} errors occurred" if error_count > 0 else "",
             )
+
+            # Trigger queue processing to start next queued scan
+            try:
+                from books.views.scanning import _check_and_process_queue
+
+                _check_and_process_queue()
+                logger.info("[QUEUE] Triggered queue processing after scan completion")
+            except Exception as e:
+                logger.warning(f"[QUEUE] Failed to trigger queue processing: {e}")
 
             result = {
                 "success": True,
@@ -226,7 +308,67 @@ class BackgroundScanner:
             if self.intelligent_scanner:
                 self.intelligent_scanner.complete_session()
             self.progress.complete(False, "", str(e))
+
+            # Create failed ScanHistory record
+            self._create_scan_history(
+                scan_folder=scan_folder if "scan_folder" in dir() else None,
+                status="failed",
+                books_added=0,
+                errors_count=1,
+                error_message=str(e),
+            )
+
+            # Trigger queue processing even on failure, so next scan can start
+            try:
+                from books.views.scanning import _check_and_process_queue
+
+                _check_and_process_queue()
+                logger.info("[QUEUE] Triggered queue processing after scan failure")
+            except Exception as queue_error:
+                logger.warning(f"[QUEUE] Failed to trigger queue processing: {queue_error}")
+
             return {"success": False, "error": str(e)}
+
+    def _create_scan_history(self, scan_folder, status, books_added=0, errors_count=0, error_message=""):
+        """Create a ScanHistory record for the scanning dashboard."""
+        try:
+            from django.utils import timezone
+            from books.models import ScanHistory
+
+            progress_data = self.progress.get_status()
+            start_time = progress_data.get("start_time", 0)
+            end_time = progress_data.get("end_time", time.time()) if status == "completed" else time.time()
+            total_files = progress_data.get("total", 0)
+            processed = progress_data.get("current", 0)
+            duration = int(end_time - start_time) if start_time > 0 else 0
+
+            from datetime import datetime, timezone as dt_timezone
+
+            started_at = datetime.fromtimestamp(start_time, tz=dt_timezone.utc) if start_time > 0 else timezone.now()
+            completed_at = datetime.fromtimestamp(end_time, tz=dt_timezone.utc) if end_time > 0 else timezone.now()
+
+            ScanHistory.objects.create(
+                job_id=self.job_id,
+                scan_type="scan",
+                folder_path=scan_folder.path if scan_folder else "",
+                folder_name=scan_folder.name if scan_folder else "Unknown",
+                status=status,
+                started_at=started_at,
+                completed_at=completed_at,
+                duration_seconds=duration,
+                total_files_found=total_files,
+                files_processed=processed,
+                books_added=books_added,
+                errors_count=errors_count,
+                error_message=error_message,
+                scan_folder=scan_folder,
+            )
+            logger.info(
+                f"[SCAN HISTORY] Created {status} record for {scan_folder.name if scan_folder else 'Unknown'} "
+                f"({processed}/{total_files} files, {books_added} books, {duration}s)"
+            )
+        except Exception as e:
+            logger.warning(f"[SCAN HISTORY] Failed to create history record: {e}")
 
     def _process_single_book(self, book_path: str, scan_folder: ScanFolder, enable_external_apis: bool) -> bool:
         """Process a single book file with intelligent API management."""
@@ -321,6 +463,15 @@ class BackgroundScanner:
                 f"{error_count} errors occurred" if error_count > 0 else "",
             )
 
+            # Trigger queue processing to start next queued scan
+            try:
+                from books.views.scanning import _check_and_process_queue
+
+                _check_and_process_queue()
+                logger.info("[QUEUE] Triggered queue processing after rescan completion")
+            except Exception as e:
+                logger.warning(f"[QUEUE] Failed to trigger queue processing: {e}")
+
             return {
                 "success": True,
                 "books_processed": processed_count,
@@ -331,6 +482,16 @@ class BackgroundScanner:
         except Exception as e:
             logger.error(f"[BACKGROUND RESCAN] Fatal error: {e}")
             self.progress.complete(False, "", str(e))
+
+            # Trigger queue processing even on failure, so next scan can start
+            try:
+                from books.views.scanning import _check_and_process_queue
+
+                _check_and_process_queue()
+                logger.info("[QUEUE] Triggered queue processing after rescan failure")
+            except Exception as queue_error:
+                logger.warning(f"[QUEUE] Failed to trigger queue processing: {queue_error}")
+
             return {"success": False, "error": str(e)}
 
 
@@ -422,13 +583,11 @@ def scan_folder_in_background(
     try:
         thread.start()
         logger.info(f"[THREAD STARTED] Background thread started for job {job_id}, thread: {thread.name}")
+        logger.info(f"Started background scan for folder '{folder_name}' (ID: {folder_id}, Job ID: {job_id})")
     except Exception as e:
         logger.error(f"[THREAD ERROR] Failed to start thread: {e}")
         raise
 
-    return job_id
-
-    logger.info(f"Started background scan for folder '{folder_name}' (ID: {folder_id}, Job ID: {job_id})")
     return job_id
 
 

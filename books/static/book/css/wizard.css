@@ -274,7 +274,6 @@ body:has(.wizard-container) main.container,
     padding: 2px 6px;
     border-radius: var(--bs-border-radius-sm);
     white-space: nowrap;
-}
     box-shadow: var(--bs-box-shadow-sm);
 }
 
@@ -324,26 +323,26 @@ body:has(.wizard-container) main.container,
         flex-direction: column;
         gap: 12px;
     }
-    
+
     .folder-info h5 {
         max-width: 100%;
     }
-    
+
     .content-selector {
         text-align: left;
         min-width: auto;
     }
-    
+
     .content-analysis-grid {
         grid-template-columns: repeat(3, 1fr);
         gap: 8px;
     }
-    
+
     .content-suggestion .d-flex {
         flex-direction: column;
         gap: 8px;
     }
-    
+
     .content-type-preview {
         text-align: left;
     }
@@ -460,44 +459,44 @@ body:has(.wizard-container) main.container,
     .wizard-container {
         padding: 10px;
     }
-    
+
     .step-indicator {
         flex-direction: column;
         gap: 15px;
     }
-    
+
     .step-indicator::before {
         display: none;
     }
-    
+
     .wizard-navigation {
         flex-direction: column;
         gap: 15px;
         text-align: center;
     }
-    
+
     .content-type-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .quick-start-grid {
         grid-template-columns: 1fr;
     }
-    
+
     /* Feature highlights stack on mobile */
     .feature-highlights-row {
         flex-direction: column;
     }
-    
+
     .feature-highlights-row .col-md-4 {
         margin-bottom: 1rem;
     }
-    
+
     /* Adjust action cards on mobile */
     .quick-actions .row {
         flex-direction: column;
     }
-    
+
     .quick-actions .col-md-4 {
         margin-bottom: 0.5rem;
     }
@@ -714,8 +713,6 @@ body:has(.wizard-complete-page) .skip-option,
     display: none !important;
 }
 
-
-
 /* Bootstrap Integration */
 .wizard-progress .progress {
     height: 8px;
@@ -800,12 +797,12 @@ body:has(.wizard-complete-page) .skip-option,
 }
 
 .wizard-step .card {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease;
 }
 
 .wizard-step .card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
 }
-
-/* Removed old alert-info rule - now using wizard-alert classes */

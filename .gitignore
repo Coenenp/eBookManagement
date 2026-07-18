@@ -19,6 +19,9 @@ pip-wheel-metadata/
 *.egg-info/
 .eggs/
 
+# Django cache storage
+cache_storage/
+
 # Coverage
 .coverage
 .coverage.*

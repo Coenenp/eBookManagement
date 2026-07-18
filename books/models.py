@@ -192,16 +192,39 @@ class ScanFolder(HashFieldMixin, models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def clean(self):
-        """Validate path exists and is accessible"""
+        """Validate path exists, is accessible, and is not a duplicate."""
         if self.path:
             try:
                 path = Path(self.path).resolve()
+                normalized = str(path).rstrip("\\/").lower()
+
+                # Check for duplicate or parent/child overlap with existing folders
+                existing = ScanFolder.objects.exclude(id=self.id)
+                for folder in existing:
+                    try:
+                        existing_path = Path(folder.path).resolve()
+                        existing_normalized = str(existing_path).rstrip("\\/").lower()
+
+                        # Exact duplicate
+                        if normalized == existing_normalized:
+                            raise ValidationError({"path": f'This folder is already added as "{folder.name}".'})
+
+                        # Check if one is a parent of the other
+                        if normalized.startswith(existing_normalized + os.sep):
+                            raise ValidationError({"path": f'This folder is a subfolder of "{folder.name}" ({folder.path}). ' f"Remove the parent folder instead."})
+                        if existing_normalized.startswith(normalized + os.sep):
+                            raise ValidationError({"path": f'"{folder.name}" ({folder.path}) is a subfolder of this path. ' f"Remove the subfolder first."})
+                    except (OSError, RuntimeError):
+                        pass  # Skip unresolvable paths
+
                 # Only validate if we can resolve the path
                 if path.exists():
                     if not path.is_dir():
                         raise ValidationError({"path": "Path is not a directory"})
                 # Note: We don't raise error for non-existent paths to allow
                 # tests and staging environments where paths may not exist yet
+            except ValidationError:
+                raise
             except (OSError, RuntimeError) as e:
                 # Log warning but don't fail - path might be created later
                 logger.warning(f"Path validation warning for {self.path}: {e}")
@@ -260,15 +283,21 @@ class ScanFolder(HashFieldMixin, models.Model):
         return file_count
 
     def get_extensions(self):
-        """Get file extensions for this scan folder based on content type"""
-        if self.content_type == "comics":
-            return [".cbr", ".cbz", ".cb7", ".cbt", ".pdf"]
-        elif self.content_type == "audiobooks":
-            return [".mp3", ".m4a", ".m4b", ".aac", ".flac", ".ogg", ".wav"]
-        elif self.content_type == "ebooks":
-            return [".epub", ".pdf", ".mobi", ".azw", ".azw3", ".fb2", ".lit", ".prc"]
-        else:
-            return [".epub", ".pdf", ".mobi", ".azw", ".azw3", ".fb2"]
+        """Get file extensions for this scan folder based on content type.
+
+        The folder's content_type is authoritative (set by the user).
+        All common formats are accepted regardless of content type
+        (e.g., PDF works for both comics and ebooks, CBZ works for both).
+        """
+        # Base ebook/comic formats (shared across content types)
+        document_formats = [".epub", ".pdf", ".mobi", ".azw", ".azw3", ".fb2", ".lit", ".prc"]
+        archive_formats = [".cbr", ".cbz", ".cb7", ".cbt"]
+        audio_formats = [".mp3", ".m4a", ".m4b", ".aac", ".flac", ".ogg", ".wav"]
+
+        if self.content_type == "audiobooks":
+            return audio_formats
+        # Both ebooks and comics accept all document + archive formats
+        return document_formats + archive_formats
 
     def get_scan_progress_info(self):
         """Get information about scan progress"""

@@ -65,11 +65,47 @@
                 const submitButton = document.activeElement;
 
                 if (submitButton && submitButton.type === 'submit') {
-                    // Show loading state but allow form to submit normally
-                    this.setButtonLoadingState(submitButton, true);
+                    // IMPORTANT: Preserve button name/value before disabling
+                    // Disabled buttons don't submit their name/value in POST data
+                    if (submitButton.name && submitButton.value) {
+                        // Check if hidden input already exists
+                        const existingInput = form.querySelector(`input[name="${submitButton.name}"][type="hidden"]`);
+                        if (!existingInput) {
+                            // Create hidden input to preserve the button's name/value
+                            const hiddenInput = document.createElement('input');
+                            hiddenInput.type = 'hidden';
+                            hiddenInput.name = submitButton.name;
+                            hiddenInput.value = submitButton.value;
+                            form.appendChild(hiddenInput);
+                        }
+                    }
+
+                    // Show loading state but DON'T disable until form is actually submitting
+                    // Only change visual state, keep button enabled so its value is submitted
+                    this.setButtonLoadingStateVisualOnly(submitButton);
                     // Form will submit normally and Django will handle the redirect
                 }
             });
+        },
+
+        /**
+         * Set button loading state (visual only, don't disable)
+         * @param {HTMLElement} button - Button element
+         */
+        setButtonLoadingStateVisualOnly(button) {
+            const icon = button.querySelector('i');
+
+            // Store original content
+            if (!button.dataset.originalContent) {
+                button.dataset.originalContent = button.innerHTML;
+            }
+
+            // Set loading state visually but keep button enabled
+            if (button.name === 'start_scan') {
+                button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Starting...';
+            } else {
+                button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Completing...';
+            }
         },
 
         /**

@@ -524,7 +524,9 @@ class IntelligentAPIScanner:
                 recommendations["recommended_mode"] = "full_external"
 
             # Count books that need retrying
-            books_needing_retry = APIAccessLog.objects.filter(should_retry=True, can_retry_now=True).values("book").distinct().count()
+            # can_retry_now is a Python @property, not a DB field - filter in Python
+            retry_logs = APIAccessLog.objects.filter(should_retry=True)
+            books_needing_retry = len(set(log.book_id for log in retry_logs if log.can_retry_now))
 
             recommendations["books_needing_retry"] = books_needing_retry
 

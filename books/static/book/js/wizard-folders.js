@@ -13,7 +13,7 @@ Wizard.Folders = {
             return;
         }
         this.initialized = true;
-        
+
         this.setupEventListeners();
         this.setupFormValidation();
         this.initializeExistingInputs();
@@ -30,13 +30,13 @@ Wizard.Folders = {
                 e.stopPropagation();
                 this.addCustomFolder();
             }
-            
+
             if (e.target.matches('.remove-folder-btn') || e.target.closest('.remove-folder-btn')) {
                 e.preventDefault();
                 e.stopPropagation();
                 this.removeCustomFolder(e.target.closest('.remove-folder-btn'));
             }
-            
+
             if (e.target.matches('.show-examples-btn') || e.target.closest('.show-examples-btn')) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -65,13 +65,13 @@ Wizard.Folders = {
      */
     initializeExistingInputs() {
         const customFolderInputs = document.querySelectorAll('.custom-folder-input');
-        customFolderInputs.forEach(input => {
+        customFolderInputs.forEach((input) => {
             this.addFolderValidation(input);
         });
 
         // Initialize visual state for pre-selected folders
         const folderCheckboxes = document.querySelectorAll('input[name="folders"]');
-        folderCheckboxes.forEach(checkbox => {
+        folderCheckboxes.forEach((checkbox) => {
             if (checkbox.checked) {
                 this.toggleFolderSelection(checkbox);
             }
@@ -122,14 +122,14 @@ Wizard.Folders = {
                 </div>
             </div>
         `;
-        
+
         container.appendChild(newFolderCard);
-        
+
         // Focus on the new input and add validation
         const newInput = newFolderCard.querySelector('.custom-folder-input');
         newInput.focus();
         this.addFolderValidation(newInput);
-        
+
         // Update button state after adding new folder
         this.updateAddFolderButtonState();
     },
@@ -140,7 +140,7 @@ Wizard.Folders = {
     removeCustomFolder(button) {
         const card = button.closest('.custom-folder-card');
         const container = document.getElementById('customFoldersContainer');
-        
+
         if (!card || !container) return;
 
         // Don't remove if it's the only folder input
@@ -158,7 +158,7 @@ Wizard.Folders = {
                 feedback.innerHTML = '';
             }
         }
-        
+
         // Update button state after removing folder
         this.updateAddFolderButtonState();
     },
@@ -204,31 +204,77 @@ Wizard.Folders = {
     async validateCustomFolderPath(input) {
         const feedback = input.closest('.card-body').querySelector('.custom-folder-feedback');
         const path = input.value.trim();
-        
+
         if (!feedback) {
             console.error('Feedback element not found for folder validation');
             return;
         }
-        
+
         // Disable form submission during validation
         this.setFormValidationState(false);
-        
+
         // Show loading state with better message
-        Wizard.Utils.showLoading(feedback, 'Validating folder... <small class="text-muted">(checking for media files)</small>');
-        
+        Wizard.Utils.showLoading(
+            feedback,
+            'Validating folder... <small class="text-muted">(checking for media files)</small>'
+        );
+
         try {
-            const validationUrl = window.wizardConfig?.validateUrl || 
-                                window.wizardFoldersConfig?.validateUrl || 
-                                '/books/wizard/ajax/validate-folder/';
-            
+            // Check for duplicate folders BEFORE making the AJAX request
+            const allInputs = document.querySelectorAll('.custom-folder-input');
+            const normalizedPath = path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+
+            // Helper to check a single path against normalizedPath
+            const checkDuplicate = (otherPath, source) => {
+                const normalizedVal = otherPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+                if (normalizedPath === normalizedVal) {
+                    return `This folder is already added${source}.`;
+                }
+                if (normalizedPath.startsWith(normalizedVal + '/')) {
+                    return `This folder is inside another folder${source}.`;
+                }
+                if (normalizedVal.startsWith(normalizedPath + '/')) {
+                    return `Another folder${source} is inside this path.`;
+                }
+                return null;
+            };
+
+            // Check against other inputs on this page
+            for (const inp of allInputs) {
+                const val = inp.value.trim();
+                if (!val || inp === input) continue;
+                const err = checkDuplicate(val, ' on this page');
+                if (err) {
+                    Wizard.Utils.setValidationState(input, false);
+                    Wizard.Utils.showError(feedback, '<i class="fas fa-exclamation-triangle me-1"></i>' + err);
+                    return;
+                }
+            }
+
+            // Check against existing DB folders
+            const dbPaths = window.wizardFoldersConfig?.existingDbPaths || [];
+            for (const dbPath of dbPaths) {
+                const err = checkDuplicate(dbPath, ' in your library');
+                if (err) {
+                    Wizard.Utils.setValidationState(input, false);
+                    Wizard.Utils.showError(feedback, '<i class="fas fa-exclamation-triangle me-1"></i>' + err);
+                    return;
+                }
+            }
+
+            const validationUrl =
+                window.wizardConfig?.validateUrl ||
+                window.wizardFoldersConfig?.validateUrl ||
+                '/books/wizard/ajax/validate-folder/';
+
             const data = await Wizard.Utils.makeRequest(validationUrl, {
-                body: 'path=' + encodeURIComponent(path)
+                body: 'path=' + encodeURIComponent(path),
             });
-            
+
             if (data.valid) {
                 Wizard.Utils.setValidationState(input, true);
-                const fileMessage = data.file_count === 0 ? 'no media files found' : 
-                                  `${data.file_count} media files found`;
+                const fileMessage =
+                    data.file_count === 0 ? 'no media files found' : `${data.file_count} media files found`;
                 const message = `<i class="fas fa-check-circle text-success me-1"></i>Valid folder: <strong>${data.name}</strong> 
                                <span class="badge bg-success ms-2">${fileMessage}</span>`;
                 Wizard.Utils.showSuccess(feedback, message);
@@ -236,13 +282,15 @@ Wizard.Folders = {
                 Wizard.Utils.setValidationState(input, false);
                 Wizard.Utils.showError(feedback, `<i class="fas fa-exclamation-triangle me-1"></i>${data.error}`);
             }
-            
         } catch (error) {
             console.error('Error validating folder:', error);
             Wizard.Utils.setValidationState(input, false);
-            Wizard.Utils.showWarning(feedback, '<i class="fas fa-exclamation-circle me-1"></i>Validation timeout - folder may be too large or inaccessible');
+            Wizard.Utils.showWarning(
+                feedback,
+                '<i class="fas fa-exclamation-circle me-1"></i>Validation timeout - folder may be too large or inaccessible'
+            );
         }
-        
+
         // Re-enable form and update button state
         this.setFormValidationState(true);
         this.updateAddFolderButtonState();
@@ -268,12 +316,12 @@ Wizard.Folders = {
      */
     canAddMoreFolders() {
         const customFolderInputs = document.querySelectorAll('.custom-folder-input');
-        
+
         // If no inputs exist, allow adding the first one
         if (customFolderInputs.length === 0) {
             return true;
         }
-        
+
         // Check if all inputs either are empty (and thus can be filled) or are valid
         for (const input of customFolderInputs) {
             const value = input.value.trim();
@@ -286,7 +334,7 @@ Wizard.Folders = {
                 return false;
             }
         }
-        
+
         return true;
     },
 
@@ -296,10 +344,10 @@ Wizard.Folders = {
     updateAddFolderButtonState() {
         const addButton = document.querySelector('.add-folder-btn');
         if (!addButton) return;
-        
+
         const canAdd = this.canAddMoreFolders();
         addButton.disabled = !canAdd;
-        
+
         if (canAdd) {
             addButton.classList.remove('btn-outline-secondary');
             addButton.classList.add('btn-outline-primary');
@@ -331,10 +379,10 @@ Wizard.Folders = {
     validateForm(form) {
         const selectedFolders = form.querySelectorAll('input[name="folders"]:checked');
         const customFolderInputs = form.querySelectorAll('.custom-folder-input');
-        
+
         // Check if any custom folders have values
         const hasCustomFolders = Wizard.Form.hasAtLeastOneValue(customFolderInputs);
-        
+
         if (selectedFolders.length === 0 && !hasCustomFolders) {
             Wizard.Form.showValidationError('Please select at least one folder or enter a custom folder path.');
             return false;
@@ -346,13 +394,13 @@ Wizard.Folders = {
             Wizard.Form.showValidationError('Please fix invalid folder paths before continuing.');
             return false;
         }
-        
+
         return true;
-    }
+    },
 };
 
 // Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     Wizard.Folders.init();
 });
 
@@ -364,7 +412,7 @@ window.WizardFolders = Wizard.Folders;
 // Initialize when DOM is ready (with flag to prevent double initialization)
 if (!window.wizardFoldersInitialized) {
     window.wizardFoldersInitialized = true;
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         Wizard.Folders.init();
     });
 }
