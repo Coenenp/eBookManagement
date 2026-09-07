@@ -204,7 +204,7 @@ class BackgroundScanner:
                 scan_folder = ScanFolder.objects.create(
                     path=folder_path,
                     language=language or "en",
-                    content_type=content_type or "mixed",
+                    content_type=content_type or "ebooks",
                     name=folder_path.split("/")[-1] or folder_path.split("\\")[-1],
                 )
             else:
@@ -230,6 +230,7 @@ class BackgroundScanner:
                     scan_folder=scan_folder,
                     rescan=False,  # This is a new scan, not a rescan
                     scan_status=progress_bridge,  # Pass bridge to enable live progress updates
+                    enable_external_apis=enable_external_apis,
                 )
 
                 # Count processed books for the progress report
@@ -333,6 +334,7 @@ class BackgroundScanner:
         """Create a ScanHistory record for the scanning dashboard."""
         try:
             from django.utils import timezone
+
             from books.models import ScanHistory
 
             progress_data = self.progress.get_status()
@@ -342,7 +344,8 @@ class BackgroundScanner:
             processed = progress_data.get("current", 0)
             duration = int(end_time - start_time) if start_time > 0 else 0
 
-            from datetime import datetime, timezone as dt_timezone
+            from datetime import datetime
+            from datetime import timezone as dt_timezone
 
             started_at = datetime.fromtimestamp(start_time, tz=dt_timezone.utc) if start_time > 0 else timezone.now()
             completed_at = datetime.fromtimestamp(end_time, tz=dt_timezone.utc) if end_time > 0 else timezone.now()
@@ -433,6 +436,14 @@ class BackgroundScanner:
 
                     # Re-extract internal metadata
                     folder_scanner.extract_internal_metadata(book)
+
+                    # Ensure content ISBN is scanned first (local step) before any external queries
+                    try:
+                        from books.scanner.extractors.content_isbn import ensure_content_isbn
+
+                        ensure_content_isbn(book)
+                    except Exception as isbn_error:
+                        logger.warning(f"[BACKGROUND RESCAN] Content ISBN failed for {book.id}: {isbn_error}")
 
                     # Re-query external APIs
                     if enable_external_apis:

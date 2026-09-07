@@ -127,6 +127,7 @@ class EbookScanner:
                     ebook_extensions=content_specific_extensions,
                     cover_extensions=self.cover_extensions,
                     scan_status=status,  # Pass status for progress tracking
+                    ai_recognizer=self.ai_recognizer,
                 )
                 logger.info(f"Completed scan of folder: {path}")
             except Exception as e:
@@ -200,6 +201,7 @@ class EbookScanner:
                     cover_extensions=self.cover_extensions,
                     scan_status=status,
                     resume_from=status.last_processed_file,  # Resume from last processed file
+                    ai_recognizer=self.ai_recognizer,
                 )
                 logger.info(f"Completed scan of folder: {path}")
             except Exception as e:
@@ -273,6 +275,13 @@ class EbookScanner:
 
                     # Skip the file creation part, book already exists
                     # Go straight to metadata collection steps
+                    try:
+                        from books.scanner.extractors.content_isbn import ensure_content_isbn
+
+                        ensure_content_isbn(book)
+                    except Exception as e:
+                        logger.warning(f"Content ISBN extraction failed: {str(e)}")
+
                     logger.info(f"[METADATA and COVER CANDIDATES QUERY] Path: {file_path}")
                     query_metadata_and_covers(book)
 

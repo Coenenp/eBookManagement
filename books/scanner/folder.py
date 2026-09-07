@@ -184,6 +184,8 @@ def scan_directory(
     cover_extensions=None,
     scan_status=None,
     resume_from=None,
+    enable_external_apis=True,
+    ai_recognizer=None,
 ):
     if not scan_status:
         scan_status, _ = ScanStatus.objects.get_or_create(id=1)
@@ -247,7 +249,7 @@ def scan_directory(
             "audiobooks",
         ]:
             logger.info(f"Using content-type specific processing for {scan_folder.content_type}")
-            process_files_by_type(ebook_files, scan_folder, cover_files, opf_files, rescan)
+            process_files_by_type(ebook_files, scan_folder, cover_files, opf_files, rescan, enable_external_apis=enable_external_apis, ai_recognizer=ai_recognizer)
 
             # Update progress for all files at once
             scan_status.processed_files += len(ebook_files)
@@ -269,6 +271,8 @@ def scan_directory(
                 rescan,
                 scan_status,
                 total_files,
+                enable_external_apis=enable_external_apis,
+                ai_recognizer=ai_recognizer,
             )
 
     except ImportError:
@@ -281,6 +285,8 @@ def scan_directory(
             rescan,
             scan_status,
             total_files,
+            enable_external_apis=enable_external_apis,
+            ai_recognizer=ai_recognizer,
         )
 
     # Handle orphaned files at the end
@@ -305,11 +311,11 @@ def _should_use_content_type_processing(ebook_files):
     return (comic_count > total_files * 0.5) or (audio_count > total_files * 0.5)
 
 
-def _process_files_individually(ebook_files, scan_folder, cover_files, opf_files, rescan, scan_status, total_files):
+def _process_files_individually(ebook_files, scan_folder, cover_files, opf_files, rescan, scan_status, total_files, enable_external_apis=True, ai_recognizer=None):
     """Process files using the original individual approach"""
     for i, ebook_path in enumerate(ebook_files, 1):
         try:
-            _process_book(ebook_path, scan_folder, cover_files, opf_files, rescan)
+            _process_book(ebook_path, scan_folder, cover_files, opf_files, rescan, enable_external_apis=enable_external_apis, ai_recognizer=ai_recognizer)
 
             # Update global progress tracking
             scan_status.processed_files += 1
@@ -357,6 +363,13 @@ def _complete_metadata_for_books(books, scan_status):
 
             # Skip the file creation part, book already exists
             # Go straight to metadata collection steps
+
+            try:
+                from books.scanner.extractors.content_isbn import ensure_content_isbn
+
+                ensure_content_isbn(book)
+            except Exception as e:
+                logger.warning(f"Content ISBN extraction failed: {str(e)}")
 
             logger.info(f"[METADATA and COVER CANDIDATES QUERY] Path: {book.primary_file.file_path if book.primary_file else 'No file'}")
             query_metadata_and_covers(book)
@@ -428,7 +441,7 @@ def _collect_files(directory, ebook_exts, cover_exts):
     return ebook_files, cover_files, opf_files
 
 
-def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
+def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False, enable_external_apis=True, ai_recognizer=None):
     book, created = _get_or_create_book_by_path(
         file_path=file_path,
         scan_folder=scan_folder,
@@ -453,7 +466,7 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
         primary_file.save()
 
     logger.info(f"[FILENAME PARSE] Path: {file_path}")
-    _extract_filename_metadata(book)
+    _extract_filename_metadata(book, ai_recognizer=ai_recognizer)
 
     try:
         _extract_internal_metadata(book)
@@ -469,9 +482,9 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
     if not is_comic:
         logger.info(f"[CONTENT ISBN SCAN] Path: {book.primary_file.file_path if book.primary_file else 'No file'}")
         try:
-            from books.scanner.extractors.content_isbn import save_content_isbns
+            from books.scanner.extractors.content_isbn import ensure_content_isbn
 
-            save_content_isbns(book)
+            ensure_content_isbn(book)
         except Exception as e:
             logger.warning(f"Content ISBN extraction failed: {str(e)}")
 
@@ -484,12 +497,14 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
             book.is_corrupted = True
             book.save()
 
-    # Skip external metadata queries for comic books
-    if not is_comic:
+    # Skip external metadata queries for comic books and local-only (quick) scans
+    if not is_comic and enable_external_apis:
         logger.info(f"[METADATA and COVER CANDIDATES QUERY] Path: {book.primary_file.file_path if book.primary_file else 'No file'}")
         query_metadata_and_covers(book)
-    else:
+    elif is_comic:
         logger.info(f"[SKIPPING EXTERNAL QUERIES] Comic book detected: {book.primary_file.file_path if book.primary_file else 'No file'}")
+    else:
+        logger.info(f"[SKIPPING EXTERNAL QUERIES] External APIs disabled (quick scan): {book.primary_file.file_path if book.primary_file else 'No file'}")
 
     try:
         logger.info(f"[FINAL METADATA RESOLVE] Path: {book.primary_file.file_path if book.primary_file else 'No file'}")
@@ -504,7 +519,7 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False):
     logger.info(f"Processed: {Path(file_path).name}")
 
 
-def _extract_filename_metadata(book):
+def _extract_filename_metadata(book, ai_recognizer=None):
     source = _get_initial_scan_source()
 
     # Use comic-specific parsing for comic books
@@ -513,6 +528,10 @@ def _extract_filename_metadata(book):
         from books.scanner.parsing import parse_comic_metadata
 
         parsed = parse_comic_metadata(book.primary_file.file_path)
+    elif ai_recognizer is not None:
+        from books.scanner.parsing import parse_path_metadata_with_ai
+
+        parsed = parse_path_metadata_with_ai(book.primary_file.file_path if book.primary_file else "", ai_recognizer)
     else:
         parsed = parse_path_metadata(book.primary_file.file_path if book.primary_file else "")
 
@@ -743,6 +762,13 @@ def query_external_metadata(book):
         if is_comic:
             logger.info(f"[EXTERNAL METADATA] Skipping external queries for comic: {book.file_path}")
             return True
+
+        try:
+            from books.scanner.extractors.content_isbn import ensure_content_isbn
+
+            ensure_content_isbn(book)
+        except Exception as e:
+            logger.warning(f"Content ISBN extraction failed for {book.file_path}: {e}")
 
         logger.info(f"[EXTERNAL METADATA] Querying external APIs: {book.file_path}")
         query_metadata_and_covers(book)

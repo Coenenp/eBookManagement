@@ -106,6 +106,7 @@ def process_files_by_content_type(
     cover_files: List[str],
     opf_files: List[str],
     rescan: bool = False,
+    enable_external_apis: bool = True,
 ):
     """
     Process files using content-type specific logic
@@ -118,11 +119,11 @@ def process_files_by_content_type(
     if content_type == "comics":
         _process_comic_files(file_paths, scan_folder, cover_files, opf_files, rescan)
     elif content_type == "audiobooks":
-        _process_audiobook_files(file_paths, scan_folder, cover_files, opf_files, rescan)
+        _process_audiobook_files(file_paths, scan_folder, cover_files, opf_files, rescan, enable_external_apis=enable_external_apis)
     else:
         # For ebooks, process individually (existing behavior)
         for file_path in file_paths:
-            _process_individual_ebook(file_path, scan_folder, cover_files, opf_files, rescan)
+            _process_individual_ebook(file_path, scan_folder, cover_files, opf_files, rescan, enable_external_apis=enable_external_apis)
 
 
 def _process_comic_files(
@@ -291,6 +292,7 @@ def _process_audiobook_files(
     cover_files: List[str],
     opf_files: List[str],
     rescan: bool,
+    enable_external_apis: bool = True,
 ):
     """Process audiobook files by grouping them into audiobooks using unified Book + BookFile architecture"""
 
@@ -333,7 +335,7 @@ def _process_audiobook_files(
         logger.info(f"Updated audiobook totals: {total_duration}s, {total_size} bytes")
 
         # Query external metadata for this audiobook (once per audiobook, not per file)
-        if created or rescan:  # Only query for new audiobooks or during rescan
+        if (created or rescan) and enable_external_apis:  # Only query for new audiobooks or during rescan
             _query_audiobook_external_metadata(book)
 
 
@@ -435,13 +437,15 @@ def _process_individual_ebook(
     cover_files: List[str],
     opf_files: List[str],
     rescan: bool,
+    enable_external_apis: bool = True,
+    ai_recognizer=None,
 ):
     """Process individual ebook file (existing behavior for ebooks)"""
     # Import the original processing function
     from books.scanner.folder import _process_book
 
     # Use the existing book processing logic for ebooks
-    _process_book(file_path, scan_folder, cover_files, opf_files, rescan)
+    _process_book(file_path, scan_folder, cover_files, opf_files, rescan, enable_external_apis=enable_external_apis, ai_recognizer=ai_recognizer)
 
 
 def detect_content_type_from_files(file_paths: List[str]) -> str:
@@ -482,6 +486,8 @@ def process_files_by_type(
     cover_files: List[str],
     opf_files: List[str],
     rescan: bool = False,
+    enable_external_apis: bool = True,
+    ai_recognizer=None,
 ):
     """
     Content-type specific file processing that routes to appropriate processors
@@ -491,7 +497,14 @@ def process_files_by_type(
     # Check if scan_folder has a specific content_type set
     if scan_folder.content_type and scan_folder.content_type != "ebooks":
         # Use content-type specific processing
-        process_files_by_content_type(file_paths, scan_folder, cover_files, opf_files, rescan)
+        process_files_by_content_type(
+            file_paths,
+            scan_folder,
+            cover_files,
+            opf_files,
+            rescan,
+            enable_external_apis=enable_external_apis,
+        )
     else:
         # Auto-detect or fall back to individual processing
         detected_type = detect_content_type_from_files(file_paths)
@@ -501,11 +514,11 @@ def process_files_by_type(
             _process_comic_files(file_paths, scan_folder, cover_files, opf_files, rescan)
         elif detected_type == "audiobooks":
             logger.info(f"Auto-detected audiobooks in folder {scan_folder.path}")
-            _process_audiobook_files(file_paths, scan_folder, cover_files, opf_files, rescan)
+            _process_audiobook_files(file_paths, scan_folder, cover_files, opf_files, rescan, enable_external_apis=enable_external_apis)
         else:
             # Process as individual ebooks
             for file_path in file_paths:
-                _process_individual_ebook(file_path, scan_folder, cover_files, opf_files, rescan)
+                _process_individual_ebook(file_path, scan_folder, cover_files, opf_files, rescan, enable_external_apis=enable_external_apis, ai_recognizer=ai_recognizer)
 
 
 def _query_audiobook_external_metadata(book):
@@ -544,7 +557,7 @@ def _query_audiobook_external_metadata(book):
         # Get ISBN from book metadata if available
         isbn = None
         try:
-            isbn_metadata = book.bookmetadata.filter(field_name="isbn", is_active=True).first()
+            isbn_metadata = book.metadata.filter(field_name="isbn", is_active=True).first()
             if isbn_metadata:
                 isbn = isbn_metadata.field_value
         except Exception:

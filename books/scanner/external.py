@@ -41,22 +41,23 @@ def query_metadata_and_covers(book):
     try:
         title = _get_best_title(book)
         author = _get_best_author(book)
+        isbn = _get_best_isbn(book)
 
         logger.info(f"Retrieving metadata and covers for {title or 'Unknown'} ({author or 'Unknown'})...")
-        logger.info(f"[DEBUG] Title resolved: {title}, Author resolved: {author}")
+        logger.info(f"[DEBUG] Title resolved: {title}, Author resolved: {author}, ISBN resolved: {isbn}")
         logger.info(f"[EXTERNAL PARSE] Book ID: {book.id}")
 
-        if title or author:
-            logger.info(f"[OPEN LIBRARY COMBINED] Title: {title}, Author: {author}")
-            _query_open_library_combined(book, title, author, None)  # No ISBN available in this context
+        if title or author or isbn:
+            logger.info(f"[OPEN LIBRARY COMBINED] Title: {title}, Author: {author}, ISBN: {isbn}")
+            _query_open_library_combined(book, title, author, isbn)
 
-            logger.info(f"[GOOGLE BOOKS COMBINED] Title: {title}, Author: {author}")
-            _query_google_books_combined(book, title, author, None)  # No ISBN available in this context
+            logger.info(f"[GOOGLE BOOKS COMBINED] Title: {title}, Author: {author}, ISBN: {isbn}")
+            _query_google_books_combined(book, title, author, isbn)
 
-            logger.info(f"[GOODREADS COMBINED] Title: {title}, Author: {author}")
-            _query_goodreads_combined(book, title, author)
+            logger.info(f"[GOODREADS COMBINED] Title: {title}, Author: {author}, ISBN: {isbn}")
+            _query_goodreads_combined(book, title, author, isbn)
         else:
-            logger.warning(f"[QUERY SKIPPED] No usable title or author found for book ID {book.id}")
+            logger.warning(f"[QUERY SKIPPED] No usable title, author, or ISBN found for book ID {book.id}")
     except Exception as e:
         logger.error(f"[QUERY_METADATA_AND_COVERS EXCEPTION] {e}")
         traceback.print_exc()
@@ -117,8 +118,8 @@ def query_metadata_and_covers_with_terms(book, search_title=None, search_author=
 
             # Query Goodreads if selected
             if "goodreads" in sources:
-                logger.info(f"[GOODREADS COMBINED] Title: {title}, Author: {author}")
-                _query_goodreads_combined(book, title, author)
+                logger.info(f"[GOODREADS COMBINED] Title: {title}, Author: {author}, ISBN: {search_isbn}")
+                _query_goodreads_combined(book, title, author, search_isbn)
             else:
                 logger.info("[GOODREADS SKIPPED] Not selected by user")
 
@@ -152,6 +153,12 @@ def _get_best_title(book):
 def _get_best_author(book):
     best = BookAuthor.objects.filter(book=book).order_by("-confidence").first()
     return best.author.name if best else None
+
+
+def _get_best_isbn(book):
+    """Return the best active ISBN from BookMetadata (highest confidence first)."""
+    best = BookMetadata.objects.filter(book=book, field_name="isbn", is_active=True).order_by("-confidence").first()
+    return normalize_isbn(best.field_value) if best else None
 
 
 def _calculate_match_confidence(query_title, query_author, result_title, result_authors):
@@ -223,11 +230,16 @@ def get_image_metadata(url):
         image = Image.open(BytesIO(response.content))
         width, height = image.size
         file_size = len(response.content)
-        format = image.format.lower()
-        return width, height, file_size, format
+        image_format = (image.format or "").lower()
+        return {
+            "width": width,
+            "height": height,
+            "size": file_size,
+            "format": image_format,
+        }
     except Exception as e:
         logger.warning(f"Metadata fetch failed for {url}: {str(e)}")
-        return None, None, None, None
+        return None
 
 
 def _query_open_library_combined(book, title, author, isbn=None):
@@ -381,18 +393,18 @@ def _query_google_books_combined(book, title, author, isbn=None):
         logger.warning(f"Google Books combined query failed for {book.file_path}: {str(e)}")
 
 
-def _query_goodreads_combined(book, title, author):
+def _query_goodreads_combined(book, title, author, isbn=None):
     """Combined Goodreads query for both metadata and covers"""
     try:
         token = settings.APIFY_API_TOKEN
-        if not token or not (title or author):
+        if not token or not (title or author or isbn):
             return
 
         metadata_source, _ = DataSource.objects.get_or_create(name=DataSource.GOODREADS, defaults={"trust_level": 0.75})
         cover_source, _ = DataSource.objects.get_or_create(name=DataSource.GOODREADS_COVERS, defaults={"trust_level": 0.7})
 
-        search_query = f"{title} {author}".strip()
-        cache_key = f"goodreads_combined:{make_cache_key(title, author)}"
+        search_query = " ".join(part for part in (title, author, isbn) if part).strip()
+        cache_key = f"goodreads_combined:{make_cache_key(title, author, isbn)}"
 
         input_payload = {
             "search": search_query,
@@ -632,13 +644,14 @@ def _process_open_library_cover(book, source, doc, confidence):
         cover_url = f"https://covers.openlibrary.org/b/id/{cover_id}-L.jpg"
 
         # Get image metadata if available
-        width, height, file_size = None, None, None
+        width, height, file_size, image_format = None, None, None, None
         try:
             metadata = get_image_metadata(cover_url)
             if metadata:
                 width = metadata.get("width")
                 height = metadata.get("height")
                 file_size = metadata.get("size")
+                image_format = metadata.get("format")
         except Exception as e:
             logger.debug(f"Could not get image metadata for {cover_url}: {e}")
 
@@ -652,7 +665,7 @@ def _process_open_library_cover(book, source, doc, confidence):
                 "width": width,
                 "height": height,
                 "file_size": file_size,
-                "format": "jpg",
+                "format": image_format or "jpg",
                 "is_active": True,
             },
         )
@@ -677,13 +690,14 @@ def _process_google_books_cover(book, source, info, confidence):
             cover_url = cover_url.replace("http://", "https://")
 
         # Get image metadata if available
-        width, height, file_size = None, None, None
+        width, height, file_size, image_format = None, None, None, None
         try:
             metadata = get_image_metadata(cover_url)
             if metadata:
                 width = metadata.get("width")
                 height = metadata.get("height")
                 file_size = metadata.get("size")
+                image_format = metadata.get("format")
         except Exception as e:
             logger.debug(f"Could not get image metadata for {cover_url}: {e}")
 
@@ -697,7 +711,7 @@ def _process_google_books_cover(book, source, info, confidence):
                 "width": width,
                 "height": height,
                 "file_size": file_size,
-                "format": "jpg",
+                "format": image_format or "jpg",
                 "is_active": True,
             },
         )
@@ -719,13 +733,14 @@ def _process_goodreads_cover(book, source, item, confidence):
             cover_url = cover_url.replace("http://", "https://")
 
         # Get image metadata if available
-        width, height, file_size = None, None, None
+        width, height, file_size, image_format = None, None, None, None
         try:
             metadata = get_image_metadata(cover_url)
             if metadata:
                 width = metadata.get("width")
                 height = metadata.get("height")
                 file_size = metadata.get("size")
+                image_format = metadata.get("format")
         except Exception as e:
             logger.debug(f"Could not get image metadata for {cover_url}: {e}")
 
@@ -739,7 +754,7 @@ def _process_goodreads_cover(book, source, item, confidence):
                 "width": width,
                 "height": height,
                 "file_size": file_size,
-                "format": "jpg",
+                "format": image_format or "jpg",
                 "is_active": True,
             },
         )

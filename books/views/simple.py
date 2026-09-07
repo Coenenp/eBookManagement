@@ -311,13 +311,42 @@ def rescan_external_metadata(request, book_id):
         else:
             data = request.POST
 
-        # Get user-provided search terms
-        search_title = data.get("title_override", "").strip()
-        search_author = data.get("author_override", "").strip()
-        search_isbn = data.get("isbn_override", "").strip()
+        def _get_value(data, *keys, default=""):
+            for key in keys:
+                value = data.get(key)
+                if value not in (None, ""):
+                    return value
+            return default
+
+        def _get_list(data, *keys):
+            for key in keys:
+                if hasattr(data, "getlist"):
+                    result = data.getlist(key)
+                else:
+                    result = data.get(key)
+                    if isinstance(result, str):
+                        result = [result]
+                if result:
+                    return list(result)
+            return []
+
+        # Get user-provided search terms (accept both override and search aliases)
+        search_title = str(_get_value(data, "title_override", "title_search")).strip()
+        search_author = str(_get_value(data, "author_override", "author_search")).strip()
+        search_isbn = str(_get_value(data, "isbn_override", "isbn_search")).strip()
+
+        # Fall back to final metadata when no explicit search terms are provided
+        try:
+            final_metadata = book.finalmetadata
+        except Exception:
+            final_metadata = None
+        if final_metadata:
+            search_title = search_title or (final_metadata.final_title or "").strip()
+            search_author = search_author or (final_metadata.final_author or "").strip()
+            search_isbn = search_isbn or (final_metadata.isbn or "").strip()
 
         # Get selected sources
-        sources = data.getlist("sources[]") or data.getlist("sources") or []
+        sources = _get_list(data, "sources[]", "sources")
         if not sources:
             # Default to all sources if none selected
             sources = ["google", "openlibrary", "goodreads"]
@@ -372,10 +401,18 @@ def rescan_external_metadata(request, book_id):
             logger.info(f"Total deactivated: {total_deleted} metadata entries")
 
         # Get counts before rescan
-        before_counts = {
-            "metadata": book.metadata.filter(is_active=True).count(),
-            "covers": book.covers.filter(is_active=True).count(),
-        }
+        def _get_counts(book):
+            return {
+                "titles": book.titles.filter(is_active=True).count(),
+                "authors": book.author_relationships.filter(is_active=True).count(),
+                "genres": book.genre_relationships.filter(is_active=True).count(),
+                "series": book.series_relationships.filter(is_active=True).count(),
+                "publishers": book.publisher_relationships.filter(is_active=True).count(),
+                "covers": book.covers.filter(is_active=True).count(),
+                "metadata": book.metadata.filter(is_active=True).count(),
+            }
+
+        before_counts = _get_counts(book)
 
         logger.info(f"Starting rescan for book {book_id}: {book.file_path}")
         logger.info(f"Search terms - Title: '{search_title}', Author: '{search_author}', ISBN: '{search_isbn}'")
@@ -394,16 +431,10 @@ def rescan_external_metadata(request, book_id):
             success = False
 
         # Get counts after rescan
-        after_counts = {
-            "metadata": book.metadata.filter(is_active=True).count(),
-            "covers": book.covers.filter(is_active=True).count(),
-        }
+        after_counts = _get_counts(book)
 
         # Calculate what was added
-        added_counts = {
-            "metadata": after_counts["metadata"] - before_counts["metadata"],
-            "covers": after_counts["covers"] - before_counts["covers"],
-        }
+        added_counts = {key: after_counts[key] - before_counts[key] for key in before_counts}
 
         # Refresh book from database to get updated data
         book.refresh_from_db()
@@ -420,6 +451,8 @@ def rescan_external_metadata(request, book_id):
                 "success": success,
                 "message": message,
                 "metadata_updated": True,
+                "search_terms": {"title": search_title, "author": search_author, "isbn": search_isbn},
+                "sources_queried": sources,
                 "before_counts": before_counts,
                 "after_counts": after_counts,
                 "added_counts": added_counts,

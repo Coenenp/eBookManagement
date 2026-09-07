@@ -27,16 +27,20 @@ def extract_isbn_from_content(book, page_limit=10):
         list: List of valid ISBN numbers found
     """
     try:
-        file_path = Path(book.file_path)
+        primary_file = book.primary_file
+        if primary_file is None or not primary_file.file_path:
+            return []
+
+        file_path = Path(primary_file.file_path)
         file_extension = file_path.suffix.lower()
 
         # Route to appropriate extractor based on file type
         if file_extension == ".epub":
-            return _extract_from_epub(book, page_limit)
+            return _extract_from_epub(str(file_path), page_limit)
         elif file_extension == ".pdf":
-            return _extract_from_pdf(book, page_limit)
+            return _extract_from_pdf(str(file_path), page_limit)
         elif file_extension in [".mobi", ".azw", ".azw3"]:
-            return _extract_from_mobi(book, page_limit)
+            return _extract_from_mobi(str(file_path), page_limit)
         else:
             logger.warning(f"Unsupported file type for content ISBN extraction: {file_extension}")
             return []
@@ -46,12 +50,12 @@ def extract_isbn_from_content(book, page_limit=10):
         return []
 
 
-def _extract_from_epub(book, page_limit):
+def _extract_from_epub(file_path, page_limit):
     """Extract ISBNs from EPUB content."""
     try:
         from ebooklib import epub
 
-        epub_book = epub.read_epub(book.file_path)
+        epub_book = epub.read_epub(file_path)
         isbn_candidates = []
 
         # Get all text items (chapters, pages)
@@ -88,12 +92,12 @@ def _extract_from_epub(book, page_limit):
         return []
 
 
-def _extract_from_pdf(book, page_limit):
+def _extract_from_pdf(file_path, page_limit):
     """Extract ISBNs from PDF content."""
     try:
         from PyPDF2 import PdfReader
 
-        reader = PdfReader(book.file_path)
+        reader = PdfReader(file_path)
         isbn_candidates = []
         total_pages = len(reader.pages)
 
@@ -134,12 +138,12 @@ def _extract_from_pdf(book, page_limit):
         return []
 
 
-def _extract_from_mobi(book, page_limit):
+def _extract_from_mobi(file_path, page_limit):
     """Extract ISBNs from MOBI content."""
     try:
         # Try to use mobidedrm or similar library if available
         # For now, return empty list as MOBI parsing is complex
-        logger.info(f"MOBI content ISBN extraction not yet implemented for {book.file_path}")
+        logger.info(f"MOBI content ISBN extraction not yet implemented for {file_path}")
         return []
 
     except Exception as e:
@@ -259,12 +263,13 @@ def _validate_and_dedupe_isbns(candidates):
     return list(valid_isbns)
 
 
-def save_content_isbns(book):
+def save_content_isbns(book, page_limit=10):
     """
     Extract ISBNs from book content and save them as metadata.
 
     Args:
         book: Book model instance
+        page_limit: Number of pages to scan from the beginning and end
     """
     try:
         # Get the data source for content-extracted ISBNs
@@ -276,7 +281,7 @@ def save_content_isbns(book):
         )
 
         # Extract ISBNs from content
-        isbns = extract_isbn_from_content(book, page_limit=10)
+        isbns = extract_isbn_from_content(book, page_limit=page_limit)
 
         if not isbns:
             logger.info(f"No ISBNs found in content for {book.file_path}")
@@ -306,6 +311,23 @@ def save_content_isbns(book):
 
     except Exception as e:
         logger.error(f"Failed to save content ISBNs for {book.file_path}: {e}")
+
+
+def has_isbn_metadata(book):
+    """Return True if the book already has any active ISBN metadata."""
+    return BookMetadata.objects.filter(book=book, field_name="isbn", is_active=True).exists()
+
+
+def ensure_content_isbn(book, page_limit=10):
+    """Run content ISBN extraction only if the book has no ISBN metadata yet.
+
+    Returns:
+        bool: True if a content scan was performed, False if skipped.
+    """
+    if has_isbn_metadata(book):
+        return False
+    save_content_isbns(book, page_limit=page_limit)
+    return True
 
 
 def bulk_scan_content_isbns(books_queryset=None, page_limit=10):

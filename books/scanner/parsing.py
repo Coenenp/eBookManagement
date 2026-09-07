@@ -122,10 +122,6 @@ def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
                 continue  # Skip this pattern, try next one
             metadata["title"] = title
             metadata["authors"] = authors
-        elif "title" in groups:
-            metadata["title"] = groups["title"]
-        elif "author" in groups:
-            metadata["authors"] = normalize_surnames(split_authors(groups["author"]))
         elif "author_first" in groups and "author_last" in groups:
             # Handle "Last, First - Title" format correctly
             # Pattern captures: author_last="Doe", author_first="John" from "Doe, John - Title"
@@ -134,6 +130,10 @@ def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
             metadata["authors"] = [full_name]
             if "title" in groups:
                 metadata["title"] = groups["title"].strip()
+        elif "title" in groups:
+            metadata["title"] = groups["title"]
+        elif "author" in groups:
+            metadata["authors"] = normalize_surnames(split_authors(groups["author"]))
 
         if "series" in groups:
             metadata["series"] = groups["series"].strip()

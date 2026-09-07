@@ -49,7 +49,7 @@ class Command(BaseCommand):
 
         # Apply folder filters if specified
         if options["folder"]:
-            query = query.filter(file_path__startswith=options["folder"])
+            query = query.filter(files__file_path__startswith=options["folder"])
 
         if options["scan_folder_id"]:
             query = query.filter(scan_folder_id=options["scan_folder_id"])
@@ -74,6 +74,7 @@ class Command(BaseCommand):
         self.stdout.write("Starting metadata completion...")
 
         # Import the required functions
+        from books.scanner.extractors.content_isbn import ensure_content_isbn
         from books.scanner.folder import (
             query_metadata_and_covers,
             resolve_final_metadata,
@@ -85,6 +86,12 @@ class Command(BaseCommand):
         for i, book in enumerate(incomplete_books, 1):
             try:
                 self.stdout.write(f"Processing book {book.id} ({i}/{len(incomplete_books)}): {book.file_path}")
+
+                # Ensure content ISBN is scanned first (local step) before external queries
+                try:
+                    ensure_content_isbn(book)
+                except Exception as e:
+                    logger.warning(f"Content ISBN extraction failed for {book.id}: {e}")
 
                 # Skip the file creation part, book already exists
                 # Go straight to metadata collection steps

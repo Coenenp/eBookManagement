@@ -38,11 +38,7 @@ class FilenamePatternRecognizerTests(TestCase):
         self.recognizer.model_dir = Path(self.temp_dir)
         # Update model paths with new directory
         self.recognizer.model_paths = {
-            "title": Path(self.temp_dir) / "title_classifier.pkl",
-            "author": Path(self.temp_dir) / "author_classifier.pkl",
-            "series": Path(self.temp_dir) / "series_classifier.pkl",
-            "volume": Path(self.temp_dir) / "volume_classifier.pkl",
-            "vectorizer": Path(self.temp_dir) / "filename_vectorizer.pkl",
+            "role": Path(self.temp_dir) / "role_classifier.pkl",
             "metadata": Path(self.temp_dir) / "model_metadata.json",
         }
 
@@ -134,26 +130,49 @@ class FilenamePatternRecognizerTests(TestCase):
         """Test model saving and loading."""
         import pickle
 
-        # Create simple dummy objects that can be pickled
-        mock_vectorizer = {"test": "vectorizer"}
-        mock_model = {"test": "model"}
+        # Create a simple dummy object that can be pickled
+        mock_role_model = {"test": "model"}
 
-        # Save mock files to temp directory
-        with open(self.recognizer.model_paths["vectorizer"], "wb") as f:
-            pickle.dump(mock_vectorizer, f)
-
-        for field in ["title", "author", "series", "volume"]:
-            with open(self.recognizer.model_paths[field], "wb") as f:
-                pickle.dump(mock_model, f)
+        # Save the mock role classifier to the temp directory
+        with open(self.recognizer.model_paths["role"], "wb") as f:
+            pickle.dump(mock_role_model, f)
 
         # Test model loading
         result = self.recognizer.load_models()
         self.assertTrue(result)
 
-        # Verify models were loaded
-        self.assertIsNotNone(self.recognizer.vectorizer)
-        self.assertIsNotNone(self.recognizer.title_model)
-        self.assertIsNotNone(self.recognizer.author_model)
+        # Verify the learned classifier was loaded
+        self.assertIsNotNone(self.recognizer.role_model)
+
+    def test_train_save_load_predict_roundtrip(self):
+        """Train a real role classifier, persist it, reload, and predict."""
+        training_rows = []
+        for i in range(12):
+            training_rows.append(
+                {
+                    "filename": f"Author{i} - Title{i}",
+                    "title": f"Title{i}",
+                    "author": f"Author{i}",
+                    "series": "",
+                    "volume": "",
+                }
+            )
+
+        results = self.recognizer.train_models(training_rows)
+        self.assertTrue(results)
+        self.assertIsNotNone(self.recognizer.role_model)
+        self.assertTrue(self.recognizer.model_paths["role"].exists())
+
+        # Reload into a fresh recognizer against the same model directory.
+        reloaded = FilenamePatternRecognizer()
+        reloaded.model_dir = self.recognizer.model_dir
+        reloaded.model_paths = self.recognizer.model_paths
+        self.assertTrue(reloaded.load_models())
+        self.assertIsNotNone(reloaded.role_model)
+
+        prediction = reloaded.predict_metadata("Author3 - Title3.epub")
+        self.assertIn("title", prediction)
+        self.assertIn("author", prediction)
 
     def test_confidence_threshold(self):
         """Test confidence-based prediction validation."""
@@ -244,6 +263,32 @@ class AIManagementCommandTests(TestCase):
             self.assertIn("Insufficient training data", output)
         finally:
             # Restore original stdout
+            self.command.stdout = original_stdout
+
+    @patch("books.management.commands.train_ai_models.FilenamePatternRecognizer")
+    def test_retrain_models_handles_dataframe(self, mock_recognizer):
+        """Retrain with a DataFrame should not raise an ambiguous-truth error."""
+        import pandas as pd
+        from io import StringIO
+
+        rows = [{"filename": f"Author{i} - Title{i}", "title": f"Title{i}", "author": f"Author{i}", "series": "", "volume": ""} for i in range(12)]
+
+        mock_instance = Mock()
+        mock_instance.models_exist.return_value = True
+        mock_instance.collect_training_data.return_value = pd.DataFrame(rows)
+        mock_instance.count_segment_samples.return_value = 24
+        mock_instance.train_models.return_value = {"title": 0.9, "author": 0.9, "series": 0.9, "volume": 0.9}
+        mock_recognizer.return_value = mock_instance
+
+        captured_output = StringIO()
+        original_stdout = self.command.stdout
+        self.command.stdout.write = captured_output.write
+
+        try:
+            self.command.retrain_models(use_feedback=False, min_feedback=5)
+            output = captured_output.getvalue()
+            self.assertIn("Models retrained successfully", output)
+        finally:
             self.command.stdout = original_stdout
 
 
@@ -529,6 +574,38 @@ class AIPerformanceTests(TestCase):
                     # Should not crash on edge cases
                 except Exception as e:
                     self.fail(f"Edge case handling failed for '{filename}': {e}")
+
+
+class EnsembleRecognizerTests(TestCase):
+    """Test the reworked ensemble recognizer (heuristic-only, no learned model)."""
+
+    def setUp(self):
+        self.recognizer = FilenamePatternRecognizer()
+
+    def test_predict_author_and_title(self):
+        result = self.recognizer.predict_metadata("Brandon Sanderson - The Final Empire.epub")
+        self.assertEqual(result["author"][0], "Brandon Sanderson")
+        self.assertEqual(result["title"][0], "The Final Empire")
+
+    def test_predict_series_and_volume(self):
+        result = self.recognizer.predict_metadata("Brandon Sanderson - Mistborn 01 - The Final Empire.epub")
+        self.assertEqual(result["author"][0], "Brandon Sanderson")
+        self.assertEqual(result["series"][0], "Mistborn")
+        self.assertEqual(result["volume"][0], "01")
+
+    def test_predict_empty_filename(self):
+        self.assertEqual(self.recognizer.predict_metadata(""), {})
+        self.assertEqual(self.recognizer.predict_metadata(None), {})
+
+    def test_parse_with_ai_fills_missing_series(self):
+        from books.scanner.parsing import parse_path_metadata_with_ai
+
+        filename = "Brandon Sanderson - Mistborn 01 - The Final Empire.epub"
+        result = parse_path_metadata_with_ai(filename, self.recognizer)
+
+        self.assertEqual(result["series"], "Mistborn")
+        self.assertIn(str(result["series_number"]), {"1", "1.0", "01"})
+        self.assertEqual(result["authors"], ["Brandon Sanderson"])
 
 
 if __name__ == "__main__":

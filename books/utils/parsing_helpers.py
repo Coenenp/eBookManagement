@@ -39,7 +39,7 @@ def split_authors(author_str: str) -> List[str]:
     Handles commas, ampersands, and conjunctions.
     """
     cleaned = clean_author_string(author_str)
-    parts = re.split(r"\s*(?:,|&|and|;)\s*", cleaned)
+    parts = re.split(r"\s*(?:,|&|\band\b|;)\s*", cleaned, flags=re.IGNORECASE)
     return [p.strip() for p in parts if p]
 
 

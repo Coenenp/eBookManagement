@@ -79,15 +79,26 @@ class Command(BaseCommand):
                 feedback_data = self._collect_feedback_data(min_feedback)
                 if feedback_data:
                     self.stdout.write(f"📝 Adding {len(feedback_data)} feedback samples...")
-                    training_data.extend(feedback_data)
+                    records = training_data.to_dict("records") if hasattr(training_data, "to_dict") else list(training_data)
+                    records.extend(feedback_data)
+                    training_data = records
 
             if len(training_data) < min_samples:
                 self.stdout.write(self.style.WARNING(f"⚠️  Insufficient training data: {len(training_data)} samples " f"(minimum {min_samples} required)"))
                 self.stdout.write("💡 To get training data, mark some books as 'reviewed' in the admin panel " "after correcting their metadata.")
                 return
 
+            segment_count = recognizer.count_segment_samples(training_data)
+            if segment_count < 20:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"⚠️  Insufficient segment samples: {len(training_data)} books yielded {segment_count} filename segments (minimum 20 segments required for training)"
+                    )
+                )
+                return
+
             # Train models
-            self.stdout.write(f"🔧 Training models with {len(training_data)} samples...")
+            self.stdout.write(f"🔧 Training models with {len(training_data)} books ({segment_count} segments)...")
             results = recognizer.train_models(training_data)
 
             if results:
@@ -121,17 +132,28 @@ class Command(BaseCommand):
                 feedback_data = self._collect_feedback_data(min_feedback)
                 if feedback_data:
                     self.stdout.write(f"📝 Adding {len(feedback_data)} feedback samples...")
-                    training_data.extend(feedback_data)
+                    records = training_data.to_dict("records") if hasattr(training_data, "to_dict") else list(training_data)
+                    records.extend(feedback_data)
+                    training_data = records
                 else:
                     self.stdout.write(self.style.WARNING(f"⚠️  No feedback data available (minimum {min_feedback} required)"))
                     return
 
-            if not training_data:
+            if len(training_data) == 0:
                 self.stdout.write(self.style.WARNING("⚠️  No training data available for retraining"))
                 return
 
+            segment_count = recognizer.count_segment_samples(training_data)
+            if segment_count < 20:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"⚠️  Insufficient segment samples: {len(training_data)} books yielded {segment_count} filename segments (minimum 20 segments required for training)"
+                    )
+                )
+                return
+
             # Retrain models
-            self.stdout.write(f"� Retraining models with {len(training_data)} samples...")
+            self.stdout.write(f"🔄 Retraining models with {len(training_data)} books ({segment_count} segments)...")
             results = recognizer.train_models(training_data)
 
             if results:
@@ -156,14 +178,8 @@ class Command(BaseCommand):
         try:
             recognizer = FilenamePatternRecognizer()
 
-            # Check if models exist
-            models_exist = []
-            for field in ["title", "author", "series", "volume"]:
-                if recognizer.model_paths[field].exists():
-                    models_exist.append(field)
-
-            if models_exist:
-                self.stdout.write(f"✅ Trained models: {', '.join(models_exist)}")
+            if recognizer.models_exist():
+                self.stdout.write("✅ Learned segment-role classifier: available")
 
                 # Load model metadata if available
                 if recognizer.model_paths["metadata"].exists():
@@ -179,7 +195,7 @@ class Command(BaseCommand):
                         for field, accuracy in metadata["model_accuracies"].items():
                             self.stdout.write(f"  • {field.title()}: {accuracy:.1%}")
             else:
-                self.stdout.write("❌ No trained models found")
+                self.stdout.write("ℹ️  No learned classifier (heuristic ensemble only)")
 
             # Check training data availability
             reviewed_books = Book.objects.filter(finalmetadata__is_reviewed=True).count()
