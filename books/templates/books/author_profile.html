@@ -1,0 +1,154 @@
+{% extends "books/base.html" %}
+{% load static %}
+
+{% block title %}{{ author.name }} - Author Profile{% endblock %}
+
+{% block extra_css %}
+<!-- Add any author profile specific CSS here if needed -->
+{% endblock %}
+
+{% block content %}
+<div id="authorProfileContainer" 
+     data-author-id="{{ author.id }}"
+     data-enrich-url="{% url 'books:author_enrich' author.id %}"
+     data-csrf-token="{{ csrf_token }}">
+    
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <!-- Author Header -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h2 class="mb-0">{{ author.name }}</h2>
+                    <button id="enrichButton" class="btn btn-primary btn-sm">
+                        <i class="fas fa-download"></i> Fetch Profile Data
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="enrichmentContent" class="d-none">
+                        <!-- Photo -->
+                        <div id="photoSection" class="d-none mb-3">
+                            <img id="authorPhoto" src="" alt="{{ author.name }}" class="img-thumbnail" style="max-width: 200px;">
+                        </div>
+                        
+                        <!-- Biography -->
+                        <div id="bioSection" class="d-none mb-3">
+                            <h5>Biography</h5>
+                            <p id="authorBio"></p>
+                        </div>
+                        
+                        <!-- Dates -->
+                        <div id="datesSection" class="d-none mb-3">
+                            <h5>Dates</h5>
+                            <p>
+                                <strong>Born:</strong> <span id="birthDate"></span><br>
+                                <strong>Died:</strong> <span id="deathDate"></span>
+                            </p>
+                        </div>
+                        
+                        <!-- Links -->
+                        <div id="linksSection" class="d-none mb-3">
+                            <h5>External Links</h5>
+                            <a id="wikipediaLink" href="" target="_blank" class="btn btn-sm btn-outline-primary">
+                                <i class="fab fa-wikipedia-w"></i> Wikipedia
+                            </a>
+                        </div>
+                        
+                        <!-- Source -->
+                        <div id="sourceSection" class="d-none">
+                            <small class="text-muted">Data source: <span id="dataSource"></span></small>
+                        </div>
+                    </div>
+                    
+                    <div id="noEnrichmentMessage">
+                        <p class="text-muted">Click "Fetch Profile Data" to retrieve biography and additional information from external sources.</p>
+                    </div>
+                    
+                    <div id="enrichmentError" class="alert alert-danger d-none" role="alert"></div>
+                </div>
+            </div>
+            
+            <!-- Basic Info -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4 class="mb-0">Basic Information</h4>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-3">Full Name:</dt>
+                        <dd class="col-sm-9">{{ author.name }}</dd>
+                        
+                        {% if author.first_name %}
+                        <dt class="col-sm-3">First Name:</dt>
+                        <dd class="col-sm-9">{{ author.first_name }}</dd>
+                        {% endif %}
+                        
+                        {% if author.last_name %}
+                        <dt class="col-sm-3">Last Name:</dt>
+                        <dd class="col-sm-9">{{ author.last_name }}</dd>
+                        {% endif %}
+                        
+                        <dt class="col-sm-3">Books:</dt>
+                        <dd class="col-sm-9">{{ book_count }}</dd>
+                        
+                        <dt class="col-sm-3">Reviewed:</dt>
+                        <dd class="col-sm-9">
+                            {% if author.is_reviewed %}
+                                <span class="badge bg-success">Yes</span>
+                            {% else %}
+                                <span class="badge bg-warning">No</span>
+                            {% endif %}
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+            
+            <!-- Books List -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4 class="mb-0">Books by {{ author.name }}</h4>
+                </div>
+                <div class="card-body">
+                    {% if books %}
+                        <div class="list-group">
+                            {% for book in books %}
+                                <a href="{% url 'books:book_detail' book.id %}" class="list-group-item list-group-item-action">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h5 class="mb-1">{{ book.display_title }}</h5>
+                                        <small class="text-muted">{{ book.content_type|title }}</small>
+                                    </div>
+                                    {% if book.display_series %}
+                                        <p class="mb-1"><small class="text-muted">{{ book.display_series }}</small></p>
+                                    {% endif %}
+                                </a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted">No books found for this author.</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Actions -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4 class="mb-0">Actions</h4>
+                </div>
+                <div class="card-body">
+                    <a href="{% url 'books:author_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Authors
+                    </a>
+                    <a href="{% url 'books:author_duplicates' %}" class="btn btn-info">
+                        <i class="fas fa-copy"></i> Find Duplicates
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'book/js/author-profile.js' %}"></script>
+{% endblock %}

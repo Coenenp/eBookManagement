@@ -20,6 +20,7 @@ from .views import ajax_cover as ajax_cover_views
 from .views import scanning as scanning_views
 from .views import sections as sections_views
 from .views import wizard as wizard_views
+from .views import author_management as author_management_views
 
 # Register app namespace for reverse lookups
 app_name = "books"
@@ -82,6 +83,10 @@ urlpatterns = [
     path("book/<int:book_id>/rescan/", views.rescan_external_metadata, name="rescan_external_metadata"),
     # Author management
     path("authors/", views.AuthorListView.as_view(), name="author_list"),
+    path("authors/duplicates/", author_management_views.duplicate_authors_list, name="author_duplicates"),
+    path("authors/merge/", author_management_views.merge_authors, name="author_merge"),
+    path("authors/<int:author_id>/profile/", author_management_views.author_profile, name="author_profile"),
+    path("authors/<int:author_id>/enrich/", author_management_views.enrich_author_profile, name="author_enrich"),
     path("authors/bulk-delete/", views.AuthorBulkDeleteView.as_view(), name="author_bulk_delete"),
     path("authors/mark-reviewed/", views.AuthorMarkReviewedView.as_view(), name="author_mark_reviewed"),
     path("authors/<int:pk>/delete/", views.AuthorDeleteView.as_view(), name="author_delete"),

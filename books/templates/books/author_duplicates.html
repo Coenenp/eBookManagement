@@ -1,0 +1,253 @@
+{% extends "books/base.html" %}
+{% load static %}
+
+{% block title %}Author Duplicates - eBook Manager{% endblock %}
+
+{% block extra_css %}
+<style>
+    .duplicate-group {
+        background: white;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .duplicate-group.high-confidence {
+        border-color: #ff9800;
+    }
+    
+    .similarity-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.9em;
+        font-weight: bold;
+    }
+    
+    .similarity-high {
+        background: #ff9800;
+        color: white;
+    }
+    
+    .similarity-medium {
+        background: #ffc107;
+        color: #333;
+    }
+    
+    .similarity-low {
+        background: #e0e0e0;
+        color: #666;
+    }
+    
+    .author-item {
+        padding: 12px;
+        margin: 8px 0;
+        background: #f5f5f5;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .author-item:hover {
+        background: #e8e8e8;
+    }
+    
+    .author-item input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+    }
+    
+    .author-item input[type="radio"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+    
+    .author-info {
+        flex: 1;
+    }
+    
+    .author-name {
+        font-weight: 600;
+        font-size: 1.1em;
+        color: #333;
+    }
+    
+    .author-details {
+        font-size: 0.9em;
+        color: #666;
+        margin-top: 4px;
+    }
+    
+    .canonical-suggestion {
+        background: #e3f2fd;
+        border-left: 4px solid #2196f3;
+        padding: 12px;
+        margin: 12px 0;
+        border-radius: 4px;
+    }
+    
+    .merge-button {
+        background: #4caf50;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1em;
+        font-weight: 600;
+    }
+    
+    .merge-button:hover {
+        background: #45a049;
+    }
+    
+    .merge-button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+    }
+    
+    .threshold-control {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .no-duplicates {
+        text-align: center;
+        padding: 40px;
+        color: #666;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="authorDuplicatesContainer"
+     data-merge-url="{% url 'books:author_merge' %}"
+     data-csrf-token="{{ csrf_token }}">
+
+<div class="container" style="max-width: 1200px; margin: 0 auto; padding: 20px;">
+    <h1>🔗 Potential Duplicate Authors</h1>
+    <p style="color: #666; margin-bottom: 20px;">
+        Review and merge author duplicates using fuzzy matching. 
+        Analyzing {{ total_authors }} total authors.
+    </p>
+    
+    <!-- Threshold Control -->
+    <div class="threshold-control">
+        <h3>Similarity Threshold</h3>
+        <form method="get" style="display: flex; align-items: center; gap: 15px;">
+            <label for="threshold">Minimum Similarity:</label>
+            <input 
+                type="range" 
+                id="threshold" 
+                name="threshold" 
+                min="0.5" 
+                max="1.0" 
+                step="0.05" 
+                value="{{ threshold }}"
+                style="flex: 1; max-width: 300px;"
+                onchange="this.form.submit()"
+            >
+            <span id="threshold-value" style="font-weight: bold; min-width: 50px;">{{ threshold|floatformat:2 }}</span>
+            <button type="submit" style="padding: 8px 16px;">Refresh</button>
+        </form>
+        <p style="font-size: 0.9em; color: #666; margin-top: 8px;">
+            Higher threshold = more strict matching (fewer, more confident matches)
+        </p>
+    </div>
+    
+    {% if duplicate_groups %}
+        <p style="margin-bottom: 20px;">
+            <strong>{{ duplicate_groups|length }}</strong> potential duplicate group(s) found
+        </p>
+        
+        {% for group in duplicate_groups %}
+        <div class="duplicate-group {% if group.similarity >= 0.95 %}high-confidence{% endif %}">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">Group #{{ forloop.counter }}</h3>
+                <span class="similarity-badge {% if group.similarity >= 0.95 %}similarity-high{% elif group.similarity >= 0.85 %}similarity-medium{% else %}similarity-low{% endif %}">
+                    {{ group.similarity|floatformat:0 }}% similar
+                </span>
+            </div>
+            
+            <div class="canonical-suggestion">
+                <strong>💡 Suggested Canonical Name:</strong> 
+                <span style="color: #1976d2; font-weight: 600;">{{ group.suggested_canonical }}</span>
+            </div>
+            
+            <form class="merge-form" data-group-id="{{ forloop.counter }}">
+                {% csrf_token %}
+                
+                <div style="margin-bottom: 15px;">
+                    <strong>Select authors to merge:</strong>
+                </div>
+                
+                {% for author in group.enriched_authors %}
+                <div class="author-item">
+                    <input 
+                        type="checkbox" 
+                        name="author_ids[]" 
+                        value="{{ author.id }}"
+                        checked
+                    >
+                    <input 
+                        type="radio" 
+                        name="primary_author_{{ forloop.parentloop.counter }}" 
+                        value="{{ author.id }}"
+                        {% if forloop.first %}checked{% endif %}
+                        title="Keep this as primary"
+                    >
+                    <div class="author-info">
+                        <div class="author-name">
+                            {{ author.name }}
+                            {% if author.name == group.suggested_canonical %}
+                            <span style="color: #4caf50;">✓ Recommended</span>
+                            {% endif %}
+                        </div>
+                        <div class="author-details">
+                            ID: {{ author.id }} | 
+                            {{ author.book_count }} book{{ author.book_count|pluralize }}
+                            {% if author.first_name or author.last_name %}
+                            | Parsed: {{ author.first_name }} {{ author.last_name }}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                <div style="margin-top: 15px; display: flex; gap: 10px; align-items: center;">
+                    <button 
+                        type="button" 
+                        class="merge-button"
+                    >
+                        🔗 Merge Selected Authors
+                    </button>
+                    <span style="font-size: 0.9em; color: #666;">
+                        (The author with radio button selected will be kept as primary)
+                    </span>
+                </div>
+            </form>
+        </div>
+        {% endfor %}
+        
+    {% else %}
+        <div class="no-duplicates">
+            <h2>✓ No Potential Duplicates Found</h2>
+            <p>At the current threshold ({{ threshold|floatformat:2 }}), no duplicate authors were detected.</p>
+            <p>Try lowering the threshold to find less similar matches.</p>
+        </div>
+    {% endif %}
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'book/js/author-duplicates.js' %}"></script>
+{% endblock %}

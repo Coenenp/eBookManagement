@@ -10,7 +10,7 @@ from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.generic import DetailView, ListView, TemplateView
@@ -20,7 +20,7 @@ from books.constants import PAGINATION
 from books.forms import MetadataReviewForm, UserRegisterForm
 from books.mixins import BookListContextMixin, BookNavigationMixin, MetadataContextMixin
 from books.models import Book, BookFile, FinalMetadata, ScanFolder
-from books.queries.book_queries import build_book_queryset
+from books.queries.book_queries import build_book_queryset, get_review_counts
 from books.services.common import CoverService, DashboardService
 from books.views.wizard import WizardRequiredMixin
 
@@ -300,35 +300,30 @@ class BookListView(LoginRequiredMixin, ListView, BookListContextMixin):
         return qs
 
     def get_optimized_counts(self):
-        """Get counts efficiently from the filtered queryset instead of entire database"""
-        # Use the base queryset before slicing for accurate counts
-        qs = getattr(self, "_base_queryset", Book.objects.all())
+        """Get counts efficiently with consistent filter logic."""
+        # Review counts should use the same predicates as review_type filtering
+        # and ignore the currently selected review tab.
+        review_counts = get_review_counts(self.request.GET)
 
-        # Get review counts using single query with conditional aggregation
-        from django.db.models import Avg, Count, Q
+        # Keep averages based on the currently visible queryset.
+        qs = getattr(self, "_base_queryset", Book.objects.all())
+        from django.db.models import Avg
 
         aggregates = qs.aggregate(
-            needs_review=Count("id", filter=Q(finalmetadata__is_reviewed__in=[False, None])),
-            low_confidence=Count("id", filter=Q(finalmetadata__overall_confidence__lt=0.7)),
-            incomplete=Count("id", filter=Q(finalmetadata__completeness_score__lt=0.8)),
-            missing_cover=Count("id", filter=Q(finalmetadata__final_cover_path__isnull=True) | Q(finalmetadata__final_cover_path="")),
-            duplicates=Count("id", filter=Q(is_duplicate=True)),
-            placeholders=Count("id", filter=Q(is_placeholder=True)),
-            corrupted=Count("id", filter=Q(is_corrupted=True)),
             avg_confidence=Avg("finalmetadata__overall_confidence"),
             avg_completeness=Avg("finalmetadata__completeness_score"),
         )
 
         return {
             "review_counts": {
-                "needs_review": aggregates["needs_review"] or 0,
-                "low_confidence": aggregates["low_confidence"] or 0,
-                "incomplete": aggregates["incomplete"] or 0,
-                "missing_cover": aggregates["missing_cover"] or 0,
-                "duplicates": aggregates["duplicates"] or 0,
-                "placeholders": aggregates["placeholders"] or 0,
+                "needs_review": review_counts["needs_review"],
+                "low_confidence": review_counts["low_confidence"],
+                "incomplete": review_counts["incomplete"],
+                "missing_cover": review_counts["missing_cover"],
+                "duplicates": review_counts["duplicates"],
+                "placeholders": review_counts["placeholders"],
             },
-            "corrupted_count": aggregates["corrupted"] or 0,
+            "corrupted_count": review_counts["corrupted"],
             "avg_confidence": round(aggregates["avg_confidence"] or 0, 2),
             "avg_completeness": round(aggregates["avg_completeness"] or 0, 2),
         }
@@ -388,7 +383,9 @@ class BookListView(LoginRequiredMixin, ListView, BookListContextMixin):
             del context["query_params"]["page"]
 
         # Add first review target
-        context["first_review_target"] = Book.objects.filter(finalmetadata__is_reviewed__in=[False, None]).order_by("id").first()
+        context["first_review_target"] = (
+            Book.objects.filter(Q(finalmetadata__is_reviewed=False) | Q(finalmetadata__is_reviewed__isnull=True) | Q(finalmetadata__isnull=True)).order_by("id").first()
+        )
 
         # Add review tabs
         context["review_tabs"] = [

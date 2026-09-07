@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from django.db.models import Prefetch, Q, QuerySet
+from django.db.models import Count, Prefetch, Q, QuerySet
 
 from books.models import Book, BookFile
 
@@ -178,3 +178,44 @@ def build_book_queryset(params: Dict[str, Any]) -> QuerySet:
     qs = apply_standard_filters(qs, params)
     qs = apply_sorting(qs, params.get("sort"), params.get("order"))
     return qs
+
+
+def build_review_counts_queryset(params: Dict[str, Any]) -> QuerySet:
+    """Build the queryset used for review tab counts.
+
+    We intentionally exclude the active `review_type` filter so each tab badge
+    represents the true count for that category under the current non-review
+    filters (search, language, format, etc.).
+    """
+    qs = base_book_queryset()
+
+    params_without_review_type = params.copy() if hasattr(params, "copy") else dict(params)
+    if hasattr(params_without_review_type, "pop"):
+        params_without_review_type.pop("review_type", None)
+
+    return apply_standard_filters(qs, params_without_review_type)
+
+
+def get_review_counts(params: Dict[str, Any]) -> Dict[str, int]:
+    """Return review category counts using the same predicates as filtering."""
+    qs = build_review_counts_queryset(params)
+
+    aggregates = qs.aggregate(
+        needs_review=Count("id", filter=REVIEW_TYPE_FILTERS["needs_review"], distinct=True),
+        low_confidence=Count("id", filter=REVIEW_TYPE_FILTERS["low_confidence"], distinct=True),
+        incomplete=Count("id", filter=REVIEW_TYPE_FILTERS["incomplete"], distinct=True),
+        missing_cover=Count("id", filter=REVIEW_TYPE_FILTERS["missing_cover"], distinct=True),
+        duplicates=Count("id", filter=REVIEW_TYPE_FILTERS["duplicates"], distinct=True),
+        placeholders=Count("id", filter=REVIEW_TYPE_FILTERS["placeholders"], distinct=True),
+        corrupted=Count("id", filter=REVIEW_TYPE_FILTERS["corrupted"], distinct=True),
+    )
+
+    return {
+        "needs_review": aggregates["needs_review"] or 0,
+        "low_confidence": aggregates["low_confidence"] or 0,
+        "incomplete": aggregates["incomplete"] or 0,
+        "missing_cover": aggregates["missing_cover"] or 0,
+        "duplicates": aggregates["duplicates"] or 0,
+        "placeholders": aggregates["placeholders"] or 0,
+        "corrupted": aggregates["corrupted"] or 0,
+    }

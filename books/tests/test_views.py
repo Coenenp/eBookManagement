@@ -130,6 +130,64 @@ class BookListViewTests(BaseViewTestCase):
         for book in books:
             self.assertTrue(book.finalmetadata.is_reviewed)
 
+    def test_review_tab_counts_match_review_type_filters(self):
+        """Review tab badge counts must match review_type filtered result counts."""
+        # Book with no FinalMetadata should be included in needs_review
+        create_test_book_with_file(
+            file_path="/test/path/no_metadata.epub",
+            file_format="epub",
+            file_size=777000,
+            scan_folder=self.scan_folder,
+        )
+
+        # Book with low confidence should be counted and filterable
+        low_conf_book = create_test_book_with_file(
+            file_path="/test/path/low_confidence.epub",
+            file_format="epub",
+            file_size=888000,
+            scan_folder=self.scan_folder,
+        )
+        FinalMetadata.objects.create(
+            book=low_conf_book,
+            final_title="Low Confidence Book",
+            final_author="Low Confidence Author",
+            overall_confidence=0.3,
+            completeness_score=0.9,
+            is_reviewed=False,
+            has_cover=True,
+        )
+
+        # Get tab counts from base list context
+        base_response = self.client.get(reverse("books:book_list"))
+        self.assertEqual(base_response.status_code, 200)
+        if hasattr(base_response, "render") and callable(base_response.render):
+            base_response.render()
+        base_context = self.get_context_from_response(base_response)
+
+        tab_low_conf_count = base_context["review_counts"]["low_confidence"]
+        tab_needs_review_count = base_context["review_counts"]["needs_review"]
+
+        # Compare with click-through filtered counts
+        low_conf_response = self.client.get(reverse("books:book_list"), {"review_type": "low_confidence"})
+        self.assertEqual(low_conf_response.status_code, 200)
+        if hasattr(low_conf_response, "render") and callable(low_conf_response.render):
+            low_conf_response.render()
+        low_conf_context = self.get_context_from_response(low_conf_response)
+        self.assertEqual(tab_low_conf_count, low_conf_context["paginator"].count)
+
+        needs_review_response = self.client.get(reverse("books:book_list"), {"review_type": "needs_review"})
+        self.assertEqual(needs_review_response.status_code, 200)
+        if hasattr(needs_review_response, "render") and callable(needs_review_response.render):
+            needs_review_response.render()
+        needs_review_context = self.get_context_from_response(needs_review_response)
+        self.assertEqual(tab_needs_review_count, needs_review_context["paginator"].count)
+
+        # No-metadata book must be included in needs_review results
+        result_ids = [book.id for book in needs_review_context["page_obj"].object_list]
+        no_metadata_book = Book.objects.filter(files__file_path="/test/path/no_metadata.epub").first()
+        self.assertIsNotNone(no_metadata_book)
+        self.assertIn(no_metadata_book.id, result_ids)
+
 
 class BookDetailViewTests(BaseViewTestCase):
     """Test cases for book detail view"""

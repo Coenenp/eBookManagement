@@ -619,135 +619,330 @@ def _process_goodreads_metadata(book, source, result, confidence):
         else:
             logger.debug(f"[YEAR] No valid 4-digit year in '{raw_year}'")
 
-    if result.get("ISBN"):
-        BookMetadata.objects.update_or_create(
-            book=book,
-            field_name="isbn",
-            source=source,
-            defaults={"field_value": result["ISBN"].strip(), "confidence": confidence, "is_active": True},
-        )
-
-    if result.get("description"):
-        BookMetadata.objects.update_or_create(
-            book=book,
-            field_name="description",
-            source=source,
-            defaults={
-                "field_value": result["description"].strip(),
-                "confidence": confidence,
-                "is_active": True,
-            },
-        )
-
-    if result.get("rating"):
-        BookMetadata.objects.update_or_create(
-            book=book,
-            field_name="rating",
-            source=source,
-            defaults={"field_value": str(result["rating"]), "confidence": confidence, "is_active": True},
-        )
-
-    # Publisher handling
-    pub_name = None
-    if result.get("publisher"):
-        pub_name = result["publisher"].strip()
-    elif result.get("publisherName"):
-        pub_name = result["publisherName"].strip()
-
-    if pub_name:
-        existing_pub = Publisher.objects.filter(name__iexact=pub_name).first()
-        pub_obj = existing_pub or Publisher.objects.create(name=pub_name)
-        BookPublisher.objects.update_or_create(
-            book=book,
-            publisher=pub_obj,
-            source=source,
-            defaults={"confidence": confidence, "is_active": True},
-        )
-
 
 # Cover processing functions
 def _process_open_library_cover(book, source, doc, confidence):
-    if doc.get("cover_i"):
-        image_url = f"https://covers.openlibrary.org/b/id/{doc['cover_i']}-L.jpg"
-        width, height, file_size, format = get_image_metadata(image_url)
+    """Process cover from Open Library API result."""
+    try:
+        cover_id = doc.get("cover_i")
+        if not cover_id:
+            return
 
-        if format:  # Only proceed if we got valid image metadata
-            try:
-                BookCover.objects.update_or_create(
-                    book=book,
-                    cover_path=image_url,
-                    source=source,
-                    defaults={
-                        "confidence": confidence,
-                        "width": width,
-                        "height": height,
-                        "file_size": file_size,
-                        "format": format,
-                        "is_active": True,
-                    },
-                )
-            except Exception as e:
-                logger.warning(f"Failed to store Open Library cover: {image_url}, error: {str(e)}")
+        # Open Library cover URL format
+        cover_url = f"https://covers.openlibrary.org/b/id/{cover_id}-L.jpg"
+
+        # Get image metadata if available
+        width, height, file_size = None, None, None
+        try:
+            metadata = get_image_metadata(cover_url)
+            if metadata:
+                width = metadata.get("width")
+                height = metadata.get("height")
+                file_size = metadata.get("size")
+        except Exception as e:
+            logger.debug(f"Could not get image metadata for {cover_url}: {e}")
+
+        # Create or update cover entry
+        BookCover.objects.update_or_create(
+            book=book,
+            cover_path=cover_url,
+            source=source,
+            defaults={
+                "confidence": confidence,
+                "width": width,
+                "height": height,
+                "file_size": file_size,
+                "format": "jpg",
+                "is_active": True,
+            },
+        )
+        logger.debug(f"Processed Open Library cover for book {book.id}: {cover_url}")
+
+    except Exception as e:
+        logger.warning(f"Error processing Open Library cover: {e}")
 
 
 def _process_google_books_cover(book, source, info, confidence):
-    image_links = info.get("imageLinks", {})
-    if image_links.get("thumbnail"):
-        image_url = image_links["thumbnail"].replace("http://", "https://")
-        width, height, file_size, format = get_image_metadata(image_url)
+    """Process cover from Google Books API result."""
+    try:
+        image_links = info.get("imageLinks", {})
+        # Prefer larger images
+        cover_url = image_links.get("large") or image_links.get("medium") or image_links.get("thumbnail")
 
-        if format:  # Only proceed if we got valid image metadata
-            try:
-                BookCover.objects.update_or_create(
-                    book=book,
-                    cover_path=image_url,
-                    source=source,
-                    defaults={
-                        "confidence": confidence,
-                        "width": width,
-                        "height": height,
-                        "file_size": file_size,
-                        "format": format,
-                        "is_active": True,
-                    },
-                )
-            except Exception as e:
-                logger.warning(f"Failed to store Google Books cover: {image_url}, error: {str(e)}")
+        if not cover_url:
+            return
+
+        # Upgrade to HTTPS if needed
+        if cover_url.startswith("http://"):
+            cover_url = cover_url.replace("http://", "https://")
+
+        # Get image metadata if available
+        width, height, file_size = None, None, None
+        try:
+            metadata = get_image_metadata(cover_url)
+            if metadata:
+                width = metadata.get("width")
+                height = metadata.get("height")
+                file_size = metadata.get("size")
+        except Exception as e:
+            logger.debug(f"Could not get image metadata for {cover_url}: {e}")
+
+        # Create or update cover entry
+        BookCover.objects.update_or_create(
+            book=book,
+            cover_path=cover_url,
+            source=source,
+            defaults={
+                "confidence": confidence,
+                "width": width,
+                "height": height,
+                "file_size": file_size,
+                "format": "jpg",
+                "is_active": True,
+            },
+        )
+        logger.debug(f"Processed Google Books cover for book {book.id}: {cover_url}")
+
+    except Exception as e:
+        logger.warning(f"Error processing Google Books cover: {e}")
 
 
 def _process_goodreads_cover(book, source, item, confidence):
-    image_url = item.get("image")
-    if image_url:
-        width, height, file_size, format = get_image_metadata(image_url)
+    """Process cover from Goodreads API result."""
+    try:
+        cover_url = item.get("image")
+        if not cover_url:
+            return
 
-        if format:  # Only proceed if we got valid image metadata
-            try:
-                BookCover.objects.update_or_create(
-                    book=book,
-                    cover_path=image_url,
-                    source=source,
-                    defaults={
-                        "confidence": confidence,
-                        "width": width,
-                        "height": height,
-                        "file_size": file_size,
-                        "format": format,
-                        "is_active": True,
-                    },
-                )
-            except Exception as e:
-                logger.warning(f"Failed to store Goodreads cover: {image_url}, error: {str(e)}")
+        # Upgrade to HTTPS if needed
+        if cover_url.startswith("http://"):
+            cover_url = cover_url.replace("http://", "https://")
+
+        # Get image metadata if available
+        width, height, file_size = None, None, None
+        try:
+            metadata = get_image_metadata(cover_url)
+            if metadata:
+                width = metadata.get("width")
+                height = metadata.get("height")
+                file_size = metadata.get("size")
+        except Exception as e:
+            logger.debug(f"Could not get image metadata for {cover_url}: {e}")
+
+        # Create or update cover entry
+        BookCover.objects.update_or_create(
+            book=book,
+            cover_path=cover_url,
+            source=source,
+            defaults={
+                "confidence": confidence,
+                "width": width,
+                "height": height,
+                "file_size": file_size,
+                "format": "jpg",
+                "is_active": True,
+            },
+        )
+        logger.debug(f"Processed Goodreads cover for book {book.id}: {cover_url}")
+
+    except Exception as e:
+        logger.warning(f"Error processing Goodreads cover: {e}")
 
 
-# Mock API client for testing
-class GoodreadsAPI:
-    """Mock Goodreads API client for testing."""
+def enrich_author_from_external_sources(author):
+    """Fetch author profile information from external sources.
 
-    def get_book_metadata(self, *args, **kwargs):
-        """Mock metadata retrieval that can be mocked to raise exceptions."""
-        # This will be mocked in tests to raise rate limit or other exceptions
-        raise Exception("Rate limit exceeded")
+    Args:
+        author: Author model instance to enrich
+
+    Returns:
+        tuple: (success: bool, data: dict with bio, photo_url, birth_date, death_date, wikipedia_url)
+    """
+    logger.info(f"Enriching author profile for: {author.name}")
+
+    enrichment_data = {
+        "bio": None,
+        "photo_url": None,
+        "birth_date": None,
+        "death_date": None,
+        "wikipedia_url": None,
+        "source": None,
+    }
+
+    # Try Open Library first
+    try:
+        ol_data = _query_open_library_author(author.name)
+        if ol_data:
+            enrichment_data.update(ol_data)
+            enrichment_data["source"] = "Open Library"
+            logger.info(f"Successfully enriched {author.name} from Open Library")
+            return (True, enrichment_data)
+    except Exception as e:
+        logger.warning(f"Open Library author lookup failed for {author.name}: {e}")
+
+    # Fallback to Google Books
+    try:
+        gb_data = _query_google_books_author(author.name)
+        if gb_data:
+            enrichment_data.update(gb_data)
+            enrichment_data["source"] = "Google Books"
+            logger.info(f"Successfully enriched {author.name} from Google Books")
+            return (True, enrichment_data)
+    except Exception as e:
+        logger.warning(f"Google Books author lookup failed for {author.name}: {e}")
+
+    logger.info(f"No enrichment data found for author: {author.name}")
+    return (False, enrichment_data)
 
 
-# Create instance for tests to patch
-goodreads_api = GoodreadsAPI()
+def _query_open_library_author(author_name):
+    """Query Open Library for author information.
+
+    Args:
+        author_name: Author name to search for
+
+    Returns:
+        dict: Enrichment data or None if not found
+    """
+    # Check cache first
+    cache_key = make_cache_key("ol_author", author_name=author_name)
+    cached = cache.get(cache_key)
+    if cached:
+        logger.debug(f"[CACHE HIT] Open Library author: {author_name}")
+        return cached
+
+    try:
+        # Search for author
+        search_url = "https://openlibrary.org/search/authors.json"
+        params = {"q": author_name, "limit": 1}
+
+        response = requests.get(search_url, params=params, timeout=10)
+        response.raise_for_status()
+        search_data = response.json()
+
+        if not search_data.get("docs"):
+            logger.debug(f"No Open Library author found for: {author_name}")
+            cache.set(cache_key, None, timeout=86400 * 7)  # Cache negative results for 7 days
+            return None
+
+        author_key = search_data["docs"][0].get("key")
+        if not author_key:
+            return None
+
+        # Fetch author details
+        author_url = f"https://openlibrary.org{author_key}.json"
+        author_response = requests.get(author_url, timeout=10)
+        author_response.raise_for_status()
+        author_data = author_response.json()
+
+        enrichment = {}
+
+        # Extract biography
+        if "bio" in author_data:
+            bio = author_data["bio"]
+            if isinstance(bio, dict):
+                enrichment["bio"] = bio.get("value", "")
+            elif isinstance(bio, str):
+                enrichment["bio"] = bio
+
+        # Extract photo URL
+        if "photos" in author_data and author_data["photos"]:
+            photo_id = author_data["photos"][0]
+            enrichment["photo_url"] = f"https://covers.openlibrary.org/a/id/{photo_id}-L.jpg"
+
+        # Extract birth date
+        if "birth_date" in author_data:
+            enrichment["birth_date"] = author_data["birth_date"]
+
+        # Extract death date
+        if "death_date" in author_data:
+            enrichment["death_date"] = author_data["death_date"]
+
+        # Extract Wikipedia link
+        if "wikipedia" in author_data:
+            enrichment["wikipedia_url"] = author_data["wikipedia"]
+        elif "links" in author_data:
+            for link in author_data["links"]:
+                if "wikipedia" in link.get("url", "").lower():
+                    enrichment["wikipedia_url"] = link["url"]
+                    break
+
+        # Cache successful result for 30 days
+        if enrichment:
+            cache.set(cache_key, enrichment, timeout=86400 * 30)
+            logger.debug(f"[OPEN LIBRARY] Found author data for: {author_name}")
+            return enrichment
+
+        return None
+
+    except requests.RequestException as e:
+        logger.warning(f"Open Library API error for {author_name}: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Error processing Open Library author data for {author_name}: {e}")
+        return None
+
+
+def _query_google_books_author(author_name):
+    """Query Google Books for author information.
+
+    Args:
+        author_name: Author name to search for
+
+    Returns:
+        dict: Enrichment data or None if not found
+    """
+    # Check cache first
+    cache_key = make_cache_key("gb_author", author_name=author_name)
+    cached = cache.get(cache_key)
+    if cached:
+        logger.debug(f"[CACHE HIT] Google Books author: {author_name}")
+        return cached
+
+    try:
+        # Use the rate-limited API client
+        client = get_api_client("google_books")
+
+        # Search for books by this author to get author info
+        params = {"q": f'inauthor:"{author_name}"', "maxResults": 1, "printType": "books"}
+
+        response = client.get("https://www.googleapis.com/books/v1/volumes", params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        if not data.get("items"):
+            logger.debug(f"No Google Books results for author: {author_name}")
+            cache.set(cache_key, None, timeout=86400 * 7)  # Cache negative results for 7 days
+            return None
+
+        # Extract author info from the first book
+        volume_info = data["items"][0].get("volumeInfo", {})
+
+        enrichment = {}
+
+        # Google Books doesn't provide extensive author profiles
+        # but we can extract some basic info from book descriptions
+        if "description" in volume_info:
+            description = volume_info["description"]
+            # Look for biographical information in the description
+            # (This is a simple heuristic - could be improved)
+            if any(word in description.lower() for word in ["author", "writer", "born", "biography"]):
+                # Extract a snippet that might contain author bio
+                enrichment["bio"] = description[:500] + "..." if len(description) > 500 else description
+
+        # Cache result for 30 days
+        if enrichment:
+            cache.set(cache_key, enrichment, timeout=86400 * 30)
+            logger.debug(f"[GOOGLE BOOKS] Found author data for: {author_name}")
+            return enrichment
+
+        # Cache negative result
+        cache.set(cache_key, None, timeout=86400 * 7)
+        return None
+
+    except requests.RequestException as e:
+        logger.warning(f"Google Books API error for {author_name}: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Error processing Google Books author data for {author_name}: {e}")
+        return None

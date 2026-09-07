@@ -24,10 +24,10 @@ from django.views.generic import (
     View,
 )
 
-from ..forms import DataSourceForm, ScanFolderEditForm, ScanFolderForm, TriggerScanForm
-
 # Import mixins and utilities
 from books.constants import PAGINATION
+
+from ..forms import DataSourceForm, ScanFolderEditForm, ScanFolderForm, TriggerScanForm
 from ..mixins.navigation import BookNavigationMixin
 
 

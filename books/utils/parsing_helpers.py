@@ -178,6 +178,16 @@ def is_probable_author(name: str) -> bool:
     # Flag single or double word names
     words = name.split()
 
+    # Reject 4-digit years (1900-2099)
+    if re.match(r"^(19|20)\d{2}$", name):
+        return False
+
+    # Reject patterns with birth/death dates like "Michael 1973-" or "Author (1950-2020)"
+    if re.search(r"\b\d{4}\s*[-–]\s*\d{0,4}\b", name):
+        return False
+    if re.search(r"\(\s*\d{4}\s*[-–]\s*\d{0,4}\s*\)", name):
+        return False
+
     # Strong title indicators that make it unlikely to be an author
     title_words = {
         "book",

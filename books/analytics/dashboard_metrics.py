@@ -13,9 +13,6 @@ from typing import Dict
 from django.db.models import Count, Q
 
 from books.models import (
-    AUDIOBOOK_FORMATS,
-    COMIC_FORMATS,
-    EBOOK_FORMATS,
     Author,
     Book,
     BookSeries,
@@ -80,15 +77,15 @@ def get_content_type_statistics() -> Dict[str, int]:
     """Get statistics for different content types.
 
     Exclude placeholders/duplicates/corrupted where appropriate to reflect
-    actual library content. Count ebooks as unique non-placeholder entries
-    across epub/mobi/pdf formats.
+    actual library content. Filter by scan_folder content_type to properly
+    categorize books (since PDFs can be both ebooks and comics).
     """
-    common_filter = Q(is_placeholder=False) & Q(is_duplicate=False) & Q(is_corrupted=False)
+    common_filter = Q(is_placeholder=False) & Q(is_duplicate=False) & Q(is_corrupted=False) & Q(scan_folder__is_active=True)
     return {
-        # Count distinct formats in each category present in the library
-        "ebook_count": Book.objects.filter(common_filter & Q(files__file_format__in=EBOOK_FORMATS)).values("files__file_format").distinct().count(),
-        "comic_count": Book.objects.filter(common_filter & Q(files__file_format__in=COMIC_FORMATS)).values("files__file_format").distinct().count(),
-        "audiobook_count": Book.objects.filter(common_filter & Q(files__file_format__in=AUDIOBOOK_FORMATS)).values("files__file_format").distinct().count(),
+        # Count books by their scan_folder's content_type (not by file format)
+        "ebook_count": Book.objects.filter(common_filter & Q(scan_folder__content_type="ebooks")).distinct().count(),
+        "comic_count": Book.objects.filter(common_filter & Q(scan_folder__content_type="comics")).distinct().count(),
+        "audiobook_count": Book.objects.filter(common_filter & Q(scan_folder__content_type="audiobooks")).distinct().count(),
         "series_count": Series.objects.count(),
         "series_with_books": Series.objects.annotate(book_count=Count("book_relationships__book", filter=Q(book_relationships__is_active=True))).filter(book_count__gt=0).count(),
         "author_count": Author.objects.count(),

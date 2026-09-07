@@ -15,6 +15,72 @@ class ComicsSectionManager extends BaseSectionManager {
         this.expandedSeries = new Set();
     }
 
+    /**
+     * Override loadData to use series grouping instead of flat comics list
+     */
+    loadData() {
+        if (this.isLoading) return;
+
+        const container = document.querySelector(this.config.listContainer);
+        this.showLoadingState(container, 'Loading comics...');
+
+        this.isLoading = true;
+
+        fetch(this.config.apiEndpoint, {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        })
+            .then((response) => response.json())
+            .then((data) => {
+                console.log('[ComicsSection] AJAX response:', data);
+                if (data.success) {
+                    // Use series grouping, not flat comics list
+                    const series = data.series || [];
+                    const standalone = data.standalone || [];
+
+                    console.log('[ComicsSection] Series count:', series.length);
+                    console.log('[ComicsSection] Standalone count:', standalone.length);
+
+                    // Convert standalone comics to series format for consistent rendering
+                    const standaloneSeries = standalone.map((comic) => ({
+                        id: `standalone_${comic.id}`,
+                        name: comic.title,
+                        books: [comic],
+                        total_books: 1,
+                        total_size: comic.file_size || 0,
+                        authors: comic.author ? [comic.author] : [],
+                        formats: [comic.file_format],
+                    }));
+
+                    this.currentData = [...series, ...standaloneSeries];
+                    this.filteredData = [...this.currentData];
+
+                    console.log('[ComicsSection] currentData length:', this.currentData.length);
+                    console.log('[ComicsSection] filteredData length:', this.filteredData.length);
+                    console.log('[ComicsSection] Calling renderList()...');
+
+                    this.renderList();
+                    this.updateItemCount(this.currentData.length);
+                } else {
+                    console.log('[ComicsSection] Response not successful');
+                    this.showFriendlyEmptyState(container, 'No Comics Found', 'No comics match your current filters.');
+                }
+            })
+            .catch((error) => {
+                console.error('[ComicsSection] Error loading comics:', error);
+                this.showFriendlyEmptyState(
+                    container,
+                    'Unable to Load Comics',
+                    'There was a problem loading comics. Please try again.'
+                );
+            })
+            .finally(() => {
+                this.isLoading = false;
+            });
+    }
+
     filterItems(searchTerm, sortBy, formatFilter, statusFilter) {
         // Filter comics data
         this.filteredData = this.currentData.filter((series) => {
@@ -70,7 +136,12 @@ class ComicsSectionManager extends BaseSectionManager {
         const container = document.querySelector(this.config.listContainer);
         const currentView = viewType || this.getCurrentViewType();
 
+        console.log('[ComicsSection] renderList() called');
+        console.log('[ComicsSection] filteredData length:', this.filteredData.length);
+        console.log('[ComicsSection] currentView:', currentView);
+
         if (this.filteredData.length === 0) {
+            console.log('[ComicsSection] Showing empty state');
             MediaLibraryUtils.showEmptyState(
                 container,
                 'No Comics Found',
@@ -80,6 +151,7 @@ class ComicsSectionManager extends BaseSectionManager {
             return;
         }
 
+        console.log('[ComicsSection] Rendering view...');
         let html = '';
 
         if (currentView === 'grid') {
@@ -88,6 +160,7 @@ class ComicsSectionManager extends BaseSectionManager {
             html = this.renderListView();
         }
 
+        console.log('[ComicsSection] HTML length:', html.length);
         container.innerHTML = html;
         container.classList.add('fade-in');
 
@@ -103,7 +176,7 @@ class ComicsSectionManager extends BaseSectionManager {
             html += this.filteredData
                 .map(
                     (series) => `
-                <div class="list-item grid-item comic-series-item" data-series-id="${series.id}" onclick="window.comicsManager.toggleSeries(${series.id})">
+                <div class="list-item grid-item comic-series-item" data-series-id="${series.id}" onclick="window.comicsManager.toggleSeries('${series.id}')">
                     <div class="grid-cover mb-3 position-relative">
                         ${
                             series.cover_url
@@ -168,21 +241,21 @@ class ComicsSectionManager extends BaseSectionManager {
                                 (series) => `
                             <tr class="${this.expandedSeries.has(series.id) ? 'expanded' : ''}" 
                                 data-series-id="${series.id}">
-                                <td style="cursor: pointer; text-align: center;" onclick="event.stopPropagation(); window.comicsManager.toggleSeries(${series.id})">
+                                <td style="cursor: pointer; text-align: center;" onclick="event.stopPropagation(); window.comicsManager.toggleSeries('${series.id}')">
                                     <i class="fas fa-chevron-right expand-icon" style="transition: transform 0.2s; ${this.expandedSeries.has(series.id) ? 'transform: rotate(90deg);' : ''}"></i>
                                 </td>
-                                <td class="col-title truncate" title="${MediaLibraryUtils.escapeHtml(series.name)}" style="cursor: pointer;" onclick="window.comicsManager.toggleSeries(${series.id})">
+                                <td class="col-title truncate" title="${MediaLibraryUtils.escapeHtml(series.name)}" style="cursor: pointer;" onclick="window.comicsManager.toggleSeries('${series.id}')">
                                     <i class="fas fa-mask file-icon"></i>
                                     ${MediaLibraryUtils.escapeHtml(series.name)}
                                 </td>
-                                <td class="col-author truncate" title="${series.authors.join(', ')}" style="cursor: pointer;" onclick="window.comicsManager.toggleSeries(${series.id})">
+                                <td class="col-author truncate" title="${series.authors.join(', ')}" style="cursor: pointer;" onclick="window.comicsManager.toggleSeries('${series.id}')">
                                     ${series.authors.map((a) => MediaLibraryUtils.escapeHtml(a)).join(', ')}
                                 </td>
-                                <td class="col-format" style="cursor: pointer;" onclick="window.comicsManager.toggleSeries(${series.id})">
+                                <td class="col-format" style="cursor: pointer;" onclick="window.comicsManager.toggleSeries('${series.id}')">
                                     ${series.formats.map((f) => `<span class="badge bg-secondary me-1">${f.toUpperCase()}</span>`).join('')}
                                 </td>
-                                <td class="col-size" style="cursor: pointer;" onclick="window.comicsManager.toggleSeries(${series.id})">${series.total_books}</td>
-                                <td class="col-size" style="cursor: pointer;" onclick="window.comicsManager.toggleSeries(${series.id})">${MediaLibraryUtils.formatFileSize(series.total_size)}</td>
+                                <td class="col-size" style="cursor: pointer;" onclick="window.comicsManager.toggleSeries('${series.id}')">${series.total_books}</td>
+                                <td class="col-size" style="cursor: pointer;" onclick="window.comicsManager.toggleSeries('${series.id}')">${MediaLibraryUtils.formatFileSize(series.total_size)}</td>
                             </tr>
                             ${this.expandedSeries.has(series.id) ? this.renderSeriesIssuesRows(series) : ''}
                         `
@@ -508,30 +581,32 @@ class ComicsSectionManager extends BaseSectionManager {
         // Helper for confidence/completeness badges
         const getQualityBadge = (value) => {
             const percent = Math.round(value * 100);
-            const colorClass = percent >= 80 ? 'bg-success' : (percent >= 50 ? 'bg-warning' : 'bg-danger');
+            const colorClass = percent >= 80 ? 'bg-success' : percent >= 50 ? 'bg-warning' : 'bg-danger';
             return `<span class="badge ${colorClass}">${percent}%</span>`;
         };
 
-    const getFormatColor = (format) => {
-        const fmt = format.toUpperCase();
-        if (fmt === 'EPUB') return 'bg-primary';
-        if (fmt === 'PDF') return 'bg-danger';
-        if (['MOBI', 'AZW', 'AZW3'].includes(fmt)) return 'bg-success';
-        if (['CBZ', 'CBR', 'CB7', 'CBT'].includes(fmt)) return 'bg-warning';
-        if (['MP3', 'M4A', 'M4B', 'AAC', 'OGG'].includes(fmt)) return 'bg-info';
-        return 'bg-secondary';
-    };
+        const getFormatColor = (format) => {
+            const fmt = format.toUpperCase();
+            if (fmt === 'EPUB') return 'bg-primary';
+            if (fmt === 'PDF') return 'bg-danger';
+            if (['MOBI', 'AZW', 'AZW3'].includes(fmt)) return 'bg-success';
+            if (['CBZ', 'CBR', 'CB7', 'CBT'].includes(fmt)) return 'bg-warning';
+            if (['MP3', 'M4A', 'M4B', 'AAC', 'OGG'].includes(fmt)) return 'bg-info';
+            return 'bg-secondary';
+        };
 
-    const getSourceIcon = (source) => {
-        if (!source) return 'fa-question';
-        const src = source.toLowerCase();
-        if (src.includes('ai') || src.includes('gpt') || src.includes('gemini')) return 'fa-robot';
-        if (src.includes('filename') || src.includes('file')) return 'fa-file';
-        if (src.includes('embedded') || src.includes('metadata')) return 'fa-book-open';
-        if (src.includes('google') || src.includes('openlibrary') || src.includes('api')) return 'fa-cloud';
-        if (src.includes('manual') || src.includes('user')) return 'fa-user';
-        return 'fa-database';
-    };
+        const getSourceIcon = (source) => {
+            if (!source) return 'fa-question';
+            const src = source.toLowerCase();
+            if (src.includes('ai') || src.includes('gpt') || src.includes('gemini')) return 'fa-robot';
+            if (src.includes('filename') || src.includes('file')) return 'fa-file';
+            if (src.includes('embedded') || src.includes('metadata')) return 'fa-book-open';
+            if (src.includes('google') || src.includes('openlibrary') || src.includes('api')) return 'fa-cloud';
+            if (src.includes('manual') || src.includes('user')) return 'fa-user';
+            return 'fa-database';
+        };
+
+        return `
                     ${comic.publisher ? `<div class="mb-2"><i class="fas fa-building me-2 text-muted"></i><strong>Publisher:</strong> ${MediaLibraryUtils.escapeHtml(comic.publisher)}</div>` : ''}
                     
                     <!-- Issue Number -->

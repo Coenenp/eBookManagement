@@ -298,29 +298,11 @@ class ComicsMainView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        FinalMetadata = apps.get_model("books", "FinalMetadata")
         Book = apps.get_model("books", "Book")
 
         # Count comics from scan folders designated as 'comics'
-        comics_from_final = FinalMetadata.objects.filter(
-            book__scan_folder__content_type="comics", book__scan_folder__is_active=True, book__files__file_format__in=COMIC_FORMATS
-        ).select_related("book")
-
-        # Count unique series + standalone comics
-        series_names = set()
-        standalone_count = 0
-
-        for final_meta in comics_from_final:
-            if final_meta.final_series and final_meta.final_series.strip():
-                series_names.add(final_meta.final_series.strip())
-            else:
-                standalone_count += 1
-
-        comics_count = len(series_names) + standalone_count
-
-        # If no comics in final metadata, fall back to scan folder detection
-        if comics_count == 0:
-            comics_count = Book.objects.filter(scan_folder__content_type="comics", scan_folder__is_active=True, files__file_format__in=COMIC_FORMATS).count()
+        # Use distinct() to avoid counting books with multiple files twice
+        comics_count = Book.objects.filter(scan_folder__content_type="comics", scan_folder__is_active=True, files__file_format__in=COMIC_FORMATS).distinct().count()
 
         context["comics_count"] = comics_count
 
@@ -343,29 +325,14 @@ def comics_ajax_list(request):
         .distinct()
     )
 
-    # Get user's items_per_page setting and apply pagination
-    def safe_int(value, default):
-        """Safely convert value to int, handling 'undefined', None, and invalid values."""
-        if value is None or value == "" or value == "undefined":
-            return default
-        try:
-            return int(value)
-        except (ValueError, TypeError):
-            return default
-
-    profile = UserProfile.get_or_create_for_user(request.user)
-    per_page = safe_int(request.GET.get("per_page"), profile.items_per_page or 50)
-    page = safe_int(request.GET.get("page"), 1)
-
-    # Paginate the queryset
-    paginator = Paginator(comics_query, per_page)
-    page_obj = paginator.get_page(page)
+    # For comics, we group ALL comics into series (no pagination at the comic level)
+    # This allows proper series grouping and expansion
 
     # Group comics by series
     series_dict = {}
     standalone_comics = []
 
-    for book in page_obj:
+    for book in comics_query:
         # Get the first file for this book
         first_file = book.files.first()
         if not first_file:
@@ -483,22 +450,19 @@ def comics_ajax_list(request):
         "comics": all_comics,
         "series": series_list,
         "standalone": standalone_comics,
-        "total_count": paginator.count,
-        "page": page,
-        "per_page": per_page,
-        "num_pages": paginator.num_pages,
-        "has_next": page_obj.has_next(),
-        "has_previous": page_obj.has_previous(),
+        "total_count": len(all_comics),
+        "num_series": len(series_list),
+        "num_standalone": len(standalone_comics),
         "version": "unified",
     }
 
 
 @login_required
 @ajax_response_handler
-def comics_ajax_detail(request, comic_id):
+def comics_ajax_detail(request, book_id):
     """AJAX endpoint for comic book detail"""
     Book = apps.get_model("books", "Book")
-    book = get_object_or_404(Book.objects.select_related("scan_folder", "finalmetadata"), id=comic_id)
+    book = get_object_or_404(Book.objects.select_related("scan_folder", "finalmetadata"), id=book_id)
     comic_detail = format_book_detail_for_json(book)
 
     return {"success": True, "comic": comic_detail, "version": "unified"}

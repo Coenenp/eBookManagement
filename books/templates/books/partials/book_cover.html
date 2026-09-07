@@ -23,11 +23,18 @@
            crossorigin="anonymous">
       {% endif %}
     {% elif cover_path %}
-      {% if "/media/" in cover_path %}
-        <img src="{{ cover_path }}"
-             alt="Cover for {{ book|get_display_title }}"
-             class="cover-image"
-             decoding="async">
+      {% if "/media/" in cover_path or cover_path|slice:":12" == "cover_cache/" %}
+        {% if cover_path|slice:":12" == "cover_cache/" %}
+          <img src="/media/{{ cover_path }}"
+               alt="Cover for {{ book|get_display_title }}"
+               class="cover-image"
+               decoding="async">
+        {% else %}
+          <img src="{{ cover_path }}"
+               alt="Cover for {{ book|get_display_title }}"
+               class="cover-image"
+               decoding="async">
+        {% endif %}
       {% else %}
         <img src="{% static cover_path %}"
              alt="Cover for {{ book|get_display_title }}"
