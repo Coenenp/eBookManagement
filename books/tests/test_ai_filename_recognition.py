@@ -268,8 +268,9 @@ class AIManagementCommandTests(TestCase):
     @patch("books.management.commands.train_ai_models.FilenamePatternRecognizer")
     def test_retrain_models_handles_dataframe(self, mock_recognizer):
         """Retrain with a DataFrame should not raise an ambiguous-truth error."""
-        import pandas as pd
         from io import StringIO
+
+        import pandas as pd
 
         rows = [{"filename": f"Author{i} - Title{i}", "title": f"Title{i}", "author": f"Author{i}", "series": "", "volume": ""} for i in range(12)]
 

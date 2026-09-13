@@ -228,7 +228,7 @@ def scan_directory(
         except Exception as e:
             logger.warning(f"Error processing resume point: {e}. Starting from beginning.")
 
-    # Use existing total_files from scan_status (set by scanner_engine)
+    # Use existing total_files from scan_status (set by the calling scanner)
     total_files = scan_status.total_files or len(ebook_files)
 
     # Update scan_status with total_files so progress tracking works correctly

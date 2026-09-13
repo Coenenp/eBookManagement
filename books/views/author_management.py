@@ -16,6 +16,7 @@ from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
 
 from books.models import Author, BookAuthor
+from books.services.author_cleanup import run_author_cleanup
 from books.utils.author_matching import find_potential_duplicates, suggest_canonical_name
 
 logger = logging.getLogger("books.scanner")
@@ -192,4 +193,45 @@ def enrich_author_profile(request, author_id):
 
     except Exception as e:
         logger.error(f"[AUTHOR ENRICH ERROR] {str(e)}")
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def clean_authors_ajax(request):
+    """
+    Run author cleanup operations from the Settings UI.
+
+    Supports the same operations as the ``clean_authors`` management command,
+    exposed here so end users can maintain their library without a shell.
+    Set ``dry_run`` to true to preview changes before applying them.
+    """
+    remove_invalid = request.POST.get("remove_invalid", "false") == "true"
+    clean_names = request.POST.get("clean_names", "false") == "true"
+    merge_duplicates = request.POST.get("merge_duplicates", "false") == "true"
+    dry_run = request.POST.get("dry_run", "true") == "true"
+
+    if not any([remove_invalid, clean_names, merge_duplicates]):
+        return JsonResponse({"success": False, "error": "No cleanup operation selected"}, status=400)
+
+    try:
+        stats = run_author_cleanup(
+            remove_invalid=remove_invalid,
+            clean_names=clean_names,
+            merge_duplicates=merge_duplicates,
+            dry_run=dry_run,
+        )
+
+        logger.info(f"[AUTHOR CLEANUP] dry_run={dry_run} " f"removed={stats['invalid_removed']} " f"cleaned={stats['names_cleaned']} " f"merged={stats['duplicates_merged']}")
+
+        return JsonResponse(
+            {
+                "success": True,
+                "dry_run": dry_run,
+                "stats": stats,
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"[AUTHOR CLEANUP ERROR] {str(e)}")
         return JsonResponse({"success": False, "error": str(e)}, status=500)

@@ -93,9 +93,11 @@ def _extract_from_epub(file_path, page_limit):
 
 
 def _extract_from_pdf(file_path, page_limit):
-    """Extract ISBNs from PDF content."""
+    """Extract ISBNs from PDF content, OCR-ing image-based pages when needed."""
     try:
         from PyPDF2 import PdfReader
+
+        from books.scanner.extractors.pdf_ocr import ocr_pages
 
         reader = PdfReader(file_path)
         isbn_candidates = []
@@ -104,29 +106,37 @@ def _extract_from_pdf(file_path, page_limit):
         # Limit to at most 3 pages from start and end to avoid hanging on large/corrupt PDFs
         effective_limit = min(page_limit, 3)
 
-        # Scan first pages
-        for i in range(min(effective_limit, total_pages)):
-            try:
-                page = reader.pages[i]
-                text = page.extract_text()
-                if text:
-                    isbn_candidates.extend(_find_isbn_patterns(text))
-            except Exception as e:
-                logger.debug(f"Failed to extract text from PDF page {i}: {e}")
-                continue
-
-        # Scan last pages (only if PDF has more pages than we scanned from front)
+        # Build the ordered, de-duplicated list of pages to sample.
+        page_indexes = list(range(min(effective_limit, total_pages)))
         if total_pages > effective_limit:
             start_page = max(total_pages - effective_limit, effective_limit)
-            for i in range(start_page, total_pages):
-                try:
-                    page = reader.pages[i]
-                    text = page.extract_text()
-                    if text:
-                        isbn_candidates.extend(_find_isbn_patterns(text))
-                except Exception as e:
-                    logger.debug(f"Failed to extract text from PDF page {i}: {e}")
-                    continue
+            page_indexes.extend(range(start_page, total_pages))
+        page_indexes = list(dict.fromkeys(page_indexes))
+
+        # First pass: extract embedded text from each sampled page.
+        page_texts = {}
+        ocr_needed = []
+        for i in page_indexes:
+            try:
+                text = reader.pages[i].extract_text()
+            except Exception as e:
+                logger.debug(f"Failed to extract text from PDF page {i}: {e}")
+                text = None
+
+            if text and text.strip():
+                page_texts[i] = text
+            else:
+                ocr_needed.append(i)
+
+        # Second pass: OCR any pages that produced no embedded text (typical
+        # of scanned/image-based PDFs where the text only exists as an image).
+        if ocr_needed:
+            for i, text in ocr_pages(file_path, ocr_needed).items():
+                if text and text.strip():
+                    page_texts[i] = text
+
+        for text in page_texts.values():
+            isbn_candidates.extend(_find_isbn_patterns(text))
 
         return _validate_and_dedupe_isbns(isbn_candidates)
 

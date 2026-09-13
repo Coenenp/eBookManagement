@@ -60,7 +60,8 @@ Key Python dependencies (see `requirements.txt` for the full list):
 
 Optional libraries for enhanced functionality:
 
-- `pdf2image` (better PDF cover rendering; requires poppler)
+- `pdf2image` (better PDF cover rendering and OCR rasterization; requires poppler)
+- `pytesseract` (OCR for image-based/scanned PDFs; requires the Tesseract binary)
 - `rarfile` (CBR cover extraction; requires unrar)
 
 ## Installation
@@ -107,6 +108,7 @@ Scans run in the background and can be monitored, cancelled, and resumed.
 ```bash
 # Background scanning
 python manage.py scan_books scan /path/to/books --language en --background --wait
+python manage.py scan_books scan /path/to/books --resume
 python manage.py scan_books rescan --all --background
 python manage.py scan_books status --job-id <job_id>
 python manage.py scan_books list
@@ -116,7 +118,6 @@ python manage.py scan_books cancel <job_id>
 python manage.py complete_metadata
 python manage.py train_ai_models
 python manage.py scan_content_isbn
-python manage.py scan_ebooks
 
 # Author data quality
 python manage.py clean_authors --dry-run --all
@@ -147,6 +148,11 @@ DB_PORT=3306
 
 # Cache (optional; defaults to local memory)
 CACHE_BACKEND=locmem
+
+# OCR for image-based/scanned PDFs (optional)
+PDF_OCR_ENABLED=True
+PDF_OCR_DPI=300
+TESSERACT_CMD=  # e.g. C:\Program Files\Tesseract-OCR\tesseract.exe
 ```
 
 Cache backends: `locmem` (default), `memcached`, or `redis`.
@@ -257,7 +263,7 @@ ebook_library_manager/
 │   ├── views.py                 # main views and AJAX endpoints
 │   ├── urls.py                  # URL routing
 │   ├── scanner/                 # scanning engine and format extractors
-│   │   ├── scanner_engine.py
+│   │   ├── background.py        # BackgroundScanner, the single scan engine
 │   │   ├── external.py          # external API integration
 │   │   ├── ai/                  # AI filename recognition
 │   │   └── extractors/          # epub, mobi, pdf, opf, comic, comicvine
@@ -286,6 +292,7 @@ python manage.py test books.tests
 
 - **CBR errors**: install `rarfile` and the `unrar` system package.
 - **PDF covers low quality**: install `pdf2image` and poppler.
+- **Scanned PDFs not recognized (no ISBN/metadata)**: install `pytesseract`, the Tesseract OCR binary, `pdf2image`, and poppler, then set `PDF_OCR_ENABLED=True` (and `TESSERACT_CMD` on Windows) in `.env`.
 - **Cache connection errors during scanning**: set `CACHE_BACKEND=locmem` in `.env`.
 - **MySQL "key too long"**: long file paths are limited to 191 chars; shorten paths or use SQLite/PostgreSQL.
 - **Covers missing**: run a deep scan to re-extract and download covers.

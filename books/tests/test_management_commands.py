@@ -91,37 +91,18 @@ class ScanBooksCommandTest(TestCase):
         self.assertIn("API Rate Limit Status:", out.getvalue())
         self.assertIn("Google Books", out.getvalue())
 
+    @patch("books.scanner.background.BackgroundScanner")
+    @patch("books.management.commands.scan_books.check_api_health")
+    def test_scan_resume_flag(self, mock_api_health, mock_scanner_class):
+        """Test the `scan --resume` action dispatches to resume_scan."""
+        mock_api_health.return_value = {"google_books": True}
+        mock_scanner = mock_scanner_class.return_value
+        mock_scanner.resume_scan.return_value = {"success": True, "message": "Resumed"}
 
-class ScanEbooksCommandTest(TestCase):
-    """Tests for the scan_ebooks management command."""
+        call_command("scan_books", "scan", "/fake/dir", "--resume")
 
-    @patch("books.scanner.scanner_engine.EbookScanner.run")
-    def test_scan_ebooks_no_args(self, mock_run):
-        """Test calling scan_ebooks with no arguments."""
-        call_command("scan_ebooks")
-        mock_run.assert_called_once_with(folder_path=None)
-
-    @patch("books.scanner.scanner_engine.EbookScanner.run")
-    def test_scan_ebooks_with_folder(self, mock_run):
-        """Test calling scan_ebooks with a folder path."""
-        call_command("scan_ebooks", "/fake/path")
-        mock_run.assert_called_once_with(folder_path="/fake/path")
-
-    @patch("books.management.commands.scan_ebooks.EbookScanner")
-    def test_scan_ebooks_rescan_flag(self, MockScanner):
-        """Test the --rescan flag."""
-        mock_scanner_instance = MockScanner.return_value
-        call_command("scan_ebooks", "--rescan")
-        MockScanner.assert_called_with(rescan=True, resume=False)
-        mock_scanner_instance.run.assert_called_once()
-
-    @patch("books.management.commands.scan_ebooks.EbookScanner")
-    def test_scan_ebooks_resume_flag(self, MockScanner):
-        """Test the --resume flag."""
-        mock_scanner_instance = MockScanner.return_value
-        call_command("scan_ebooks", "--resume")
-        MockScanner.assert_called_with(rescan=False, resume=True)
-        mock_scanner_instance.run.assert_called_once()
+        mock_scanner.resume_scan.assert_called_once_with("/fake/dir", "en", True)
+        mock_scanner.scan_folder.assert_not_called()
 
 
 class ScanContentIsbnCommandTest(TestCase):

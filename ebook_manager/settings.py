@@ -222,6 +222,13 @@ COMICVINE_API_KEY = os.getenv("COMICVINE_API_KEY")
 # Apify API Token for Goodreads scraping (optional)
 APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN")
 
+# PDF OCR configuration for image-based (scanned) PDFs.
+# Requires the optional "pytesseract" Python package, the Tesseract OCR binary,
+# and "pdf2image" plus Poppler to rasterize pages.
+PDF_OCR_ENABLED = os.getenv("PDF_OCR_ENABLED", "True").lower() in ("true", "1", "t")
+PDF_OCR_DPI = int(os.getenv("PDF_OCR_DPI", "300"))
+TESSERACT_CMD = os.getenv("TESSERACT_CMD")
+
 # Logging configuration
 LOGGING = {
     "version": 1,

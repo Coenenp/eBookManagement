@@ -311,3 +311,24 @@ class ContentISBNExtractorTests(TestCase):
         # Should handle page errors gracefully
         isbns = extract_isbn_from_content(self.pdf_book)
         self.assertEqual(isbns, [])
+
+    @patch("books.scanner.extractors.pdf_ocr.ocr_pages")
+    @patch("PyPDF2.PdfReader")
+    def test_extract_isbn_from_content_pdf_ocr_fallback(self, mock_pdf_reader, mock_ocr_pages):
+        """Test that image-based PDFs (no embedded text) are OCR'd for ISBNs"""
+        # Mock PDF whose pages return no embedded text (scanned PDF)
+        mock_reader = MagicMock()
+        mock_page1 = MagicMock()
+        mock_page1.extract_text.return_value = ""
+        mock_page2 = MagicMock()
+        mock_page2.extract_text.return_value = ""
+
+        mock_reader.pages = [mock_page1, mock_page2]
+        mock_pdf_reader.return_value = mock_reader
+
+        # OCR recovers the ISBN from the rasterized pages
+        mock_ocr_pages.return_value = {0: "Copyright page ISBN: 9780134685991"}
+
+        isbns = extract_isbn_from_content(self.pdf_book, page_limit=5)
+        self.assertIn("9780134685991", isbns)
+        mock_ocr_pages.assert_called_once()

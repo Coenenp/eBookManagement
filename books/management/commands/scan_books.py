@@ -39,8 +39,7 @@ class Command(BaseCommand):
             help="Run in background (returns job ID)",
         )
         scan_parser.add_argument("--wait", action="store_true", help="Wait for completion and show progress")
-
-        # Rescan books command
+        scan_parser.add_argument("--resume", action="store_true", help="Resume an interrupted scan instead of starting a new one")
         rescan_parser = subparsers.add_parser("rescan", help="Rescan existing books")
         rescan_parser.add_argument("--book-ids", nargs="+", type=int, help="Specific book IDs to rescan")
         rescan_parser.add_argument("--all", action="store_true", help="Rescan all books")
@@ -88,6 +87,7 @@ class Command(BaseCommand):
         enable_external_apis = not options["no_external_apis"]
         background = options["background"]
         wait = options["wait"]
+        resume = options.get("resume", False)
 
         self.stdout.write("Scanning folder: {folder_path}")
 
@@ -109,7 +109,7 @@ class Command(BaseCommand):
             self.stdout.write(f"Starting background scan (Job ID: {job_id})")
 
             # Start the background job
-            result = background_scan_folder(job_id, folder_path, language, enable_external_apis)
+            result = background_scan_folder(job_id, folder_path, language, enable_external_apis, resume=resume)
 
             if wait:
                 self.wait_for_completion(job_id)
@@ -121,7 +121,10 @@ class Command(BaseCommand):
             from books.scanner.background import BackgroundScanner
 
             scanner = BackgroundScanner(job_id)
-            result = scanner.scan_folder(folder_path, language, enable_external_apis)
+            if resume:
+                result = scanner.resume_scan(folder_path, language, enable_external_apis)
+            else:
+                result = scanner.scan_folder(folder_path, language, enable_external_apis)
 
             if result["success"]:
                 self.stdout.write(self.style.SUCCESS(f"Scan completed: {result['message']}"))

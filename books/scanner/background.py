@@ -153,6 +153,17 @@ class BackgroundScanner:
         self.intelligent_scanner: Optional[IntelligentAPIScanner] = None
         self.scan_session: Optional[ScanSession] = None
         self.api_mode = "adaptive"  # 'full', 'partial', 'internal_only', 'adaptive'
+        self.ai_recognizer = self._initialize_ai_system()
+
+    def _initialize_ai_system(self):
+        """Initialize the AI filename recognition system used during scanning."""
+        try:
+            from books.scanner.ai import initialize_ai_system
+
+            return initialize_ai_system()
+        except Exception as e:
+            logger.error(f"[BACKGROUND SCAN] Failed to initialize AI system: {e}")
+            return None
 
     def report_progress(self, current: int, total: int, message: str = ""):
         """Report progress during scanning."""
@@ -231,6 +242,7 @@ class BackgroundScanner:
                     rescan=False,  # This is a new scan, not a rescan
                     scan_status=progress_bridge,  # Pass bridge to enable live progress updates
                     enable_external_apis=enable_external_apis,
+                    ai_recognizer=self.ai_recognizer,
                 )
 
                 # Count processed books for the progress report
@@ -373,6 +385,106 @@ class BackgroundScanner:
         except Exception as e:
             logger.warning(f"[SCAN HISTORY] Failed to create history record: {e}")
 
+    def resume_scan(
+        self,
+        folder_path: str = None,
+        language: str = None,
+        enable_external_apis: bool = True,
+    ) -> Dict:
+        """Resume an interrupted scan, completing metadata for existing books first."""
+        import json
+
+        from books.models import FinalMetadata, ScanStatus
+
+        try:
+            status = ScanStatus.objects.filter(status="Running").order_by("-started").first()
+            if not status:
+                logger.info("[BACKGROUND RESUME] No interrupted scan found, starting new scan")
+                return self.scan_folder(folder_path, language, enable_external_apis)
+
+            logger.info(f"[BACKGROUND RESUME] Resuming from: {status.last_processed_file or 'beginning'}")
+
+            if status.scan_folders:
+                try:
+                    folders_to_scan = json.loads(status.scan_folders)
+                except json.JSONDecodeError:
+                    logger.error("[BACKGROUND RESUME] Could not parse saved scan folders, starting new scan")
+                    return self.scan_folder(folder_path, language, enable_external_apis)
+            elif folder_path:
+                folders_to_scan = [folder_path]
+            else:
+                folders_to_scan = list(ScanFolder.objects.filter(is_active=True).values_list("path", flat=True))
+
+            self.progress.update(0, 100, "Resuming", "Resuming interrupted scan...")
+
+            # Complete metadata for books that exist but were never fully processed
+            incomplete_books = (
+                Book.objects.filter(scan_folder__path__in=folders_to_scan).exclude(id__in=FinalMetadata.objects.values_list("book_id", flat=True)).exclude(is_corrupted=True)
+            )
+            total_incomplete = incomplete_books.count()
+            for i, book in enumerate(incomplete_books, 1):
+                try:
+                    from books.scanner.extractors.content_isbn import ensure_content_isbn
+
+                    ensure_content_isbn(book)
+                except Exception as e:
+                    logger.warning(f"[BACKGROUND RESUME] Content ISBN failed for book {book.id}: {e}")
+
+                try:
+                    folder_scanner.query_metadata_and_covers(book)
+                    folder_scanner.resolve_final_metadata(book)
+                except Exception as e:
+                    logger.error(f"[BACKGROUND RESUME] Metadata completion failed for book {book.id}: {e}")
+
+                self.progress.update(int((i / total_incomplete) * 10), 100, "Completing metadata", f"Book {i}/{total_incomplete}")
+
+            processed_count = 0
+            error_count = 0
+            progress_bridge = ProgressBridge(self.progress)
+            progress_bridge.processed_files = 0
+            progress_bridge.total_files = 0
+
+            for path in folders_to_scan:
+                scan_folder_obj, _ = ScanFolder.objects.get_or_create(path=path, defaults={"is_active": True})
+                try:
+                    folder_scanner.scan_directory(
+                        directory=path,
+                        scan_folder=scan_folder_obj,
+                        rescan=False,
+                        scan_status=progress_bridge,
+                        resume_from=status.last_processed_file,
+                        enable_external_apis=enable_external_apis,
+                        ai_recognizer=self.ai_recognizer,
+                    )
+                    processed_count += Book.objects.filter(scan_folder=scan_folder_obj).count()
+                except Exception as e:
+                    logger.error(f"[BACKGROUND RESUME] Error scanning folder {path}: {e}")
+                    error_count += 1
+
+            status.status = "Completed"
+            status.last_processed_file = None
+            status.save()
+
+            success_message = f"Resumed scan processed {processed_count} books"
+            if error_count:
+                success_message += f" ({error_count} folder errors)"
+
+            self.progress.complete(True, success_message, f"{error_count} errors occurred" if error_count else "")
+
+            try:
+                from books.views.scanning import _check_and_process_queue
+
+                _check_and_process_queue()
+            except Exception as e:
+                logger.warning(f"[QUEUE] Failed to trigger queue processing: {e}")
+
+            return {"success": True, "books_processed": processed_count, "errors": error_count, "message": success_message}
+
+        except Exception as e:
+            logger.error(f"[BACKGROUND RESUME] Fatal error: {e}")
+            self.progress.complete(False, "", str(e))
+            return {"success": False, "error": str(e)}
+
     def _process_single_book(self, book_path: str, scan_folder: ScanFolder, enable_external_apis: bool) -> bool:
         """Process a single book file with intelligent API management."""
         try:
@@ -513,6 +625,7 @@ def background_scan_folder(
     language: str = None,
     enable_external_apis: bool = True,
     content_type: str = None,
+    resume: bool = False,
 ):
     """Background job for scanning a folder."""
     import inspect
@@ -529,6 +642,8 @@ def background_scan_folder(
     logger.info(f"[FUNCTION SIGNATURE] Expected: {all_args}")
 
     scanner = BackgroundScanner(job_id)
+    if resume:
+        return scanner.resume_scan(folder_path, language, enable_external_apis)
     return scanner.scan_folder(folder_path, language, enable_external_apis, content_type)
 
 
