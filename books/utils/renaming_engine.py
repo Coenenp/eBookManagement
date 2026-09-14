@@ -289,19 +289,19 @@ class RenamingEngine:
         # For now, return same as title - could be enhanced with original language title
         return self._get_title()
 
-    def _get_title_sortable(self) -> Optional[str]:
-        """Get title formatted for sorting (The Matrix -> Matrix, The)."""
-        title = self._get_title()
+    @staticmethod
+    def _sort_title(title):
+        """Move a leading article to the end for sorting (The Matrix -> Matrix, The)."""
         if not title:
             return None
-
-        # Move articles to the end
-        articles = ["The ", "A ", "An "]
-        for article in articles:
+        for article in ("The ", "A ", "An "):
             if title.startswith(article):
                 return f"{title[len(article):].strip()}, {article.strip()}"
-
         return title
+
+    def _get_title_sortable(self) -> Optional[str]:
+        """Get title formatted for sorting (The Matrix -> Matrix, The)."""
+        return self._sort_title(self._get_title())
 
     def _get_original_filename(self) -> Optional[str]:
         """Get original filename without extension."""
@@ -345,43 +345,30 @@ class RenamingEngine:
         # Fallback to direct field
         return getattr(self.current_book, "series_name", None)
 
-    def _get_series_number(self) -> Optional[str]:
-        """Get series number as simple integer."""
+    def _get_series_number_value(self) -> Optional[int]:
+        """Return the raw series number as an integer, or None."""
         if hasattr(self.current_book, "finalmetadata") and self.current_book.finalmetadata:
             series_num = self.current_book.finalmetadata.final_series_number
             if series_num:
-                return str(int(series_num))  # Format as simple integer (1, 2, etc.)
-        # Fallback to direct book field
+                return int(series_num)
         series_num = getattr(self.current_book, "series_number", None)
         if series_num:
-            return str(int(series_num))  # Format as simple integer (1, 2, etc.)
+            return int(series_num)
         return None
+
+    def _get_series_number(self) -> Optional[str]:
+        """Get series number as a simple integer."""
+        value = self._get_series_number_value()
+        return str(value) if value is not None else None
 
     def _get_series_number_padded(self) -> Optional[str]:
         """Get series number with zero padding (01, 02, etc.)."""
-        if hasattr(self.current_book, "finalmetadata") and self.current_book.finalmetadata:
-            series_num = self.current_book.finalmetadata.final_series_number
-            if series_num:
-                return f"{int(series_num):02d}"  # Format as 01, 02, etc.
-        # Fallback to direct book field
-        series_num = getattr(self.current_book, "series_number", None)
-        if series_num:
-            return f"{int(series_num):02d}"  # Format as 01, 02, etc.
-        return None
+        value = self._get_series_number_value()
+        return f"{value:02d}" if value is not None else None
 
     def _get_series_title_sortable(self) -> Optional[str]:
         """Get series title formatted for sorting."""
-        series_title = self._get_series_title()
-        if not series_title:
-            return None
-
-        # Same logic as title sortable
-        articles = ["The ", "A ", "An "]
-        for article in articles:
-            if series_title.startswith(article):
-                return f"{series_title[len(article):].strip()}, {article.strip()}"
-
-        return series_title
+        return self._sort_title(self._get_series_title())
 
     def _get_author_lastname(self) -> Optional[str]:
         """Get author last name."""

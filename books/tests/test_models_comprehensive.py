@@ -534,8 +534,8 @@ class FinalMetadataModelTests(BaseTestCaseWithTempDir):
             mock_confidence.assert_called_once()
             mock_completeness.assert_called_once()
 
-    @patch("books.models.normalize_language")
-    @patch("books.models.logger")
+    @patch("books.models_metadata.normalize_language")
+    @patch("books.models_metadata.logger")
     def test_save_auto_update(self, mock_logger, mock_normalize):
         """Test FinalMetadata save with auto-update on creation"""
         mock_normalize.return_value = "en"
@@ -547,8 +547,8 @@ class FinalMetadataModelTests(BaseTestCaseWithTempDir):
             final.save()  # This should trigger auto-update on first save
             mock_update.assert_called_once_with(save_after=False)
 
-    @patch("books.models.normalize_language")
-    @patch("books.models.logger")
+    @patch("books.models_metadata.normalize_language")
+    @patch("books.models_metadata.logger")
     def test_save_manual_update(self, mock_logger, mock_normalize):
         """Test FinalMetadata save with manual update flag"""
         mock_normalize.return_value = "en"
@@ -560,8 +560,8 @@ class FinalMetadataModelTests(BaseTestCaseWithTempDir):
             final.save()
             mock_update.assert_not_called()
 
-    @patch("books.models.normalize_language")
-    @patch("books.models.logger")
+    @patch("books.models_metadata.normalize_language")
+    @patch("books.models_metadata.logger")
     def test_save_reviewed_no_update(self, mock_logger, mock_normalize):
         """Test FinalMetadata save when reviewed (no auto-update)"""
         mock_normalize.return_value = "en"

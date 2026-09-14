@@ -596,6 +596,8 @@ class UserProfileForm(StandardFormMixin, forms.ModelForm):
             "theme",
             "items_per_page",
             "default_view_mode",
+            "show_covers_in_list",
+            "share_reading_progress",
             "default_folder_pattern",
             "default_filename_pattern",
             "include_companion_files",
@@ -611,6 +613,8 @@ class UserProfileForm(StandardFormMixin, forms.ModelForm):
             ),
             "items_per_page": forms.NumberInput(attrs={"class": "form-control", "min": "10", "max": "200", "step": "10"}),
             "default_view_mode": forms.Select(attrs={"class": "form-select"}),
+            "show_covers_in_list": forms.CheckboxInput(attrs={"class": "form-check-input"}),
+            "share_reading_progress": forms.CheckboxInput(attrs={"class": "form-check-input"}),
             "default_folder_pattern": forms.TextInput(
                 attrs={
                     "class": "form-control",

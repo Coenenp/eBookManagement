@@ -74,13 +74,13 @@
 
                         <!-- Review Status Navigation -->
                         <div class="btn-group btn-group-sm nav-review" role="group" aria-label="Review status navigation">
-                            {% if prev_unreviewed %}
-                                <a href="{% url 'books:book_detail' prev_unreviewed.id %}" class="btn btn-outline-warning" title="Previous Unreviewed Book">
+                            {% if prev_needs_review %}
+                                <a href="{% url 'books:book_detail' prev_needs_review.id %}" class="btn btn-outline-warning" title="Previous Unreviewed Book">
                                     <i class="fas fa-chevron-left"></i><span class="d-none d-xl-inline"> Prev Unreviewed</span>
                                 </a>
                             {% endif %}
-                            {% if next_unreviewed %}
-                                <a href="{% url 'books:book_detail' next_unreviewed.id %}" class="btn btn-outline-warning" title="Next Unreviewed Book">
+                            {% if next_needs_review %}
+                                <a href="{% url 'books:book_detail' next_needs_review.id %}" class="btn btn-outline-warning" title="Next Unreviewed Book">
                                     <span class="d-none d-xl-inline">Next Unreviewed </span><i class="fas fa-chevron-right"></i>
                                 </a>
                             {% endif %}
@@ -1517,13 +1517,13 @@
 
                         <!-- Review Status Navigation -->
                         <div class="btn-group btn-group-sm nav-review" role="group" aria-label="Review status navigation">
-                            {% if prev_unreviewed %}
-                                <a href="{% url 'books:book_detail' prev_unreviewed.id %}" class="btn btn-outline-warning" title="Previous Unreviewed Book">
+                            {% if prev_needs_review %}
+                                <a href="{% url 'books:book_detail' prev_needs_review.id %}" class="btn btn-outline-warning" title="Previous Unreviewed Book">
                                     <i class="fas fa-chevron-left"></i><span class="d-none d-xl-inline"> Prev Unreviewed</span>
                                 </a>
                             {% endif %}
-                            {% if next_unreviewed %}
-                                <a href="{% url 'books:book_detail' next_unreviewed.id %}" class="btn btn-outline-warning" title="Next Unreviewed Book">
+                            {% if next_needs_review %}
+                                <a href="{% url 'books:book_detail' next_needs_review.id %}" class="btn btn-outline-warning" title="Next Unreviewed Book">
                                     <span class="d-none d-xl-inline">Next Unreviewed </span><i class="fas fa-chevron-right"></i>
                                 </a>
                             {% endif %}

@@ -157,7 +157,6 @@ class PDFCoverExtractorTestCase(TestCase):
         """Test PDF extraction using pdf2image."""
         # Mock pdf2image returning a PIL Image
         mock_image = MagicMock()
-        mock_bytes = BytesIO()
         mock_image.save.side_effect = lambda buf, **kwargs: buf.write(b"fake_image_data")
 
         mock_convert = MagicMock(return_value=[mock_image])

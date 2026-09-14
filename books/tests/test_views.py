@@ -259,7 +259,7 @@ class BookDetailViewTests(BaseViewTestCase):
         # Check navigation context
         self.assertIn("prev_book_id", context)
         self.assertIn("next_book_id", context)
-        self.assertIn("next_needsreview_id", context)
+        self.assertIn("next_needs_review_id", context)
 
     def test_book_detail_nonexistent_book(self):
         """Test book detail view with nonexistent book"""
@@ -977,8 +977,8 @@ class BookDetailNavigationTestCase(BaseViewTestCase):
         response = self.client.get(reverse("books:book_detail", kwargs={"pk": 1}))
         context = self.get_context_from_response(response)
 
-        self.assertIsNotNone(context.get("next_unreviewed"))
-        self.assertEqual(context["next_unreviewed"].id, 2)
+        self.assertIsNotNone(context.get("next_needs_review"))
+        self.assertEqual(context["next_needs_review"].id, 2)
 
         # Test book2 (unreviewed) - should have next reviewed book (none in this case)
         response = self.client.get(reverse("books:book_detail", kwargs={"pk": 2}))
@@ -2266,9 +2266,9 @@ class BookDetailNavigationIntegrationTestCase(BaseViewTestCase):
 
         # Should have next unreviewed book
         context = self.get_context_from_response(response)
-        next_unreviewed = context.get("next_unreviewed")
-        self.assertIsNotNone(next_unreviewed)
-        self.assertEqual(next_unreviewed.id, 3)  # Book 3 is unreviewed
+        next_needs_review = context.get("next_needs_review")
+        self.assertIsNotNone(next_needs_review)
+        self.assertEqual(next_needs_review.id, 3)  # Book 3 is unreviewed
 
         # Navigate to book 3
         response = self.client.get(reverse("books:book_detail", kwargs={"pk": 3}))
@@ -2276,9 +2276,9 @@ class BookDetailNavigationIntegrationTestCase(BaseViewTestCase):
 
         # Should have next unreviewed book
         context = self.get_context_from_response(response)
-        next_unreviewed = context.get("next_unreviewed")
-        self.assertIsNotNone(next_unreviewed)
-        self.assertEqual(next_unreviewed.id, 5)  # Book 5 is unreviewed
+        next_needs_review = context.get("next_needs_review")
+        self.assertIsNotNone(next_needs_review)
+        self.assertEqual(next_needs_review.id, 5)  # Book 5 is unreviewed
 
 
 # ============================================================================

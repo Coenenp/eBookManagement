@@ -107,6 +107,7 @@ class AuthorManagementViewTests(TestCase):
                     name=f"Test Author {i}",
                     first_name=f"Test{i}",
                     last_name=f"Author{i}",
+                    name_normalized=f"test author {i}",
                 )
                 for i in range(30)
             ]

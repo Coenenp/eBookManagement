@@ -446,6 +446,20 @@ def _query_goodreads_combined(book, title, author, isbn=None):
 
 
 # Metadata processing functions
+def _upsert_publisher(book, source, pub_name, confidence):
+    """Create or update a publisher and its relationship to a book."""
+    if not pub_name:
+        return
+    existing_pub = Publisher.objects.filter(name__iexact=pub_name).first()
+    pub_obj = existing_pub or Publisher.objects.create(name=pub_name)
+    BookPublisher.objects.update_or_create(
+        book=book,
+        publisher=pub_obj,
+        source=source,
+        defaults={"confidence": confidence, "is_active": True},
+    )
+
+
 def _process_open_library_metadata(book, source, result, confidence):
     if result.get("title"):
         BookTitle.objects.update_or_create(
@@ -493,16 +507,7 @@ def _process_open_library_metadata(book, source, result, confidence):
             pass  # Silently skip invalid year
 
     if result.get("publisher"):
-        pub_name = result["publisher"][0].strip()
-        if pub_name:
-            existing_pub = Publisher.objects.filter(name__iexact=pub_name).first()
-            pub_obj = existing_pub or Publisher.objects.create(name=pub_name)
-            BookPublisher.objects.update_or_create(
-                book=book,
-                publisher=pub_obj,
-                source=source,
-                defaults={"confidence": confidence, "is_active": True},
-            )
+        _upsert_publisher(book, source, result["publisher"][0].strip(), confidence)
 
 
 def _process_google_books_metadata(book, source, result, confidence):
@@ -527,16 +532,7 @@ def _process_google_books_metadata(book, source, result, confidence):
         )
 
     if result.get("publisher"):
-        pub_name = result["publisher"].strip()
-        if pub_name:
-            existing_pub = Publisher.objects.filter(name__iexact=pub_name).first()
-            pub_obj = existing_pub or Publisher.objects.create(name=pub_name)
-            BookPublisher.objects.update_or_create(
-                book=book,
-                publisher=pub_obj,
-                source=source,
-                defaults={"confidence": confidence, "is_active": True},
-            )
+        _upsert_publisher(book, source, result["publisher"].strip(), confidence)
 
     if result.get("publishedDate"):
         match = re.search(r"\d{4}", result["publishedDate"])
@@ -633,29 +629,28 @@ def _process_goodreads_metadata(book, source, result, confidence):
 
 
 # Cover processing functions
-def _process_open_library_cover(book, source, doc, confidence):
-    """Process cover from Open Library API result."""
+def _process_cover_result(book, source, cover_url, confidence):
+    """Normalize, fetch metadata for, and store a cover URL."""
+    if not cover_url:
+        return
+
+    # Upgrade to HTTPS if needed
+    if cover_url.startswith("http://"):
+        cover_url = cover_url.replace("http://", "https://")
+
+    # Get image metadata if available
+    width, height, file_size, image_format = None, None, None, None
     try:
-        cover_id = doc.get("cover_i")
-        if not cover_id:
-            return
+        metadata = get_image_metadata(cover_url)
+        if metadata:
+            width = metadata.get("width")
+            height = metadata.get("height")
+            file_size = metadata.get("size")
+            image_format = metadata.get("format")
+    except Exception as e:
+        logger.debug(f"Could not get image metadata for {cover_url}: {e}")
 
-        # Open Library cover URL format
-        cover_url = f"https://covers.openlibrary.org/b/id/{cover_id}-L.jpg"
-
-        # Get image metadata if available
-        width, height, file_size, image_format = None, None, None, None
-        try:
-            metadata = get_image_metadata(cover_url)
-            if metadata:
-                width = metadata.get("width")
-                height = metadata.get("height")
-                file_size = metadata.get("size")
-                image_format = metadata.get("format")
-        except Exception as e:
-            logger.debug(f"Could not get image metadata for {cover_url}: {e}")
-
-        # Create or update cover entry
+    try:
         BookCover.objects.update_or_create(
             book=book,
             cover_path=cover_url,
@@ -669,99 +664,31 @@ def _process_open_library_cover(book, source, doc, confidence):
                 "is_active": True,
             },
         )
-        logger.debug(f"Processed Open Library cover for book {book.id}: {cover_url}")
-
+        logger.debug(f"Processed cover for book {book.id}: {cover_url}")
     except Exception as e:
-        logger.warning(f"Error processing Open Library cover: {e}")
+        logger.warning(f"Error processing cover {cover_url}: {e}")
+
+
+def _process_open_library_cover(book, source, doc, confidence):
+    """Process cover from Open Library API result."""
+    cover_id = doc.get("cover_i")
+    if not cover_id:
+        return
+    cover_url = f"https://covers.openlibrary.org/b/id/{cover_id}-L.jpg"
+    _process_cover_result(book, source, cover_url, confidence)
 
 
 def _process_google_books_cover(book, source, info, confidence):
     """Process cover from Google Books API result."""
-    try:
-        image_links = info.get("imageLinks", {})
-        # Prefer larger images
-        cover_url = image_links.get("large") or image_links.get("medium") or image_links.get("thumbnail")
-
-        if not cover_url:
-            return
-
-        # Upgrade to HTTPS if needed
-        if cover_url.startswith("http://"):
-            cover_url = cover_url.replace("http://", "https://")
-
-        # Get image metadata if available
-        width, height, file_size, image_format = None, None, None, None
-        try:
-            metadata = get_image_metadata(cover_url)
-            if metadata:
-                width = metadata.get("width")
-                height = metadata.get("height")
-                file_size = metadata.get("size")
-                image_format = metadata.get("format")
-        except Exception as e:
-            logger.debug(f"Could not get image metadata for {cover_url}: {e}")
-
-        # Create or update cover entry
-        BookCover.objects.update_or_create(
-            book=book,
-            cover_path=cover_url,
-            source=source,
-            defaults={
-                "confidence": confidence,
-                "width": width,
-                "height": height,
-                "file_size": file_size,
-                "format": image_format or "jpg",
-                "is_active": True,
-            },
-        )
-        logger.debug(f"Processed Google Books cover for book {book.id}: {cover_url}")
-
-    except Exception as e:
-        logger.warning(f"Error processing Google Books cover: {e}")
+    image_links = info.get("imageLinks", {})
+    # Prefer larger images
+    cover_url = image_links.get("large") or image_links.get("medium") or image_links.get("thumbnail")
+    _process_cover_result(book, source, cover_url, confidence)
 
 
 def _process_goodreads_cover(book, source, item, confidence):
     """Process cover from Goodreads API result."""
-    try:
-        cover_url = item.get("image")
-        if not cover_url:
-            return
-
-        # Upgrade to HTTPS if needed
-        if cover_url.startswith("http://"):
-            cover_url = cover_url.replace("http://", "https://")
-
-        # Get image metadata if available
-        width, height, file_size, image_format = None, None, None, None
-        try:
-            metadata = get_image_metadata(cover_url)
-            if metadata:
-                width = metadata.get("width")
-                height = metadata.get("height")
-                file_size = metadata.get("size")
-                image_format = metadata.get("format")
-        except Exception as e:
-            logger.debug(f"Could not get image metadata for {cover_url}: {e}")
-
-        # Create or update cover entry
-        BookCover.objects.update_or_create(
-            book=book,
-            cover_path=cover_url,
-            source=source,
-            defaults={
-                "confidence": confidence,
-                "width": width,
-                "height": height,
-                "file_size": file_size,
-                "format": image_format or "jpg",
-                "is_active": True,
-            },
-        )
-        logger.debug(f"Processed Goodreads cover for book {book.id}: {cover_url}")
-
-    except Exception as e:
-        logger.warning(f"Error processing Goodreads cover: {e}")
+    _process_cover_result(book, source, item.get("image"), confidence)
 
 
 def enrich_author_from_external_sources(author):

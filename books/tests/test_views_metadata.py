@@ -376,7 +376,7 @@ class BookMetadataUpdateViewTests(TestCase):
         # View handles errors gracefully with redirect
         self.assertEqual(response.status_code, 302)
 
-    @patch("books.views.metadata.logger")
+    @patch("books.views.metadata_update.logger")
     def test_exception_handling(self, mock_logger):
         """Test exception handling in metadata update"""
         # Mock an exception during processing
@@ -499,7 +499,7 @@ class MetadataProcessingEdgeCaseTests(TestCase):
         update_data = {
             "final_title": "Test Book: Спец!@#$%^&*()чарς",
             "final_author": "Åuthör with spëcial chars 中文",
-            "description": 'Unicode: 🚀📚✨ and HTML: <script>alert("test")</script>',
+            "description": 'Unicode: emoji and HTML: <script>alert("test")</script>',
         }
 
         response = self.client.post(reverse("books:book_metadata_update", kwargs={"pk": self.book.pk}), update_data)

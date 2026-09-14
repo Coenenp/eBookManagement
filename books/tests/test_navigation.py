@@ -164,8 +164,8 @@ class BookDetailNavigationTestCase(TestCase):
         response = self.client.get(reverse("books:book_detail", kwargs={"pk": 1}))
         context = response.context
 
-        self.assertIsNotNone(context.get("next_unreviewed"))
-        self.assertEqual(context["next_unreviewed"].id, 2)
+        self.assertIsNotNone(context.get("next_needs_review"))
+        self.assertEqual(context["next_needs_review"].id, 2)
 
         # Test book2 (unreviewed) - should have next reviewed book (none in this case)
         response = self.client.get(reverse("books:book_detail", kwargs={"pk": 2}))
@@ -333,15 +333,15 @@ class BookDetailNavigationIntegrationTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
 
         # Should have next unreviewed book
-        next_unreviewed = response.context.get("next_unreviewed")
-        self.assertIsNotNone(next_unreviewed)
-        self.assertEqual(next_unreviewed.id, 3)  # Book 3 is unreviewed
+        next_needs_review = response.context.get("next_needs_review")
+        self.assertIsNotNone(next_needs_review)
+        self.assertEqual(next_needs_review.id, 3)  # Book 3 is unreviewed
 
         # Navigate to book 3
         response = self.client.get(reverse("books:book_detail", kwargs={"pk": 3}))
         self.assertEqual(response.status_code, 200)
 
         # Should have next unreviewed book
-        next_unreviewed = response.context.get("next_unreviewed")
-        self.assertIsNotNone(next_unreviewed)
-        self.assertEqual(next_unreviewed.id, 5)  # Book 5 is unreviewed
+        next_needs_review = response.context.get("next_needs_review")
+        self.assertIsNotNone(next_needs_review)
+        self.assertEqual(next_needs_review.id, 5)  # Book 5 is unreviewed

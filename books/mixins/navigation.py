@@ -48,10 +48,13 @@ class BookNavigationMixin:
 
         context["next_reviewed"] = base_queryset.filter(finalmetadata__is_reviewed=True, id__gt=book.id).order_by("id").first()
 
-        # Previous/next unreviewed books
-        context["prev_unreviewed"] = base_queryset.filter(finalmetadata__is_reviewed=False, id__lt=book.id).order_by("-id").first()
+        # Previous/next books needing review.
+        prev_needs_review = base_queryset.filter(finalmetadata__is_reviewed=False, id__lt=book.id).order_by("-id").first()
+        next_needs_review = base_queryset.filter(finalmetadata__is_reviewed=False, id__gt=book.id).order_by("id").first()
 
-        context["next_unreviewed"] = base_queryset.filter(finalmetadata__is_reviewed=False, id__gt=book.id).order_by("id").first()
+        context["prev_needs_review"] = prev_needs_review
+        context["next_needs_review"] = next_needs_review
+        context["next_needs_review_id"] = next_needs_review.id if next_needs_review else None
 
         return context
 
@@ -74,7 +77,11 @@ class SimpleNavigationMixin:
             prev_book_id = None
             next_book_id = None
 
+        next_needs_review = Book.objects.filter(finalmetadata__is_reviewed=False, id__gt=book.id).order_by("id").first()
+        next_needs_review_id = next_needs_review.id if next_needs_review else None
+
         return {
             "prev_book_id": prev_book_id,
             "next_book_id": next_book_id,
+            "next_needs_review_id": next_needs_review_id,
         }

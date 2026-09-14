@@ -442,81 +442,104 @@ class AuthorDeleteView(LoginRequiredMixin, BookNavigationMixin, DeleteView):
         return response
 
 
-class AuthorBulkDeleteView(LoginRequiredMixin, BookNavigationMixin, ListView):
-    """Bulk delete authors."""
+class _BulkDeleteEntityView(LoginRequiredMixin, BookNavigationMixin, ListView):
+    """Base view for bulk-deleting unreviewed entities."""
 
-    template_name = "books/author/bulk_delete.html"
-    context_object_name = "authors"
+    model_name = None
+    template_name = None
+    context_object_name = None
+    selected_field = None
+    redirect_name = None
+    entity_label = None
+    entity_label_plural = None
+
+    def get_model(self):
+        return get_model(self.model_name)
 
     def get_queryset(self):
-        """Get Author queryset dynamically."""
-        Author = get_model("Author")
-        return Author.objects.all()
+        return self.get_model().objects.all()
 
     def post(self, request, *args, **kwargs):
         """Handle bulk delete POST request."""
-        from django.contrib import messages
-        from django.shortcuts import redirect
+        Model = self.get_model()
+        selected = request.POST.getlist(self.selected_field)
 
-        Author = get_model("Author")
-        selected_authors = request.POST.getlist("selected_authors")
+        if not selected:
+            messages.warning(request, f"No {self.entity_label_plural} selected for deletion.")
+            return redirect(self.redirect_name)
 
-        if not selected_authors:
-            messages.warning(request, "No authors selected for deletion.")
-            return redirect("books:author_list")
-
-        # Only delete unreviewed authors
-        authors_to_delete = Author.objects.filter(id__in=selected_authors, is_reviewed=False)
-
-        deleted_count = authors_to_delete.count()
+        to_delete = Model.objects.filter(id__in=selected, is_reviewed=False)
+        deleted_count = to_delete.count()
 
         if deleted_count == 0:
-            messages.info(
-                request,
-                "No authors deleted. Only unreviewed authors can be bulk deleted.",
-            )
+            messages.info(request, f"No {self.entity_label_plural} deleted. Only unreviewed {self.entity_label_plural} can be bulk deleted.")
         else:
-            authors_to_delete.delete()
-            messages.success(request, f"Successfully deleted {deleted_count} author(s).")
+            to_delete.delete()
+            messages.success(request, f"Successfully deleted {deleted_count} {self.entity_label}(s).")
 
-        return redirect("books:author_list")
+        return redirect(self.redirect_name)
 
 
-class AuthorMarkReviewedView(LoginRequiredMixin, BookNavigationMixin, ListView):
-    """Mark authors as reviewed."""
+class _MarkReviewedEntityView(LoginRequiredMixin, BookNavigationMixin, ListView):
+    """Base view for marking entities as reviewed."""
 
-    template_name = "books/author/mark_reviewed.html"
-    context_object_name = "authors"
+    model_name = None
+    template_name = None
+    context_object_name = None
+    selected_field = None
+    redirect_name = None
+    entity_label = None
+    entity_label_plural = None
+
+    def get_model(self):
+        return get_model(self.model_name)
 
     def get_queryset(self):
-        """Get Author queryset dynamically."""
-        Author = get_model("Author")
-        return Author.objects.all()
+        return self.get_model().objects.all()
 
     def post(self, request, *args, **kwargs):
         """Handle mark reviewed POST request."""
-        from django.contrib import messages
-        from django.shortcuts import redirect
+        Model = self.get_model()
+        selected = request.POST.getlist(self.selected_field)
 
-        Author = get_model("Author")
-        selected_authors = request.POST.getlist("selected_authors")
+        if not selected:
+            messages.warning(request, f"No {self.entity_label_plural} selected.")
+            return redirect(self.redirect_name)
 
-        if not selected_authors:
-            messages.warning(request, "No authors selected.")
-            return redirect("books:author_list")
-
-        # Update unreviewed authors to reviewed
-        authors_to_update = Author.objects.filter(id__in=selected_authors, is_reviewed=False)
-
-        updated_count = authors_to_update.count()
+        to_update = Model.objects.filter(id__in=selected, is_reviewed=False)
+        updated_count = to_update.count()
 
         if updated_count == 0:
-            messages.info(request, "No changes made. Selected authors are already reviewed.")
+            messages.info(request, f"No changes made. Selected {self.entity_label_plural} are already reviewed.")
         else:
-            authors_to_update.update(is_reviewed=True)
-            messages.success(request, f"Successfully marked {updated_count} author(s) as reviewed.")
+            to_update.update(is_reviewed=True)
+            messages.success(request, f"Successfully marked {updated_count} {self.entity_label}(s) as reviewed.")
 
-        return redirect("books:author_list")
+        return redirect(self.redirect_name)
+
+
+class AuthorBulkDeleteView(_BulkDeleteEntityView):
+    """Bulk delete authors."""
+
+    model_name = "Author"
+    template_name = "books/author/bulk_delete.html"
+    context_object_name = "authors"
+    selected_field = "selected_authors"
+    redirect_name = "books:author_list"
+    entity_label = "author"
+    entity_label_plural = "authors"
+
+
+class AuthorMarkReviewedView(_MarkReviewedEntityView):
+    """Mark authors as reviewed."""
+
+    model_name = "Author"
+    template_name = "books/author/mark_reviewed.html"
+    context_object_name = "authors"
+    selected_field = "selected_authors"
+    redirect_name = "books:author_list"
+    entity_label = "author"
+    entity_label_plural = "authors"
 
 
 # =============================================================================
@@ -608,77 +631,28 @@ class GenreDeleteView(LoginRequiredMixin, BookNavigationMixin, DeleteView):
         return response
 
 
-class GenreBulkDeleteView(LoginRequiredMixin, BookNavigationMixin, ListView):
+class GenreBulkDeleteView(_BulkDeleteEntityView):
     """Bulk delete genres."""
 
+    model_name = "Genre"
     template_name = "books/genre/bulk_delete.html"
     context_object_name = "genres"
-
-    def get_model(self):
-        return get_model("Genre")
-
-    def post(self, request, *args, **kwargs):
-        """Handle bulk delete POST request."""
-        from django.contrib import messages
-        from django.shortcuts import redirect
-
-        Genre = self.get_model()
-        selected_genres = request.POST.getlist("selected_genres")
-
-        if not selected_genres:
-            messages.warning(request, "No genres selected for deletion.")
-            return redirect("books:genre_list")
-
-        # Only delete unreviewed genres
-        genres_to_delete = Genre.objects.filter(id__in=selected_genres, is_reviewed=False)
-
-        deleted_count = genres_to_delete.count()
-
-        if deleted_count == 0:
-            messages.info(
-                request,
-                "No genres deleted. Only unreviewed genres can be bulk deleted.",
-            )
-        else:
-            genres_to_delete.delete()
-            messages.success(request, f"Successfully deleted {deleted_count} genre(s).")
-
-        return redirect("books:genre_list")
+    selected_field = "selected_genres"
+    redirect_name = "books:genre_list"
+    entity_label = "genre"
+    entity_label_plural = "genres"
 
 
-class GenreMarkReviewedView(LoginRequiredMixin, BookNavigationMixin, ListView):
+class GenreMarkReviewedView(_MarkReviewedEntityView):
     """Mark genres as reviewed."""
 
+    model_name = "Genre"
     template_name = "books/genre/mark_reviewed.html"
     context_object_name = "genres"
-
-    def get_model(self):
-        return get_model("Genre")
-
-    def post(self, request, *args, **kwargs):
-        """Handle mark reviewed POST request."""
-        from django.contrib import messages
-        from django.shortcuts import redirect
-
-        Genre = self.get_model()
-        selected_genres = request.POST.getlist("selected_genres")
-
-        if not selected_genres:
-            messages.warning(request, "No genres selected.")
-            return redirect("books:genre_list")
-
-        # Update unreviewed genres to reviewed
-        genres_to_update = Genre.objects.filter(id__in=selected_genres, is_reviewed=False)
-
-        updated_count = genres_to_update.count()
-
-        if updated_count == 0:
-            messages.info(request, "No changes made. Selected genres are already reviewed.")
-        else:
-            genres_to_update.update(is_reviewed=True)
-            messages.success(request, f"Successfully marked {updated_count} genre(s) as reviewed.")
-
-        return redirect("books:genre_list")
+    selected_field = "selected_genres"
+    redirect_name = "books:genre_list"
+    entity_label = "genre"
+    entity_label_plural = "genres"
 
 
 # =============================================================================
