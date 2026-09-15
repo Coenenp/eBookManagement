@@ -5,16 +5,16 @@ This package organizes views into focused modules for better maintainability.
 All views are imported here to maintain backward compatibility.
 
 REFACTORING STATUS:
-✅ Core views (core.py) - Main book functionality
-✅ Metadata views (metadata.py) - Metadata management
-✅ Management views (management.py) - Admin functionality
-✅ AJAX views (ajax.py) - All AJAX endpoints
-✅ Simple views (simple.py) - Utility views
-✅ User Settings views (user_settings.py) - User preferences
-✅ Scanning views (scanning.py) - Background scanning operations
-✅ Sections views (sections.py) - Media type sections
-⏳ Renaming views (renaming.py) - TODO: Book renaming (~1,500 lines)
-⏳ AI Feedback views (ai_feedback.py) - TODO: AI integration
+Core views (core.py) - Main book functionality
+Metadata views (metadata.py) - Metadata management
+Management views (management.py) - Admin functionality
+AJAX views (ajax.py) - All AJAX endpoints
+Simple views (simple.py) - Utility views
+User Settings views (user_settings.py) - User preferences
+Scanning views (scanning.py) - Background scanning operations
+Sections views (sections.py) - Media type sections
+Renaming views (renaming.py) - TODO: Book renaming (~1,500 lines)
+AI Feedback views (ai_feedback.py) - TODO: AI integration
 """
 
 # Legacy imports for backward compatibility

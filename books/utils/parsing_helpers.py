@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 def clean_title_and_extract_series_number(raw_title: str) -> Tuple[str, Optional[float]]:
     """
     Extract leading series number from title string.
-    Example: "02 - Book Title" → ("Book Title", 2.0)
+    Example: "02 - Book Title" -> ("Book Title", 2.0)
     """
     match = re.match(r"^(?P<num>\d{1,2}(?:\.\d)?)[.\- ]+(?P<title>.+)$", raw_title.strip())
     if match:
@@ -22,7 +22,7 @@ def clean_title_and_extract_series_number(raw_title: str) -> Tuple[str, Optional
 def clean_author_string(raw: str) -> str:
     """
     Remove common format strings from author names.
-    Example: "Jane Doe (epub)" → "Jane Doe"
+    Example: "Jane Doe (epub)" -> "Jane Doe"
     """
     # Remove format strings in parentheses
     cleaned = re.sub(r"\s*\([^)]*(?:azw3?|epub|mobi|cbz|cbr|azw|pdf|txt)[^)]*\)", "", raw, flags=re.IGNORECASE)

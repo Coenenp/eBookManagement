@@ -164,9 +164,9 @@ class AudiobooksSectionManager extends BaseSectionManager {
                                 <td class="col-status" onclick="window.sectionManager.selectItem(${audiobook.id})" style="cursor: pointer;">
                                     ${
                                         audiobook.is_finished
-                                            ? '<span class="badge bg-success" title="Finished">✓</span>'
+                                            ? '<span class="badge bg-success" title="Finished"></span>'
                                             : audiobook.reading_progress > 0
-                                              ? '<span class="badge bg-warning" title="Listening">🎧</span>'
+                                              ? '<span class="badge bg-warning" title="Listening"></span>'
                                               : '<span class="badge bg-secondary" title="Not Started">○</span>'
                                     }
                                 </td>

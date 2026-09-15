@@ -317,7 +317,7 @@ class Command(BaseCommand):
         api_health = check_api_health()
 
         for api_name, status in api_status.items():
-            health = "🟢 Healthy" if api_health.get(api_name, False) else "🔴 Down"
+            health = " Healthy" if api_health.get(api_name, False) else " Down"
             self.stdout.write(f"\n{status['api_name']}: {health}")
 
             rate_limits = status.get("rate_limits", {})

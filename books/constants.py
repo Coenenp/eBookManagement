@@ -77,14 +77,6 @@ RESCAN_PRIORITY = {
     "folder_rescan": 3,  # High priority for folder rescans
 }
 
-# Priority icons for UI display
-PRIORITY_ICONS = {
-    1: "⬇️",  # Low
-    2: "➡️",  # Normal
-    3: "⬆️",  # High
-    4: "🔴",  # Urgent
-}
-
 
 # ============================================================================
 # DATA SOURCE PRIORITIES

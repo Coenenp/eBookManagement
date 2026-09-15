@@ -79,7 +79,7 @@ def upgrade_epub_to_3(extract_dir: Path, opf_path: Path) -> bool:
             logger.debug("Already EPUB 3.0, no upgrade needed")
             return True
 
-        logger.info(f"Upgrading EPUB {current_version} → 3.0")
+        logger.info(f"Upgrading EPUB {current_version} -> 3.0")
 
         # Parse OPF
         tree = ET.parse(opf_path)

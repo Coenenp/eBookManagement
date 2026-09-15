@@ -162,7 +162,7 @@ class Command(BaseCommand):
         self.stdout.write("\nRecent Scan Sessions:")
         sessions = ScanSession.objects.all()[:5]
         for session in sessions:
-            status = "✅ Complete" if session.completed_at else "🔄 Active" if session.is_active else "⏸️ Paused"
+            status = " Complete" if session.completed_at else " Active" if session.is_active else " Paused"
             resume_status = f" (Resume: {len(session.resume_queue)} pending)" if session.can_resume else ""
             self.stdout.write(f"  {session.session_id}: {status}{resume_status}")
 

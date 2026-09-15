@@ -99,7 +99,7 @@ class EbookRenamer {
                                           data-filename="${template.filename}"
                                           data-description="${template.description || ''}"
                                           data-deletable="true">
-                                    ⭐ ${template.name}${template.description ? ' - ' + template.description : ''}
+                                     ${template.name}${template.description ? ' - ' + template.description : ''}
                                   </option>`);
                 });
             }

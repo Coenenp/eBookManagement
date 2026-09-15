@@ -95,7 +95,7 @@ class AuthorMaintenanceManager {
         if (stats.cleaned_names && stats.cleaned_names.length) {
             html += '<div class="mb-2"><strong>Names to clean:</strong><ul class="small mb-1">';
             stats.cleaned_names.slice(0, 50).forEach((entry) => {
-                html += `<li>${this.escapeHtml(entry.before)} → ${this.escapeHtml(entry.after)}</li>`;
+                html += `<li>${this.escapeHtml(entry.before)} -> ${this.escapeHtml(entry.after)}</li>`;
             });
             if (stats.cleaned_names.length > 50) {
                 html += `<li>…and ${stats.cleaned_names.length - 50} more</li>`;

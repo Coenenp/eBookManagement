@@ -259,7 +259,7 @@ def test_comic_grouping():
     comic_groups = comic_grouper.group_files(comic_files)
     print("Comic Groups:")
     for series, files in comic_groups.items():
-        print(f"  {series}: {files}")
+        print(f"{series}: {files}")
     return comic_groups
 
 
@@ -278,7 +278,7 @@ def test_audiobook_grouping():
     audiobook_groups = audiobook_grouper.group_files(audiobook_files)
     print("\nAudiobook Groups:")
     for book, files in audiobook_groups.items():
-        print(f"  {book}: {files}")
+        print(f"{book}: {files}")
     return audiobook_groups
 
 

@@ -63,9 +63,9 @@ class AuthorDuplicatesManager {
         mergeButton.disabled = checkedCount < 2;
 
         if (checkedCount < 2) {
-            mergeButton.textContent = '🔗 Select at least 2 authors';
+            mergeButton.textContent = ' Select at least 2 authors';
         } else {
-            mergeButton.textContent = `🔗 Merge ${checkedCount} Authors`;
+            mergeButton.textContent = ` Merge ${checkedCount} Authors`;
         }
     }
 

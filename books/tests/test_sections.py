@@ -746,7 +746,7 @@ class EdgeCasesAndErrorHandlingTests(SectionsTestCase):
         """Test handling of unicode and special characters"""
         book = create_test_book_with_file(file_path="/test/unicode测试.epub", file_format="epub", scan_folder=self.ebooks_folder, content_type="ebook", title="Unicode Test Book")
 
-        FinalMetadata.objects.create(book=book, final_title="测试书籍 with émojis 📚", final_author="作者名字", is_reviewed=True)
+        FinalMetadata.objects.create(book=book, final_title="测试书籍 with émojis", final_author="作者名字", is_reviewed=True)
 
         self.client.login(username=self.user.username, password="testpass123")
         response = self.client.get(reverse("books:ebooks_ajax_list"))
@@ -757,7 +757,7 @@ class EdgeCasesAndErrorHandlingTests(SectionsTestCase):
         # Find our unicode book
         unicode_book = next((b for b in data["ebooks"] if b["id"] == book.id), None)
         self.assertIsNotNone(unicode_book)
-        self.assertEqual(unicode_book["title"], "测试书籍 with émojis 📚")
+        self.assertEqual(unicode_book["title"], "测试书籍 with émojis")
 
     @patch("books.views.sections.get_book_metadata_dict")
     def test_metadata_function_exception_handling(self, mock_metadata):

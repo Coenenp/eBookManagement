@@ -167,7 +167,7 @@ class Command(BaseCommand):
             )
 
             if log.can_retry_now:
-                self.stdout.write("  ✅ API available, making request...")
+                self.stdout.write("   API available, making request...")
                 # Simulate successful request
                 log.record_attempt(
                     success=True,
@@ -176,10 +176,10 @@ class Command(BaseCommand):
                     metadata_retrieved=True,
                 )
                 completeness.mark_source_complete("Google Books")
-                self.stdout.write("  📚 Metadata retrieved successfully!")
+                self.stdout.write("   Metadata retrieved successfully!")
             else:
                 next_retry = log.next_retry_after.strftime("%Y-%m-%d %H:%M") if log.next_retry_after else "N/A"
-                self.stdout.write(f"  ⏳ API not available (next retry: {next_retry})")
+                self.stdout.write(f"   API not available (next retry: {next_retry})")
 
         self.stdout.write(self.style.SUCCESS("\nAPI interaction simulation complete!"))
 
@@ -190,7 +190,7 @@ class Command(BaseCommand):
         self.stdout.write("=" * 60)
 
         # System components
-        self.stdout.write("\n📦 SYSTEM COMPONENTS:")
+        self.stdout.write("\n SYSTEM COMPONENTS:")
         self.stdout.write("  • APIAccessLog: Tracks per-book API success/failure")
         self.stdout.write("  • ScanSession: Manages scan sessions and resumption")
         self.stdout.write("  • BookAPICompleteness: Optimizes future scans")

@@ -40,9 +40,9 @@ def test_ebooks_ajax():
         response = client.get("/ebooks/")
         print(f"Main ebooks view status: {response.status_code}")
         if response.status_code == 200:
-            print("✓ Main ebooks page loads successfully")
+            print("Main ebooks page loads successfully")
         else:
-            print(f"✗ Main ebooks page failed with status {response.status_code}")
+            print(f"Main ebooks page failed with status {response.status_code}")
             return
 
         # Test the AJAX list endpoint
@@ -52,29 +52,29 @@ def test_ebooks_ajax():
         if response.status_code == 200:
             try:
                 data = response.json()
-                print("✓ AJAX endpoint returns JSON data")
+                print("AJAX endpoint returns JSON data")
                 print(f"Response keys: {list(data.keys())}")
 
                 if "success" in data and data["success"]:
-                    print("✓ AJAX response indicates success")
+                    print("AJAX response indicates success")
                     ebooks_count = len(data.get("ebooks", []))
-                    print(f"✓ Found {ebooks_count} ebooks in response")
+                    print(f"Found {ebooks_count} ebooks in response")
 
                     # Show first few ebooks for verification
                     if ebooks_count > 0:
                         print("\nFirst few ebooks:")
                         for i, ebook in enumerate(data["ebooks"][:3]):
-                            print(f"  {i+1}. {ebook.get('title', 'No title')} by {ebook.get('author_display', 'Unknown')}")
+                            print(f"{i+1}. {ebook.get('title', 'No title')} by {ebook.get('author_display', 'Unknown')}")
 
                 else:
-                    print("✗ AJAX response indicates failure")
+                    print("AJAX response indicates failure")
                     print(f"Error: {data.get('error', 'Unknown error')}")
 
             except Exception as e:
-                print(f"✗ Error parsing JSON response: {e}")
+                print(f"Error parsing JSON response: {e}")
                 print(f"Raw response: {response.content[:200]}...")
         else:
-            print(f"✗ AJAX endpoint failed with status {response.status_code}")
+            print(f"AJAX endpoint failed with status {response.status_code}")
             print(f"Response content: {response.content[:200]}...")
 
     except Exception as e:

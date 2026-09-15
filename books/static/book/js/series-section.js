@@ -208,9 +208,9 @@ class SeriesSectionManager extends BaseSectionManager {
                 <td class="col-size" style="cursor: pointer;">
                     ${
                         book.is_read
-                            ? '<span class="badge bg-success" title="Read">✓</span>'
+                            ? '<span class="badge bg-success" title="Read"></span>'
                             : book.reading_progress > 0
-                              ? '<span class="badge bg-warning" title="Reading">📖</span>'
+                              ? '<span class="badge bg-warning" title="Reading"></span>'
                               : '<span class="badge bg-secondary" title="Unread">○</span>'
                     }
                 </td>
@@ -257,8 +257,8 @@ class SeriesSectionManager extends BaseSectionManager {
                         <div class="item-info">
                             <div class="item-badges">
                                 <span class="badge bg-secondary">${book.file_format.toUpperCase()}</span>
-                                ${book.is_read ? '<span class="badge bg-success">✓</span>' : ''}
-                                ${book.reading_progress > 0 && !book.is_read ? '<span class="badge bg-warning">📖</span>' : ''}
+                                ${book.is_read ? '<span class="badge bg-success"></span>' : ''}
+                                ${book.reading_progress > 0 && !book.is_read ? '<span class="badge bg-warning"></span>' : ''}
                             </div>
                             <div class="text-muted small">
                                 ${MediaLibraryUtils.formatFileSize(book.file_size)}

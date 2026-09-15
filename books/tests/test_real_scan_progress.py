@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
     for filename in test_files:
         file_path = Path(temp_dir) / filename
         file_path.write_text("test content")
-        print(f"  Created: {filename}")
+        print(f"Created: {filename}")
 
     print("\n=== Starting Background Scan ===")
 
@@ -67,16 +67,16 @@ with tempfile.TemporaryDirectory() as temp_dir:
             percentage = scan.get("percentage", 0)
             current = scan.get("current", 0)
             total = scan.get("total", 0)
-            print(f"  Scan {j+1}: {status} - {current}/{total} ({percentage}%)")
+            print(f"Scan {j+1}: {status} - {current}/{total} ({percentage}%)")
 
         if not active_scans:
-            print("  No active scans detected")
+            print("No active scans detected")
 
         time.sleep(1)
 
         # Break if scan thread finished
         if not scan_thread.is_alive():
-            print("  Scan thread completed")
+            print("Scan thread completed")
             break
 
     # Final check

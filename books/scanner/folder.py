@@ -535,7 +535,7 @@ def _extract_filename_metadata(book, ai_recognizer=None):
     else:
         parsed = parse_path_metadata(book.primary_file.file_path if book.primary_file else "")
 
-    # 🎯 Debug output for filename parsing
+    # Debug output for filename parsing
     logger.info(f"[FILENAME PARSE] Parsed title: {parsed.get('title')}")
     logger.info(f"[FILENAME PARSE] Parsed authors: {parsed.get('authors')}")
     logger.info(f"[FILENAME PARSE] Parsed series: {parsed.get('series')} (#{parsed.get('series_number')})")

@@ -1,5 +1,5 @@
 /**
- * 📝 Scan Folder Form Enhancement
+ *  Scan Folder Form Enhancement
  * Enhanced functionality for adding and managing scan folders
  */
 

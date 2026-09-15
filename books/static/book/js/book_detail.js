@@ -138,7 +138,7 @@ class BookDetailManager {
                 <div class="text-muted small mt-2">
                     <i class="fas fa-keyboard me-1"></i>
                     <strong>Keyboard shortcuts:</strong> 
-                    ← Prev • → Next • U Unreviewed • A Author • S Series
+                    <- Prev • -> Next • U Unreviewed • A Author • S Series
                 </div>
             `;
 
@@ -1200,12 +1200,12 @@ class RescanTabManager {
         summaryHtml += `<p class="alert alert-success"><i class="fas fa-check-circle me-2"></i>${result.message}</p>`;
 
         summaryHtml += '<p><strong>Metadata Changes:</strong></p><ul>';
-        summaryHtml += `<li>Metadata entries: ${result.before_counts.metadata} → ${result.after_counts.metadata} `;
+        summaryHtml += `<li>Metadata entries: ${result.before_counts.metadata} -> ${result.after_counts.metadata} `;
         if (result.added_counts.metadata > 0) {
             summaryHtml += `<span class="badge bg-success">+${result.added_counts.metadata}</span>`;
         }
         summaryHtml += '</li>';
-        summaryHtml += `<li>Cover images: ${result.before_counts.covers} → ${result.after_counts.covers} `;
+        summaryHtml += `<li>Cover images: ${result.before_counts.covers} -> ${result.after_counts.covers} `;
         if (result.added_counts.covers > 0) {
             summaryHtml += `<span class="badge bg-success">+${result.added_counts.covers}</span>`;
         }

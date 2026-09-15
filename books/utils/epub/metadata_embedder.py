@@ -64,7 +64,7 @@ def embed_metadata_in_epub(epub_path: Path, book: Book, cover_path: Optional[Pat
             logger.info(f"Detected EPUB version: {current_version}")
 
             if current_version in ["1.0", "2.0", None]:
-                logger.info(f"Upgrading EPUB {current_version or 'unknown'} → 3.0")
+                logger.info(f"Upgrading EPUB {current_version or 'unknown'} -> 3.0")
                 upgrade_success = upgrade_epub_to_3(extract_dir, opf_path)
                 if upgrade_success:
                     logger.info("EPUB upgraded to 3.0")

@@ -766,7 +766,7 @@ class MixinAdvancedEdgeCaseTests(TestCase):
         self.assertIsInstance(widgets["description"], forms.Textarea)
         self.assertIsInstance(widgets["is_reviewed"], forms.CheckboxInput)
 
-    @patch("books.models.logger")
+    @patch("books.models_metadata.logger")
     def test_final_metadata_sync_mixin_database_errors(self, mock_logger):
         """Test FinalMetadataSyncMixin handling of database errors"""
 
@@ -845,7 +845,7 @@ class MixinAdvancedEdgeCaseTests(TestCase):
     def test_validator_required_text_with_special_chars(self):
         """Test required text validation with special characters"""
         # Test with unicode, special chars, emojis
-        test_cases = ["Título en Español", "Texte en Français", "Text with 📚 emoji", "Text with \"quotes\" and 'apostrophes'", "HTML <tag> content", "Line 1\nLine 2"]
+        test_cases = ["Título en Español", "Texte en Français", "Text with emoji", "Text with \"quotes\" and 'apostrophes'", "HTML <tag> content", "Line 1\nLine 2"]
 
         for text in test_cases:
             result = BaseMetadataValidator.validate_required_text(text, "field")

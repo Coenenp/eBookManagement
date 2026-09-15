@@ -17,7 +17,7 @@ def test_simple_scan_history():
 
     # Verify scan folder was created
     assert scan_folder.name == "Test Folder"
-    print("✅ Test passed: Scan history functionality works!")
+    print("Test passed: Scan history functionality works!")
 
 
 @pytest.mark.django_db
@@ -54,7 +54,7 @@ def test_scan_history_model():
     str_repr = str(scan_history)
     assert "Test Folder" in str_repr
     assert "completed" in str_repr
-    print("✅ Test passed: ScanHistory model works correctly!")
+    print("Test passed: ScanHistory model works correctly!")
 
 
 @pytest.mark.django_db
@@ -126,7 +126,7 @@ class TestScanHistory(TestCase):
         self.assertEqual(successful_scans, 2)
         self.assertEqual(failed_scans, 1)
 
-        print(f"✅ Created {total_scans} scan history entries")
-        print(f"   - {successful_scans} successful scans")
-        print(f"   - {failed_scans} failed scans")
-        print("✅ Test passed: Multiple scan history entries created successfully!")
+        print(f"Created {total_scans} scan history entries")
+        print(f"- {successful_scans} successful scans")
+        print(f"- {failed_scans} failed scans")
+        print("Test passed: Multiple scan history entries created successfully!")

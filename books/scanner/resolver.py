@@ -16,26 +16,26 @@ def resolve_final_metadata(book):
     """Generate final metadata suggestions for a book"""
     final_metadata, _ = FinalMetadata.objects.get_or_create(book=book)
 
-    # 🖋️ Title
+    # Title
     best_title = book.titles.filter(is_active=True).order_by("-confidence").first()
     if best_title:
         final_metadata.final_title = best_title.title
         final_metadata.final_title_confidence = best_title.confidence
 
-    # 👤 Author
+    # Author
     best_author = book.author_relationships.filter(is_active=True).order_by("-confidence", "-is_main_author").first()
     if best_author:
         final_metadata.final_author = best_author.author.name
         final_metadata.final_author_confidence = best_author.confidence
 
-    # 📚 Series
+    # Series
     best_series = book.series_relationships.filter(is_active=True).order_by("-confidence").first()
     if best_series:
         final_metadata.final_series = best_series.series.name
         final_metadata.final_series_number = str(best_series.series_number) if best_series.series_number is not None else ""
         final_metadata.final_series_confidence = best_series.confidence
 
-    # 📕 Cover
+    # Cover
     best_cover = book.covers.filter(is_active=True).order_by("-confidence", "-is_high_resolution", "-width").first()
     if best_cover and best_cover.cover_path:
         final_metadata.final_cover_path = best_cover.cover_path
@@ -44,13 +44,13 @@ def resolve_final_metadata(book):
     else:
         final_metadata.has_cover = False
 
-    # 🏢 Publisher
+    # Publisher
     best_pub = book.publisher_relationships.filter(is_active=True).order_by("-confidence").first()
     if best_pub:
         final_metadata.final_publisher = best_pub.publisher.name
         final_metadata.final_publisher_confidence = best_pub.confidence
 
-    # 📑 Additional metadata
+    # Additional metadata
     metadata_fields = {
         "language": "language",
         "isbn": "isbn",
@@ -83,6 +83,6 @@ def resolve_final_metadata(book):
             final_metadata.language = book.scan_folder.language
             logger.info(f"[LANGUAGE INHERIT] Book {book.id} inheriting language '{book.scan_folder.language}' from scan folder")
 
-    # 🔢 Confidence aggregation
+    # Confidence aggregation
     final_metadata.calculate_overall_confidence()
     final_metadata.save()

@@ -54,7 +54,7 @@ class TestMetadataFormDebug(TestCase):
             print(f"Form cleaned_data: {form.cleaned_data}")
         else:
             for field, errors in form.errors.items():
-                print(f"  {field}: {errors}")
+                print(f"{field}: {errors}")
         self.assertTrue(form.is_valid())
 
     def test_form_directly_complete(self):

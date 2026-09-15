@@ -478,9 +478,9 @@ if (typeof EbooksSectionManager === 'undefined') {
                                     <td class="col-status" onclick="window.ebookManager.selectItem(${ebook.id})" style="cursor: pointer;">
                                         ${
                                             ebook.is_read
-                                                ? '<span class="badge bg-success" title="Read">✓</span>'
+                                                ? '<span class="badge bg-success" title="Read"></span>'
                                                 : ebook.reading_progress > 0
-                                                  ? '<span class="badge bg-warning" title="Reading">📖</span>'
+                                                  ? '<span class="badge bg-warning" title="Reading"></span>'
                                                   : '<span class="badge bg-secondary" title="Unread">○</span>'
                                         }
                                     </td>

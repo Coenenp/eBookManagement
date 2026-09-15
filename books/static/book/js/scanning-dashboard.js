@@ -4,8 +4,8 @@
  * Version: 2025-11-23-fixed
  */
 
-console.log('🔧 SCANNING DASHBOARD FIX LOADED! 🔧');
-console.log('✅ startFolderScanById issue fixed - using this.startScan() instead');
+console.log('SCANNING DASHBOARD FIX LOADED!');
+console.log('startFolderScanById issue fixed - using this.startScan() instead');
 
 class ScanningDashboard {
     constructor() {

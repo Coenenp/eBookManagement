@@ -33,48 +33,48 @@ class WizardFinalValidationTests(TestCase):
 
     def test_wizard_all_features_working(self):
         """Test that all wizard features are working correctly"""
-        print("\n🚀 Comprehensive Wizard System Test")
+        print("\nComprehensive Wizard System Test")
         print("=" * 50)
 
         # Test 1: Welcome page loads
         response = self.client.get(reverse("books:wizard_welcome"))
         self.assertEqual(response.status_code, 200)
-        print("✅ Welcome view: Loads successfully")
+        print("Welcome view: Loads successfully")
 
         # Test 2: Folders management
         with patch("os.path.exists", return_value=True):
             with patch("os.path.isdir", return_value=True):
                 with patch("os.access", return_value=True):
                     response = self.client.post(reverse("books:wizard_folders"), {"action": "add_folder", "folder_path": self.temp_dir, "folder_name": "Final Test Folder"})
-                    print("✅ Folders view: Folder addition working")
+                    print("Folders view: Folder addition working")
 
         # Test 3: Content types selection
         response = self.client.post(reverse("books:wizard_content_types"), {"content_type": "ebooks"})
-        print("✅ Content Types view: Selection working")
+        print("Content Types view: Selection working")
 
         # Test 4: Scrapers configuration
         response = self.client.post(reverse("books:wizard_scrapers"), {"google_books": "test_final_api_key_123456789", "enabled_scrapers": ["google_books"]})
-        print("✅ Scrapers view: Configuration working")
+        print("Scrapers view: Configuration working")
 
         # Test 5: Completion page
         response = self.client.get(reverse("books:wizard_complete"))
         self.assertEqual(response.status_code, 200)
-        print("✅ Complete view: Final page loads")
+        print("Complete view: Final page loads")
 
         # Test 6: Data persistence
         wizard = SetupWizard.objects.filter(user=self.user).first()
         if wizard:
-            print("✅ Data persistence: Wizard data saved")
+            print("Data persistence: Wizard data saved")
 
         folder = ScanFolder.objects.filter(path=self.temp_dir).first()
         if folder:
-            print("✅ Folder persistence: Folder data saved")
+            print("Folder persistence: Folder data saved")
 
-        print("\n📊 Test Summary: All core features working")
+        print("\nTest Summary: All core features working")
 
     def test_wizard_css_structure_validation(self):
         """Test wizard CSS and visual structure"""
-        print("\n🎨 Testing CSS Structure")
+        print("\nTesting CSS Structure")
         print("=" * 30)
 
         response = self.client.get(reverse("books:wizard_complete"))
@@ -84,13 +84,13 @@ class WizardFinalValidationTests(TestCase):
 
         for css_class, description in css_checks:
             if css_class in content:
-                print(f"✅ {description}: Found")
+                print(f"{description}: Found")
             else:
-                print(f"❌ {description}: Missing")
+                print(f"{description}: Missing")
 
     def test_wizard_pre_population_validation(self):
         """Test wizard pre-population functionality"""
-        print("\n📊 Testing Pre-population")
+        print("\nTesting Pre-population")
         print("=" * 30)
 
         # Create wizard with existing data
@@ -107,18 +107,18 @@ class WizardFinalValidationTests(TestCase):
         content = response.content.decode("utf-8")
 
         if "value=" in content:
-            print("✅ Scrapers pre-population: Fields populated")
+            print("Scrapers pre-population: Fields populated")
         else:
-            print("❌ Scrapers pre-population: No populated fields found")
+            print("Scrapers pre-population: No populated fields found")
 
         # Test content types pre-population
         response = self.client.get(reverse("books:wizard_content_types"))
         self.assertEqual(response.status_code, 200)
-        print("✅ Content types pre-population: View loads with data")
+        print("Content types pre-population: View loads with data")
 
     def test_wizard_error_handling_validation(self):
         """Test wizard error handling"""
-        print("\n🔧 Testing Error Handling")
+        print("\nTesting Error Handling")
         print("=" * 30)
 
         # Test invalid folder path
@@ -127,21 +127,21 @@ class WizardFinalValidationTests(TestCase):
         )
 
         if response.status_code in [200, 400]:
-            print("✅ Invalid folder handling: Graceful error handling")
+            print("Invalid folder handling: Graceful error handling")
         else:
-            print(f"❌ Invalid folder handling: Unexpected status {response.status_code}")
+            print(f"Invalid folder handling: Unexpected status {response.status_code}")
 
         # Test empty form submission
         response = self.client.post(reverse("books:wizard_folders"), {"action": "add_folder", "folder_path": "", "folder_name": ""})
 
         if response.status_code in [200, 400]:
-            print("✅ Empty form handling: Validation working")
+            print("Empty form handling: Validation working")
         else:
-            print(f"❌ Empty form handling: Unexpected status {response.status_code}")
+            print(f"Empty form handling: Unexpected status {response.status_code}")
 
     def test_wizard_security_validation(self):
         """Test wizard security features"""
-        print("\n🔒 Testing Security Features")
+        print("\nTesting Security Features")
         print("=" * 30)
 
         # Test authentication requirement
@@ -149,9 +149,9 @@ class WizardFinalValidationTests(TestCase):
         response = self.client.get(reverse("books:wizard_welcome"))
 
         if response.status_code == 302:
-            print("✅ Authentication required: Redirects unauthenticated users")
+            print("Authentication required: Redirects unauthenticated users")
         else:
-            print(f"❌ Authentication required: Unexpected status {response.status_code}")
+            print(f"Authentication required: Unexpected status {response.status_code}")
 
         # Re-login for further tests
         self.client.force_login(self.user)
@@ -161,13 +161,13 @@ class WizardFinalValidationTests(TestCase):
         content = response.content.decode("utf-8")
 
         if "csrfmiddlewaretoken" in content:
-            print("✅ CSRF protection: Token present in forms")
+            print("CSRF protection: Token present in forms")
         else:
-            print("❌ CSRF protection: No CSRF token found")
+            print("CSRF protection: No CSRF token found")
 
     def test_wizard_performance_validation(self):
         """Test wizard performance"""
-        print("\n⚡ Testing Performance")
+        print("\nTesting Performance")
         print("=" * 25)
 
         import time
@@ -183,15 +183,15 @@ class WizardFinalValidationTests(TestCase):
             load_time = end_time - start_time
 
             if response.status_code == 200 and load_time < 2.0:
-                print(f"✅ {name} page: {load_time:.3f}s (Good)")
+                print(f"{name} page: {load_time:.3f}s (Good)")
             elif response.status_code == 200:
-                print(f"⚠️  {name} page: {load_time:.3f}s (Slow)")
+                print(f"{name} page: {load_time:.3f}s (Slow)")
             else:
-                print(f"❌ {name} page: Failed to load")
+                print(f"{name} page: Failed to load")
 
     def test_wizard_accessibility_validation(self):
         """Test wizard accessibility features"""
-        print("\n♿ Testing Accessibility")
+        print("\nTesting Accessibility")
         print("=" * 25)
 
         response = self.client.get(reverse("books:wizard_welcome"))
@@ -201,13 +201,13 @@ class WizardFinalValidationTests(TestCase):
 
         for feature, description in accessibility_features:
             if feature in content:
-                print(f"✅ {description}: Present")
+                print(f"{description}: Present")
             else:
-                print(f"⚠️  {description}: Not found")
+                print(f"{description}: Not found")
 
     def test_wizard_responsive_design_validation(self):
         """Test wizard responsive design"""
-        print("\n📱 Testing Responsive Design")
+        print("\nTesting Responsive Design")
         print("=" * 30)
 
         response = self.client.get(reverse("books:wizard_welcome"))
@@ -217,11 +217,11 @@ class WizardFinalValidationTests(TestCase):
 
         for feature, description in responsive_features:
             if feature in content:
-                print(f"✅ {description}: Present")
+                print(f"{description}: Present")
 
     def test_wizard_data_flow_validation(self):
         """Test wizard data flow and persistence"""
-        print("\n💾 Testing Data Flow")
+        print("\nTesting Data Flow")
         print("=" * 20)
 
         # Set session data
@@ -235,9 +235,9 @@ class WizardFinalValidationTests(TestCase):
 
         # Check session persistence
         if "wizard_test_data" in self.client.session:
-            print("✅ Session persistence: Data maintained across requests")
+            print("Session persistence: Data maintained across requests")
         else:
-            print("❌ Session persistence: Data lost")
+            print("Session persistence: Data lost")
 
         # Test database operations
         initial_wizard_count = SetupWizard.objects.count()
@@ -248,13 +248,13 @@ class WizardFinalValidationTests(TestCase):
         final_wizard_count = SetupWizard.objects.count()
 
         if final_wizard_count > initial_wizard_count:
-            print("✅ Database operations: Wizard data creation working")
+            print("Database operations: Wizard data creation working")
         else:
-            print("❌ Database operations: Failed to create wizard data")
+            print("Database operations: Failed to create wizard data")
 
     def test_wizard_integration_validation(self):
         """Test wizard integration with broader system"""
-        print("\n🔗 Testing System Integration")
+        print("\nTesting System Integration")
         print("=" * 35)
 
         # Test wizard affects scan folders
@@ -270,21 +270,21 @@ class WizardFinalValidationTests(TestCase):
         final_folder_count = ScanFolder.objects.count()
 
         if final_folder_count > initial_folder_count:
-            print("✅ Scan folder integration: Wizard creates scan folders")
+            print("Scan folder integration: Wizard creates scan folders")
         else:
-            print("⚠️  Scan folder integration: No new folders created")
+            print("Scan folder integration: No new folders created")
 
         # Test wizard completion affects system state
         response = self.client.post(reverse("books:wizard_complete"), {"action": "dashboard"})
 
         if response.status_code == 302:
-            print("✅ Completion integration: Redirects to dashboard")
+            print("Completion integration: Redirects to dashboard")
         else:
-            print("❌ Completion integration: Unexpected behavior")
+            print("Completion integration: Unexpected behavior")
 
     def test_wizard_final_system_state(self):
         """Test final system state after wizard completion"""
-        print("\n🎯 Final System State Validation")
+        print("\nFinal System State Validation")
         print("=" * 40)
 
         # Run complete wizard flow
@@ -305,22 +305,22 @@ class WizardFinalValidationTests(TestCase):
             # Complete
             self.client.get(reverse("books:wizard_complete"))
 
-            print("✅ Complete workflow: All steps executed successfully")
+            print("Complete workflow: All steps executed successfully")
 
         except Exception as e:
-            print(f"❌ Complete workflow: Failed with error: {str(e)}")
+            print(f"Complete workflow: Failed with error: {str(e)}")
 
         # Validate final state
         wizard = SetupWizard.objects.filter(user=self.user).first()
         folder = ScanFolder.objects.filter(path=self.temp_dir).first()
 
         if wizard and folder:
-            print("✅ Final state: System properly configured")
+            print("Final state: System properly configured")
         else:
-            print("❌ Final state: Configuration incomplete")
+            print("Final state: Configuration incomplete")
 
         print("\n" + "=" * 50)
-        print("🎊 Wizard System Validation Complete")
+        print("Wizard System Validation Complete")
         print("Your wizard system is ready for production use!")
         print("=" * 50)
 
@@ -390,7 +390,7 @@ class WizardSystemHealthCheck(TestCase):
         max_score = len(health_report)
         health_percentage = (total_score / max_score) * 100
 
-        print("\n🏥 Wizard System Health Check")
+        print("\nWizard System Health Check")
         print(f"Endpoints: {health_report['endpoints']}/5")
         print(f"Database: {health_report['database']}/1")
         print(f"Templates: {health_report['templates']}/1")

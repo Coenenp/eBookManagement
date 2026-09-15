@@ -185,8 +185,8 @@ class BookAdmin(admin.ModelAdmin):
     def deleted_status(self, obj):
         """Show if book is soft-deleted"""
         if obj.deleted_at:
-            return f"🗑️ Deleted ({obj.deleted_at.strftime('%Y-%m-%d')})"
-        return "✅ Active"
+            return f"Deleted ({obj.deleted_at.strftime('%Y-%m-%d')})"
+        return "Active"
 
     deleted_status.short_description = "Status"
 
@@ -199,7 +199,7 @@ class BookAdmin(admin.ModelAdmin):
         else:
             self.message_user(request, "No books selected for deletion.", level="warning")
 
-    permanently_delete_books.short_description = "⚠️ Permanently delete selected books (cannot be undone)"
+    permanently_delete_books.short_description = "Permanently delete selected books (cannot be undone)"
 
     def restore_deleted_books(self, request, queryset):
         """Restore soft-deleted books"""
@@ -211,7 +211,7 @@ class BookAdmin(admin.ModelAdmin):
         else:
             self.message_user(request, "No deleted books selected for restoration.", level="warning")
 
-    restore_deleted_books.short_description = "♻️ Restore soft-deleted books"
+    restore_deleted_books.short_description = "Restore soft-deleted books"
 
     def file_format(self, obj):
         """Get file format from first BookFile"""

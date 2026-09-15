@@ -34,10 +34,10 @@ def confidence_badge(confidence, size=""):
 def status_badge(status_type, value=None, text=None, title=None):
     """Generate status badges with consistent styling"""
     badges = {
-        "reviewed": {True: ("badge status-success", "✅ Reviewed"), False: ("badge status-warning", "⚠️ Not Reviewed")},
-        "needs_review": {True: ("badge status-warning", "⚠️ Needs Review"), False: ("badge status-success", "✅ Reviewed")},
-        "duplicate": {True: ("badge status-danger", "🔄 Duplicate"), False: ("badge status-success", "✅ Unique")},
-        "placeholder": {True: ("badge status-info", "📄 Placeholder"), False: ("badge status-success", "📚 Real File")},
+        "reviewed": {True: ("badge status-success", "Reviewed"), False: ("badge status-warning", "Not Reviewed")},
+        "needs_review": {True: ("badge status-warning", "Needs Review"), False: ("badge status-success", "Reviewed")},
+        "duplicate": {True: ("badge status-danger", "Duplicate"), False: ("badge status-success", "Unique")},
+        "placeholder": {True: ("badge status-info", "Placeholder"), False: ("badge status-success", "Real File")},
         "active": {True: ("badge status-success", "Active"), False: ("badge status-neutral", "Inactive")},
         "final": ("badge status-info", "Final"),
         "selected": ("badge status-info", "Selected"),

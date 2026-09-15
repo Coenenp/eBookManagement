@@ -11,7 +11,7 @@ class MetadataAjax {
         const url = `/books/${bookId}/status/`;
         return await EbookLibrary.Ajax.makeRequest(url, {
             method: 'POST',
-            body: JSON.stringify(statusData)
+            body: JSON.stringify(statusData),
         });
     }
 
@@ -19,7 +19,7 @@ class MetadataAjax {
         const url = `/books/${bookId}/cover-action/`;
         return await EbookLibrary.Ajax.makeRequest(url, {
             method: 'POST',
-            body: JSON.stringify(actionData)
+            body: JSON.stringify(actionData),
         });
     }
 
@@ -32,7 +32,7 @@ class MetadataAjax {
         const url = `/books/${bookId}/remove-metadata/`;
         return await EbookLibrary.Ajax.makeRequest(url, {
             method: 'POST',
-            body: JSON.stringify(metadataData)
+            body: JSON.stringify(metadataData),
         });
     }
 }
@@ -43,7 +43,7 @@ class MetadataAjax {
 class MetadataValidators {
     static validateISBN(isbn) {
         if (!isbn) return true;
-        
+
         const cleanISBN = isbn.replace(/[-\s]/g, '');
         if (cleanISBN.length !== 10 && cleanISBN.length !== 13) {
             return false;
@@ -53,7 +53,7 @@ class MetadataValidators {
 
     static validateYear(year) {
         if (!year) return true;
-        
+
         const yearInt = parseInt(year);
         const currentYear = new Date().getFullYear();
         return yearInt >= 1000 && yearInt <= currentYear + 5;
@@ -61,9 +61,10 @@ class MetadataValidators {
 
     static sanitizeText(text) {
         if (!text) return '';
-        return text.trim()
-                  .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-                  .replace(/[<>]/g, '');
+        return text
+            .trim()
+            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+            .replace(/[<>]/g, '');
     }
 }
 
@@ -75,7 +76,7 @@ class MetadataUI {
         const badge = element.querySelector('.confidence-badge');
         if (badge) {
             badge.className = `badge ${this.getConfidenceBadgeClass(confidence)}`;
-            badge.textContent = `★ ${confidence.toFixed(2)}`;
+            badge.textContent = `* ${confidence.toFixed(2)}`;
         }
     }
 
@@ -100,7 +101,7 @@ if (
             const metadataShortcuts = {
                 'ctrl+s': () => this.saveMetadata(),
                 'ctrl+shift+r': () => this.refreshMetadata(),
-                'escape': () => this.cancelEdit()
+                escape: () => this.cancelEdit(),
             };
             super(metadataShortcuts);
         }
@@ -134,13 +135,13 @@ if (typeof module !== 'undefined' && module.exports) {
         MetadataAjax,
         MetadataValidators,
         MetadataUI,
-        MetadataShortcuts
+        MetadataShortcuts,
     };
 } else {
     window.MetadataUtils = {
         MetadataAjax,
         MetadataValidators,
         MetadataUI,
-        MetadataShortcuts
+        MetadataShortcuts,
     };
 }
