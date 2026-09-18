@@ -18,7 +18,8 @@ A Django application that prepares a large personal media library (100,000+ book
 3. **Decide (AI)** — the accuracy engine scores each signal and decides whether enough accurate information exists to query external providers.
 4. **Enrich + validate (AI)** — query Google Books, Open Library, Goodreads, and Comic Vine only when confidence is high; immediately verify the returned record matches the request (ISBN/title/author) and reject mismatches, then merge through the trust hierarchy and produce a per-book accuracy score.
 5. **Rename** — auto-apply the naming template and (re)generate OPF only when the score clears a high-confidence threshold (~99%), covering ~90% of the library unattended.
-6. **Verify + confirm (ultrafast)** — the remaining books are confirmed, edited, or rejected in a keyboard-driven workbench in seconds each; corrections retrain the AI.
+6. **AI pre-confirmation** — for books below the auto-rename threshold, a heavier agent-driven pass opens the file, OCRs the title page, and cross-checks candidate metadata against a live websearch; it resolves the book with a recorded evidence trail or narrows it to a specific unresolved reason. Corrupted files and duplicate resolution bypass this tier and go straight to step 7.
+7. **Verify + confirm (ultrafast, human)** — the remaining books are confirmed, edited, or rejected in a keyboard-driven workbench in seconds each; corrections retrain the AI. This human-only step is the ground truth for retraining, and step 6 exists to shrink its volume.
 
 See [`ROADMAP.md`](ROADMAP.md) for status and [`FUNCTIONAL_SPECIFICATION.md`](FUNCTIONAL_SPECIFICATION.md) for what is already implemented.
 

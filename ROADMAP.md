@@ -10,9 +10,10 @@ This app is a **metadata accuracy + file renaming pipeline** that prepares a lar
 2. **Decide (AI)** — the accuracy engine scores each signal and decides whether enough accurate information exists to query external providers.
 3. **Enrich + validate (AI)** — query Google Books, Open Library, Goodreads, and Comic Vine only when confidence is high; immediately verify the returned record matches the request (ISBN/title/author) and reject mismatches, then merge through the trust hierarchy and produce a per-book accuracy score.
 4. **Rename** — auto-apply the naming template and (re)generate OPF metadata only when the score clears a high threshold (target 99%), covering ~90% of the library unattended.
-5. **Verify + confirm (ultrafast)** — route the remainder to a keyboard-driven confirmation workbench; confirm, edit, or reject each book in seconds, and feed corrections back into the AI.
+5. **AI pre-confirmation** — for books below the auto-rename threshold, run a second, heavier verification pass (agent-driven): open the actual file, extract OCR from the title page, and cross-check candidate metadata against a live websearch, not just the cached provider lookup. This either resolves the book with a documented evidence trail or narrows it down to a specific, named reason it can't be resolved (no ISBN and multiple candidates, degraded OCR, suspected duplicate, corrupted file, uncertain language). This tier does not touch corrupted files or duplicate resolution; those route directly to step 6.
+6. **Verify + confirm (ultrafast, human)** — route the remainder to a keyboard-driven confirmation workbench; confirm, edit, or reject each book in seconds, and feed corrections back into the AI. This step remains human-only. It is the ground truth source for retraining, and its volume is what step 5 exists to shrink, not eliminate.
 
-The goal is for the validation gate to auto-confirm the **majority of the library at near-100% accuracy**, so the human confirm step only ever touches the small low-confidence remainder.
+The goal is for the validation gate plus the AI pre-confirmation tier to resolve the large majority of the library at near-100% accuracy, so the human confirm step only ever touches the small remainder that genuinely needs judgment: corrupted files, real duplicates, and cases where even a deeper AI pass couldn't reach confidence.
 
 Every filter and statistic in the UI is a metadata-quality workbench: filter to find books needing the same fix, correct them in bulk, then rename and move them to the final library location.
 
@@ -150,6 +151,16 @@ The filename-recognition engine is an ensemble in [`filename_recognizer.py`](boo
 - **External-lookup gating** — the same model decides whether enough accurate input exists to query Google Books / Open Library / Goodreads / Comic Vine, so a low-confidence query is never sent and cannot return the wrong book.
 - **Result match verification** — when a query is sent, immediately verify the returned record against the request (ISBN, title, author similarity) so a mismatch (e.g. author parsed as title) is flagged as "no match" and never persisted.
 - **Output** — a per-book accuracy/confidence score stored on `FinalMetadata`, consumed by the confidence-gated rename in Bulk Actions and Maintenance.
+
+### AI pre-confirmation tier
+
+- **Planned** — an agent-driven verification pass for books that fail the auto-rename threshold but haven't yet reached the human workbench. Unlike the validation gate (which scores existing candidate data), this tier does new work: opens the file, runs OCR against the title page, and cross-checks the result against a live websearch rather than only the cached provider response.
+- **Output** — either a resolved book with a recorded evidence trail (OCR text, search result used, confidence score), or a specific unresolved reason (no ISBN, degraded OCR, suspected duplicate, corrupted file, uncertain language) that routes directly to the human workbench with that reason attached, so the human doesn't re-derive what the AI already ruled out.
+- **Explicitly out of scope for this tier** — corrupted file handling and duplicate resolution. Both require a judgment call (which copy to keep, whether a file is salvageable) that stays with the human step.
+
+### AIFeedback provenance
+
+- **Planned** — add a `confirmed_by` field (`human` / `ai_preconfirmation` / `auto_gate`) to `AIFeedback` so retraining can distinguish genuine human-verified ground truth from AI-confirmed rows. Default `train_ai_models` to human-confirmed data only, with AI-confirmed rows available as an opt-in, separately weighted set, so the pre-confirmation tier can't quietly reinforce its own errors through the training loop.
 
 ### Bundled learning set
 

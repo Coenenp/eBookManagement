@@ -6,10 +6,10 @@ migration hygiene. It reads database credentials from Django settings and:
 
 1. Backs up the current database with ``mysqldump`` (unless ``--skip-backup``).
 2. Drops and recreates the database using the utf8mb4 charset.
-3. Runs ``makemigrations books`` so migrations are generated from the current
-   models (a no-op when they already exist locally).
-4. Runs ``migrate`` to apply all migrations.
-5. Optionally creates a superuser.
+3. Removes existing ``books`` migration files (keeping ``__init__.py``).
+4. Runs ``makemigrations books`` to regenerate migrations from the current models.
+5. Runs ``migrate`` to apply all migrations.
+6. Optionally creates a superuser.
 
 The database is not dropped without confirmation unless ``--noinput`` is passed.
 If the configured database user cannot drop/create the database, the command
@@ -106,6 +106,9 @@ class Command(BaseCommand):
 
         self._drop_and_create_database(name, user, password, host, port, charset)
 
+        self.stdout.write(self.style.NOTICE("Removing existing migrations for the books app..."))
+        self._delete_migrations()
+
         self.stdout.write(self.style.NOTICE("Generating migrations for the books app..."))
         call_command("makemigrations", "books", interactive=False, stdout=self.stdout, stderr=self.stderr)
 
@@ -116,6 +119,26 @@ class Command(BaseCommand):
             self._create_superuser(options)
 
         self.stdout.write(self.style.SUCCESS("Database reset complete."))
+
+    def _delete_migrations(self):
+        """Delete generated migration files for the books app (keeping __init__.py)."""
+        migrations_dir = Path(settings.BASE_DIR) / "books" / "migrations"
+        if not migrations_dir.is_dir():
+            self.stdout.write(self.style.NOTICE("No migrations directory found; nothing to remove."))
+            return
+
+        removed = []
+        for path in sorted(migrations_dir.iterdir()):
+            if path.is_file() and path.suffix == ".py" and path.name != "__init__.py":
+                path.unlink()
+                removed.append(path.name)
+            elif path.is_dir() and path.name == "__pycache__":
+                shutil.rmtree(path, ignore_errors=True)
+
+        if removed:
+            self.stdout.write(self.style.WARNING(f"Removed migration files: {', '.join(removed)}"))
+        else:
+            self.stdout.write(self.style.NOTICE("No migration files to remove."))
 
     def _confirm_drop(self, name):
         self.stdout.write(self.style.WARNING(f"\nYou are about to DROP database '{name}' and all of its data.\n" "This action cannot be undone.\n"))
