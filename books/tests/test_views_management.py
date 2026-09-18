@@ -310,6 +310,90 @@ class AuthorManagementViewTests(TestCase):
         self.assertTrue(any("No changes made" in str(msg) for msg in messages))
 
 
+class AuthorNormalizeAndFixViewTests(TestCase):
+    """Tests for bulk author normalization and fix-all-books-by-author views."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(username="fixuser", password="testpass123")
+        self.client.login(username="fixuser", password="testpass123")
+        self.source, _ = DataSource.objects.get_or_create(name="Manual Entry", defaults={"trust_level": 0.9})
+        self.scan_folder = create_test_scan_folder()
+
+    def _create_book_with_author(self, path, author):
+        book = create_test_book_with_file(
+            file_path=path,
+            file_format="epub",
+            file_size=1000,
+            scan_folder=self.scan_folder,
+        )
+        BookAuthor.objects.create(
+            book=book,
+            author=author,
+            confidence=0.9,
+            is_main_author=True,
+            is_active=True,
+            source=self.source,
+        )
+        FinalMetadata.objects.create(book=book, final_title="Test Book", final_author=author.name)
+        return book
+
+    def test_normalize_authors_ajax_cleans_names(self):
+        author = Author.objects.create(name="Michael 1973-2010")
+
+        response = self.client.post(reverse("books:author_normalize"))
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["names_cleaned"], 1)
+        self.assertEqual(data["cleaned_names"][0]["before"], "Michael 1973-2010")
+        self.assertEqual(data["cleaned_names"][0]["after"], "Michael")
+
+        author.refresh_from_db()
+        self.assertEqual(author.name, "Michael")
+
+    def test_fix_books_by_author_ajax(self):
+        author_a = Author.objects.create(name="J.K. Rowling")
+        author_b = Author.objects.create(name="J. K. Rowling")
+        book1 = self._create_book_with_author("/test/fix1.epub", author_a)
+        book2 = self._create_book_with_author("/test/fix2.epub", author_b)
+
+        response = self.client.post(
+            reverse("books:book_fix_author", kwargs={"book_id": book1.id}),
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["success"])
+        canonical = data["canonical_name"]
+
+        self.assertEqual(Author.objects.count(), 1)
+        remaining = Author.objects.get()
+        self.assertEqual(remaining.name, canonical)
+        self.assertEqual(BookAuthor.objects.filter(author=remaining).count(), 2)
+
+        book1.refresh_from_db()
+        book2.refresh_from_db()
+        self.assertEqual(book1.finalmetadata.final_author, canonical)
+        self.assertEqual(book2.finalmetadata.final_author, canonical)
+
+    def test_fix_books_by_author_requires_login(self):
+        self.client.logout()
+        book = create_test_book_with_file(
+            file_path="/test/fix.epub",
+            file_format="epub",
+            file_size=1000,
+            scan_folder=self.scan_folder,
+        )
+
+        response = self.client.post(reverse("books:book_fix_author", kwargs={"book_id": book.id}))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("login", response.url)
+
+
 class GenreManagementViewTests(TestCase):
     """Test suite for Genre management views"""
 

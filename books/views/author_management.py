@@ -9,14 +9,19 @@ Provides UI for:
 
 import logging
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from books.models import Author, BookAuthor
-from books.services.author_cleanup import run_author_cleanup
+from books.models import Author, Book, BookAuthor
+from books.services.author_cleanup import (
+    fix_all_books_by_author,
+    normalize_all_author_names,
+    run_author_cleanup,
+)
 from books.utils.author_matching import find_potential_duplicates, suggest_canonical_name
 
 logger = logging.getLogger("books.scanner")
@@ -235,3 +240,71 @@ def clean_authors_ajax(request):
     except Exception as e:
         logger.error(f"[AUTHOR CLEANUP ERROR] {str(e)}")
         return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def normalize_authors_ajax(request):
+    """
+    Normalize every author name in one operation.
+
+    Runs ``run_author_cleanup(clean_names=True)`` and reports the before/after
+    ``cleaned_names`` list so callers can show exactly what changed.
+    """
+    dry_run = request.POST.get("dry_run", "false") == "true"
+
+    try:
+        stats = normalize_all_author_names(dry_run=dry_run)
+
+        logger.info(f"[AUTHOR NORMALIZE] dry_run={dry_run} cleaned={stats['names_cleaned']}")
+
+        return JsonResponse(
+            {
+                "success": True,
+                "dry_run": dry_run,
+                "names_cleaned": stats["names_cleaned"],
+                "cleaned_names": stats["cleaned_names"],
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"[AUTHOR NORMALIZE ERROR] {str(e)}")
+        return JsonResponse({"success": False, "error": str(e)}, status=500)
+
+
+@login_required
+@require_POST
+def fix_books_by_author(request, book_id):
+    """
+    Canonicalize the author of the given book across all matching books.
+
+    This is the "fix all books by this author" flow triggered from a book
+    detail page. It resolves the book's primary author, finds fuzzy duplicates,
+    picks a canonical name, and updates BookAuthor + FinalMetadata atomically.
+    """
+    book = get_object_or_404(Book, pk=book_id)
+
+    try:
+        result = fix_all_books_by_author(book)
+    except Exception as e:
+        logger.error(f"[AUTHOR FIX ERROR] book_id={book_id} {str(e)}")
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"success": False, "error": str(e)}, status=500)
+        messages.error(request, f"Error fixing author: {str(e)}")
+        return redirect("books:book_detail", pk=book.id)
+
+    if not result.get("success"):
+        reason = result.get("reason", "unknown")
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse(result, status=400)
+        messages.warning(request, f"No author to fix on this book ({reason}).")
+        return redirect("books:book_detail", pk=book.id)
+
+    message = f'Author canonicalized as "{result["canonical_name"]}" ' f"across {result['books_affected']} book(s) " f"({result['metadata_updated']} metadata record(s) updated)."
+    logger.info(f"[AUTHOR FIX] {message}")
+
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse(result)
+
+    messages.success(request, message)
+    return redirect("books:book_detail", pk=book.id)

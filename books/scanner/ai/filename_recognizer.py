@@ -45,6 +45,17 @@ class FilenamePatternRecognizer:
     ROLE_VOLUME = "volume"
     ROLE_OTHER = "other"
 
+    SEED_DATA_COLUMNS = [
+        "filename",
+        "original_filename",
+        "title",
+        "author",
+        "series",
+        "volume",
+        "file_format",
+        "book_id",
+    ]
+
     # Names that appear in titles but not usually in author names.
     TITLE_INDICATOR_WORDS = {
         "guide",
@@ -145,6 +156,30 @@ class FilenamePatternRecognizer:
         logger.info(f"Training data saved to {training_data_path}")
 
         return df
+
+    def load_seed_training_data(self) -> pd.DataFrame:
+        """Load the checked-in seed training corpus."""
+        seed_path = self.model_dir / "training_data.csv"
+        if not seed_path.exists():
+            logger.info("No seed training data file found at %s", seed_path)
+            return pd.DataFrame(columns=self.SEED_DATA_COLUMNS)
+
+        try:
+            df = pd.read_csv(seed_path, dtype=str, keep_default_na=False)
+        except Exception as e:
+            logger.warning("Failed to load seed training data: %s", e)
+            return pd.DataFrame(columns=self.SEED_DATA_COLUMNS)
+
+        for column in self.SEED_DATA_COLUMNS:
+            if column not in df.columns:
+                df[column] = ""
+
+        return df[self.SEED_DATA_COLUMNS].fillna("")
+
+    def save_training_data(self, df: pd.DataFrame) -> None:
+        """Persist training data to the model directory CSV."""
+        training_data_path = self.model_dir / "training_data.csv"
+        df.to_csv(training_data_path, index=False)
 
     # ------------------------------------------------------------------
     # Text helpers

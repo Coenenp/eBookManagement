@@ -1,6 +1,6 @@
 # Universal Media Manager
 
-A Django application for scanning, cataloging, and organizing a personal media library. It handles ebooks, comics, and audiobooks: extracting metadata from files and external APIs, resolving conflicts with a trust hierarchy, and reorganizing files with user-defined naming templates.
+A Django application that prepares a large personal media library (100,000+ books) for import into **BookOrbit**. It scans ebooks, comics, and audiobooks, extracts metadata from files and external APIs, validates it with AI, and renames/organizes files with user-defined naming templates plus embedded OPF metadata. It is **not a reader** — reading, reading status, and library browsing are handled by BookOrbit.
 
 ## Documentation Index
 
@@ -10,6 +10,39 @@ A Django application for scanning, cataloging, and organizing a personal media l
 | [`FUNCTIONAL_SPECIFICATION.md`](FUNCTIONAL_SPECIFICATION.md) | User-facing behavior of every implemented feature.                      |
 | [`ROADMAP.md`](ROADMAP.md)                                   | Planned, partially implemented, and proposed features.                  |
 | [`docs/TESTING.md`](docs/TESTING.md)                         | Unit and end-to-end testing guide.                                      |
+
+## Pipeline
+
+1. **Scan** — recursively discover books, comics, and audiobooks.
+2. **Recognize (AI, multi-signal)** — fuse filename parsing/cleaning, embedded metadata (EPUB, OPF, ComicInfo, ID3), and OCR (title, author, publisher, ISBN) into structured candidate fields.
+3. **Decide (AI)** — the accuracy engine scores each signal and decides whether enough accurate information exists to query external providers.
+4. **Enrich + validate (AI)** — query Google Books, Open Library, Goodreads, and Comic Vine only when confidence is high; immediately verify the returned record matches the request (ISBN/title/author) and reject mismatches, then merge through the trust hierarchy and produce a per-book accuracy score.
+5. **Rename** — auto-apply the naming template and (re)generate OPF only when the score clears a high-confidence threshold (~99%), covering ~90% of the library unattended.
+6. **Verify + confirm (ultrafast)** — the remaining books are confirmed, edited, or rejected in a keyboard-driven workbench in seconds each; corrections retrain the AI.
+
+See [`ROADMAP.md`](ROADMAP.md) for status and [`FUNCTIONAL_SPECIFICATION.md`](FUNCTIONAL_SPECIFICATION.md) for what is already implemented.
+
+## Ultrafast verification & confirmation
+
+The human step is the bottleneck at 100k+ books, so confirmation is optimized for **seconds per book**, not page-by-page editing:
+
+- **Spreadsheet workbench** — every book is a row with suggested vs. current metadata shown as an inline diff.
+- **Keyboard-driven** — move with the keyboard, `Enter`/`Y` to confirm, `N`/`Esc` to reject, arrow keys to jump fields; auto-advance to the next unconfirmed book.
+- **Bulk confirm** — confirm a whole filtered page (or everything above a confidence threshold) in one action.
+- **Inline correction** — fix a single wrong field without leaving the flow; the correction becomes training data.
+- **Confirm-to-rename** — confirmed books flow straight into the rename + move step.
+
+## Metadata quality filters
+
+Every filter and statistic is a metadata-quality workbench, not a browsing view. Common examples:
+
+- **Same author** — verify the author name is clean and identical across all books.
+- **Series completeness** — find missing volumes and correct series name/numbering.
+- **Missing covers** — re-trigger cover extraction/downloads.
+- **Missing/incorrect filenames** — target books that still need renaming.
+- **Unprocessed enrichment** — e.g. books where the Google Books lookup has not run yet.
+
+The loop is always **filter → correct metadata → rename → move to the final library location**, and every correction becomes training data for the AI.
 
 ## Features
 
@@ -25,9 +58,9 @@ A Django application for scanning, cataloging, and organizing a personal media l
 - AI filename recognition with confidence scoring and a user feedback loop.
 - Multi-source metadata aggregation from Google Books, Open Library, Goodreads, and Comic Vine.
 - Trust-hierarchy conflict resolution (manual edits always win).
-- Unified metadata review workflow with cover, file, and duplicate handling.
+- Ultrafast metadata verification workbench (keyboard confirm/reject, bulk accept, inline edit) with cover, file, and duplicate handling.
 - Template-based renaming and file organization with OPF metadata generation.
-- Series, author, and genre management (including duplicate author detection).
+- Series, author, and genre management (including duplicate author detection, name normalization, and fix-all-by-author).
 - Cover extraction, caching, manual upload, restore, and internal-cover selection.
 - User settings with themes and default renaming templates.
 - Setup wizard for first-run configuration.
@@ -40,7 +73,7 @@ A Django application for scanning, cataloging, and organizing a personal media l
 | Comics       | `.cbr`, `.cbz`                                          |
 | Audiobooks   | `.mp3`, `.m4a`, `.m4b`, `.aac`, `.flac`, `.ogg`, `.wav` |
 
-> FB2, LIT, PRC, CB7, and CBT are declared in the format constants but do not yet have dedicated extractors. OPF files are parsed as metadata companion files. See [`ROADMAP.md`](ROADMAP.md).
+> FB2, LIT, PRC, CB7, and CBT are declared in the format constants but do not yet have dedicated extractors. OPF files are both parsed as metadata companion files and generated as the metadata handoff to BookOrbit. See [`ROADMAP.md`](ROADMAP.md).
 
 ## Requirements
 
@@ -115,8 +148,8 @@ python manage.py scan_books list
 python manage.py scan_books cancel <job_id>
 
 # Metadata and maintenance
-python manage.py complete_metadata
-python manage.py train_ai_models
+python manage.py enrich_metadata
+python manage.py train_ai_models --include-seed
 python manage.py scan_content_isbn
 
 # Author data quality
@@ -124,6 +157,11 @@ python manage.py clean_authors --dry-run --all
 python manage.py clean_authors --remove-invalid
 python manage.py clean_authors --merge-duplicates
 python manage.py clean_authors --find-fuzzy-duplicates --fuzzy-threshold 0.85
+python manage.py normalize_authors --dry-run
+
+# Cover cache maintenance
+python manage.py clean_cover_cache --dry-run
+python manage.py clean_cover_cache --rebuild-missing
 
 # Test utilities
 python manage.py create_test_superuser
@@ -295,10 +333,12 @@ eBookManagement/
 
 ## Testing
 
-See [`docs/TESTING.md`](docs/TESTING.md) for unit and Playwright E2E instructions.
+Tests run on a dedicated file-based SQLite database via [`ebook_manager/settings_test.py`](ebook_manager/settings_test.py), so they never touch the live MariaDB/MySQL database. See [`docs/TESTING.md`](docs/TESTING.md) for unit and Playwright E2E instructions.
 
 ```bash
 python manage.py test books.tests
+# or
+pytest
 ```
 
 ## Troubleshooting

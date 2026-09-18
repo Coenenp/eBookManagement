@@ -2,9 +2,12 @@
 Tests for the management commands related to scanning.
 """
 
+import os
+import tempfile
 from io import StringIO
-from unittest.mock import patch
+from unittest.mock import ANY, MagicMock, call, patch
 
+from django.conf import settings as django_settings
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
@@ -118,19 +121,204 @@ class ScanContentIsbnCommandTest(TestCase):
         mock_bulk_scan.assert_called_once()
 
 
-class CompleteMetadataCommandTest(TestCase):
-    """Tests for the complete_metadata management command."""
+class _MySQLDBError(Exception):
+    """Stand-in for MySQLdb.Error in tests."""
 
-    @patch("books.scanner.folder.query_metadata_and_covers")
-    @patch("books.scanner.folder.resolve_final_metadata")
-    def test_complete_metadata_command(self, mock_resolve, mock_query):
-        """Test the basic execution of the command."""
-        # Create a book without final metadata
-        scan_folder = create_test_scan_folder(name="Test Folder")
-        create_test_book_with_file(file_path="/fake/book.epub", scan_folder=scan_folder)
 
-        call_command("complete_metadata")
+class ResetDatabaseCommandTest(TestCase):
+    """Tests for the reset_database management command."""
 
-        # The functions should be called for incomplete books
-        # Note: The exact number depends on the Book.objects queryset behavior in tests
-        self.assertTrue(mock_query.called or mock_resolve.called)
+    MYSQL_CONFIG = {
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": "test_ebook_manager",
+        "USER": "ebook_user",
+        "PASSWORD": "secret",
+        "HOST": "db.example.com",
+        "PORT": "3307",
+        "OPTIONS": {"charset": "utf8mb4"},
+    }
+
+    def tearDown(self):
+        for key in ("DJANGO_SUPERUSER_USERNAME", "DJANGO_SUPERUSER_EMAIL", "DJANGO_SUPERUSER_PASSWORD"):
+            os.environ.pop(key, None)
+
+    def test_non_mysql_engine_raises(self):
+        """The command refuses to run when the active engine is not MySQL."""
+        with self.assertRaises(CommandError):
+            call_command("reset_database", "--noinput")
+
+    @patch("books.management.commands.reset_database.MySQLdb")
+    @patch("books.management.commands.reset_database.call_command")
+    def test_mysql_rebuild_flow(self, mock_call_command, mock_mysql):
+        """Drops and recreates the database, then runs makemigrations and migrate."""
+        mock_connection = mock_mysql.connect.return_value
+        mock_cursor = mock_connection.cursor.return_value
+
+        with patch.object(django_settings, "DATABASES", {"default": self.MYSQL_CONFIG}):
+            call_command("reset_database", "--noinput", "--skip-backup")
+
+        mock_mysql.connect.assert_called_once_with(
+            host="db.example.com",
+            user="ebook_user",
+            password="secret",
+            port=3307,
+            charset="utf8mb4",
+        )
+
+        statements = [call[0][0] for call in mock_cursor.execute.call_args_list]
+        self.assertIn("DROP DATABASE IF EXISTS `test_ebook_manager`", statements[0])
+        self.assertIn("CREATE DATABASE `test_ebook_manager`", statements[1])
+        self.assertIn("utf8mb4", statements[1])
+
+        mock_call_command.assert_any_call("makemigrations", "books", interactive=False, stdout=ANY, stderr=ANY)
+        mock_call_command.assert_any_call("migrate", interactive=False, stdout=ANY, stderr=ANY)
+
+    @patch("books.management.commands.reset_database.MySQLdb")
+    def test_prompt_declines_abort(self, mock_mysql):
+        """Declining the confirmation prompt aborts before any destructive call."""
+        with patch.object(django_settings, "DATABASES", {"default": self.MYSQL_CONFIG}):
+            with patch("builtins.input", return_value="no"):
+                call_command("reset_database")
+
+        mock_mysql.connect.assert_not_called()
+
+    @patch("books.management.commands.reset_database.MySQLdb")
+    @patch("books.management.commands.reset_database.call_command")
+    def test_superuser_explicit_flags(self, mock_call_command, mock_mysql):
+        """Explicit flags take precedence for superuser creation."""
+        with patch.object(django_settings, "DATABASES", {"default": self.MYSQL_CONFIG}):
+            call_command(
+                "reset_database",
+                "--noinput",
+                "--skip-backup",
+                "--superuser",
+                "--superuser-username",
+                "admin2",
+                "--superuser-email",
+                "admin2@example.com",
+                "--superuser-password",
+                "pw2",
+            )
+
+        mock_call_command.assert_any_call(
+            "createsuperuser",
+            interactive=False,
+            username="admin2",
+            email="admin2@example.com",
+            stdout=ANY,
+            stderr=ANY,
+        )
+
+    @patch("books.management.commands.reset_database.MySQLdb")
+    @patch("books.management.commands.reset_database.call_command")
+    def test_superuser_env_vars(self, mock_call_command, mock_mysql):
+        """DJANGO_SUPERUSER_* env vars are used when explicit flags are absent."""
+        env = {
+            "DJANGO_SUPERUSER_USERNAME": "envuser",
+            "DJANGO_SUPERUSER_EMAIL": "env@example.com",
+            "DJANGO_SUPERUSER_PASSWORD": "envpw",
+        }
+        with patch.object(django_settings, "DATABASES", {"default": self.MYSQL_CONFIG}):
+            with patch.dict(os.environ, env):
+                call_command("reset_database", "--noinput", "--skip-backup", "--superuser")
+
+        mock_call_command.assert_any_call(
+            "createsuperuser",
+            interactive=False,
+            username="envuser",
+            email="env@example.com",
+            stdout=ANY,
+            stderr=ANY,
+        )
+
+    @patch("books.management.commands.reset_database.MySQLdb")
+    @patch("books.management.commands.reset_database.call_command")
+    def test_superuser_interactive_fallback(self, mock_call_command, mock_mysql):
+        """Without flags or env vars, createsuperuser is run interactively."""
+        env = {
+            "DJANGO_SUPERUSER_USERNAME": "",
+            "DJANGO_SUPERUSER_EMAIL": "",
+            "DJANGO_SUPERUSER_PASSWORD": "",
+        }
+        with patch.object(django_settings, "DATABASES", {"default": self.MYSQL_CONFIG}):
+            with patch.dict(os.environ, env):
+                call_command("reset_database", "--noinput", "--skip-backup", "--superuser")
+
+        mock_call_command.assert_any_call("createsuperuser", stdout=ANY, stderr=ANY)
+
+    @patch("books.management.commands.reset_database.MySQLdb")
+    @patch("books.management.commands.reset_database.call_command")
+    def test_admin_fallback_on_privilege_error(self, mock_call_command, mock_mysql):
+        """When the app user cannot DROP/CREATE, the command retries with DB_ADMIN_*."""
+        mock_mysql.Error = _MySQLDBError
+        admin_connection = MagicMock()
+        admin_cursor = admin_connection.cursor.return_value
+        mock_mysql.connect.side_effect = [_MySQLDBError("access denied"), admin_connection]
+
+        with patch.object(django_settings, "DATABASES", {"default": self.MYSQL_CONFIG}):
+            with patch.object(django_settings, "DB_ADMIN_USER", "root"):
+                with patch.object(django_settings, "DB_ADMIN_PASSWORD", "adminpass"):
+                    with patch.object(django_settings, "DB_ADMIN_HOST", "adminhost"):
+                        with patch.object(django_settings, "DB_ADMIN_PORT", 3308):
+                            call_command("reset_database", "--noinput", "--skip-backup")
+
+        self.assertEqual(
+            mock_mysql.connect.call_args_list,
+            [
+                call(host="db.example.com", user="ebook_user", password="secret", port=3307, charset="utf8mb4"),
+                call(host="adminhost", user="root", password="adminpass", port=3308, charset="utf8mb4"),
+            ],
+        )
+
+        statements = [c[0][0] for c in admin_cursor.execute.call_args_list]
+        self.assertIn("DROP DATABASE IF EXISTS `test_ebook_manager`", statements[0])
+        self.assertIn("CREATE DATABASE `test_ebook_manager`", statements[1])
+
+    @patch("books.management.commands.reset_database.MySQLdb")
+    def test_no_admin_fallback_raises(self, mock_mysql):
+        """Without DB_ADMIN_* credentials, a DROP/CREATE failure surfaces as CommandError."""
+        mock_mysql.Error = _MySQLDBError
+        mock_mysql.connect.side_effect = _MySQLDBError("access denied")
+
+        with patch.object(django_settings, "DATABASES", {"default": self.MYSQL_CONFIG}):
+            with patch.object(django_settings, "DB_ADMIN_USER", None):
+                with self.assertRaises(CommandError):
+                    call_command("reset_database", "--noinput", "--skip-backup")
+
+    @patch("books.management.commands.reset_database.MySQLdb")
+    @patch("books.management.commands.reset_database.call_command")
+    @patch("books.management.commands.reset_database.Command._backup_database")
+    def test_skip_backup(self, mock_backup, mock_call_command, mock_mysql):
+        """--skip-backup bypasses the pre-drop backup."""
+        with patch.object(django_settings, "DATABASES", {"default": self.MYSQL_CONFIG}):
+            call_command("reset_database", "--noinput", "--skip-backup")
+
+        mock_backup.assert_not_called()
+
+    @patch("books.management.commands.reset_database.shutil.which", return_value=None)
+    def test_backup_missing_mysqldump_raises(self, mock_which):
+        """The command aborts when mysqldump is unavailable and backup is not skipped."""
+        with patch.object(django_settings, "DATABASES", {"default": self.MYSQL_CONFIG}):
+            with self.assertRaises(CommandError):
+                call_command("reset_database", "--noinput")
+
+    @patch("books.management.commands.reset_database.MySQLdb")
+    @patch("books.management.commands.reset_database.call_command")
+    @patch("books.management.commands.reset_database.subprocess.run")
+    @patch("books.management.commands.reset_database.shutil.which", return_value="/usr/bin/mysqldump")
+    def test_backup_runs_before_drop(self, mock_which, mock_run, mock_call_command, mock_mysql):
+        """A successful mysqldump backup runs before the drop/recreate step."""
+        result = MagicMock()
+        result.returncode = 0
+        result.stderr = b""
+        mock_run.return_value = result
+
+        with tempfile.TemporaryDirectory() as backup_dir:
+            with patch.object(django_settings, "DATABASES", {"default": self.MYSQL_CONFIG}):
+                with patch.object(django_settings, "DB_BACKUP_DIR", backup_dir):
+                    call_command("reset_database", "--noinput")
+
+        mock_run.assert_called_once()
+        self.assertEqual(mock_run.call_args.kwargs["env"]["MYSQL_PWD"], "secret")
+        self.assertIn("mysqldump", mock_run.call_args.args[0][0])
+        self.assertIn("--single-transaction", mock_run.call_args.args[0])

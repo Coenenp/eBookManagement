@@ -314,7 +314,17 @@
                                     <h5 class="mb-0">
                                         <i class="fas fa-user me-2"></i>Authors
                                     </h5>
-                                    <span class="badge bg-info">{{ all_authors|length }} found</span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge bg-info">{{ all_authors|length }} found</span>
+                                        <form method="post" action="{% url 'books:book_fix_author' book.id %}"
+                                              onsubmit="return confirm('Re-point and rename every book by this author to a single canonical name?');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-outline-primary"
+                                                    title="Resolve this author's canonical name and fix all matching books">
+                                                <i class="fas fa-magic me-1"></i>Fix All Books by This Author
+                                            </button>
+                                        </form>
+                                    </div>
                                 </div>
                                 <div class="card-body">
                                     {% for book_author in all_authors %}

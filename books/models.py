@@ -633,6 +633,7 @@ class Author(models.Model):
     last_name = models.CharField(max_length=100, blank=True)
     name_normalized = models.CharField(max_length=200, db_index=True, unique=True)
     is_reviewed = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True, help_text="Whether this author is active and selectable")
 
     def save(self, *args, **kwargs):
         from books.utils.authors import normalize_author_name, parse_author_name

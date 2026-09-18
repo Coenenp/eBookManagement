@@ -134,6 +134,16 @@ else:
         }
     }
 
+# Admin credentials used as a fallback when the app database user lacks
+# DROP/CREATE DATABASE privileges.
+DB_ADMIN_USER = os.getenv("DB_ADMIN_USER")
+DB_ADMIN_PASSWORD = os.getenv("DB_ADMIN_PASSWORD")
+DB_ADMIN_HOST = os.getenv("DB_ADMIN_HOST") or os.getenv("DB_HOST", "localhost")
+DB_ADMIN_PORT = int(os.getenv("DB_ADMIN_PORT") or os.getenv("DB_PORT") or 3306)
+
+# Directory for mysqldump backups created by the reset_database command.
+DB_BACKUP_DIR = os.getenv("DB_BACKUP_DIR", str(BASE_DIR / "backups"))
+
 # Cache configuration
 # Use file-based cache to share data between processes/threads
 # This is crucial for scan progress tracking across background threads

@@ -2,6 +2,7 @@
 
 import json
 
+import pandas as pd
 from django.core.management.base import BaseCommand, CommandError
 
 from books.models import Book
@@ -45,6 +46,12 @@ class Command(BaseCommand):
             help="Minimum feedback entries required when using feedback (default: 5)",
         )
 
+        parser.add_argument(
+            "--include-seed",
+            action="store_true",
+            help="Merge the checked-in seed training corpus with locally collected training data",
+        )
+
     def handle(self, *args, **options):
         action = options["action"]
 
@@ -53,9 +60,14 @@ class Command(BaseCommand):
                 options["min_samples"],
                 options.get("use_feedback", False),
                 options.get("min_feedback", 5),
+                options.get("include_seed", False),
             )
         elif action == "retrain":
-            self.retrain_models(options.get("use_feedback", False), options.get("min_feedback", 5))
+            self.retrain_models(
+                options.get("use_feedback", False),
+                options.get("min_feedback", 5),
+                options.get("include_seed", False),
+            )
         elif action == "status":
             self.show_status()
         elif action == "test":
@@ -63,16 +75,28 @@ class Command(BaseCommand):
                 raise CommandError("--test-filename is required for test action")
             self.test_prediction(options["test_filename"])
 
-    def train_models(self, min_samples, use_feedback=False, min_feedback=5):
+    def train_models(self, min_samples, use_feedback=False, min_feedback=5, include_seed=False):
         """Train new AI models from scratch."""
         self.stdout.write("Training AI filename recognition models...")
 
         try:
             recognizer = FilenamePatternRecognizer()
 
+            seed_df = None
+            if include_seed:
+                seed_df = recognizer.load_seed_training_data()
+                if seed_df is not None and len(seed_df):
+                    self.stdout.write(f"Loaded {len(seed_df)} seed training samples...")
+
             # Collect training data
             self.stdout.write("Collecting training data from reviewed books...")
             training_data = recognizer.collect_training_data()
+
+            # Merge seed data before feedback so user data always wins
+            if include_seed and seed_df is not None and len(seed_df):
+                training_data = self._merge_training_data(seed_df, training_data)
+                recognizer.save_training_data(training_data)
+                self.stdout.write(f"Merged seed + reviewed data: {len(training_data)} total samples")
 
             # Add feedback data if requested
             if use_feedback:
@@ -112,7 +136,7 @@ class Command(BaseCommand):
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"Training error: {e}"))
 
-    def retrain_models(self, use_feedback=False, min_feedback=5):
+    def retrain_models(self, use_feedback=False, min_feedback=5, include_seed=False):
         """Retrain existing models with optional feedback data."""
         self.stdout.write("Retraining models...")
 
@@ -121,11 +145,23 @@ class Command(BaseCommand):
 
             if not recognizer.models_exist():
                 self.stdout.write(self.style.WARNING("No existing models found. Running initial training..."))
-                return self.train_models(10, use_feedback, min_feedback)
+                return self.train_models(10, use_feedback, min_feedback, include_seed)
+
+            seed_df = None
+            if include_seed:
+                seed_df = recognizer.load_seed_training_data()
+                if seed_df is not None and len(seed_df):
+                    self.stdout.write(f"Loaded {len(seed_df)} seed training samples...")
 
             # Collect all available training data
             self.stdout.write("Collecting training data...")
             training_data = recognizer.collect_training_data()
+
+            # Merge seed data before feedback so user data always wins
+            if include_seed and seed_df is not None and len(seed_df):
+                training_data = self._merge_training_data(seed_df, training_data)
+                recognizer.save_training_data(training_data)
+                self.stdout.write(f"Merged seed + reviewed data: {len(training_data)} total samples")
 
             # Add feedback data if requested
             if use_feedback:
@@ -244,6 +280,21 @@ class Command(BaseCommand):
 
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"Prediction error: {e}"))
+
+    def _merge_training_data(self, seed_df, local_data):
+        """Merge seed corpus with local data; local rows win on ``filename``."""
+        if not hasattr(local_data, "to_dict"):
+            local_data = pd.DataFrame(list(local_data))
+
+        if seed_df is None or len(seed_df) == 0:
+            return local_data
+        if local_data is None or len(local_data) == 0:
+            return seed_df
+
+        combined = pd.concat([seed_df, local_data], ignore_index=True, sort=False)
+        if "filename" in combined.columns:
+            combined = combined.drop_duplicates(subset=["filename"], keep="last")
+        return combined
 
     def _collect_feedback_data(self, min_feedback):
         """Collect training data from user feedback."""

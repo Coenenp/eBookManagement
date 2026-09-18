@@ -252,3 +252,43 @@ def _infer_source_type(bookfile):
         elif ext == "pdf":
             return "pdf_page"
     return "external"
+
+
+@login_required
+@require_POST
+def clean_cover_cache_ajax(request):
+    """
+    Clean orphaned covers from the cache.
+
+    POST /ajax/clean-cover-cache/
+
+    Returns:
+        {
+            "success": true,
+            "deleted": 3,
+            "errors": 0,
+            "file_count": 12,
+            "total_size": 524288
+        }
+    """
+    try:
+        deleted, errors = CoverCache.cleanup_orphans(dry_run=False)
+        file_count, total_bytes = CoverCache.get_cache_size()
+        orphan_count, _ = CoverCache.cleanup_orphans(dry_run=True)
+
+        logger.info(f"[COVER CACHE CLEANUP] deleted={deleted} errors={errors} remaining={file_count}")
+
+        return JsonResponse(
+            {
+                "success": True,
+                "deleted": deleted,
+                "errors": errors,
+                "file_count": file_count,
+                "total_size": total_bytes,
+                "orphan_count": orphan_count,
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"[COVER CACHE CLEANUP ERROR] {str(e)}")
+        return JsonResponse({"success": False, "error": str(e)}, status=500)

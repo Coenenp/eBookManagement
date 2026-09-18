@@ -15,6 +15,7 @@ from django.views.generic import TemplateView
 from books.constants import DEFAULT_THEME, DEFAULT_USER_ITEMS_PER_PAGE
 from books.forms import UserProfileForm
 from books.models import UserProfile
+from books.utils.cover_cache import CoverCache
 
 
 class UserSettingsView(LoginRequiredMixin, TemplateView):
@@ -74,6 +75,10 @@ class UserSettingsView(LoginRequiredMixin, TemplateView):
                 sample_result = self._generate_sample_result(template["folder"], template["filename"])
                 pattern_examples.append({"name": template["name"], "folder": template["folder"], "filename": template["filename"], "result": sample_result})
 
+        # Cover cache maintenance statistics
+        cover_cache_file_count, cover_cache_total_size = CoverCache.get_cache_size()
+        cover_cache_orphan_count, _ = CoverCache.cleanup_orphans(dry_run=True)
+
         context.update(
             {
                 "user": self.request.user,
@@ -84,6 +89,9 @@ class UserSettingsView(LoginRequiredMixin, TemplateView):
                 "user_templates": user_templates,
                 "default_template_key": default_template_key,
                 "pattern_examples": pattern_examples,
+                "cover_cache_file_count": cover_cache_file_count,
+                "cover_cache_total_size": cover_cache_total_size,
+                "cover_cache_orphan_count": cover_cache_orphan_count,
                 "settings": {
                     "theme": profile.theme,
                     "books_per_page": profile.items_per_page,

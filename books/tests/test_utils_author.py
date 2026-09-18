@@ -4,7 +4,8 @@ Test cases for Author utilities
 
 from django.test import TestCase
 
-from books.models import Author, BookAuthor, DataSource
+from books.models import Author, BookAuthor, DataSource, FinalMetadata
+from books.services.author_cleanup import fix_all_books_by_author, normalize_all_author_names
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 from books.utils.author import attach_authors, split_author_parts
 
@@ -178,3 +179,76 @@ class AuthorUtilsTests(TestCase):
         # but with unique authors
         authors = Author.objects.filter(book_relationships__book=self.book)
         self.assertEqual(authors.count(), 2)  # John Doe and Jane Smith
+
+
+class AuthorCleanupFixServiceTests(TestCase):
+    """Tests for bulk author normalization and fix-all-books-by-author service."""
+
+    def setUp(self):
+        self.scan_folder = create_test_scan_folder(name="Fix Test Folder")
+        self.source, _ = DataSource.objects.get_or_create(name="fix_source", defaults={"trust_level": 0.8})
+
+    def _make_book(self, path, author):
+        book = create_test_book_with_file(
+            file_path=path,
+            file_format="epub",
+            file_size=1024000,
+            scan_folder=self.scan_folder,
+        )
+        BookAuthor.objects.create(
+            book=book,
+            author=author,
+            source=self.source,
+            confidence=0.9,
+            is_main_author=True,
+            is_active=True,
+        )
+        FinalMetadata.objects.create(book=book, final_title="Book", final_author=author.name)
+        return book
+
+    def test_normalize_all_author_names_cleans_names(self):
+        author = Author.objects.create(name="George 1943-2020")
+
+        stats = normalize_all_author_names()
+
+        self.assertEqual(stats["names_cleaned"], 1)
+        self.assertEqual(stats["cleaned_names"][0]["before"], "George 1943-2020")
+        self.assertEqual(stats["cleaned_names"][0]["after"], "George")
+
+        author.refresh_from_db()
+        self.assertEqual(author.name, "George")
+
+    def test_fix_all_books_by_author_merges_variants(self):
+        author_a = Author.objects.create(name="J.K. Rowling")
+        author_b = Author.objects.create(name="J. K. Rowling")
+        book1 = self._make_book("/test/fix1.epub", author_a)
+        book2 = self._make_book("/test/fix2.epub", author_b)
+
+        result = fix_all_books_by_author(book1)
+
+        self.assertTrue(result["success"])
+        canonical = result["canonical_name"]
+        self.assertEqual(result["books_affected"], 2)
+        self.assertEqual(result["metadata_updated"], 2)
+
+        remaining = Author.objects.get()
+        self.assertEqual(remaining.name, canonical)
+        self.assertEqual(BookAuthor.objects.filter(author=remaining).count(), 2)
+
+        book1.refresh_from_db()
+        book2.refresh_from_db()
+        self.assertEqual(book1.finalmetadata.final_author, canonical)
+        self.assertEqual(book2.finalmetadata.final_author, canonical)
+
+    def test_fix_all_books_by_author_handles_book_without_author(self):
+        book = create_test_book_with_file(
+            file_path="/test/nofix.epub",
+            file_format="epub",
+            file_size=1024000,
+            scan_folder=self.scan_folder,
+        )
+
+        result = fix_all_books_by_author(book)
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["reason"], "no_author")
