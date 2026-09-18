@@ -8,11 +8,11 @@ scheme to ensure uniqueness and enable efficient lookups.
 
 import hashlib
 import logging
+import os
 from pathlib import Path
 from typing import Optional, Tuple
 
 from django.conf import settings
-from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 
 logger = logging.getLogger(__name__)
@@ -22,6 +22,18 @@ class CoverCache:
     """Manages caching of extracted cover images."""
 
     CACHE_DIR = "cover_cache"
+    PLACEHOLDER_REL = "book/images/cover-placeholder.svg"
+    COVER_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+
+    @classmethod
+    def _iter_cache_files(cls):
+        """Yield cached cover files matching supported image extensions."""
+        cache_dir = Path(settings.MEDIA_ROOT) / cls.CACHE_DIR
+        if not cache_dir.exists():
+            return
+        for path in cache_dir.iterdir():
+            if path.is_file() and path.suffix.lower() in cls.COVER_EXTENSIONS:
+                yield path
 
     @classmethod
     def get_cache_path(cls, book_file_path: str, internal_path: Optional[str] = None) -> str:
@@ -57,22 +69,32 @@ class CoverCache:
         Returns:
             Tuple of (success: bool, cache_path: str)
         """
+        cache_path = cls.get_cache_path(book_file_path, internal_path)
+
+        # Ensure cache directory exists
+        cache_dir = Path(settings.MEDIA_ROOT) / cls.CACHE_DIR
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Write to a temporary file first, then atomically replace the target so a
+        # failed write never destroys a previously cached cover.
+        final_path = cache_dir / Path(cache_path).name
+        tmp_path = cache_dir / f".{final_path.name}.tmp"
+
         try:
-            cache_path = cls.get_cache_path(book_file_path, internal_path)
-
-            # Ensure cache directory exists
-            cache_dir = Path(settings.MEDIA_ROOT) / cls.CACHE_DIR
-            cache_dir.mkdir(parents=True, exist_ok=True)
-
-            # Save the cover image
-            saved_path = default_storage.save(cache_path, ContentFile(cover_data))
-
-            logger.info(f"Cached cover for {book_file_path} at {saved_path}")
-            return True, saved_path
-
+            with open(tmp_path, "wb") as f:
+                f.write(cover_data)
+            os.replace(tmp_path, final_path)
         except Exception as e:
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
             logger.error(f"Failed to cache cover for {book_file_path}: {e}")
             return False, ""
+
+        logger.info(f"Cached cover for {book_file_path} at {cache_path}")
+        return True, cache_path
 
     @classmethod
     def get_cover(cls, book_file_path: str, internal_path: Optional[str] = None) -> Optional[str]:
@@ -135,6 +157,60 @@ class CoverCache:
             return False
 
     @classmethod
+    def media_exists(cls, relative_path: Optional[str]) -> bool:
+        """Return True when a media-relative path exists in storage."""
+        if not relative_path:
+            return False
+        return default_storage.exists(str(relative_path).replace("\\", "/").lstrip("/"))
+
+    @classmethod
+    def placeholder_url(cls) -> str:
+        """Return the static URL for the placeholder cover image."""
+        from django.conf import settings
+
+        return f"{settings.STATIC_URL}{cls.PLACEHOLDER_REL}"
+
+    @classmethod
+    def cleanup_orphans(cls, dry_run: bool = False) -> Tuple[int, int]:
+        """Delete cached covers not referenced by any ``BookFile``.
+
+        Returns a ``(deleted, errors)`` tuple. With ``dry_run=True`` the first
+        value is the number of files that *would* be deleted.
+        """
+        try:
+            from books.models import BookFile
+        except ImportError:
+            return 0, 0
+
+        referenced = set()
+        for cover_path, original_path in BookFile.objects.values_list("cover_path", "original_cover_path"):
+            for value in (cover_path, original_path):
+                if value:
+                    referenced.add(str(value).replace("\\", "/").lstrip("/"))
+
+        cache_dir = Path(settings.MEDIA_ROOT) / cls.CACHE_DIR
+        if not cache_dir.exists():
+            return 0, 0
+
+        deleted = 0
+        errors = 0
+        for cover_file in cls._iter_cache_files():
+            relative = f"{cls.CACHE_DIR}/{cover_file.name}"
+            if relative in referenced:
+                continue
+            if dry_run:
+                deleted += 1
+                continue
+            try:
+                cover_file.unlink()
+                deleted += 1
+            except Exception as e:
+                logger.error(f"Failed to delete orphaned cover {cover_file}: {e}")
+                errors += 1
+
+        return deleted, errors
+
+    @classmethod
     def clear_all(cls) -> Tuple[int, int]:
         """
         Clear all cached covers.
@@ -152,7 +228,7 @@ class CoverCache:
                 logger.info("Cover cache directory does not exist")
                 return 0, 0
 
-            for cover_file in cache_dir.glob("*.jpg"):
+            for cover_file in cls._iter_cache_files():
                 try:
                     cover_file.unlink()
                     deleted += 1
@@ -181,7 +257,7 @@ class CoverCache:
             if not cache_dir.exists():
                 return 0, 0
 
-            files = list(cache_dir.glob("*.jpg"))
+            files = list(cls._iter_cache_files())
             total_size = sum(f.stat().st_size for f in files if f.is_file())
 
             return len(files), total_size

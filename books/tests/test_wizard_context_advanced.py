@@ -12,9 +12,6 @@ from django.test import RequestFactory, TestCase
 from books.models import SetupWizard
 from books.views.wizard import WizardContentTypesView, WizardScrapersView
 
-# Setup Django
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ebook_manager.settings")
-
 
 class WizardContextDataTests(TestCase):
     """Test wizard context data population and pre-population features"""

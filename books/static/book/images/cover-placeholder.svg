@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="300" viewBox="0 0 200 300">
+  <rect width="200" height="300" rx="6" fill="#e9ecef"/>
+  <g fill="#ced4da">
+    <path d="M50 120 Q100 78 150 120 L150 185 L50 185 Z"/>
+    <path d="M50 120 L50 185 M150 120 L150 185" fill="none" stroke="#adb5bd" stroke-width="2"/>
+    <circle cx="85" cy="98" r="12"/>
+  </g>
+  <text x="100" y="240" text-anchor="middle" font-family="sans-serif" font-size="14" fill="#6c757d">No cover</text>
+</svg>

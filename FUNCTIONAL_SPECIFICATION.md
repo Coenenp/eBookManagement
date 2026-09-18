@@ -112,6 +112,8 @@ Discovers files, extracts metadata, and imports them into the library.
 
 **Entry points:** `/scanning/`, `/scanning/start-folder/`, `/scanning/start-rescan/`, and the setup wizard.
 
+The single command-line scanning entry point is [`scan_books`](books/management/commands/scan_books.py), with `scan`, `rescan`, `status`, `list`, and `cancel` subcommands. `scan --resume` continues an interrupted scan and completes metadata for books that were never fully processed.
+
 #### Scan Types
 
 | Type                  | File Discovery | Metadata Extraction | External APIs | Resume |
@@ -258,13 +260,19 @@ When embedding metadata into an EPUB, an optional "remove unused images" flag de
 
 If the selected cover file is missing, the operation continues without a cover rather than failing.
 
+#### Cover Cache Robustness
+
+- Cache naming is idempotent — saving the same cover twice overwrites the canonical `cover_cache/<hash>.jpg` instead of appending a random suffix.
+- When a cached cover file is missing, the UI falls back to a placeholder image instead of emitting a 404.
+- `CoverCache.cleanup_orphans()` removes cached files no longer referenced by any `BookFile`.
+
 ---
 
 ### 7. Author Management
 
 Provides author data-quality controls, duplicate detection, and external enrichment.
 
-**Entry points:** `/authors/`, `/authors/duplicates/`, `/authors/<id>/profile/`, `/authors/<id>/enrich/`.
+**Entry points:** `/authors/`, `/authors/duplicates/`, `/authors/merge/`, `/authors/<id>/profile/`, `/authors/<id>/enrich/`.
 
 #### Data Validation
 
@@ -279,6 +287,10 @@ Automatic cleaning removes:
 #### Fuzzy Duplicate Detection
 
 Uses `difflib.SequenceMatcher`, initials matching, name-reversal detection, and case-insensitive comparison with a configurable threshold (default 0.85).
+
+#### Merge
+
+From `/authors/duplicates/`, select two or more authors plus a primary author to merge; `BookAuthor` relationships are re-pointed to the primary and the merged authors are removed.
 
 #### Profile Enrichment
 

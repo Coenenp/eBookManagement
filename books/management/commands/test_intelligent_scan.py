@@ -84,13 +84,13 @@ class Command(BaseCommand):
 
             # Show results
             self.stdout.write("\nScan Results:")
-            self.stdout.write(f"  Books Processed: {result.get('books_processed', 0)}")
-            self.stdout.write(f"  Errors: {result.get('errors', 0)}")
-            self.stdout.write(f"  API Mode: {result.get('api_mode', 'unknown')}")
-            self.stdout.write(f"  Available APIs: {result.get('available_apis', [])}")
-            self.stdout.write(f"  Books Needing Retry: {result.get('books_needing_retry', 0)}")
+            self.stdout.write(f"Books Processed: {result.get('books_processed', 0)}")
+            self.stdout.write(f"Errors: {result.get('errors', 0)}")
+            self.stdout.write(f"API Mode: {result.get('api_mode', 'unknown')}")
+            self.stdout.write(f"Available APIs: {result.get('available_apis', [])}")
+            self.stdout.write(f"Books Needing Retry: {result.get('books_needing_retry', 0)}")
             if result.get("session_id"):
-                self.stdout.write(f"  Session ID: {result['session_id']}")
+                self.stdout.write(f"Session ID: {result['session_id']}")
 
         except ScanFolder.DoesNotExist:
             self.stdout.write(self.style.ERROR(f"Scan folder with ID {folder_id} not found"))
@@ -162,7 +162,7 @@ class Command(BaseCommand):
         self.stdout.write("\nRecent Scan Sessions:")
         sessions = ScanSession.objects.all()[:5]
         for session in sessions:
-            status = " Complete" if session.completed_at else " Active" if session.is_active else " Paused"
+            status = "Complete" if session.completed_at else "Active" if session.is_active else "Paused"
             resume_status = f" (Resume: {len(session.resume_queue)} pending)" if session.can_resume else ""
             self.stdout.write(f"  {session.session_id}: {status}{resume_status}")
 

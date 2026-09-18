@@ -12,4 +12,3 @@ __all__ = ["test_renaming_basic"]
 # - test_batch_renamer
 # - test_renaming_views
 # - test_renaming_comprehensive
-# - test_renaming_config

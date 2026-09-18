@@ -9,17 +9,12 @@ import shutil
 import tempfile
 from unittest.mock import Mock, PropertyMock, mock_open, patch
 
-import django
 from django.template import Context, Template
 from django.test import RequestFactory, TestCase
 
 from books.models import Author, BookAuthor, BookTitle, DataSource, FinalMetadata, ScanFolder
 from books.templatetags import book_extras, custom_filters
 from books.tests.test_helpers import create_test_book_with_file
-
-# Must set Django settings before importing Django models
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ebook_manager.settings")
-django.setup()
 
 
 class BaseTestCaseWithTempDir(TestCase):
@@ -606,9 +601,3 @@ class TemplateIntegrationTests(BaseTestCaseWithTempDir):
         # Should not crash even with missing book
         result = template.render(context)
         self.assertIsInstance(result, str)
-
-
-if __name__ == "__main__":
-    import unittest
-
-    unittest.main()

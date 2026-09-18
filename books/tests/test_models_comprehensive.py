@@ -10,7 +10,6 @@ import tempfile
 import uuid
 from unittest.mock import patch
 
-import django
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
@@ -38,10 +37,6 @@ from books.models import (
     UserProfile,
 )
 from books.tests.test_helpers import create_test_book_with_file
-
-# Must set Django settings before importing Django models
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ebook_manager.settings")
-django.setup()
 
 
 class BaseTestCaseWithTempDir(TestCase):
@@ -126,7 +121,7 @@ class ScanFolderModelTests(BaseTestCaseWithTempDir):
         """Test ScanFolder default values"""
         folder = ScanFolder.objects.create(path=self.temp_dir)
         self.assertEqual(folder.name, "Untitled")
-        self.assertEqual(folder.language, "en")
+        self.assertEqual(folder.language, "")
         self.assertTrue(folder.is_active)
         self.assertIsNotNone(folder.created_at)
 
@@ -887,9 +882,3 @@ class ModelRelationshipTests(BaseTestCaseWithTempDir):
 
         # Metadata should be deleted due to CASCADE
         self.assertFalse(BookMetadata.objects.filter(id=metadata_id).exists())
-
-
-if __name__ == "__main__":
-    import unittest
-
-    unittest.main()

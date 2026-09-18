@@ -12,7 +12,6 @@ This module tests the complete AI functionality including:
 import json
 import shutil
 import tempfile
-import unittest
 from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import User
@@ -607,7 +606,3 @@ class EnsembleRecognizerTests(TestCase):
         self.assertEqual(result["series"], "Mistborn")
         self.assertIn(str(result["series_number"]), {"1", "1.0", "01"})
         self.assertEqual(result["authors"], ["Brandon Sanderson"])
-
-
-if __name__ == "__main__":
-    unittest.main()

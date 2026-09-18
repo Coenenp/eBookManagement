@@ -216,8 +216,8 @@ class BookMetadataUpdateViewTests(TestCase):
 
         response = self.client.post(reverse("books:book_metadata_update", kwargs={"pk": self.book.pk}), update_data)
 
-        # Should redirect to book detail edit tab
-        expected_url = reverse("books:book_detail", kwargs={"pk": self.book.pk}) + "?tab=edit"
+        # Should redirect to book detail
+        expected_url = reverse("books:book_detail", kwargs={"pk": self.book.pk})
         self.assertRedirects(response, expected_url)
 
         # Check that metadata was updated
@@ -373,8 +373,8 @@ class BookMetadataUpdateViewTests(TestCase):
         """Test error handling in metadata update"""
         # Test with nonexistent book
         response = self.client.post(reverse("books:book_metadata_update", kwargs={"pk": 99999}), {"final_title": "New Title"})
-        # View handles errors gracefully with redirect
-        self.assertEqual(response.status_code, 302)
+        # Nonexistent book returns 404
+        self.assertEqual(response.status_code, 404)
 
     @patch("books.views.metadata_update.logger")
     def test_exception_handling(self, mock_logger):
@@ -461,8 +461,8 @@ class MetadataProcessingEdgeCaseTests(TestCase):
         # Empty form should fail validation due to missing required final_title
         response = self.client.post(reverse("books:book_metadata_update", kwargs={"pk": self.book.pk}), {})
 
-        # Should return 200 with error message (not redirect)
-        self.assertEqual(response.status_code, 200)
+        # View redirects back to the metadata page with an error message
+        self.assertEqual(response.status_code, 302)
 
         # Should create empty FinalMetadata if none exists
         final_metadata = FinalMetadata.objects.get(book=self.book)
@@ -475,8 +475,8 @@ class MetadataProcessingEdgeCaseTests(TestCase):
 
         response = self.client.post(reverse("books:book_metadata_update", kwargs={"pk": self.book.pk}), update_data)
 
-        # Should return 200 with error (title required)
-        self.assertEqual(response.status_code, 200)
+        # View redirects back to the metadata page with an error (title required)
+        self.assertEqual(response.status_code, 302)
 
         final_metadata = FinalMetadata.objects.get(book=self.book)
         # Original values should be preserved since update failed

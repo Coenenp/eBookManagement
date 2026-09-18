@@ -5,10 +5,8 @@ MetadataFormMixin, and FinalMetadataSyncMixin functionality.
 Focuses on achieving 100% coverage for the mixins module.
 """
 
-import os
 from unittest.mock import patch
 
-import django
 from django import forms
 from django.test import TestCase
 from django.utils import timezone
@@ -16,10 +14,6 @@ from django.utils import timezone
 from books.mixins import BaseMetadataValidator, FinalMetadataSyncMixin, MetadataFormMixin, StandardFormMixin, StandardWidgetMixin
 from books.models import Author, DataSource, FinalMetadata
 from books.tests.test_helpers import create_test_book_with_file
-
-# Must set Django settings before importing Django models
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ebook_manager.settings")
-django.setup()
 
 
 class StandardWidgetMixinTests(TestCase):
@@ -865,9 +859,3 @@ class MixinAdvancedEdgeCaseTests(TestCase):
         for isbn in international_isbns:
             result = BaseMetadataValidator.validate_isbn(isbn)
             self.assertEqual(result, isbn)
-
-
-if __name__ == "__main__":
-    import unittest
-
-    unittest.main()

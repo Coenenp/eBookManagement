@@ -399,26 +399,3 @@ class PredefinedPatternsTests(TestCase):
 
                 self.assertGreater(len(pattern["folder"]), 0)
                 self.assertGreater(len(pattern["filename"]), 0)
-
-
-# Test runner helper
-def run_basic_renaming_tests():
-    """Run the basic renaming tests"""
-    import unittest
-
-    # Create test suite
-    test_classes = [BasicRenamingEngineTests, BasicRenamingViewsTests, BasicBatchOperationsTests, BasicIntegrationTests, PredefinedPatternsTests]
-
-    suite = unittest.TestSuite()
-    for test_class in test_classes:
-        suite.addTest(unittest.makeSuite(test_class))
-
-    # Run tests
-    runner = unittest.TextTestRunner(verbosity=2)
-    result = runner.run(suite)
-
-    return result.wasSuccessful()
-
-
-if __name__ == "__main__":
-    run_basic_renaming_tests()

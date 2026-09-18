@@ -272,12 +272,16 @@ def get_book_cover_url(book_file, default=""):
 
     # If cover_path is already set, use it
     if book_file.cover_path:
-        # Return the media URL for the cover
         from django.conf import settings
 
-        # For cached covers, construct the media URL
+        from books.utils.cover_cache import CoverCache
+
+        # For cached covers, construct the media URL and guard against stale
+        # paths that no longer exist on disk.
         if book_file.cover_path.startswith("cover_cache/"):
-            return f"{settings.MEDIA_URL}{book_file.cover_path}"
+            if CoverCache.media_exists(book_file.cover_path):
+                return f"{settings.MEDIA_URL}{book_file.cover_path}"
+            return CoverCache.placeholder_url()
 
         # For external companion files, return the path
         return book_file.cover_path

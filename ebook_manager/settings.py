@@ -11,7 +11,6 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
-import sys
 from pathlib import Path
 
 from dotenv import dotenv_values, load_dotenv
@@ -134,16 +133,6 @@ else:
             },
         }
     }
-
-# Keep SQLite as backup for testing
-if "test" in sys.argv or "pytest" in sys.modules:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": ":memory:",
-        }
-    }
-
 
 # Cache configuration
 # Use file-based cache to share data between processes/threads

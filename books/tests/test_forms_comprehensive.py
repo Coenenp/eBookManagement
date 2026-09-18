@@ -7,7 +7,6 @@ Focuses on achieving higher coverage for the forms module.
 import os
 import tempfile
 
-import django
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -27,10 +26,6 @@ from books.forms import (
 from books.mixins import StandardFormMixin
 from books.models import FinalMetadata, ScanFolder, UserProfile
 from books.tests.test_helpers import create_test_book_with_file
-
-# Must set Django settings before importing Django models
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ebook_manager.settings")
-django.setup()
 
 
 class UserRegisterFormTests(TestCase):
@@ -587,9 +582,3 @@ class FormIntegrationTests(TestCase):
         search_form = BookSearchForm()
         self.assertFalse(search_form.fields["search_query"].required)
         self.assertFalse(search_form.fields["language"].required)
-
-
-if __name__ == "__main__":
-    import unittest
-
-    unittest.main()

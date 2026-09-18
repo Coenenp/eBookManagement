@@ -79,7 +79,7 @@ class Command(BaseCommand):
 
         if options["dry_run"]:
             for book in books[:50]:
-                self.stdout.write(f"  Book {book.id}: {book.file_path}")
+                self.stdout.write(f"Book {book.id}: {book.file_path}")
             if total > 50:
                 self.stdout.write(f"  ... and {total - 50} more")
             return
@@ -104,7 +104,7 @@ class Command(BaseCommand):
                 if options["purge_low_trust"]:
                     purged = self._purge_low_trust_metadata(book)
                     if purged:
-                        self.stdout.write(f"  Deactivated {purged} low-trust Initial Scan rows")
+                        self.stdout.write(f"Deactivated {purged} low-trust Initial Scan rows")
 
                 success += 1
             except Exception as e:

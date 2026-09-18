@@ -167,7 +167,7 @@ class Command(BaseCommand):
             )
 
             if log.can_retry_now:
-                self.stdout.write("   API available, making request...")
+                self.stdout.write("API available, making request...")
                 # Simulate successful request
                 log.record_attempt(
                     success=True,
@@ -176,10 +176,10 @@ class Command(BaseCommand):
                     metadata_retrieved=True,
                 )
                 completeness.mark_source_complete("Google Books")
-                self.stdout.write("   Metadata retrieved successfully!")
+                self.stdout.write("Metadata retrieved successfully!")
             else:
                 next_retry = log.next_retry_after.strftime("%Y-%m-%d %H:%M") if log.next_retry_after else "N/A"
-                self.stdout.write(f"   API not available (next retry: {next_retry})")
+                self.stdout.write(f"API not available (next retry: {next_retry})")
 
         self.stdout.write(self.style.SUCCESS("\nAPI interaction simulation complete!"))
 
@@ -190,7 +190,7 @@ class Command(BaseCommand):
         self.stdout.write("=" * 60)
 
         # System components
-        self.stdout.write("\n SYSTEM COMPONENTS:")
+        self.stdout.write("\nSYSTEM COMPONENTS:")
         self.stdout.write("  • APIAccessLog: Tracks per-book API success/failure")
         self.stdout.write("  • ScanSession: Manages scan sessions and resumption")
         self.stdout.write("  • BookAPICompleteness: Optimizes future scans")
@@ -203,14 +203,14 @@ class Command(BaseCommand):
         sessions = ScanSession.objects.count()
         completeness_records = BookAPICompleteness.objects.count()
 
-        self.stdout.write("\n CURRENT STATE:")
+        self.stdout.write("\nCURRENT STATE:")
         self.stdout.write(f"  • Total books: {total_books}")
         self.stdout.write(f"  • API access logs: {api_logs}")
         self.stdout.write(f"  • Scan sessions: {sessions}")
         self.stdout.write(f"  • Completeness records: {completeness_records}")
 
         # Key features
-        self.stdout.write("\n KEY FEATURES:")
+        self.stdout.write("\nKEY FEATURES:")
         self.stdout.write("  • Continues scanning when APIs fail")
         self.stdout.write("  • Tracks successful API access per book")
         self.stdout.write("  • Creates resumption queues for failed calls")
@@ -219,13 +219,13 @@ class Command(BaseCommand):
         self.stdout.write("  • Graceful degradation and recovery")
 
         # Usage examples
-        self.stdout.write("\n USAGE EXAMPLES:")
-        self.stdout.write("  python manage.py demo_intelligent_api --setup-demo")
-        self.stdout.write("  python manage.py demo_intelligent_api --simulate-api-calls")
-        self.stdout.write("  python manage.py test_intelligent_scan --show-stats")
+        self.stdout.write("\nUSAGE EXAMPLES:")
+        self.stdout.write("python manage.py demo_intelligent_api --setup-demo")
+        self.stdout.write("python manage.py demo_intelligent_api --simulate-api-calls")
+        self.stdout.write("python manage.py test_intelligent_scan --show-stats")
 
         # Integration points
-        self.stdout.write("\n INTEGRATION POINTS:")
+        self.stdout.write("\nINTEGRATION POINTS:")
         self.stdout.write("  • Enhanced background scanner extends existing system")
         self.stdout.write("  • Intelligent scanner works with rate limiting system")
         self.stdout.write("  • API tracking integrates with external data sources")

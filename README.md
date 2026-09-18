@@ -23,7 +23,7 @@ A Django application for scanning, cataloging, and organizing a personal media l
 
 - Recursive folder scanning with background jobs, progress tracking, resume, and history.
 - AI filename recognition with confidence scoring and a user feedback loop.
-- Multi-source metadata aggregation from Google Books, Open Library, and Comic Vine.
+- Multi-source metadata aggregation from Google Books, Open Library, Goodreads, and Comic Vine.
 - Trust-hierarchy conflict resolution (manual edits always win).
 - Unified metadata review workflow with cover, file, and duplicate handling.
 - Template-based renaming and file organization with OPF metadata generation.
@@ -36,15 +36,15 @@ A Django application for scanning, cataloging, and organizing a personal media l
 
 | Content Type | Extensions                                              |
 | ------------ | ------------------------------------------------------- |
-| Ebooks       | `.epub`, `.mobi`, `.azw`, `.azw3`, `.pdf`, `.opf`       |
+| Ebooks       | `.epub`, `.mobi`, `.azw`, `.azw3`, `.pdf`               |
 | Comics       | `.cbr`, `.cbz`                                          |
 | Audiobooks   | `.mp3`, `.m4a`, `.m4b`, `.aac`, `.flac`, `.ogg`, `.wav` |
 
-> FB2, LIT, PRC, CB7, and CBT are declared in the format constants but do not yet have dedicated extractors. See [`ROADMAP.md`](ROADMAP.md).
+> FB2, LIT, PRC, CB7, and CBT are declared in the format constants but do not yet have dedicated extractors. OPF files are parsed as metadata companion files. See [`ROADMAP.md`](ROADMAP.md).
 
 ## Requirements
 
-- Python 3.8–3.12 (tested up to 3.13)
+- Python 3.11+ (tested up to 3.13)
 - Windows, Linux, or macOS
 - 500 MB+ free disk space
 
@@ -62,7 +62,7 @@ Optional libraries for enhanced functionality:
 
 - `pdf2image` (better PDF cover rendering and OCR rasterization; requires poppler)
 - `pytesseract` (OCR for image-based/scanned PDFs; requires the Tesseract binary)
-- `rarfile` (CBR cover extraction; requires unrar)
+- `unrar` system binary (required with `rarfile` to extract CBR/RAR covers)
 
 ## Installation
 
@@ -86,7 +86,7 @@ Visit `http://127.0.0.1:8000`.
 
 ### Database
 
-SQLite is the default and needs no configuration. For large collections, MySQL/MariaDB is supported by setting environment variables (see [Configuration](#configuration)) and installing `mysqlclient`.
+MariaDB/MySQL is the default database. To use SQLite instead (no external database required), set `USE_SQLITE_TEMPORARILY=True` in `.env`. `mysqlclient` is included in `requirements.txt`.
 
 ## Usage
 
@@ -136,18 +136,18 @@ Create a `.env` file in the project root:
 ```env
 DEBUG=True
 SECRET_KEY=your-secret-key-here
-ALLOWED_HOSTS=localhost,127.0.0.1
 
-# Database (optional; defaults to SQLite)
+# Database
+# The default engine is MariaDB/MySQL. Set USE_SQLITE_TEMPORARILY=True to use
+# SQLite instead (no external database required).
 USE_SQLITE_TEMPORARILY=True
+
+# MariaDB/MySQL connection (used when USE_SQLITE_TEMPORARILY is False or unset)
 DB_NAME=ebook_manager
 DB_USER=ebook_user
 DB_PASSWORD=your_password
 DB_HOST=localhost
 DB_PORT=3306
-
-# Cache (optional; defaults to local memory)
-CACHE_BACKEND=locmem
 
 # OCR for image-based/scanned PDFs (optional)
 PDF_OCR_ENABLED=True
@@ -155,9 +155,9 @@ PDF_OCR_DPI=300
 TESSERACT_CMD=  # e.g. C:\Program Files\Tesseract-OCR\tesseract.exe
 ```
 
-Cache backends: `locmem` (default), `memcached`, or `redis`.
+Caching uses Django's file-based cache backend (stored in `cache_storage/`) and needs no configuration.
 
-External APIs are used automatically and require no API keys for basic functionality. Optional keys raise rate limits for Google Books and Comic Vine.
+Google Books and Open Library are queried automatically without API keys. Optional `GOOGLE_BOOKS_API_KEY` and `COMICVINE_API_KEY` values raise rate limits; Goodreads enrichment requires an `APIFY_API_TOKEN`.
 
 ## Architecture
 
@@ -168,36 +168,40 @@ External APIs are used automatically and require no API keys for basic functiona
 
 ### Key Models
 
-- [`Book`](books/models.py:353) — a single work with a content type (`ebook`, `comic`, `audiobook`).
-- [`BookFile`](books/models.py:548) — one file of a work, including cover fields.
-- [`FinalMetadata`](books/models.py:987) — consolidated, user-reviewable metadata.
+- [`Book`](books/models.py:350) — a single work with a content type (`ebook`, `comic`, `audiobook`).
+- [`BookFile`](books/models.py:545) — one file of a work, including cover fields.
+- [`FinalMetadata`](books/models_metadata.py:13) — consolidated, user-reviewable metadata.
 - Source-attributed metadata: `BookTitle`, `BookAuthor`, `BookSeries`, `BookGenre`, `BookPublisher`, `BookCover`, `BookMetadata`.
-- [`DataSource`](books/models.py:85) — metadata sources with trust levels.
-- [`Author`](books/models.py:631), [`Series`](books/models.py:778), [`Genre`](books/models.py:820), [`Publisher`](books/models.py:918).
-- [`ScanQueue`](books/models.py:1922) and [`ScanHistory`](books/models.py:1459) — background scan scheduling and results.
-- [`AIFeedback`](books/models.py:1629) — AI prediction feedback for retraining.
-- [`UserProfile`](books/models.py:1697) — themes and renaming preferences.
+- [`DataSource`](books/models.py:82) — metadata sources with trust levels.
+- [`Author`](books/models.py:628), [`Series`](books/models.py:775), [`Genre`](books/models.py:817), [`Publisher`](books/models.py:915).
+- [`ScanQueue`](books/models_operations.py:530) and [`ScanHistory`](books/models_operations.py:65) — background scan scheduling and results.
+- [`AIFeedback`](books/models_operations.py:235) — AI prediction feedback for retraining.
+- [`UserProfile`](books/models_operations.py:303) — themes and renaming preferences.
 
 ### Metadata Trust Hierarchy
 
 When sources disagree, the highest-trust value wins:
 
-| Priority | Source        | Trust |
-| -------- | ------------- | ----- |
-| 1        | Manual entry  | 1.0   |
-| 2        | Open Library  | 0.95  |
-| 3        | OPF file      | 0.9   |
-| 4        | Content scan  | 0.85  |
-| 5        | EPUB internal | 0.8   |
-| 6        | MOBI internal | 0.75  |
-| 7        | Google Books  | 0.7   |
-| 8        | PDF internal  | 0.6   |
-| 9        | Filename      | 0.2   |
+| Priority | Source              | Trust |
+| -------- | ------------------- | ----- |
+| 1        | Manual Entry        | 1.0   |
+| 2        | Open Library        | 0.95  |
+| 3        | Comic Vine          | 0.9   |
+| 4        | OPF File            | 0.9   |
+| 5        | ISBN Content Scan   | 0.85  |
+| 6        | EPUB                | 0.8   |
+| 7        | MOBI                | 0.75  |
+| 8        | Google Books        | 0.7   |
+| 9        | Open Library Covers | 0.65  |
+| 10       | PDF                 | 0.6   |
+| 11       | Google Books Covers | 0.55  |
+| 12       | Initial Scan        | 0.2   |
 
 ### External APIs
 
 - **Google Books** — metadata and covers.
 - **Open Library** — metadata and covers (also author enrichment).
+- **Goodreads** — metadata and covers (via the Apify Goodreads scraper).
 - **Comic Vine** — comic metadata and creator information.
 
 API responses are cached, rate-limited, and backed off automatically.
@@ -257,10 +261,18 @@ CoverCache.get_cache_size()
 ## Project Structure
 
 ```text
-ebook_library_manager/
+eBookManagement/
 ├── books/
-│   ├── models.py                # database models
-│   ├── views.py                 # main views and AJAX endpoints
+│   ├── models.py                # core models and constants
+│   ├── models_metadata.py       # FinalMetadata model
+│   ├── models_operations.py     # ScanQueue, ScanHistory, AIFeedback, UserProfile
+│   ├── views/                   # view modules (core, metadata, ajax, etc.)
+│   ├── views.py                 # backward-compatible view re-exports
+│   ├── mixins/                  # reusable view mixins
+│   ├── services/                # business logic (e.g. author_cleanup)
+│   ├── analytics/               # dashboard metrics
+│   ├── queries/                 # query helpers
+│   ├── templatetags/            # template tags and filters
 │   ├── urls.py                  # URL routing
 │   ├── scanner/                 # scanning engine and format extractors
 │   │   ├── background.py        # BackgroundScanner, the single scan engine
@@ -276,6 +288,7 @@ ebook_library_manager/
 ├── tests/e2e/                   # Playwright end-to-end tests
 ├── docs/TESTING.md              # testing guide
 ├── manage.py
+├── requirements.txt
 ├── ROADMAP.md
 └── FUNCTIONAL_SPECIFICATION.md
 ```
@@ -293,8 +306,8 @@ python manage.py test books.tests
 - **CBR errors**: install `rarfile` and the `unrar` system package.
 - **PDF covers low quality**: install `pdf2image` and poppler.
 - **Scanned PDFs not recognized (no ISBN/metadata)**: install `pytesseract`, the Tesseract OCR binary, `pdf2image`, and poppler, then set `PDF_OCR_ENABLED=True` (and `TESSERACT_CMD` on Windows) in `.env`.
-- **Cache connection errors during scanning**: set `CACHE_BACKEND=locmem` in `.env`.
-- **MySQL "key too long"**: long file paths are limited to 191 chars; shorten paths or use SQLite/PostgreSQL.
+- **Cache errors during scanning**: the file-based cache lives in `cache_storage/`; clear that directory and retry.
+- **MySQL "key too long"**: shorten very long file paths or switch to SQLite.
 - **Covers missing**: run a deep scan to re-extract and download covers.
 - **Scan stuck**: check the scanning dashboard, cancel the job, and restart.
 

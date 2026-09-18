@@ -7,7 +7,6 @@ Tests real-world scenarios, edge cases, and integration between all components.
 import shutil
 import tempfile
 import time
-import unittest
 from pathlib import Path
 from unittest.mock import patch
 
@@ -645,28 +644,3 @@ class RegressionTests(ComprehensiveRenamingTestCase):
         # Implementation may truncate or warn
         self.assertTrue(result.endswith(".epub"))
         self.assertGreater(len(result), 0)
-
-
-# Run all test cases
-def run_comprehensive_tests():
-    """
-    Run all comprehensive renaming tests
-    This function can be called to execute the complete test suite
-    """
-    # Create test suite
-    suite = unittest.TestSuite()
-
-    # Add all test cases
-    suite.addTest(unittest.makeSuite(TC1to9ComprehensiveTests))
-    suite.addTest(unittest.makeSuite(RegressionTests))
-
-    # Run tests
-    runner = unittest.TextTestRunner(verbosity=2)
-    result = runner.run(suite)
-
-    return result
-
-
-if __name__ == "__main__":
-    # Allow running tests directly
-    run_comprehensive_tests()

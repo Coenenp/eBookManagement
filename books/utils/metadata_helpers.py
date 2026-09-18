@@ -101,10 +101,18 @@ def get_book_cover_url(book):
             if cover_path.startswith("http"):
                 return cover_path
             else:
+                from books.utils.cover_cache import CoverCache
+
                 # Convert local path to media URL
                 if cover_path.startswith(settings.MEDIA_ROOT):
                     relative_path = cover_path[len(settings.MEDIA_ROOT) :].lstrip("\\/")
-                    return settings.MEDIA_URL + relative_path.replace("\\", "/")
+                    if CoverCache.media_exists(relative_path):
+                        return settings.MEDIA_URL + relative_path.replace("\\", "/")
+                    return CoverCache.placeholder_url()
+                if cover_path.startswith("cover_cache/"):
+                    if CoverCache.media_exists(cover_path):
+                        return f"{settings.MEDIA_URL}{cover_path}"
+                    return CoverCache.placeholder_url()
                 return cover_path
     except (AttributeError, ValueError, TypeError):
         pass

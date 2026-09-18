@@ -82,7 +82,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("=" * 70))
 
         if dry_run:
-            self.stdout.write(self.style.WARNING("\n  DRY RUN MODE - No changes will be made\n"))
+            self.stdout.write(self.style.WARNING("\nDRY RUN MODE - No changes will be made\n"))
 
         ran_cleanup = any([remove_invalid, clean_names, merge_duplicates])
         if ran_cleanup:
@@ -106,36 +106,36 @@ class Command(BaseCommand):
             self.stdout.write(self.style.NOTICE("STEP 1: Removing invalid author names"))
             self.stdout.write("-" * 70)
             for entry in stats["invalid_authors"]:
-                self.stdout.write(self.style.WARNING(f"   INVALID: '{entry['name']}' (used in {entry['book_count']} books)"))
+                self.stdout.write(self.style.WARNING(f"INVALID: '{entry['name']}' (used in {entry['book_count']} books)"))
             if stats["invalid_removed"] == 0:
-                self.stdout.write(self.style.SUCCESS("   No invalid authors found"))
+                self.stdout.write(self.style.SUCCESS("No invalid authors found"))
 
         if clean_names:
             self.stdout.write("\n" + "-" * 70)
             self.stdout.write(self.style.NOTICE("STEP 2: Cleaning author names"))
             self.stdout.write("-" * 70)
             for entry in stats["cleaned_names"]:
-                self.stdout.write(self.style.NOTICE(f"   CLEAN: '{entry['before']}' -> '{entry['after']}'"))
+                self.stdout.write(self.style.NOTICE(f"CLEAN: '{entry['before']}' -> '{entry['after']}'"))
             if stats["names_cleaned"] == 0:
-                self.stdout.write(self.style.SUCCESS("   No author names need cleaning"))
+                self.stdout.write(self.style.SUCCESS("No author names need cleaning"))
 
         if merge_duplicates:
             self.stdout.write("\n" + "-" * 70)
             self.stdout.write(self.style.NOTICE("STEP 3: Merging duplicate authors (exact match)"))
             self.stdout.write("-" * 70)
             for group in stats["merged_groups"]:
-                self.stdout.write(self.style.SUCCESS(f"      KEEP: '{group['primary']['name']}' (ID: {group['primary']['id']})"))
+                self.stdout.write(self.style.SUCCESS(f"KEEP: '{group['primary']['name']}' (ID: {group['primary']['id']})"))
                 for dup in group["duplicates"]:
-                    self.stdout.write(self.style.WARNING(f"      MERGE: '{dup['name']}' (ID: {dup['id']}, {dup['book_count']} books)"))
+                    self.stdout.write(self.style.WARNING(f"MERGE: '{dup['name']}' (ID: {dup['id']}, {dup['book_count']} books)"))
             if stats["duplicates_merged"] == 0:
-                self.stdout.write(self.style.SUCCESS("   No duplicate authors found"))
+                self.stdout.write(self.style.SUCCESS("No duplicate authors found"))
 
         self.stdout.write("\n" + "=" * 70)
         self.stdout.write(self.style.SUCCESS("SUMMARY"))
         self.stdout.write("=" * 70)
-        self.stdout.write(f"  Invalid authors removed: {stats['invalid_removed']}")
-        self.stdout.write(f"  Author names cleaned: {stats['names_cleaned']}")
-        self.stdout.write(f"  Duplicate authors merged: {stats['duplicates_merged']}")
+        self.stdout.write(f"Invalid authors removed: {stats['invalid_removed']}")
+        self.stdout.write(f"Author names cleaned: {stats['names_cleaned']}")
+        self.stdout.write(f"Duplicate authors merged: {stats['duplicates_merged']}")
         self.stdout.write("=" * 70 + "\n")
 
     def _find_fuzzy_duplicates(self, dry_run, threshold):
@@ -148,33 +148,33 @@ class Command(BaseCommand):
         self.stdout.write("-" * 70)
 
         if len(authors) < 2:
-            self.stdout.write(self.style.WARNING("    Not enough authors to compare"))
+            self.stdout.write(self.style.WARNING("Not enough authors to compare"))
             return 0
 
-        self.stdout.write(f"   Analyzing {len(authors)} authors with threshold {threshold}...")
+        self.stdout.write(f"Analyzing {len(authors)} authors with threshold {threshold}...")
 
         duplicate_groups = find_potential_duplicates(authors, threshold)
 
         if not duplicate_groups:
-            self.stdout.write(self.style.SUCCESS("   No fuzzy duplicates found"))
+            self.stdout.write(self.style.SUCCESS("No fuzzy duplicates found"))
             return 0
 
         for i, group in enumerate(duplicate_groups, 1):
             similarity = group["similarity"]
             author_list = group["authors"]
 
-            self.stdout.write(self.style.NOTICE(f"\n   POTENTIAL DUPLICATE GROUP #{i} (similarity: {similarity:.2%}):"))
+            self.stdout.write(self.style.NOTICE(f"\nPOTENTIAL DUPLICATE GROUP #{i} (similarity: {similarity:.2%}):"))
 
             names = [name for _, name in author_list]
             canonical = suggest_canonical_name(names)
 
-            self.stdout.write(self.style.SUCCESS(f"      SUGGESTED CANONICAL: '{canonical}'"))
+            self.stdout.write(self.style.SUCCESS(f"SUGGESTED CANONICAL: '{canonical}'"))
 
             for author_id, author_name in author_list:
                 book_count = BookAuthor.objects.filter(author_id=author_id).count()
                 marker = "KEEP" if author_name == canonical else "MERGE"
-                self.stdout.write(f"     {marker} '{author_name}' (ID: {author_id}, {book_count} books)")
+                self.stdout.write(f"    {marker} '{author_name}' (ID: {author_id}, {book_count} books)")
 
-        self.stdout.write(self.style.NOTICE("\n   TIP: Review these potential duplicates in the web UI under Authors -> Duplicates."))
+        self.stdout.write(self.style.NOTICE("\nTIP: Review these potential duplicates in the web UI under Authors -> Duplicates."))
 
         return len(duplicate_groups)

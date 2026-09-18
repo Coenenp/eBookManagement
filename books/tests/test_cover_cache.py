@@ -150,7 +150,7 @@ class CoverCacheTestCase(TestCase):
         self.assertGreater(size, 0)
 
     def test_save_cover_overwrites_existing(self):
-        """Test that saving a cover overwrites existing one."""
+        """Test that saving a cover is idempotent and does not create suffixed duplicates."""
         # Save first version
         success1, path1 = CoverCache.save_cover(self.test_book_path, b"version 1", self.test_internal_path)
 
@@ -160,10 +160,52 @@ class CoverCacheTestCase(TestCase):
         self.assertTrue(success1)
         self.assertTrue(success2)
 
-        # Both saves should succeed
-        self.assertIsNotNone(path1)
-        self.assertIsNotNone(path2)
+        # Idempotent: same canonical path, no `<hash>_<random>.jpg` duplicate.
+        self.assertEqual(path1, path2)
 
-        # Should have saved successfully (paths may differ due to Django's file storage generating unique names)
-        self.assertTrue(path1.startswith("cover_cache/"))
-        self.assertTrue(path2.startswith("cover_cache/"))
+        full_path = os.path.join(settings.MEDIA_ROOT, path1)
+        self.assertTrue(os.path.exists(full_path))
+
+    def test_media_exists(self):
+        """Test that media_exists reports true only for files present in storage."""
+        success, cache_path = CoverCache.save_cover(self.test_book_path, self.test_cover_data, self.test_internal_path)
+        self.assertTrue(success)
+
+        self.assertTrue(CoverCache.media_exists(cache_path))
+        self.assertFalse(CoverCache.media_exists("cover_cache/definitely-missing.jpg"))
+        self.assertFalse(CoverCache.media_exists(""))
+
+    def test_placeholder_url(self):
+        """Test that the placeholder URL is a static URL to the placeholder asset."""
+        url = CoverCache.placeholder_url()
+        self.assertIn("cover-placeholder.svg", url)
+        self.assertTrue(url.startswith(settings.STATIC_URL))
+
+    def test_cleanup_orphans(self):
+        """Test that cleanup_orphans removes only unreferenced cached covers."""
+        from books.models import Book, BookFile
+
+        # Referenced cover
+        success, referenced_path = CoverCache.save_cover("/referenced/book.epub", self.test_cover_data, "cover.jpg")
+        self.assertTrue(success)
+
+        book = Book.objects.create()
+        BookFile.objects.create(
+            book=book,
+            file_path="/referenced/book.epub",
+            file_format="epub",
+            cover_path=referenced_path,
+        )
+
+        # Orphan cover
+        success, orphan_path = CoverCache.save_cover("/orphan/book.epub", self.test_cover_data, "cover.jpg")
+        self.assertTrue(success)
+        self.assertNotEqual(referenced_path, orphan_path)
+
+        deleted, errors = CoverCache.cleanup_orphans(dry_run=False)
+
+        self.assertEqual(errors, 0)
+        self.assertEqual(deleted, 1)
+
+        self.assertTrue(os.path.exists(os.path.join(settings.MEDIA_ROOT, referenced_path)))
+        self.assertFalse(os.path.exists(os.path.join(settings.MEDIA_ROOT, orphan_path)))

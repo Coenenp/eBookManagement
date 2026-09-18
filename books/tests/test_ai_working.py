@@ -2,8 +2,6 @@
 Working test suite for AI-driven filename pattern recognition system.
 """
 
-import unittest
-
 from django.contrib.auth.models import User
 from django.test import TestCase
 
@@ -87,7 +85,3 @@ class AIFeedbackTests(TestCase):
             user = User.objects.create_user(f"testuser{i}", f"test{i}@example.com", "password")
             feedback = AIFeedback.objects.create(book=self.book, user=user, original_filename="test.epub", ai_predictions="{}", user_corrections="{}", feedback_rating=rating)
             self.assertEqual(feedback.get_accuracy_score(), expected_score)
-
-
-if __name__ == "__main__":
-    unittest.main()

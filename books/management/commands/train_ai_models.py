@@ -65,100 +65,100 @@ class Command(BaseCommand):
 
     def train_models(self, min_samples, use_feedback=False, min_feedback=5):
         """Train new AI models from scratch."""
-        self.stdout.write(" Training AI filename recognition models...")
+        self.stdout.write("Training AI filename recognition models...")
 
         try:
             recognizer = FilenamePatternRecognizer()
 
             # Collect training data
-            self.stdout.write(" Collecting training data from reviewed books...")
+            self.stdout.write("Collecting training data from reviewed books...")
             training_data = recognizer.collect_training_data()
 
             # Add feedback data if requested
             if use_feedback:
                 feedback_data = self._collect_feedback_data(min_feedback)
                 if feedback_data:
-                    self.stdout.write(f" Adding {len(feedback_data)} feedback samples...")
+                    self.stdout.write(f"Adding {len(feedback_data)} feedback samples...")
                     records = training_data.to_dict("records") if hasattr(training_data, "to_dict") else list(training_data)
                     records.extend(feedback_data)
                     training_data = records
 
             if len(training_data) < min_samples:
-                self.stdout.write(self.style.WARNING(f"  Insufficient training data: {len(training_data)} samples " f"(minimum {min_samples} required)"))
-                self.stdout.write(" To get training data, mark some books as 'reviewed' in the admin panel " "after correcting their metadata.")
+                self.stdout.write(self.style.WARNING(f"Insufficient training data: {len(training_data)} samples " f"(minimum {min_samples} required)"))
+                self.stdout.write("To get training data, mark some books as 'reviewed' in the admin panel " "after correcting their metadata.")
                 return
 
             segment_count = recognizer.count_segment_samples(training_data)
             if segment_count < 20:
                 self.stdout.write(
                     self.style.WARNING(
-                        f"  Insufficient segment samples: {len(training_data)} books yielded {segment_count} filename segments (minimum 20 segments required for training)"
+                        f"Insufficient segment samples: {len(training_data)} books yielded {segment_count} filename segments (minimum 20 segments required for training)"
                     )
                 )
                 return
 
             # Train models
-            self.stdout.write(f" Training models with {len(training_data)} books ({segment_count} segments)...")
+            self.stdout.write(f"Training models with {len(training_data)} books ({segment_count} segments)...")
             results = recognizer.train_models(training_data)
 
             if results:
-                self.stdout.write(self.style.SUCCESS(" AI models trained successfully!"))
-                self.stdout.write("\n Training Results:")
+                self.stdout.write(self.style.SUCCESS("AI models trained successfully!"))
+                self.stdout.write("\nTraining Results:")
                 for field, accuracy in results.items():
                     self.stdout.write(f"  • {field.title()}: {accuracy:.1%} accuracy")
             else:
-                self.stdout.write(self.style.ERROR(" Training failed"))
+                self.stdout.write(self.style.ERROR("Training failed"))
 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f" Training error: {e}"))
+            self.stdout.write(self.style.ERROR(f"Training error: {e}"))
 
     def retrain_models(self, use_feedback=False, min_feedback=5):
         """Retrain existing models with optional feedback data."""
-        self.stdout.write(" Retraining models...")
+        self.stdout.write("Retraining models...")
 
         try:
             recognizer = FilenamePatternRecognizer()
 
             if not recognizer.models_exist():
-                self.stdout.write(self.style.WARNING("  No existing models found. Running initial training..."))
+                self.stdout.write(self.style.WARNING("No existing models found. Running initial training..."))
                 return self.train_models(10, use_feedback, min_feedback)
 
             # Collect all available training data
-            self.stdout.write(" Collecting training data...")
+            self.stdout.write("Collecting training data...")
             training_data = recognizer.collect_training_data()
 
             # Add feedback data if requested
             if use_feedback:
                 feedback_data = self._collect_feedback_data(min_feedback)
                 if feedback_data:
-                    self.stdout.write(f" Adding {len(feedback_data)} feedback samples...")
+                    self.stdout.write(f"Adding {len(feedback_data)} feedback samples...")
                     records = training_data.to_dict("records") if hasattr(training_data, "to_dict") else list(training_data)
                     records.extend(feedback_data)
                     training_data = records
                 else:
-                    self.stdout.write(self.style.WARNING(f"  No feedback data available (minimum {min_feedback} required)"))
+                    self.stdout.write(self.style.WARNING(f"No feedback data available (minimum {min_feedback} required)"))
                     return
 
             if len(training_data) == 0:
-                self.stdout.write(self.style.WARNING("  No training data available for retraining"))
+                self.stdout.write(self.style.WARNING("No training data available for retraining"))
                 return
 
             segment_count = recognizer.count_segment_samples(training_data)
             if segment_count < 20:
                 self.stdout.write(
                     self.style.WARNING(
-                        f"  Insufficient segment samples: {len(training_data)} books yielded {segment_count} filename segments (minimum 20 segments required for training)"
+                        f"Insufficient segment samples: {len(training_data)} books yielded {segment_count} filename segments (minimum 20 segments required for training)"
                     )
                 )
                 return
 
             # Retrain models
-            self.stdout.write(f" Retraining models with {len(training_data)} books ({segment_count} segments)...")
+            self.stdout.write(f"Retraining models with {len(training_data)} books ({segment_count} segments)...")
             results = recognizer.train_models(training_data)
 
             if results:
-                self.stdout.write(self.style.SUCCESS(" Models retrained successfully!"))
-                self.stdout.write("\n Retraining Results:")
+                self.stdout.write(self.style.SUCCESS("Models retrained successfully!"))
+                self.stdout.write("\nRetraining Results:")
                 for field, accuracy in results.items():
                     self.stdout.write(f"  • {field.title()}: {accuracy:.1%} accuracy")
 
@@ -166,32 +166,32 @@ class Command(BaseCommand):
                 if use_feedback:
                     self._mark_feedback_processed()
             else:
-                self.stdout.write(self.style.ERROR(" Retraining failed"))
+                self.stdout.write(self.style.ERROR("Retraining failed"))
 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f" Retraining error: {e}"))
+            self.stdout.write(self.style.ERROR(f"Retraining error: {e}"))
 
     def show_status(self):
         """Show current AI system status."""
-        self.stdout.write(" AI Filename Recognition System Status\n")
+        self.stdout.write("AI Filename Recognition System Status\n")
 
         try:
             recognizer = FilenamePatternRecognizer()
 
             if recognizer.models_exist():
-                self.stdout.write(" Learned segment-role classifier: available")
+                self.stdout.write("Learned segment-role classifier: available")
 
                 # Load model metadata if available
                 if recognizer.model_paths["metadata"].exists():
                     with open(recognizer.model_paths["metadata"], "r") as f:
                         metadata = json.load(f)
 
-                    self.stdout.write(f" Training date: {metadata.get('training_date', 'Unknown')}")
-                    self.stdout.write(f" Training samples: {metadata.get('training_samples', 'Unknown')}")
-                    self.stdout.write(f" Confidence threshold: {metadata.get('confidence_threshold', 'Unknown')}")
+                    self.stdout.write(f"Training date: {metadata.get('training_date', 'Unknown')}")
+                    self.stdout.write(f"Training samples: {metadata.get('training_samples', 'Unknown')}")
+                    self.stdout.write(f"Confidence threshold: {metadata.get('confidence_threshold', 'Unknown')}")
 
                     if "model_accuracies" in metadata:
-                        self.stdout.write("\n Model Accuracies:")
+                        self.stdout.write("\nModel Accuracies:")
                         for field, accuracy in metadata["model_accuracies"].items():
                             self.stdout.write(f"  • {field.title()}: {accuracy:.1%}")
             else:
@@ -199,7 +199,7 @@ class Command(BaseCommand):
 
             # Check training data availability
             reviewed_books = Book.objects.filter(finalmetadata__is_reviewed=True).count()
-            self.stdout.write(f"\n Available training data: {reviewed_books} reviewed books")
+            self.stdout.write(f"\nAvailable training data: {reviewed_books} reviewed books")
 
             # Check feedback data availability
             try:
@@ -207,44 +207,43 @@ class Command(BaseCommand):
 
                 total_feedback = AIFeedback.objects.count()
                 pending_feedback = AIFeedback.objects.filter(needs_retraining=True).count()
-                self.stdout.write(f" User feedback: {total_feedback} total, {pending_feedback} pending training")
+                self.stdout.write(f"User feedback: {total_feedback} total, {pending_feedback} pending training")
             except ImportError:
                 pass  # AIFeedback model not available yet
 
             if reviewed_books < 10:
-                self.stdout.write(self.style.WARNING("  Insufficient training data. Need at least 10 reviewed books."))
+                self.stdout.write(self.style.WARNING("Insufficient training data. Need at least 10 reviewed books."))
 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f" Status check error: {e}"))
+            self.stdout.write(self.style.ERROR(f"Status check error: {e}"))
 
     def test_prediction(self, filename):
         """Test AI prediction on a filename."""
-        self.stdout.write(f" Testing AI prediction for: '{filename}'\n")
+        self.stdout.write(f"Testing AI prediction for: '{filename}'\n")
 
         try:
             recognizer = initialize_ai_system()
 
             if not recognizer:
-                self.stdout.write(self.style.ERROR(" AI system not available"))
+                self.stdout.write(self.style.ERROR("AI system not available"))
                 return
 
             predictions = recognizer.predict_metadata(filename)
 
             if predictions:
-                self.stdout.write(" AI Predictions:")
+                self.stdout.write("AI Predictions:")
                 for field, (value, confidence) in predictions.items():
-                    confidence_emoji = "" if confidence >= 0.8 else "" if confidence >= 0.6 else ""
-                    self.stdout.write(f"  • {field.title()}: '{value}' " f"({confidence:.1%} confidence) {confidence_emoji}")
+                    self.stdout.write(f"  • {field.title()}: '{value}' ({confidence:.1%} confidence)")
 
                 is_confident = recognizer.is_prediction_confident(predictions)
-                confidence_status = " High confidence" if is_confident else "  Low confidence"
+                confidence_status = "High confidence" if is_confident else "Low confidence"
                 self.stdout.write(f"\n{confidence_status}")
 
             else:
-                self.stdout.write(" No predictions generated")
+                self.stdout.write("No predictions generated")
 
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f" Prediction error: {e}"))
+            self.stdout.write(self.style.ERROR(f"Prediction error: {e}"))
 
     def _collect_feedback_data(self, min_feedback):
         """Collect training data from user feedback."""
@@ -254,7 +253,7 @@ class Command(BaseCommand):
             feedback_entries = AIFeedback.objects.filter(needs_retraining=True).select_related("book")
 
             if len(feedback_entries) < min_feedback:
-                self.stdout.write(self.style.WARNING(f"  Insufficient feedback data: {len(feedback_entries)} entries " f"(minimum {min_feedback} required)"))
+                self.stdout.write(self.style.WARNING(f"Insufficient feedback data: {len(feedback_entries)} entries " f"(minimum {min_feedback} required)"))
                 return []
 
             training_data = []
@@ -281,17 +280,17 @@ class Command(BaseCommand):
                             training_data.append(sample)
 
                 except Exception as e:
-                    self.stdout.write(f"  Skipping invalid feedback entry: {e}")
+                    self.stdout.write(f"Skipping invalid feedback entry: {e}")
                     continue
 
-            self.stdout.write(f" Collected {len(training_data)} feedback samples")
+            self.stdout.write(f"Collected {len(training_data)} feedback samples")
             return training_data
 
         except ImportError:
-            self.stdout.write(self.style.WARNING("  AIFeedback model not available"))
+            self.stdout.write(self.style.WARNING("AIFeedback model not available"))
             return []
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f" Error collecting feedback: {e}"))
+            self.stdout.write(self.style.ERROR(f"Error collecting feedback: {e}"))
             return []
 
     def _mark_feedback_processed(self):
@@ -302,9 +301,9 @@ class Command(BaseCommand):
             updated = AIFeedback.objects.filter(needs_retraining=True).update(needs_retraining=False, processed_for_training=True)
 
             if updated:
-                self.stdout.write(f" Marked {updated} feedback entries as processed")
+                self.stdout.write(f"Marked {updated} feedback entries as processed")
 
         except ImportError:
             pass  # AIFeedback model not available yet
         except Exception as e:
-            self.stdout.write(f"  Could not mark feedback as processed: {e}")
+            self.stdout.write(f"Could not mark feedback as processed: {e}")

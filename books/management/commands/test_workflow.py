@@ -45,13 +45,13 @@ class Command(BaseCommand):
         # Get scan folder
         try:
             scan_folder = ScanFolder.objects.get(path__icontains="Sample [To Delete]")
-            self.stdout.write(f" Scan Folder: {scan_folder.name}")
-            self.stdout.write(f"   Path: {scan_folder.path}\n")
+            self.stdout.write(f"Scan Folder: {scan_folder.name}")
+            self.stdout.write(f"Path: {scan_folder.path}\n")
         except ScanFolder.DoesNotExist:
-            self.stdout.write(self.style.ERROR(" No sample scan folder found!"))
-            self.stdout.write("   Add scan folder first:\n")
-            self.stdout.write("   Name: Test Sample Books")
-            self.stdout.write("   Path: \\\\TS-469L\\Multimedia\\Books -sample DB - Copy\\Sample [To Delete]")
+            self.stdout.write(self.style.ERROR("No sample scan folder found!"))
+            self.stdout.write("Add scan folder first:\n")
+            self.stdout.write("Name: Test Sample Books")
+            self.stdout.write("Path: \\\\TS-469L\\Multimedia\\Books -sample DB - Copy\\Sample [To Delete]")
             return
 
         if options["stats"]:
@@ -78,10 +78,10 @@ class Command(BaseCommand):
         reviewed = books.filter(finalmetadata__is_reviewed=True)
         with_covers = books.exclude(finalmetadata__final_cover_path="")
 
-        self.stdout.write("\n Current Statistics:")
-        self.stdout.write(f"   Total Books: {books.count()}")
-        self.stdout.write(f"   Reviewed: {reviewed.count()} ({reviewed.count()/books.count()*100 if books.count() > 0 else 0:.1f}%)")
-        self.stdout.write(f"   With Covers: {with_covers.count()}")
+        self.stdout.write("\nCurrent Statistics:")
+        self.stdout.write(f"Total Books: {books.count()}")
+        self.stdout.write(f"Reviewed: {reviewed.count()} ({reviewed.count()/books.count()*100 if books.count() > 0 else 0:.1f}%)")
+        self.stdout.write(f"With Covers: {with_covers.count()}")
 
         # File types
         epub_count = BookFile.objects.filter(book__scan_folder=scan_folder, file_format="epub").count()
@@ -89,16 +89,16 @@ class Command(BaseCommand):
         cbr_count = BookFile.objects.filter(book__scan_folder=scan_folder, file_format="cbr").count()
         pdf_count = BookFile.objects.filter(book__scan_folder=scan_folder, file_format="pdf").count()
 
-        self.stdout.write("\n File Types:")
-        self.stdout.write(f"   EPUB: {epub_count}")
-        self.stdout.write(f"   CBZ: {cbz_count}")
-        self.stdout.write(f"   CBR: {cbr_count}")
-        self.stdout.write(f"   PDF: {pdf_count}")
+        self.stdout.write("\nFile Types:")
+        self.stdout.write(f"EPUB: {epub_count}")
+        self.stdout.write(f"CBZ: {cbz_count}")
+        self.stdout.write(f"CBR: {cbr_count}")
+        self.stdout.write(f"PDF: {pdf_count}")
 
     def _run_quick_test(self, scan_folder):
         """Run quick validation test."""
-        self.stdout.write(self.style.WARNING("\n Quick Test - 10 Sample Files"))
-        self.stdout.write("   Duration: ~30 minutes\n")
+        self.stdout.write(self.style.WARNING("\nQuick Test - 10 Sample Files"))
+        self.stdout.write("Duration: ~30 minutes\n")
 
         # TODO: Implement quick test workflow
         self.stdout.write("Steps:")
@@ -110,41 +110,41 @@ class Command(BaseCommand):
         self.stdout.write("6. Rename with preview")
         self.stdout.write("7. Verify results\n")
 
-        self.stdout.write(self.style.SUCCESS(" Quick test template ready"))
-        self.stdout.write("  Follow TESTING_WORKFLOW.md for manual steps")
+        self.stdout.write(self.style.SUCCESS("Quick test template ready"))
+        self.stdout.write("Follow TESTING_WORKFLOW.md for manual steps")
 
     def _run_phase_test(self, scan_folder, phase):
         """Run specific phase test."""
-        self.stdout.write(self.style.WARNING(f"\n Phase Test - {phase.upper()}"))
+        self.stdout.write(self.style.WARNING(f"\nPhase Test - {phase.upper()}"))
 
         if phase == "epub":
             epub_files = BookFile.objects.filter(book__scan_folder=scan_folder, file_format="epub")
-            self.stdout.write(f"   EPUB Files: {epub_files.count()}")
+            self.stdout.write(f"EPUB Files: {epub_files.count()}")
             self.stdout.write("\nTest Scenarios:")
-            self.stdout.write("   Clean metadata EPUBs")
-            self.stdout.write("   Multi-cover selection")
-            self.stdout.write("   Orphaned image cleanup")
-            self.stdout.write("   Metadata embedding")
+            self.stdout.write("Clean metadata EPUBs")
+            self.stdout.write("Multi-cover selection")
+            self.stdout.write("Orphaned image cleanup")
+            self.stdout.write("Metadata embedding")
 
         elif phase == "comic":
             cbz_count = BookFile.objects.filter(book__scan_folder=scan_folder, file_format="cbz").count()
             cbr_count = BookFile.objects.filter(book__scan_folder=scan_folder, file_format="cbr").count()
-            self.stdout.write(f"   CBZ Files: {cbz_count}")
-            self.stdout.write(f"   CBR Files: {cbr_count}")
+            self.stdout.write(f"CBZ Files: {cbz_count}")
+            self.stdout.write(f"CBR Files: {cbr_count}")
 
         elif phase == "pdf":
             pdf_count = BookFile.objects.filter(book__scan_folder=scan_folder, file_format="pdf").count()
-            self.stdout.write(f"   PDF Files: {pdf_count}")
+            self.stdout.write(f"PDF Files: {pdf_count}")
 
     def _run_full_test(self, scan_folder):
         """Run full batch processing test."""
-        self.stdout.write(self.style.WARNING("\n Full Batch Test"))
+        self.stdout.write(self.style.WARNING("\nFull Batch Test"))
         books = Book.objects.filter(scan_folder=scan_folder)
-        self.stdout.write(f"   Total Books: {books.count()}")
-        self.stdout.write("   Duration: 4-6 hours (estimated)\n")
+        self.stdout.write(f"Total Books: {books.count()}")
+        self.stdout.write("Duration: 4-6 hours (estimated)\n")
 
-        self.stdout.write(self.style.ERROR(" This is a large operation!"))
-        self.stdout.write("  Ensure you have:")
+        self.stdout.write(self.style.ERROR("This is a large operation!"))
+        self.stdout.write("Ensure you have:")
         self.stdout.write("  - Sufficient disk space")
         self.stdout.write("  - Good network connection")
         self.stdout.write("  - API rate limits configured")
