@@ -35,8 +35,8 @@ def create_test_user():
         # Create new user
         user = User.objects.create_user(username, email, password)
         print(f"✓ Created test user: {username}")
-        print(f"  Email: {email}")
-        print(f"  Password: {password}")
+        print(f"Email: {email}")
+        print(f"Password: {password}")
 
     return user
 
