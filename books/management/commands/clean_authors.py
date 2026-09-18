@@ -103,7 +103,7 @@ class Command(BaseCommand):
     def _print_cleanup_stats(self, stats, remove_invalid, clean_names, merge_duplicates):
         if remove_invalid:
             self.stdout.write("\n" + "-" * 70)
-            self.stdout.write(self.style.NOTICE("STEP 1: Removing invalid author names"))
+            self.stdout.write(self.style.NOTICE("STEP 1: Deactivating invalid author names"))
             self.stdout.write("-" * 70)
             for entry in stats["invalid_authors"]:
                 self.stdout.write(self.style.WARNING(f"INVALID: '{entry['name']}' (used in {entry['book_count']} books)"))
@@ -133,7 +133,7 @@ class Command(BaseCommand):
         self.stdout.write("\n" + "=" * 70)
         self.stdout.write(self.style.SUCCESS("SUMMARY"))
         self.stdout.write("=" * 70)
-        self.stdout.write(f"Invalid authors removed: {stats['invalid_removed']}")
+        self.stdout.write(f"Invalid authors deactivated: {stats['invalid_removed']}")
         self.stdout.write(f"Author names cleaned: {stats['names_cleaned']}")
         self.stdout.write(f"Duplicate authors merged: {stats['duplicates_merged']}")
         self.stdout.write("=" * 70 + "\n")

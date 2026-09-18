@@ -38,8 +38,8 @@ def duplicate_authors_list(request):
     # Clamp threshold between 0.5 and 1.0
     threshold = max(0.5, min(1.0, threshold))
 
-    # Get all authors
-    authors = [(a.id, a.name) for a in Author.objects.all()]
+    # Get all active authors
+    authors = [(a.id, a.name) for a in Author.objects.filter(is_active=True)]
 
     # Find potential duplicates
     duplicate_groups = find_potential_duplicates(authors, threshold)

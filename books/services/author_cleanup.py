@@ -24,10 +24,11 @@ def run_author_cleanup(*, remove_invalid=False, clean_names=False, merge_duplica
     Run the requested author cleanup operations.
 
     Args:
-        remove_invalid: Remove authors whose names resolve to empty/invalid values.
+        remove_invalid: Deactivate authors whose names resolve to empty/invalid values.
         clean_names: Normalize author names by stripping birth/death dates and
             formatting artifacts.
-        merge_duplicates: Merge authors whose normalized names are identical.
+        merge_duplicates: Deactivate duplicate authors after repointing their
+            relationships to the canonical author.
         dry_run: When True, compute and report results without persisting changes.
 
     Returns:
@@ -63,25 +64,26 @@ def run_author_cleanup(*, remove_invalid=False, clean_names=False, merge_duplica
 
 
 def _remove_invalid_authors(stats, dry_run):
-    """Remove authors whose names are empty or resolve to a bare year."""
-    for author in Author.objects.all().iterator():
+    """Deactivate authors whose names are empty or resolve to a bare year."""
+    for author in Author.objects.filter(is_active=True).iterator():
         cleaned = clean_author_name(author.name)
 
         if cleaned and len(cleaned) >= 2:
             continue
 
-        book_count = BookAuthor.objects.filter(author=author).count()
+        book_count = BookAuthor.objects.filter(author=author, is_active=True).count()
         stats["invalid_authors"].append({"id": author.id, "name": author.name, "book_count": book_count})
         stats["invalid_removed"] += 1
 
         if not dry_run:
-            BookAuthor.objects.filter(author=author).delete()
-            author.delete()
+            BookAuthor.objects.filter(author=author).update(is_active=False)
+            author.is_active = False
+            author.save(update_fields=["is_active"])
 
 
 def _clean_author_names(stats, dry_run):
     """Normalize author names by removing dates and formatting artifacts."""
-    for author in Author.objects.all().iterator():
+    for author in Author.objects.filter(is_active=True).iterator():
         original_name = author.name
         cleaned_name = clean_author_name(original_name)
 
@@ -99,9 +101,9 @@ def _clean_author_names(stats, dry_run):
 
 
 def _merge_duplicate_authors(stats, dry_run):
-    """Merge authors that share the same normalized name."""
+    """Merge active authors that share the same normalized name."""
     normalized_groups = defaultdict(list)
-    for author in Author.objects.all().iterator():
+    for author in Author.objects.filter(is_active=True).iterator():
         normalized_groups[author.name_normalized].append(author)
 
     for authors in normalized_groups.values():
@@ -124,8 +126,9 @@ def _merge_duplicate_authors(stats, dry_run):
             stats["duplicates_merged"] += 1
 
             if not dry_run:
-                BookAuthor.objects.filter(author=dup).update(author=primary)
-                dup.delete()
+                _merge_author_relationships(dup, primary)
+                dup.is_active = False
+                dup.save(update_fields=["is_active"])
 
         stats["merged_groups"].append(group)
 
@@ -185,7 +188,8 @@ def _merge_author_relationships(source_author, target_author):
                 conflicting.confidence = relationship.confidence
             conflicting.is_main_author = conflicting.is_main_author or relationship.is_main_author
             conflicting.save(update_fields=["confidence", "is_main_author"])
-            relationship.delete()
+            # Deactivate instead of deleting so the relationship remains recoverable.
+            BookAuthor.objects.filter(pk=relationship.pk).update(is_active=False)
         else:
             # Use QuerySet.update to avoid BookAuthor.save() re-syncing metadata
             # mid-transaction; FinalMetadata is updated explicitly below.
@@ -214,7 +218,7 @@ def fix_all_books_by_author(book, *, threshold=0.85):
     if author is None:
         return {"success": False, "reason": "no_author", "book_id": book.id}
 
-    authors = [(a.id, a.name) for a in Author.objects.all()]
+    authors = [(a.id, a.name) for a in Author.objects.filter(is_active=True)]
     duplicate_groups = find_potential_duplicates(authors, threshold)
 
     group = None
@@ -246,9 +250,10 @@ def fix_all_books_by_author(book, *, threshold=0.85):
         for duplicate in Author.objects.filter(id__in=group_ids).exclude(id=primary.id):
             merged_authors.append({"id": duplicate.id, "name": duplicate.name})
             _merge_author_relationships(duplicate, primary)
-            duplicate.delete()
+            duplicate.is_active = False
+            duplicate.save(update_fields=["is_active"])
 
-        affected_book_ids = list(BookAuthor.objects.filter(author=primary).values_list("book_id", flat=True).distinct())
+        affected_book_ids = list(BookAuthor.objects.filter(author=primary, is_active=True).values_list("book_id", flat=True).distinct())
         metadata_updated = FinalMetadata.objects.filter(book_id__in=affected_book_ids).update(final_author=canonical_name)
 
     return {

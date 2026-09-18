@@ -231,9 +231,11 @@ class AuthorCleanupFixServiceTests(TestCase):
         self.assertEqual(result["books_affected"], 2)
         self.assertEqual(result["metadata_updated"], 2)
 
-        remaining = Author.objects.get()
+        self.assertEqual(Author.objects.filter(is_active=True).count(), 1)
+        self.assertEqual(Author.objects.filter(is_active=False).count(), 1)
+        remaining = Author.objects.get(is_active=True)
         self.assertEqual(remaining.name, canonical)
-        self.assertEqual(BookAuthor.objects.filter(author=remaining).count(), 2)
+        self.assertEqual(BookAuthor.objects.filter(author=remaining, is_active=True).count(), 2)
 
         book1.refresh_from_db()
         book2.refresh_from_db()

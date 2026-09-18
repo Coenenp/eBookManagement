@@ -365,7 +365,7 @@ class AuthorListView(LoginRequiredMixin, BookNavigationMixin, ListView):
 
     def get_queryset(self):
         Author = self.get_model()
-        queryset = Author.objects.all()
+        queryset = Author.objects.filter(is_active=True)
 
         # Apply search filter
         search_query = self.request.GET.get("search", "").strip()

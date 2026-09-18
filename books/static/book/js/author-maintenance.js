@@ -72,7 +72,7 @@ class AuthorMaintenanceManager {
         const dryRun = data.dry_run;
         let html = `<div class="alert alert-${dryRun ? 'info' : 'success'}">`;
         html += `<strong>${dryRun ? 'Preview' : 'Completed'}:</strong> `;
-        html += `Invalid authors removed: ${stats.invalid_removed} · `;
+        html += `Invalid authors deactivated: ${stats.invalid_removed} · `;
         html += `Names cleaned: ${stats.names_cleaned} · `;
         html += `Duplicates merged: ${stats.duplicates_merged}`;
         if (dryRun) {
