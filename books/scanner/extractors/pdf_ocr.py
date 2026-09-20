@@ -120,7 +120,7 @@ def ocr_pages(pdf_path, page_indexes, dpi=None):
             for offset, image in enumerate(images):
                 page_number = start + offset
                 try:
-                    results[page_number] = pytesseract.image_to_string(image) or ""
+                    results[page_number] = pytesseract.image_to_string(image, lang='eng+nld+fra+deu') or ""
                 except Exception as exc:
                     logger.warning(f"Tesseract OCR failed for page {page_number} of {pdf_path}: {exc}")
                     results[page_number] = ""
