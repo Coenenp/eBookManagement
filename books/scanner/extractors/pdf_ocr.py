@@ -56,6 +56,16 @@ def _ocr_enabled():
         return True
 
 
+def _ocr_langs():
+    """Read the PDF_OCR_LANGS setting (default: eng)."""
+    try:
+        from django.conf import settings
+
+        return str(getattr(settings, "PDF_OCR_LANGS", "eng"))
+    except Exception:  # pragma: no cover - settings access is best-effort
+        return "eng"
+
+
 def _ocr_dpi():
     """Read the PDF_OCR_DPI setting (default: 300)."""
     try:
@@ -120,7 +130,7 @@ def ocr_pages(pdf_path, page_indexes, dpi=None):
             for offset, image in enumerate(images):
                 page_number = start + offset
                 try:
-                    results[page_number] = pytesseract.image_to_string(image) or ""
+                    results[page_number] = pytesseract.image_to_string(image, lang=_ocr_langs()) or ""
                 except Exception as exc:
                     logger.warning(f"Tesseract OCR failed for page {page_number} of {pdf_path}: {exc}")
                     results[page_number] = ""

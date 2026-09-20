@@ -199,7 +199,10 @@ STATICFILES_DIRS = [
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MEDIA_URL = "/media/"
-MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+MEDIA_ROOT = os.path.join("/workspace/state", "media")
+
+# OCR language list for Tesseract (e.g. "eng+nld+fra+deu")
+PDF_OCR_LANGS = os.getenv("PDF_OCR_LANGS", "eng")
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
