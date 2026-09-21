@@ -71,6 +71,33 @@ class ScanBooksCommandTest(TestCase):
         mock_scanner_class.assert_called_once()
         mock_scanner.rescan_existing_books.assert_called_once_with([book1.id, book2.id], True)
 
+    @patch("books.scanner.background.BackgroundScanner")
+    @patch("books.management.commands.scan_books.check_api_health")
+    def test_rescan_folder_command(self, mock_api_health, mock_scanner_class):
+        """Test the `rescan --folder` action targets only that folder's books."""
+        mock_api_health.return_value = {"google_books": True}
+        mock_scanner = mock_scanner_class.return_value
+        mock_scanner.rescan_existing_books.return_value = {"success": True, "message": "Test completed"}
+
+        book = create_test_book_with_file(file_path="/fake/dir/book1.epub", scan_folder=self.scan_folder)
+        call_command("scan_books", "rescan", "--folder", self.scan_folder.path)
+
+        mock_scanner_class.assert_called_once()
+        mock_scanner.rescan_existing_books.assert_called_once_with([book.id], True)
+
+    @patch("books.scanner.background.BackgroundScanner")
+    @patch("books.management.commands.scan_books.check_api_health")
+    def test_rescan_no_external_apis_disables_deep_scan(self, mock_api_health, mock_scanner_class):
+        """`rescan --no-external-apis` skips the external (Deep Scan) pass entirely."""
+        mock_scanner = mock_scanner_class.return_value
+        mock_scanner.rescan_existing_books.return_value = {"success": True, "message": "Test completed"}
+
+        book = create_test_book_with_file(file_path="/fake/dir/book1.epub", scan_folder=self.scan_folder)
+        call_command("scan_books", "rescan", "--all", "--no-external-apis")
+
+        mock_api_health.assert_not_called()
+        mock_scanner.rescan_existing_books.assert_called_once_with([book.id], False)
+
     def test_rescan_no_target_error(self):
         """Test that `rescan` raises an error if no target is specified."""
         with self.assertRaises(CommandError):
