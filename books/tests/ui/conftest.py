@@ -5,6 +5,9 @@ default so the normal ``manage.py test`` / ``pytest`` run skips them. They are
 pytest-style (using pytest-playwright fixtures), so Django's own test runner
 never discovers them; for pytest, ``RUN_UI_TESTS=1`` (and a reachable server)
 is required.
+
+Credentials are read from the environment with no default:
+``EBOOK_UI_USERNAME`` and ``EBOOK_UI_PASSWORD``.
 """
 
 import os
@@ -14,8 +17,13 @@ import pytest
 # The walkthrough server (uitest copy), per TASK.md M1a.
 APP_BASE = "http://127.0.0.1:8001"
 
-USERNAME = "admin"
-PASSWORD = "admin123"
+
+def _require_env(name):
+    """Return a required credential from the environment (no default)."""
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise RuntimeError(f"Set the {name} environment variable to run the UI walkthrough tests")
+    return value
 
 
 def _server_is_up() -> bool:
@@ -52,9 +60,11 @@ def app_url():
 @pytest.fixture
 def authenticated_page(page, app_url):
     """A Playwright page already logged in as the walkthrough user."""
+    username = _require_env("EBOOK_UI_USERNAME")
+    password = _require_env("EBOOK_UI_PASSWORD")
     page.goto(f"{app_url}/login/")
-    page.fill('input[name="username"]', USERNAME)
-    page.fill('input[name="password"]', PASSWORD)
+    page.fill('input[name="username"]', username)
+    page.fill('input[name="password"]', password)
     page.click('button[type="submit"]')
     page.wait_for_url("**/dashboard/**", timeout=15000)
     return page
