@@ -20,6 +20,10 @@ class CoverCacheTestCase(TestCase):
         self.test_book_path = "/media/books/test_book.epub"
         self.test_internal_path = "OEBPS/cover.jpg"
         self.test_cover_data = b"fake image data for testing"
+        # Start from an empty cache so cleanup_orphans/clear_all counts are
+        # deterministic regardless of what earlier tests left in the shared
+        # (temp) MEDIA_ROOT/cover_cache.
+        CoverCache.clear_all()
 
     def tearDown(self):
         """Clean up after tests."""
