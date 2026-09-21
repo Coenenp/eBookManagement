@@ -104,15 +104,35 @@ def get_book_cover_url(book):
                 from books.utils.cover_cache import CoverCache
 
                 # Convert local path to media URL
+                # If the stored path is an absolute path pointing into a previous MEDIA_ROOT,
+                # normalise it to a media-relative path.
                 if cover_path.startswith(settings.MEDIA_ROOT):
                     relative_path = cover_path[len(settings.MEDIA_ROOT) :].lstrip("\\/")
                     if CoverCache.media_exists(relative_path):
                         return settings.MEDIA_URL + relative_path.replace("\\", "/")
+                    # If the absolute path doesn't exist in current storage, clear it later (placeholder)
                     return CoverCache.placeholder_url()
+
+                # If it's a media-relative cover_cache/ path, check storage
                 if cover_path.startswith("cover_cache/"):
                     if CoverCache.media_exists(cover_path):
                         return f"{settings.MEDIA_URL}{cover_path}"
                     return CoverCache.placeholder_url()
+
+                # An absolute path (e.g. a stale path from a previous MEDIA_ROOT)
+                # must never be returned as a raw filesystem URL, which would 404.
+                # Rebase its cover_cache/ remainder onto the current MEDIA_ROOT and
+                # serve the media URL when the file exists, otherwise the placeholder.
+                normalized = str(cover_path).replace("\\", "/")
+                if normalized.startswith("/") or (len(normalized) > 1 and normalized[1] == ":"):
+                    marker = "cover_cache/"
+                    idx = normalized.find(marker)
+                    if idx != -1:
+                        relative = normalized[idx:]
+                        if CoverCache.media_exists(relative):
+                            return settings.MEDIA_URL + relative
+                    return CoverCache.placeholder_url()
+
                 return cover_path
     except (AttributeError, ValueError, TypeError):
         pass
