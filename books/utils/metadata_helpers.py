@@ -104,15 +104,39 @@ def get_book_cover_url(book):
                 from books.utils.cover_cache import CoverCache
 
                 # Convert local path to media URL
+                # If the stored path is an absolute path pointing into a previous MEDIA_ROOT,
+                # normalise it to a media-relative path.
                 if cover_path.startswith(settings.MEDIA_ROOT):
                     relative_path = cover_path[len(settings.MEDIA_ROOT) :].lstrip("\\/")
                     if CoverCache.media_exists(relative_path):
                         return settings.MEDIA_URL + relative_path.replace("\\", "/")
+                    # If the absolute path doesn't exist in current storage, clear it later (placeholder)
                     return CoverCache.placeholder_url()
+
+                # If it's a media-relative cover_cache/ path, check storage
                 if cover_path.startswith("cover_cache/"):
                     if CoverCache.media_exists(cover_path):
                         return f"{settings.MEDIA_URL}{cover_path}"
                     return CoverCache.placeholder_url()
+
+                # As a last resort, if it's an absolute filesystem path pointing to an existing file,
+                # convert it to a media url by making it relative to MEDIA_ROOT if possible.
+                try:
+                    from pathlib import Path
+
+                    p = Path(cover_path)
+                    if p.is_absolute() and p.exists():
+                        # Attempt to relativize it to MEDIA_ROOT
+                        try:
+                            rel = str(p.relative_to(settings.MEDIA_ROOT)).replace("\\", "/")
+                            if CoverCache.media_exists(rel):
+                                return settings.MEDIA_URL + rel
+                        except Exception:
+                            # Not under MEDIA_ROOT; fall back to placeholder
+                            return CoverCache.placeholder_url()
+                except Exception:
+                    pass
+
                 return cover_path
     except (AttributeError, ValueError, TypeError):
         pass

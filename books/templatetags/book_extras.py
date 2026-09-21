@@ -110,14 +110,24 @@ def _process_cover_for_display(cover_path, book, add_cache_busting=False, skip_d
     else:
         # Handle local file paths - always encode to base64 for consistent display
         try:
-            if os.path.exists(cover_path):
-                logger.debug(f"Encoding local file to base64: {cover_path}")
-                base64_image = encode_cover_to_base64(cover_path)
+            # Resolve cover_cache/ relative paths against MEDIA_ROOT
+            resolved_path = cover_path
+            if cover_path.startswith("cover_cache/"):
+                resolved_path = os.path.join(settings.MEDIA_ROOT, cover_path)
+
+            if os.path.exists(resolved_path):
+                logger.debug(f"Encoding local file to base64: {resolved_path}")
+                base64_image = encode_cover_to_base64(resolved_path)
                 if base64_image:
                     logger.debug(f"Successfully encoded to base64, length: {len(base64_image)}")
+            else:
+                # File does not exist — clear cover_path so template shows placeholder
+                logger.warning(f"Cover file not found: {resolved_path}")
+                cover_path = ""
         except Exception as e:
             logger.error(f"Error encoding local file {cover_path}: {e}")
             base64_image = None
+            cover_path = ""
 
     return cover_path, is_url, base64_image
 
