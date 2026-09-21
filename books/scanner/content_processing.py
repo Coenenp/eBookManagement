@@ -19,6 +19,7 @@ from books.models import (
 )
 from books.scanner.file_ops import get_file_format
 from books.scanner.grouping import AudiobookFileGrouper, ComicFileGrouper
+from books.scanner.resolver import resolve_final_metadata
 from books.utils.cover_cache import CoverCache
 from books.utils.cover_extractor import (
     ArchiveCoverExtractor,
@@ -243,6 +244,13 @@ def _process_comic_issue(
         book_file.has_internal_cover = False
 
     book_file.save()
+
+    # Resolve final metadata so comics get a FinalMetadata row (title, series,
+    # volume, year, cover) exactly like the ebook path does.
+    try:
+        resolve_final_metadata(book)
+    except Exception:
+        logger.exception("Final metadata resolution failed for comic: %s", file_path)
 
 
 def _store_comic_metadata(book: Book, issue_info: dict):
