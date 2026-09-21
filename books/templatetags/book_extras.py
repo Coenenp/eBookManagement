@@ -122,7 +122,7 @@ def _process_cover_for_display(cover_path, book, add_cache_busting=False, skip_d
                     logger.debug(f"Successfully encoded to base64, length: {len(base64_image)}")
             else:
                 # File does not exist — clear cover_path so template shows placeholder
-                logger.warning(f"Cover file not found: {resolved_path}")
+                logger.debug(f"Cover file not found: {resolved_path}")
                 cover_path = ""
         except Exception as e:
             logger.error(f"Error encoding local file {cover_path}: {e}")

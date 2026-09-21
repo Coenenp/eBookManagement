@@ -119,23 +119,19 @@ def get_book_cover_url(book):
                         return f"{settings.MEDIA_URL}{cover_path}"
                     return CoverCache.placeholder_url()
 
-                # As a last resort, if it's an absolute filesystem path pointing to an existing file,
-                # convert it to a media url by making it relative to MEDIA_ROOT if possible.
-                try:
-                    from pathlib import Path
-
-                    p = Path(cover_path)
-                    if p.is_absolute() and p.exists():
-                        # Attempt to relativize it to MEDIA_ROOT
-                        try:
-                            rel = str(p.relative_to(settings.MEDIA_ROOT)).replace("\\", "/")
-                            if CoverCache.media_exists(rel):
-                                return settings.MEDIA_URL + rel
-                        except Exception:
-                            # Not under MEDIA_ROOT; fall back to placeholder
-                            return CoverCache.placeholder_url()
-                except Exception:
-                    pass
+                # An absolute path (e.g. a stale path from a previous MEDIA_ROOT)
+                # must never be returned as a raw filesystem URL, which would 404.
+                # Rebase its cover_cache/ remainder onto the current MEDIA_ROOT and
+                # serve the media URL when the file exists, otherwise the placeholder.
+                normalized = str(cover_path).replace("\\", "/")
+                if normalized.startswith("/") or (len(normalized) > 1 and normalized[1] == ":"):
+                    marker = "cover_cache/"
+                    idx = normalized.find(marker)
+                    if idx != -1:
+                        relative = normalized[idx:]
+                        if CoverCache.media_exists(relative):
+                            return settings.MEDIA_URL + relative
+                    return CoverCache.placeholder_url()
 
                 return cover_path
     except (AttributeError, ValueError, TypeError):
