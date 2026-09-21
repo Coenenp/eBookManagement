@@ -169,8 +169,8 @@ def test_metadata_accepts_awkward_input(authenticated_page, app_url):
     page.get_by_role("button", name="Save Changes").click()
     page.wait_for_load_state("domcontentloaded")
 
-    # The saved title must round-trip onto the metadata page.
-    assert "Karamazov" in page.content()
+    # The full title must round-trip, diacritics and brackets intact.
+    assert awkward_title in page.content()
 
 
 # --- B2: metadata page never fires `load` (expected failure) ----------------
