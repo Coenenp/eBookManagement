@@ -1,0 +1,59 @@
+{% extends "books/base.html" %}
+{% load static %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-question-circle"></i> {{ page_title }}</h1>
+        <a href="{% url 'books:scan_dashboard' %}" class="btn btn-primary">
+            <i class="fas fa-tachometer-alt"></i> Back to Control Center
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header"><i class="fas fa-search"></i> Scanning folders</div>
+                <div class="card-body">
+                    <p>Add folders on the Scanning page to discover new books. Each folder has a
+                    content type (ebooks, comics, or audiobooks) and a default language.</p>
+                    <ul>
+                        <li><strong>Quick scan</strong> discovers files and extracts local metadata from the files themselves.</li>
+                        <li><strong>Deep scan</strong> additionally queries external providers (Google Books, Open Library, Comic Vine).</li>
+                        <li><strong>Rescan</strong> re-queries external providers for books that already have metadata.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header"><i class="fas fa-tasks"></i> Review and rename</div>
+                <div class="card-body">
+                    <p>After scanning, review each book's metadata and confirm it, then rename and
+                    organise the file against your naming template.</p>
+                    <ul>
+                        <li>Review books with the <strong>books list</strong> and per-book metadata editor.</li>
+                        <li>Preview the new file name and location before <strong>renaming</strong>.</li>
+                        <li>Books you cannot confirm are flagged for later review rather than renamed.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header"><i class="fas fa-plug"></i> External providers</div>
+                <div class="card-body">
+                    <p>External lookups are rate limited. The <strong>API status</strong> page shows the
+                    current quota usage and any source that is temporarily unavailable.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
