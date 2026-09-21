@@ -116,6 +116,33 @@ def test_scan_dashboard_renders(authenticated_page, app_url):
     assert "Server Error" not in page.content()
 
 
+def test_rescan_scratch_folder_quick_scan(authenticated_page, app_url):
+    """Open the Rescan tab and submit a quick rescan of the scratch folder.
+
+    Exercises the scanning dashboard's "Rescan Books" tab: pick the scratch
+    folder, turn Deep Scan off (a "quick" rescan), and submit. The folder
+    rescan must reach the view -- a successful submit never falls through to
+    the "Must specify books to rescan" error.
+    """
+    page = authenticated_page
+    page.goto(f"{app_url}/scanning/", wait_until="domcontentloaded")
+
+    # Open the "New Scan" modal and switch to the Rescan Books tab.
+    page.get_by_role("button", name="Start New Scan").click()
+    page.click("#book-rescan-tab")
+
+    # "Rescan books in folder" is the default choice; select the scratch folder.
+    page.select_option("#folder_id", "1")
+    # Quick rescan: turn off Deep Scan (ISBN + external APIs).
+    page.uncheck("#enable_external_apis_rescan")
+
+    page.get_by_role("button", name="Start Rescan").click()
+    page.wait_for_load_state("domcontentloaded")
+
+    assert "Server Error" not in page.content()
+    assert "Must specify books to rescan" not in page.content()
+
+
 # --- Helpers ----------------------------------------------------------------
 
 def _csrf_token(page):
