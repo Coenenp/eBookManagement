@@ -224,6 +224,18 @@ def start_book_rescan(request):
     rescan_all = request.POST.get("rescan_all") == "on"
     enable_external_apis = request.POST.get("enable_external_apis") == "on"
 
+    # The Rescan tab posts a ``rescan_type`` radio (all/folder/specific) while
+    # the dispatch below speaks the legacy ``rescan_all``/``folder_id``/
+    # ``book_ids`` contract, so translate the radio onto it first.
+    rescan_type = request.POST.get("rescan_type")
+    if rescan_type == "all":
+        rescan_all = True
+        folder_id = None
+    elif rescan_type == "folder":
+        rescan_all = bool(folder_id)  # only when a folder was actually chosen
+    elif rescan_type == "specific":
+        rescan_all = False
+
     # Priority 1: Folder rescan (rescan=True means full folder scan with cleanup)
     if folder_id and rescan_all:
         ScanFolder = apps.get_model("books", "ScanFolder")
