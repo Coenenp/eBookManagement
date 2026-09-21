@@ -138,6 +138,16 @@ class ResetDatabaseCommandTest(TestCase):
         "OPTIONS": {"charset": "utf8mb4"},
     }
 
+    def setUp(self):
+        # Several tests below reach Command._delete_migrations(), which calls
+        # shutil.rmtree(books/migrations/) for real. Patch it for the whole
+        # class so the test suite never deletes tracked repository files.
+        self._delete_migrations_patcher = patch(
+            "books.management.commands.reset_database.Command._delete_migrations"
+        )
+        self._delete_migrations_patcher.start()
+        self.addCleanup(self._delete_migrations_patcher.stop)
+
     def tearDown(self):
         for key in ("DJANGO_SUPERUSER_USERNAME", "DJANGO_SUPERUSER_EMAIL", "DJANGO_SUPERUSER_PASSWORD"):
             os.environ.pop(key, None)
