@@ -14,7 +14,7 @@ import os
 
 import pytest
 
-# The walkthrough server (uitest copy), per TASK.md M1a.
+# The walkthrough server (uitest copy).
 APP_BASE = "http://127.0.0.1:8001"
 
 

@@ -1,6 +1,6 @@
 """M1a Playwright UI walkthrough: first-time-user workflows against scratch.
 
-Scenarios (from TASK.md M1a): folder add/edit, quick scan + progress, open a
+Scenarios: folder add/edit, quick scan + progress, open a
 book and edit metadata, approve/reject in the review workflow, rename preview,
 settings/filters, pagination and search. Everything acts on the scratch copy
 only; no button that renames/moves/deletes/resets touches the NAS or the main
