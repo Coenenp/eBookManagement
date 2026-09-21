@@ -114,3 +114,73 @@ def test_scan_dashboard_renders(authenticated_page, app_url):
     page.goto(f"{app_url}/scanning/")
     page.wait_for_load_state("domcontentloaded")
     assert "Server Error" not in page.content()
+
+
+# --- Helpers ----------------------------------------------------------------
+
+def _csrf_token(page):
+    """Return the csrftoken cookie value, for POSTs that need it."""
+    for cookie in page.context.cookies():
+        if cookie["name"] == "csrftoken":
+            return cookie["value"]
+    return ""
+
+
+# --- Review queue: approve / reject -----------------------------------------
+
+def test_review_queue_approve_then_reject(authenticated_page, app_url):
+    """Approve (mark reviewed) then reject a book via the review toggle."""
+    page = authenticated_page
+    token = _csrf_token(page)
+
+    resp = page.request.post(
+        f"{app_url}/book/1/toggle_review/", headers={"X-CSRFToken": token}
+    )
+    assert resp.status == 200, f"approve returned {resp.status}"
+    data = resp.json()
+    assert data["status"] == "success"
+    assert isinstance(data["is_reviewed"], bool)
+    approved = data["is_reviewed"]
+
+    resp2 = page.request.post(
+        f"{app_url}/book/1/toggle_review/", headers={"X-CSRFToken": token}
+    )
+    data2 = resp2.json()
+    assert data2["status"] == "success"
+    assert data2["is_reviewed"] == (not approved)
+
+
+# --- Awkward input ----------------------------------------------------------
+
+def test_metadata_accepts_awkward_input(authenticated_page, app_url):
+    """Dutch diacritics, brackets and a very long title survive a metadata save."""
+    page = authenticated_page
+
+    awkward_title = (
+        "De Gëbroeders Karamazov [deel 2] (herziene uitgave) - "
+        "een zeer lange titel met diakritische tekens ë ï ö ü ç ñ é è ê û "
+        "en haakjes [] () plus een heel erg lange aanloop " * 3
+    )
+
+    page.goto(f"{app_url}/book/1/metadata/", wait_until="domcontentloaded")
+    # Choose "Manual Entry" for the title and type the awkward value.
+    page.check("#title_manual")
+    page.fill("#title_override", awkward_title)
+    page.get_by_role("button", name="Save Changes").click()
+    page.wait_for_load_state("domcontentloaded")
+
+    # The saved title must round-trip onto the metadata page.
+    assert "Karamazov" in page.content()
+
+
+# --- B2: metadata page never fires `load` (expected failure) ----------------
+
+@pytest.mark.xfail(
+    reason="B2: metadata page never fires 'load' — cover grid references missing no-cover.png",
+    strict=True,
+)
+def test_metadata_page_fires_load_event(authenticated_page, app_url):
+    """The metadata page should fully load; currently it hangs (B2)."""
+    page = authenticated_page
+    page.goto(f"{app_url}/book/1/metadata/", wait_until="load", timeout=15000)
+    assert "Server Error" not in page.content()
