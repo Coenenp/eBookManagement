@@ -56,17 +56,10 @@ def test_open_book_and_view_metadata(authenticated_page, app_url):
     assert "Server Error" not in page.content()
 
 
-def test_edit_metadata_page_loads(authenticated_page, app_url):
-    """The metadata page renders its edit form (content check; note below).
-
-    The full ``load`` event on this page never fires because the template's
-    cover-selection grid references a missing ``no-cover.png`` static image
-    (the real placeholder is ``cover-placeholder.svg``) -- see the walkthrough
-    report. We assert on DOM content, not ``load``, to document that the form
-    itself renders.
-    """
+def test_metadata_page_loads_and_renders_form(authenticated_page, app_url):
+    """The metadata page fully loads and renders its edit form."""
     page = authenticated_page
-    page.goto(f"{app_url}/book/1/metadata/", wait_until="domcontentloaded")
+    page.goto(f"{app_url}/book/1/metadata/", wait_until="load")
     assert "Server Error" not in page.content()
     # The metadata edit form (with a Save action) is present.
     assert "<form" in page.content()
@@ -198,16 +191,3 @@ def test_metadata_accepts_awkward_input(authenticated_page, app_url):
 
     # The full title must round-trip, diacritics and brackets intact.
     assert awkward_title in page.content()
-
-
-# --- B2: metadata page never fires `load` (expected failure) ----------------
-
-@pytest.mark.xfail(
-    reason="B2: metadata page never fires 'load' — cover grid references missing no-cover.png",
-    strict=True,
-)
-def test_metadata_page_fires_load_event(authenticated_page, app_url):
-    """The metadata page should fully load; currently it hangs (B2)."""
-    page = authenticated_page
-    page.goto(f"{app_url}/book/1/metadata/", wait_until="load", timeout=15000)
-    assert "Server Error" not in page.content()
