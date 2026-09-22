@@ -235,6 +235,7 @@ def start_book_rescan(request):
         rescan_all = bool(folder_id)  # only when a folder was actually chosen
     elif rescan_type == "specific":
         rescan_all = False
+        folder_id = None  # never let a stale folder_id leak into the folder branch
 
     # Priority 1: Folder rescan (rescan=True means full folder scan with cleanup)
     if folder_id and rescan_all:

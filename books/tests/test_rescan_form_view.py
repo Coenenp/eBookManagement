@@ -134,3 +134,19 @@ class RescanFormViewTest(TestCase):
         _, book_ids, deep = args
         self.assertEqual(book_ids, [self.book1.id, self.book2.id])
         self.assertIs(deep, False)
+
+    def test_specific_ids_ignore_stale_folder_id(
+        self, mock_rescan, mock_scan_folder, mock_add, mock_active, mock_queue, mock_thread
+    ):
+        """A stale folder_id must never hijack a 'specific IDs' rescan."""
+        response = self._post(
+            rescan_type="specific",
+            book_ids=f"{self.book1.id}",
+            folder_id=str(self.folder.id),  # stale value from the folder select
+        )
+
+        self.assertEqual(response.status_code, 302)
+        target, args = self._thread_call(mock_thread)
+        self.assertIs(target, mock_rescan)  # NOT mock_scan_folder
+        _, book_ids, _ = args
+        self.assertEqual(book_ids, [self.book1.id])
