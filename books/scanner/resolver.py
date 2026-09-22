@@ -16,6 +16,11 @@ def resolve_final_metadata(book):
     """Generate final metadata suggestions for a book"""
     final_metadata, _ = FinalMetadata.objects.get_or_create(book=book)
 
+    # A human-reviewed book's manual edits must survive any automatic
+    # (re)resolution — a rescan must never overwrite them.
+    if getattr(final_metadata, "is_reviewed", False):
+        return final_metadata
+
     # Title
     best_title = book.titles.filter(is_active=True).order_by("-confidence").first()
     if best_title:
