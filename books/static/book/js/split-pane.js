@@ -183,8 +183,6 @@ function updateResizeHandlePosition() {
     resizeHandle.style.left = rect.right - 3 + 'px';
     resizeHandle.style.top = containerRect.top + 'px';
     resizeHandle.style.height = containerRect.height + 'px';
-    resizeHandle.style.position = 'fixed';
-    resizeHandle.style.zIndex = '1000';
 }
 
 function preventSelection(e) {
@@ -259,7 +257,6 @@ function addMobileBackButton() {
 
     const backButton = document.createElement('button');
     backButton.className = 'btn btn-outline-secondary btn-sm mobile-back-btn position-absolute';
-    backButton.style.cssText = 'top: 10px; left: 10px; z-index: 1000;';
     backButton.innerHTML = '<i class="fas fa-arrow-left me-1"></i>Back to List';
 
     backButton.addEventListener('click', function () {

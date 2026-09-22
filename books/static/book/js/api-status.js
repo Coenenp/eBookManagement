@@ -22,7 +22,7 @@ function retryBook(bookId) {
         .then((response) => response.json())
         .then((data) => {
             document.getElementById('retryStatus').textContent = data.message;
-            document.getElementById('retryProgress').style.width = '100%';
+            document.getElementById('retryProgress').classList.add('progress-bar-complete');
 
             setTimeout(() => {
                 modal.hide();
@@ -56,7 +56,7 @@ function retryAllHigh() {
         .then((response) => response.json())
         .then((data) => {
             document.getElementById('retryStatus').textContent = data.message;
-            document.getElementById('retryProgress').style.width = '100%';
+            document.getElementById('retryProgress').classList.add('progress-bar-complete');
 
             setTimeout(() => {
                 modal.hide();

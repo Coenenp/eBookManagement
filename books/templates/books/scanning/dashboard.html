@@ -216,9 +216,9 @@
                                 <code>{{ session.session_id|slice:":8" }}...</code>
                             </td>
                             <td>
-                                <div class="progress" style="min-width: 100px;">
-                                    <div class="progress-bar bg-success" 
-                                         style="width: {{ session.completion_percentage }}%"
+                                <div class="progress progress-min-w-100">
+                                    <div class="progress-bar bg-success progress-bar-dynamic" 
+                                         style="--progress-width: {{ session.completion_percentage }}%"
                                          title="{{ session.completion_percentage|floatformat:1 }}%">
                                         {{ session.completion_percentage|floatformat:0 }}%
                                     </div>

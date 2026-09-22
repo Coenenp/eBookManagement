@@ -50,7 +50,7 @@ class CoverCacheMaintenanceManager {
 
     showResult(type, message) {
         this.resultEl.innerHTML = `<div class="alert alert-${type}">${this.escapeHtml(message)}</div>`;
-        this.resultEl.style.display = 'block';
+        this.resultEl.classList.remove('d-none');
     }
 
     updateStats(data) {

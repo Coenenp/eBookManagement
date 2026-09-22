@@ -5,17 +5,17 @@
  */
 
 :root {
-  /* Renamer-specific CSS custom properties using Bootstrap variables */
-  --renamer-overlay-bg: rgba(var(--bs-dark-rgb), 0.5);
-  --renamer-spinner-size: 3rem;
-  --renamer-monospace-font: var(--bs-font-monospace);
-  --renamer-border-radius: var(--bs-border-radius);
-  --renamer-border-radius-sm: var(--bs-border-radius-sm);
-  --renamer-spacing-xs: 0.125rem;
-  --renamer-spacing-sm: 0.25rem;
-  --renamer-spacing-md: 0.75rem;
-  --renamer-font-size-sm: 0.875rem;
-  --renamer-font-size-xs: 0.8rem;
+    /* Renamer-specific CSS custom properties using Bootstrap variables */
+    --renamer-overlay-bg: rgba(var(--bs-dark-rgb), 0.5);
+    --renamer-spinner-size: 3rem;
+    --renamer-monospace-font: var(--bs-font-monospace);
+    --renamer-border-radius: var(--bs-border-radius);
+    --renamer-border-radius-sm: var(--bs-border-radius-sm);
+    --renamer-spacing-xs: 0.125rem;
+    --renamer-spacing-sm: 0.25rem;
+    --renamer-spacing-md: 0.75rem;
+    --renamer-font-size-sm: 0.875rem;
+    --renamer-font-size-xs: 0.8rem;
 }
 
 /* Loading overlay - uses Bootstrap utility classes where possible */
@@ -27,6 +27,28 @@
     height: 100%;
     background-color: var(--renamer-overlay-bg);
     z-index: 9999;
+}
+
+/* Make empty pattern fields visually distinct from filled ones */
+.field-empty {
+    background-color: var(--bs-secondary-bg) !important;
+    font-style: italic;
+    color: var(--bs-secondary-color);
+}
+
+.field-filled {
+    background-color: var(--bs-body-bg) !important;
+    font-style: normal;
+    font-weight: 500;
+    color: var(--bs-body-color);
+}
+
+/* Default state for pattern fields */
+#folder-pattern,
+#filename-pattern {
+    background-color: var(--bs-secondary-bg);
+    font-style: italic;
+    color: var(--bs-secondary-color);
 }
 
 #loading-overlay .spinner-border {
@@ -269,12 +291,12 @@
         padding: var(--renamer-spacing-xs) var(--renamer-spacing-sm);
         margin: 0.0625rem;
     }
-    
+
     .results-modal .modal-dialog {
         max-width: 95vw;
         margin: 0.5rem auto;
     }
-    
+
     .preview-path,
     .current-path {
         max-width: 150px;
@@ -351,11 +373,11 @@
     .filters-section {
         display: none;
     }
-    
+
     .book-selection-table .book-checkbox {
         display: none;
     }
-    
+
     .preview-path {
         max-width: none;
         overflow: visible;

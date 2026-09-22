@@ -622,8 +622,7 @@ function showToast(type, message) {
     // Use existing toast system or create simple alert
     const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
     const alert = document.createElement('div');
-    alert.className = `alert ${alertClass} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
-    alert.style.zIndex = '9999';
+    alert.className = `alert ${alertClass} alert-dismissible fade show position-fixed app-toast-fixed`;
     alert.innerHTML = `
         ${message}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>

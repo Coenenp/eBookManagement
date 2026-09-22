@@ -1,0 +1,59 @@
+/* Multi-cover selector modal styles */
+.cover-preview {
+    height: 300px;
+    object-fit: contain;
+    background: var(--bs-secondary-bg);
+}
+
+.cover-hover-overlay {
+    background: rgba(var(--bs-dark-rgb), 0.7);
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+
+.cover-hover-overlay button {
+    pointer-events: all;
+}
+
+.cover-card {
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 2px solid transparent;
+}
+
+.cover-card:hover {
+    border-color: var(--bs-primary);
+    box-shadow: var(--bs-box-shadow-sm);
+}
+
+.cover-card:hover .cover-hover-overlay {
+    opacity: 1 !important;
+}
+
+.cover-card.selected {
+    border-color: var(--bs-success);
+    box-shadow: 0 0 0 3px rgba(var(--bs-success-rgb), 0.25);
+}
+
+.cover-radio:checked {
+    background-color: var(--bs-success);
+    border-color: var(--bs-success);
+}
+
+.cover-card-wrapper.filtered-out {
+    display: none !important;
+}
+
+.quality-excellent {
+    color: var(--bs-success);
+}
+.quality-good {
+    color: var(--bs-info);
+}
+.quality-fair {
+    color: var(--bs-warning);
+}
+.quality-poor {
+    color: var(--bs-danger);
+}

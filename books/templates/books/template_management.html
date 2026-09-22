@@ -6,29 +6,6 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'book/css/renamer.css' %}">
-<style>
-    /* Make empty pattern fields visually distinct from filled ones */
-    .field-empty {
-        background-color: #f8f9fa !important;
-        font-style: italic;
-        color: #6c757d;
-    }
-    
-    .field-filled {
-        background-color: white !important;
-        font-style: normal;
-        font-weight: 500;
-        color: #212529;
-    }
-    
-    /* Default state for pattern fields */
-    #folder-pattern,
-    #filename-pattern {
-        background-color: #f8f9fa;
-        font-style: italic;
-        color: #6c757d;
-    }
-</style>
 {% endblock %}
 
 {% block content %}

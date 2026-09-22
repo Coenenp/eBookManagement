@@ -4,6 +4,10 @@
     height: 8px;
 }
 
+.progress-min-w-100 {
+    min-width: 100px;
+}
+
 .folder-progress-container .progress-bar {
     transition: width 0.3s ease-in-out;
 }
@@ -20,15 +24,6 @@
     width: 100% !important;
 }
 
-/* Notification styles using Bootstrap utilities */
-.notification-fixed {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: var(--bs-zindex-modal, 1055);
-    min-width: 300px;
-}
-
 /* Button states */
 .scan-all-btn-loading {
     opacity: 0.7;
@@ -41,7 +36,7 @@
 }
 
 .folder-progress-container:hover {
-    background-color: var(--bs-secondary-bg, rgba(0, 0, 0, 0.02));
+    background-color: var(--bs-secondary-bg);
 }
 
 /* Progress numbers styling using Bootstrap text colors */

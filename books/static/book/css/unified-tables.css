@@ -20,7 +20,7 @@
     background: var(--bs-light-bg-subtle);
     border-bottom: 1px solid var(--bs-border-color);
     padding: 1.25rem 1.5rem;
-    
+
     display: flex;
     justify-content: between;
     align-items: center;
@@ -64,7 +64,7 @@
 .unified-table {
     margin-bottom: 0;
     border: none;
-    
+
     /* Use Bootstrap theme colors */
     --bs-table-bg: var(--bs-body-bg);
     --bs-table-hover-bg: var(--bs-primary-bg-subtle);
@@ -165,13 +165,13 @@
     gap: 0.375rem;
 }
 
-.status-active { 
+.status-active {
     background-color: var(--bs-success-bg-subtle);
     color: var(--bs-success-text);
     border: 1px solid var(--bs-success-border-subtle);
 }
 
-.status-inactive { 
+.status-inactive {
     background-color: var(--bs-secondary-bg-subtle);
     color: var(--bs-secondary-text);
     border: 1px solid var(--bs-secondary-border-subtle);
@@ -186,22 +186,20 @@
     text-transform: capitalize;
 }
 
-.content-type-ebooks { 
+.content-type-ebooks {
     background-color: var(--bs-primary-bg-subtle);
     color: var(--bs-primary-text);
 }
 
-.content-type-comics { 
+.content-type-comics {
     background-color: var(--bs-warning-bg-subtle);
     color: var(--bs-warning-text);
 }
 
-.content-type-audiobooks { 
+.content-type-audiobooks {
     background-color: var(--bs-info-bg-subtle);
     color: var(--bs-info-text);
 }
-
-
 
 /* Path display */
 .path-display {
@@ -281,7 +279,7 @@
     color: var(--bs-primary-text);
     background-color: var(--bs-primary);
     border-color: var(--bs-primary);
-    transform: translateY(-1px);
+    transform: scale(1.1);
     box-shadow: 0 2px 4px rgba(var(--bs-primary-rgb), 0.3);
 }
 
@@ -295,7 +293,7 @@
     color: var(--bs-danger-text);
     background-color: var(--bs-danger);
     border-color: var(--bs-danger);
-    transform: translateY(-1px);
+    transform: scale(1.1);
     box-shadow: 0 2px 4px rgba(var(--bs-danger-rgb), 0.3);
 }
 
@@ -309,7 +307,7 @@
     color: var(--bs-info-text);
     background-color: var(--bs-info);
     border-color: var(--bs-info);
-    transform: translateY(-1px);
+    transform: scale(1.1);
     box-shadow: 0 2px 4px rgba(var(--bs-info-rgb), 0.3);
 }
 
@@ -345,35 +343,35 @@
         align-items: stretch;
         text-align: center;
     }
-    
+
     .unified-table-actions {
         justify-content: center;
         margin-top: 1rem;
     }
-    
+
     .unified-table thead th {
         padding: 0.75rem 0.5rem;
         font-size: 0.8125rem;
     }
-    
+
     .unified-table tbody td {
         padding: 0.75rem 0.5rem;
         font-size: 0.875rem;
     }
-    
+
     .path-display {
         max-width: 150px;
     }
-    
+
     .item-name {
         max-width: 120px;
     }
-    
+
     .action-buttons {
         flex-direction: column;
         gap: 0.25rem;
     }
-    
+
     .action-btn {
         min-width: auto;
         width: 100%;
@@ -392,13 +390,13 @@
     .unified-table tr {
         display: block;
     }
-    
+
     .unified-table thead tr {
         position: absolute;
         top: -9999px;
         left: -9999px;
     }
-    
+
     .unified-table tr {
         border: 1px solid var(--bs-border-color);
         border-radius: var(--bs-border-radius);
@@ -406,7 +404,7 @@
         background: var(--bs-body-bg);
         box-shadow: 0 1px 3px rgba(var(--bs-body-color-rgb), 0.1);
     }
-    
+
     .unified-table td {
         border: none !important;
         position: relative;
@@ -416,7 +414,7 @@
         padding-bottom: 0.75rem !important;
         text-align: right;
     }
-    
+
     .unified-table td:before {
         content: attr(data-label);
         position: absolute;
@@ -469,8 +467,13 @@
 }
 
 @keyframes pulse {
-    0%, 100% { opacity: 0.5; }
-    50% { opacity: 0.8; }
+    0%,
+    100% {
+        opacity: 0.5;
+    }
+    50% {
+        opacity: 0.8;
+    }
 }
 
 /* ======================================
@@ -517,12 +520,12 @@
     .action-buttons {
         display: none !important;
     }
-    
+
     .unified-table {
         background: white !important;
         color: black !important;
     }
-    
+
     .unified-table th,
     .unified-table td {
         background: var(--bs-body-bg, white) !important;

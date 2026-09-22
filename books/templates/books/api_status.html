@@ -4,38 +4,7 @@
 {% block title %}API Status - Book by Book{% endblock %}
 
 {% block extra_css %}
-<style>
-    .completeness-bar {
-        height: 20px;
-        background: var(--bs-secondary-bg);
-        border-radius: 4px;
-        overflow: hidden;
-    }
-    .completeness-fill {
-        height: 100%;
-        background: linear-gradient(90deg, var(--bs-danger) 0%, var(--bs-warning) 50%, var(--bs-success) 100%);
-        transition: width 0.3s ease;
-    }
-    .api-badge {
-        font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
-    }
-    .book-row:hover {
-        background-color: var(--bs-light);
-    }
-    .priority-high {
-        border-left: 4px solid var(--bs-danger);
-    }
-    .priority-medium {
-        border-left: 4px solid var(--bs-warning);
-    }
-    .priority-low {
-        border-left: 4px solid #17a2b8;
-    }
-    .priority-complete {
-        border-left: 4px solid #28a745;
-    }
-</style>
+<link href="{% static 'book/css/api-status.css' %}" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -147,11 +116,11 @@
                 <table class="table table-hover mb-0">
                     <thead>
                         <tr>
-                            <th style="width: 35%;">Book</th>
-                            <th style="width: 15%;">Completeness</th>
-                            <th style="width: 10%;">Priority</th>
-                            <th style="width: 25%;">Missing Sources</th>
-                            <th style="width: 15%;">Actions</th>
+                            <th class="col-width-book">Book</th>
+                            <th class="col-width-completeness">Completeness</th>
+                            <th class="col-width-priority">Priority</th>
+                            <th class="col-width-missing">Missing Sources</th>
+                            <th class="col-width-actions">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -164,7 +133,7 @@
                             <td>
                                 <div class="completeness-bar">
                                     <div class="completeness-fill" 
-                                         style="width: {{ book.api_completeness.metadata_completeness|floatformat:0 }}%"
+                                         style="--progress-width: {{ book.api_completeness.metadata_completeness|floatformat:0 }}%"
                                          title="{{ book.api_completeness.metadata_completeness|floatformat:0 }}%">
                                     </div>
                                 </div>

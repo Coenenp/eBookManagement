@@ -12,20 +12,20 @@ window.EbookLibrary = window.EbookLibrary || {};
 EbookLibrary.Bootstrap = {
     initTooltips() {
         const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-        return Array.from(tooltipTriggerList).map(el => new bootstrap.Tooltip(el));
+        return Array.from(tooltipTriggerList).map((el) => new bootstrap.Tooltip(el));
     },
 
     initPopovers() {
         const popoverTriggerList = document.querySelectorAll('[data-bs-toggle="popover"]');
-        return Array.from(popoverTriggerList).map(el => new bootstrap.Popover(el));
+        return Array.from(popoverTriggerList).map((el) => new bootstrap.Popover(el));
     },
 
     destroyTooltips() {
-        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((el) => {
             const tooltip = bootstrap.Tooltip.getInstance(el);
             if (tooltip) tooltip.dispose();
         });
-    }
+    },
 };
 
 /**
@@ -34,18 +34,19 @@ EbookLibrary.Bootstrap = {
 EbookLibrary.Images = {
     handleCoverErrors() {
         const bookCovers = document.querySelectorAll('.cover-img');
-        bookCovers.forEach(img => {
-            img.addEventListener('load', function() {
+        bookCovers.forEach((img) => {
+            img.addEventListener('load', function () {
                 this.classList.add('loaded');
             });
-            
-            img.addEventListener('error', function() {
-                const coverSize = Array.from(this.classList).find(cls => cls.startsWith('cover-')) || 'cover-medium';
-                
+
+            img.addEventListener('error', function () {
+                const coverSize = Array.from(this.classList).find((cls) => cls.startsWith('cover-')) || 'cover-medium';
+
                 const fallback = document.createElement('div');
                 fallback.className = `bg-secondary text-white rounded shadow-sm d-flex align-items-center justify-content-center cover-placeholder ${coverSize}`;
-                fallback.innerHTML = '<div class="text-center"><i class="fas fa-book fa-2x mb-2"></i><div class="small">Cover Error</div></div>';
-                
+                fallback.innerHTML =
+                    '<div class="text-center"><i class="fas fa-book fa-2x mb-2"></i><div class="small">Cover Error</div></div>';
+
                 if (this.parentNode) {
                     this.parentNode.replaceChild(fallback, this);
                 }
@@ -75,7 +76,7 @@ EbookLibrary.Images = {
             reader.onerror = (e) => reject(e);
             reader.readAsDataURL(file);
         });
-    }
+    },
 };
 
 /**
@@ -83,13 +84,13 @@ EbookLibrary.Images = {
  */
 EbookLibrary.Forms = {
     addLoadingStates() {
-        document.querySelectorAll('form').forEach(form => {
+        document.querySelectorAll('form').forEach((form) => {
             // Skip forms that handle their own loading states
             if (form.id === 'settingsForm' || form.classList.contains('no-auto-loading')) {
                 return;
             }
-            
-            form.addEventListener('submit', function() {
+
+            form.addEventListener('submit', function () {
                 const submitBtn = form.querySelector('button[type="submit"]');
                 if (submitBtn) {
                     submitBtn.disabled = true;
@@ -113,7 +114,7 @@ EbookLibrary.Forms = {
 
     getCSRFToken() {
         return document.querySelector('[name=csrfmiddlewaretoken]')?.value;
-    }
+    },
 };
 
 /**
@@ -128,8 +129,8 @@ EbookLibrary.Ajax = {
         const defaultOptions = {
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': this.getCSRFToken()
-            }
+                'X-CSRFToken': this.getCSRFToken(),
+            },
         };
 
         const mergedOptions = {
@@ -137,12 +138,12 @@ EbookLibrary.Ajax = {
             ...options,
             headers: {
                 ...defaultOptions.headers,
-                ...options.headers
-            }
+                ...options.headers,
+            },
         };
 
         return fetch(url, mergedOptions);
-    }
+    },
 };
 
 /**
@@ -152,37 +153,30 @@ EbookLibrary.UI = {
     showAlert(message, type = 'info', duration = 5000) {
         // Create alert element
         const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-        alertDiv.style.cssText = `
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            min-width: 300px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        `;
-        
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed app-toast-fixed`;
+
         alertDiv.innerHTML = `
             ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         `;
-        
+
         // Add to page
         document.body.appendChild(alertDiv);
-        
+
         // Auto-remove after duration
         setTimeout(() => {
             if (alertDiv.parentNode) {
                 alertDiv.remove();
             }
         }, duration);
-        
+
         return alertDiv;
     },
 
     showToast(title, message, type = 'info') {
         // Simple toast implementation using Bootstrap alert
         return this.showAlert(`<strong>${title}</strong><br>${message}`, type);
-    }
+    },
 };
 
 /**
@@ -191,7 +185,7 @@ EbookLibrary.UI = {
 EbookLibrary.ProgressBars = {
     initializeAll() {
         // Initialize all progress bars with data-width attributes
-        document.querySelectorAll('[data-width]').forEach(element => {
+        document.querySelectorAll('[data-width]').forEach((element) => {
             const width = element.getAttribute('data-width');
             if (width !== null && width !== '') {
                 // Set width via CSS custom property or direct style
@@ -208,7 +202,7 @@ EbookLibrary.ProgressBars = {
         if (typeof element === 'string') {
             element = document.querySelector(element);
         }
-        
+
         if (element) {
             if (element.classList.contains('reading-progress-bar')) {
                 element.style.setProperty('--reading-width', width + '%');
@@ -217,7 +211,7 @@ EbookLibrary.ProgressBars = {
             }
             element.setAttribute('data-width', width);
         }
-    }
+    },
 };
 
 /**
@@ -231,17 +225,16 @@ EbookLibrary.Notifications = {
             ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
-        
+
         let container = document.querySelector('.notification-container');
         if (!container) {
             container = document.createElement('div');
             container.className = 'notification-container position-fixed top-0 end-0 p-3';
-            container.style.zIndex = '1050';
             document.body.appendChild(container);
         }
-        
+
         container.appendChild(notification);
-        
+
         if (duration > 0) {
             setTimeout(() => {
                 if (notification.parentNode) {
@@ -249,7 +242,7 @@ EbookLibrary.Notifications = {
                 }
             }, duration);
         }
-    }
+    },
 };
 
 /**
@@ -261,12 +254,12 @@ EbookLibrary.Ajax = {
             method: 'GET',
             headers: {
                 'X-CSRFToken': EbookLibrary.Forms.getCSRFToken(),
-                'Content-Type': 'application/json'
-            }
+                'Content-Type': 'application/json',
+            },
         };
 
         const mergedOptions = { ...defaultOptions, ...options };
-        
+
         try {
             const response = await fetch(url, mergedOptions);
             if (!response.ok) {
@@ -283,7 +276,7 @@ EbookLibrary.Ajax = {
     async bookAction(bookId, action, data = {}) {
         return this.makeRequest(`/ajax/book/${bookId}/${action}/`, {
             method: 'POST',
-            body: JSON.stringify(data)
+            body: JSON.stringify(data),
         });
     },
 
@@ -302,14 +295,14 @@ EbookLibrary.Ajax = {
     async uploadCover(bookId, fileData) {
         const formData = new FormData();
         formData.append('cover_file', fileData);
-        
+
         return this.makeRequest(`/ajax/book/${bookId}/upload_cover/`, {
             method: 'POST',
             headers: {
-                'X-CSRFToken': EbookLibrary.Forms.getCSRFToken()
+                'X-CSRFToken': EbookLibrary.Forms.getCSRFToken(),
                 // Don't set Content-Type for FormData
             },
-            body: formData
+            body: formData,
         });
     },
 
@@ -320,9 +313,9 @@ EbookLibrary.Ajax = {
     async triggerScan(scanData) {
         return this.makeRequest('/ajax/trigger_scan/', {
             method: 'POST',
-            body: JSON.stringify(scanData)
+            body: JSON.stringify(scanData),
         });
-    }
+    },
 };
 
 /**
@@ -349,7 +342,7 @@ EbookLibrary.Sections = {
             console.warn('No suitable manager found for toggleSeries');
             return;
         }
-        
+
         // Use specific manager
         const managerName = managerType + 'Manager';
         const manager = window[managerName];
@@ -371,12 +364,12 @@ EbookLibrary.Sections = {
         if (!container) return;
 
         const selectedText = select.options[select.selectedIndex].text;
-        
+
         // Handle advanced preview with suggestion badges (content_types page)
         const previewSpan = container.querySelector('.content-type-preview span');
         if (previewSpan) {
             previewSpan.textContent = selectedText;
-            
+
             // Update suggestion badge if different from suggestion
             const suggestionBadge = container.querySelector('.badge.bg-info');
             if (suggestionBadge) {
@@ -391,32 +384,32 @@ EbookLibrary.Sections = {
             }
             return;
         }
-        
+
         // Handle simple preview (other wizard pages)
         const preview = container.querySelector('.content-type-preview');
         if (preview) {
             const prefix = options.prefix || 'Will scan as: ';
             preview.textContent = prefix + selectedText;
         }
-    }
+    },
 };
 
 /**
  * Initialize all common functionality
  */
-EbookLibrary.init = function() {
+EbookLibrary.init = function () {
     // Initialize Bootstrap components
     this.Bootstrap.initTooltips();
-    
+
     // Setup image error handling
     this.Images.handleCoverErrors();
-    
+
     // Setup form loading states
     this.Forms.addLoadingStates();
     this.ProgressBars.initializeAll();
-    
+
     console.log('Ebook Library shared utilities initialized');
-    
+
     // Expose as both names for compatibility
     window.MediaLibraryUtils = window.EbookLibrary;
 

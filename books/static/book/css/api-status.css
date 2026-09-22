@@ -1,0 +1,63 @@
+/* API Status page styles */
+.completeness-bar {
+    height: 20px;
+    background: var(--bs-secondary-bg);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.completeness-fill {
+    height: 100%;
+    width: var(--progress-width, 0%);
+    background: linear-gradient(90deg, var(--bs-danger) 0%, var(--bs-warning) 50%, var(--bs-success) 100%);
+    transition: width 0.3s ease;
+}
+
+.progress-bar-complete {
+    width: 100% !important;
+}
+
+.api-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.book-row:hover {
+    background-color: var(--bs-tertiary-bg);
+}
+
+.priority-high {
+    border-left: 4px solid var(--bs-danger);
+}
+
+.priority-medium {
+    border-left: 4px solid var(--bs-warning);
+}
+
+.priority-low {
+    border-left: 4px solid var(--bs-info);
+}
+
+.priority-complete {
+    border-left: 4px solid var(--bs-success);
+}
+
+.col-width-book {
+    width: 35%;
+}
+
+.col-width-completeness {
+    width: 15%;
+}
+
+.col-width-priority {
+    width: 10%;
+}
+
+.col-width-missing {
+    width: 25%;
+}
+
+.col-width-actions {
+    width: 15%;
+}

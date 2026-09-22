@@ -161,29 +161,19 @@
                 // Add hover effects
                 card.addEventListener('mouseenter', () => {
                     card.classList.add('shadow-sm');
-                    const chevron = card.querySelector('.fa-chevron-right');
-                    if (chevron) {
-                        chevron.style.transform = 'translateX(3px)';
-                        chevron.style.transition = 'transform 0.2s ease';
-                    }
                 });
 
                 card.addEventListener('mouseleave', () => {
                     card.classList.remove('shadow-sm');
-                    const chevron = card.querySelector('.fa-chevron-right');
-                    if (chevron) {
-                        chevron.style.transform = 'translateX(0)';
-                    }
                 });
 
                 // Add click feedback
                 card.addEventListener('click', (e) => {
                     // Add brief scale effect
-                    card.style.transform = 'scale(0.98)';
-                    card.style.transition = 'transform 0.1s ease';
+                    card.classList.add('card-press');
 
                     setTimeout(() => {
-                        card.style.transform = 'scale(1)';
+                        card.classList.remove('card-press');
                     }, 100);
                 });
             });
@@ -197,33 +187,27 @@
             const completionIcon = document.querySelector('.completion-icon i');
             if (completionIcon) {
                 setTimeout(() => {
-                    completionIcon.style.animation = 'pulse 2s ease-in-out infinite';
+                    completionIcon.parentElement.classList.add('is-animated');
                 }, 500);
             }
 
             // Animate feature highlights
             const features = document.querySelectorAll('.feature-highlight');
             features.forEach((feature, index) => {
-                feature.style.opacity = '0';
-                feature.style.transform = 'translateY(20px)';
-                feature.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+                feature.classList.add('is-entering');
 
                 setTimeout(() => {
-                    feature.style.opacity = '1';
-                    feature.style.transform = 'translateY(0)';
+                    feature.classList.add('is-visible');
                 }, 200 * index);
             });
 
             // Animate action cards
             const cards = document.querySelectorAll('.action-card');
             cards.forEach((card, index) => {
-                card.style.opacity = '0';
-                card.style.transform = 'translateX(-20px)';
-                card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                card.classList.add('is-entering');
 
                 setTimeout(() => {
-                    card.style.opacity = '1';
-                    card.style.transform = 'translateX(0)';
+                    card.classList.add('is-visible');
                 }, 100 * index);
             });
         },

@@ -154,24 +154,24 @@
                         </div>
 
                         <!-- Pattern Preview -->
-                        <div id="pattern-preview" class="mt-3" style="display: none;">
+                        <div id="pattern-preview" class="mt-3 d-none">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label fw-semibold">
                                         <i class="fas fa-folder me-1"></i>Folder Pattern
                                     </label>
-                                    <div class="border rounded p-2 bg-light font-monospace" style="font-size: 0.7rem; word-break: break-all;" id="folder-pattern-preview"></div>
+                                    <div class="border rounded p-2 bg-light font-monospace pattern-preview-text" id="folder-pattern-preview"></div>
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label fw-semibold">
                                         <i class="fas fa-file me-1"></i>Filename Pattern
                                     </label>
-                                    <div class="border rounded p-2 bg-light font-monospace" style="font-size: 0.7rem; word-break: break-all;" id="filename-pattern-preview"></div>
+                                    <div class="border rounded p-2 bg-light font-monospace pattern-preview-text" id="filename-pattern-preview"></div>
                                 </div>
                             </div>
                             <div class="alert alert-info">
                                 <small class="fw-semibold">Preview Example:</small>
-                                <div class="font-monospace mt-1" style="font-size: 0.75rem; word-break: break-all;" id="full-path-preview"></div>
+                                <div class="font-monospace mt-1 pattern-preview-text-lg" id="full-path-preview"></div>
                             </div>
                             
                             <!-- Save Default Template Button -->
@@ -188,8 +188,7 @@
                                 </h6>
                                 <div class="list-group">
                                     {% for example in pattern_examples %}
-                                    <div class="list-group-item list-group-item-action example-clickable" 
-                                         style="cursor: pointer;"
+                                    <div class="list-group-item list-group-item-action example-clickable list-item-clickable" 
                                          data-folder="{{ example.folder }}"
                                          data-filename="{{ example.filename }}">
                                         <div class="d-flex w-100 justify-content-between">
@@ -291,7 +290,7 @@
                             </button>
                         </div>
 
-                        <div id="maint-result" class="mt-3" style="display: none;"></div>
+                        <div id="maint-result" class="mt-3 d-none"></div>
                     </div>
                 </div>
 
@@ -326,7 +325,7 @@
                             <i class="fas fa-trash-alt me-1"></i>Clean orphaned covers
                         </button>
 
-                        <div id="cover-cache-result" class="mt-3" style="display: none;"></div>
+                        <div id="cover-cache-result" class="mt-3 d-none"></div>
                     </div>
                 </div>
 

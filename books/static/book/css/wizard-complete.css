@@ -22,6 +22,49 @@ body {
 }
 
 @keyframes fa-spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+/* Action card hover/click feedback */
+.action-card-clickable:hover .fa-chevron-right {
+    transform: translateX(3px);
+    transition: transform 0.2s ease;
+}
+
+.action-card-clickable.card-press {
+    transform: scale(0.98);
+    transition: transform 0.1s ease;
+}
+
+/* Completion icon pulse, started via JS after a short delay */
+.completion-icon.is-animated i {
+    animation: pulse 2s ease-in-out infinite;
+}
+
+/* Staggered entrance animation for feature highlights and action cards */
+.feature-highlight.is-entering,
+.action-card.is-entering {
+    opacity: 0;
+    transform: translateY(20px);
+    transition:
+        opacity 0.6s ease,
+        transform 0.6s ease;
+}
+
+.action-card.is-entering {
+    transform: translateX(-20px);
+    transition:
+        opacity 0.5s ease,
+        transform 0.5s ease;
+}
+
+.feature-highlight.is-entering.is-visible,
+.action-card.is-entering.is-visible {
+    opacity: 1;
+    transform: translate(0, 0);
 }

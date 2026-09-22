@@ -598,7 +598,7 @@ class UserSettingsManager {
             const patternPreview = document.getElementById('pattern-preview');
 
             if (!selectedOption || !selectedOption.value) {
-                patternPreview.style.display = 'none';
+                patternPreview.classList.add('d-none');
                 return;
             }
 
@@ -615,7 +615,7 @@ class UserSettingsManager {
             document.getElementById('full-path-preview').textContent = samplePath;
 
             // Show the preview
-            patternPreview.style.display = 'block';
+            patternPreview.classList.remove('d-none');
         });
 
         // Load default template if specified
@@ -681,7 +681,7 @@ class UserSettingsManager {
                     document.getElementById('filename-pattern-preview').textContent = filenamePattern;
                     const samplePath = this.generateSamplePath(folderPattern, filenamePattern);
                     document.getElementById('full-path-preview').textContent = samplePath;
-                    document.getElementById('pattern-preview').style.display = 'block';
+                    document.getElementById('pattern-preview').classList.remove('d-none');
 
                     // Scroll to template selector to show it's cleared
                     templateSelector.scrollIntoView({ behavior: 'smooth', block: 'center' });

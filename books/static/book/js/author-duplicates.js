@@ -119,7 +119,7 @@ class AuthorDuplicatesManager {
                 if (data.success) {
                     alert(data.message);
                     // Remove the merged group from display
-                    form.closest('.duplicate-group').style.display = 'none';
+                    form.closest('.duplicate-group').classList.add('d-none');
                 } else {
                     alert('Error: ' + data.error);
                 }

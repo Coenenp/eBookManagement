@@ -64,7 +64,7 @@ class AuthorMaintenanceManager {
 
     showResult(type, message) {
         this.resultEl.innerHTML = `<div class="alert alert-${type}">${this.escapeHtml(message)}</div>`;
-        this.resultEl.style.display = 'block';
+        this.resultEl.classList.remove('d-none');
     }
 
     renderStats(data) {
@@ -120,7 +120,7 @@ class AuthorMaintenanceManager {
         }
 
         this.resultEl.innerHTML = html;
-        this.resultEl.style.display = 'block';
+        this.resultEl.classList.remove('d-none');
     }
 
     runMaintenance(dryRun) {

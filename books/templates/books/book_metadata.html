@@ -8,23 +8,13 @@
 {% block title %}{{ book.filename }} - Ebook Library Manager{% endblock %}
 
 {% block extra_css %}
-<style>
-    /* Section headers with visual separation */
-    h3 {
-        border-bottom: 2px solid #dee2e6;
-        padding-bottom: 0.5rem;
-        margin-bottom: 1rem;
-    }
-    
-    /* Visual flow between sections */
-    .mb-4 {
-        scroll-margin-top: 80px; /* For smooth scrolling to sections */
-    }
-</style>
+<link href="{% static 'book/css/book-metadata.css' %}" rel="stylesheet">
+<link href="{% static 'book/css/cover-selection.css' %}" rel="stylesheet">
+<link href="{% static 'book/css/multi-cover-selector.css' %}" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid book-metadata-page">
     <!-- Header Section -->
     <div class="row mb-4">
         <div class="col-12">

@@ -1,0 +1,29 @@
+/* Cover selection grid styles */
+.cover-option {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.cover-option:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--bs-box-shadow);
+}
+
+.cover-option.selected-final {
+    border-color: var(--bs-success) !important;
+    box-shadow: 0 0 15px rgba(var(--bs-success-rgb), 0.4);
+}
+
+.cover-option img {
+    max-height: 200px;
+    object-fit: contain;
+}
+
+.cover-option-wrapper {
+    position: relative;
+}
+
+.border-success.border-3 {
+    box-shadow: 0 0 20px rgba(var(--bs-success-rgb), 0.6);
+}

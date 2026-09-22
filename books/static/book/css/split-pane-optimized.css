@@ -3,6 +3,22 @@
    Optimized for performance & Bootstrap
 ========================================= */
 
+.mobile-back-btn {
+    top: 10px;
+    left: 10px;
+    z-index: 1000;
+}
+
+/* Brief scale bump used when a counter value updates */
+#item-count {
+    display: inline-block;
+    transition: transform 0.2s ease;
+}
+
+#item-count.count-bump {
+    transform: scale(1.2);
+}
+
 /* Core layout container */
 .container-fluid.h-100 {
     height: calc(100vh - 60px); /* Reduced from 100px for more compact view */
@@ -240,7 +256,7 @@
     overflow: hidden;
     flex-shrink: 0;
     margin-right: 8px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--bs-box-shadow-sm);
 }
 .item-cover-tiny img {
     width: 100%;
@@ -425,7 +441,7 @@
     top: 0;
     z-index: 10;
     background-color: var(--bs-light);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--bs-box-shadow-sm);
 }
 
 .condensed-table th {

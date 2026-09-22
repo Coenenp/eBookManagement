@@ -27,11 +27,11 @@ class MediaLibraryUtils {
      */
     static formatFileSize(bytes) {
         if (!bytes || bytes === 0) return '0 B';
-        
+
         const k = 1024;
         const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        
+
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
@@ -42,7 +42,7 @@ class MediaLibraryUtils {
      */
     static formatDate(dateString) {
         if (!dateString) return 'Never';
-        
+
         try {
             const date = new Date(dateString);
             return date.toLocaleDateString('en-US', {
@@ -50,7 +50,7 @@ class MediaLibraryUtils {
                 month: 'short',
                 day: 'numeric',
                 hour: '2-digit',
-                minute: '2-digit'
+                minute: '2-digit',
             });
         } catch (error) {
             console.error('Error formatting date:', error);
@@ -74,7 +74,7 @@ class MediaLibraryUtils {
      */
     static showLoadingState(container, message = 'Loading...') {
         if (!container) return;
-        
+
         container.innerHTML = `
             <div class="text-center p-4">
                 <div class="spinner-border text-primary mb-3" role="status">
@@ -92,9 +92,14 @@ class MediaLibraryUtils {
      * @param {string} message - Empty state message
      * @param {string} icon - Font Awesome icon class
      */
-    static showEmptyState(container, title = 'No Items Found', message = 'No items match your current filters.', icon = 'fas fa-inbox') {
+    static showEmptyState(
+        container,
+        title = 'No Items Found',
+        message = 'No items match your current filters.',
+        icon = 'fas fa-inbox'
+    ) {
         if (!container) return;
-        
+
         container.innerHTML = `
             <div class="text-center p-4 text-muted">
                 <i class="${MediaLibraryUtils.escapeHtml(icon)} fa-3x mb-3"></i>
@@ -111,7 +116,7 @@ class MediaLibraryUtils {
      */
     static showErrorState(container, message = 'An error occurred while loading data.') {
         if (!container) return;
-        
+
         container.innerHTML = `
             <div class="text-center p-4 text-danger">
                 <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
@@ -132,35 +137,28 @@ class MediaLibraryUtils {
      */
     static showToast(message, type = 'info', duration = 5000) {
         // Remove existing toasts
-        document.querySelectorAll('.media-toast').forEach(toast => toast.remove());
-        
+        document.querySelectorAll('.media-toast').forEach((toast) => toast.remove());
+
         const toastTypes = {
             success: { icon: 'check-circle', class: 'success' },
             error: { icon: 'exclamation-circle', class: 'danger' },
             warning: { icon: 'exclamation-triangle', class: 'warning' },
-            info: { icon: 'info-circle', class: 'info' }
+            info: { icon: 'info-circle', class: 'info' },
         };
-        
+
         const toastConfig = toastTypes[type] || toastTypes.info;
-        
+
         const toast = document.createElement('div');
-        toast.className = `media-toast alert alert-${toastConfig.class} alert-dismissible fade show position-fixed`;
-        toast.style.cssText = `
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            min-width: 300px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        `;
-        
+        toast.className = `media-toast alert alert-${toastConfig.class} alert-dismissible fade show position-fixed app-toast-fixed`;
+
         toast.innerHTML = `
             <i class="fas fa-${toastConfig.icon} me-2"></i>
             ${MediaLibraryUtils.escapeHtml(message)}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
-        
+
         document.body.appendChild(toast);
-        
+
         // Auto-remove after duration
         setTimeout(() => {
             if (toast.parentNode) {
@@ -180,16 +178,16 @@ class MediaLibraryUtils {
             const defaultOptions = {
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': MediaLibraryUtils.getCsrfToken()
-                }
+                    'X-CSRFToken': MediaLibraryUtils.getCsrfToken(),
+                },
             };
-            
+
             const response = await fetch(url, { ...defaultOptions, ...options });
-            
+
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            
+
             return await response.json();
         } catch (error) {
             console.error('Request failed:', error);
@@ -230,27 +228,23 @@ class MediaLibraryUtils {
         // Apply search filter
         if (searchTerm.trim()) {
             const search = searchTerm.toLowerCase();
-            filtered = filtered.filter(item => {
+            filtered = filtered.filter((item) => {
                 const title = (item.title || '').toLowerCase();
                 const author = (item.author || '').toLowerCase();
                 const series = (item.series || '').toLowerCase();
-                
-                return title.includes(search) || 
-                       author.includes(search) || 
-                       series.includes(search);
+
+                return title.includes(search) || author.includes(search) || series.includes(search);
             });
         }
 
         // Apply format filter
         if (formatFilter) {
-            filtered = filtered.filter(item => 
-                (item.format || '').toLowerCase() === formatFilter.toLowerCase()
-            );
+            filtered = filtered.filter((item) => (item.format || '').toLowerCase() === formatFilter.toLowerCase());
         }
 
         // Apply status filter
         if (statusFilter) {
-            filtered = filtered.filter(item => {
+            filtered = filtered.filter((item) => {
                 switch (statusFilter) {
                     case 'read':
                         return item.is_read;
@@ -268,19 +262,19 @@ class MediaLibraryUtils {
         filtered.sort((a, b) => {
             let aVal = a[sortBy] || '';
             let bVal = b[sortBy] || '';
-            
+
             // Handle date sorting
             if (sortBy.includes('date') || sortBy.includes('time')) {
                 aVal = new Date(aVal);
                 bVal = new Date(bVal);
             }
-            
+
             // Handle numeric sorting
             if (sortBy === 'size') {
                 aVal = parseInt(aVal) || 0;
                 bVal = parseInt(bVal) || 0;
             }
-            
+
             if (aVal < bVal) return -1;
             if (aVal > bVal) return 1;
             return 0;
@@ -318,11 +312,14 @@ class MediaLibraryUtils {
                 window.electronAPI.showItemInFolder(filePath);
             } else {
                 // Fallback: copy path to clipboard
-                navigator.clipboard.writeText(filePath).then(() => {
-                    MediaLibraryUtils.showToast(`File path copied to clipboard: ${filePath}`, 'info');
-                }).catch(() => {
-                    MediaLibraryUtils.showToast('File path: ' + filePath, 'info', 10000);
-                });
+                navigator.clipboard
+                    .writeText(filePath)
+                    .then(() => {
+                        MediaLibraryUtils.showToast(`File path copied to clipboard: ${filePath}`, 'info');
+                    })
+                    .catch(() => {
+                        MediaLibraryUtils.showToast('File path: ' + filePath, 'info', 10000);
+                    });
             }
         } catch (error) {
             console.error('Error opening file location:', error);
@@ -337,23 +334,23 @@ class MediaLibraryUtils {
      */
     static sanitizeHtml(html) {
         if (!html) return '';
-        
+
         // Create a temporary div to parse HTML
         const temp = document.createElement('div');
         temp.innerHTML = html;
-        
+
         // Remove script tags and event handlers
-        temp.querySelectorAll('script').forEach(el => el.remove());
-        
+        temp.querySelectorAll('script').forEach((el) => el.remove());
+
         // Remove all event handler attributes (onclick, onload, etc.)
-        temp.querySelectorAll('*').forEach(el => {
-            Array.from(el.attributes).forEach(attr => {
+        temp.querySelectorAll('*').forEach((el) => {
+            Array.from(el.attributes).forEach((attr) => {
                 if (attr.name.startsWith('on')) {
                     el.removeAttribute(attr.name);
                 }
             });
         });
-        
+
         return temp.innerHTML;
     }
 }

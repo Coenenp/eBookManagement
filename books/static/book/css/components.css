@@ -3,6 +3,20 @@
    Optimized for Bootstrap compatibility
 ========================================= */
 
+/* Fixed-position toast/alert notification, shared by JS alert/toast helpers */
+.app-toast-fixed {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: var(--bs-zindex-modal, 1055);
+    min-width: 300px;
+    box-shadow: var(--bs-box-shadow);
+}
+
+.notification-container {
+    z-index: var(--bs-zindex-modal, 1055);
+}
+
 /* ======================================
    📚 Series Thumbnails and Covers
 ========================================= */
@@ -17,7 +31,7 @@
     height: 60px;
     object-fit: cover;
     border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--bs-box-shadow-sm);
 }
 
 .series-cover-placeholder {
@@ -37,7 +51,7 @@
     bottom: -5px;
     right: -5px;
     background: var(--bs-primary);
-    color: white;
+    color: var(--bs-white);
     border-radius: 50%;
     width: 20px;
     height: 20px;
@@ -46,8 +60,8 @@
     justify-content: center;
     font-size: 10px;
     font-weight: bold;
-    border: 2px solid white;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    border: 2px solid var(--bs-white);
+    box-shadow: var(--bs-box-shadow-sm);
 }
 
 .series-info {
@@ -241,6 +255,11 @@
     border-radius: 0.5rem !important;
     box-shadow: var(--bs-box-shadow-sm);
     border: none;
+}
+
+/* Author profile photo thumbnail */
+.author-photo {
+    max-width: 200px;
 }
 
 /* Size variants with enforced 3:2 aspect ratio */
@@ -514,7 +533,7 @@
     border-radius: 50%;
     display: inline-block;
     margin-right: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--bs-box-shadow-sm);
     position: relative;
 }
 .status-indicator::after {

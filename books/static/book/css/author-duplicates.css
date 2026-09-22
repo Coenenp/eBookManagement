@@ -1,0 +1,17 @@
+/* Author duplicates page styles */
+.container {
+    max-width: 1200px;
+}
+
+.threshold-slider {
+    max-width: 300px;
+}
+
+.threshold-value {
+    min-width: 50px;
+    display: inline-block;
+}
+
+.author-item:hover {
+    background-color: var(--bs-tertiary-bg);
+}

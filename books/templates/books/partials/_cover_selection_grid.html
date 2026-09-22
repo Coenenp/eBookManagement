@@ -134,29 +134,3 @@
     <i class="fas fa-info-circle me-2"></i>No covers available. Use the Rescan button to fetch covers from external sources.
 </div>
 {% endif %}
-
-<style>
-.cover-option {
-    cursor: pointer;
-    transition: all 0.3s ease;
-    position: relative;
-}
-.cover-option:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-.cover-option.selected-final {
-    border-color: var(--bs-success) !important;
-    box-shadow: 0 0 15px rgba(25, 135, 84, 0.4);
-}
-.cover-option img {
-    max-height: 200px;
-    object-fit: contain;
-}
-.cover-option-wrapper {
-    position: relative;
-}
-.border-success.border-3 {
-    box-shadow: 0 0 20px rgba(25, 135, 84, 0.6);
-}
-</style>

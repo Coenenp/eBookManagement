@@ -70,7 +70,7 @@
         <div class="card h-100 cover-card" data-internal-path="">
             <div class="position-relative">
                 <!-- Image preview -->
-                <img src="" class="card-img-top cover-preview" alt="Cover preview" style="height: 300px; object-fit: contain; background: #f8f9fa;">
+                <img src="" class="card-img-top cover-preview" alt="Cover preview">
                 
                 <!-- Badges -->
                 <div class="position-absolute top-0 start-0 m-2">
@@ -115,8 +115,8 @@
             </div>
             
             <!-- Hover overlay for full preview -->
-            <div class="cover-hover-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style="background: rgba(0,0,0,0.7); opacity: 0; transition: opacity 0.2s; pointer-events: none;">
-                <button class="btn btn-light btn-sm" style="pointer-events: all;">
+            <div class="cover-hover-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center">
+                <button class="btn btn-light btn-sm">
                     <i class="bi bi-zoom-in me-1"></i>
                     View Full Size
                 </button>
@@ -124,39 +124,3 @@
         </div>
     </div>
 </template>
-
-<style>
-.cover-card {
-    cursor: pointer;
-    transition: all 0.2s;
-    border: 2px solid transparent;
-}
-
-.cover-card:hover {
-    border-color: #0d6efd;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}
-
-.cover-card:hover .cover-hover-overlay {
-    opacity: 1 !important;
-}
-
-.cover-card.selected {
-    border-color: #198754;
-    box-shadow: 0 0 0 3px rgba(25, 135, 84, 0.25);
-}
-
-.cover-radio:checked {
-    background-color: #198754;
-    border-color: #198754;
-}
-
-.cover-card-wrapper.filtered-out {
-    display: none !important;
-}
-
-.quality-excellent { color: #198754; }
-.quality-good { color: #0dcaf0; }
-.quality-fair { color: #ffc107; }
-.quality-poor { color: #dc3545; }
-</style>

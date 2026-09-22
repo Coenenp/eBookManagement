@@ -16,10 +16,10 @@
     padding: 1rem;
     margin-bottom: 1rem;
     position: relative;
-    
+
     /* Add subtle shadow for depth */
     box-shadow: 0 2px 4px rgba(var(--bs-primary-rgb), 0.1);
-    
+
     /* Ensure proper color inheritance */
     color: var(--bs-body-color);
 }
@@ -29,7 +29,7 @@
     .filter-section {
         background: var(--bs-dark-bg-subtle, var(--bs-secondary-bg-subtle));
         border-color: var(--bs-secondary-border-subtle);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        box-shadow: var(--bs-box-shadow-sm);
     }
 }
 
@@ -57,11 +57,11 @@
     background-color: var(--bs-body-bg);
     border: 1px solid var(--bs-border-color);
     color: var(--bs-body-color);
-    
+
     /* Padding for icon */
     padding-left: 2.5rem;
     padding-right: 2.5rem;
-    
+
     /* Enhanced styling */
     border-radius: var(--bs-border-radius);
     transition: all 0.2s ease-in-out;
@@ -89,26 +89,26 @@
     top: 50%;
     transform: translateY(-50%);
     z-index: 3;
-    
+
     /* Reset button styling */
     border: none;
     background: transparent;
     padding: 0.25rem;
-    
+
     /* Use theme colors */
     color: var(--bs-secondary);
-    
+
     /* Sizing and styling */
     width: 1.5rem;
     height: 1.5rem;
     border-radius: var(--bs-border-radius-sm);
-    
+
     /* Animation */
     transition: all 0.2s ease-in-out;
-    
+
     /* Initially hidden */
     display: none;
-    
+
     /* Ensure proper centering */
     align-items: center;
     justify-content: center;
@@ -143,11 +143,11 @@
     border: 1px solid var(--bs-border-color);
     color: var(--bs-body-color);
     font-size: 0.875rem;
-    
+
     /* Enhanced styling */
     border-radius: var(--bs-border-radius);
     transition: all 0.2s ease-in-out;
-    
+
     /* Ensure proper background image for dropdown arrow */
     background-image: var(--bs-form-select-bg-img);
 }
@@ -171,7 +171,7 @@
     font-weight: 500;
     border-radius: var(--bs-border-radius);
     transition: all 0.2s ease-in-out;
-    
+
     /* Ensure proper spacing for icons */
     display: inline-flex;
     align-items: center;
@@ -204,7 +204,7 @@
     margin-top: 0.75rem;
     padding-top: 0.75rem;
     border-top: 1px solid var(--bs-border-color-translucent);
-    
+
     /* Smooth animation */
     transition: all 0.3s ease-in-out;
 }
@@ -242,20 +242,20 @@
         padding: 0.75rem;
         margin-bottom: 0.75rem;
     }
-    
+
     .filter-section .row.g-2 {
         --bs-gutter-x: 0.5rem;
     }
-    
+
     .filter-section .btn {
         font-size: 0.8125rem;
         padding: 0.375rem 0.75rem;
     }
-    
+
     .search-icon {
         font-size: 0.8125rem;
     }
-    
+
     .clear-search-btn {
         width: 1.25rem;
         height: 1.25rem;
@@ -288,12 +288,12 @@
     .filter-section {
         border-width: 2px;
     }
-    
+
     .filter-section .form-control,
     .filter-section .form-select {
         border-width: 2px;
     }
-    
+
     .search-icon,
     .clear-search-btn {
         color: var(--bs-body-color);
@@ -342,8 +342,12 @@
 }
 
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* Badge styling in filter context */
@@ -359,17 +363,17 @@
 }
 
 /* RTL support */
-[dir="rtl"] .search-icon {
+[dir='rtl'] .search-icon {
     left: auto;
     right: 0.75rem;
 }
 
-[dir="rtl"] .clear-search-btn {
+[dir='rtl'] .clear-search-btn {
     right: auto;
     left: 0.5rem;
 }
 
-[dir="rtl"] .filter-section .form-control {
+[dir='rtl'] .filter-section .form-control {
     padding-left: 2.5rem;
     padding-right: 2.5rem;
 }

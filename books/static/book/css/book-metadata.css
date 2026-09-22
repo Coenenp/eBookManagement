@@ -1,0 +1,13 @@
+/* Book metadata page styles */
+
+/* Section headers with visual separation */
+.book-metadata-page h3 {
+    border-bottom: 2px solid var(--bs-border-color);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+/* Visual flow between sections, for smooth scrolling to sections */
+.book-metadata-page .mb-4 {
+    scroll-margin-top: 80px;
+}
