@@ -3,11 +3,12 @@
 Every filesystem-backed resource a test could touch -- the database, the
 media root, and the file-based cache -- is redirected into a fresh,
 per-run temporary directory. No test can therefore read or write anything
-under ``/workspace/state`` or ``/mnt/sample``, and a cleanup-orphans style
-test can never delete the real cover cache again (see TASK.md section 15,
-"Test isolation").
+outside that directory, and a cleanup-orphans style test can never delete
+the real cover cache again.
 """
 
+import atexit
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -45,3 +46,19 @@ CACHES = {
         "OPTIONS": {"MAX_ENTRIES": 1000},
     }
 }
+
+
+def _cleanup_test_tmp():
+    """Remove the per-run temp dir at exit, only if still inside the temp dir."""
+    tmp_root = Path(tempfile.gettempdir()).resolve()
+    try:
+        resolved = _TEST_TMP.resolve()
+    except OSError:
+        return
+    # Refuse to delete anything that is not (still) inside the system temp
+    # directory, as a guard against path confusion.
+    if resolved == tmp_root or tmp_root in resolved.parents:
+        shutil.rmtree(resolved, ignore_errors=True)
+
+
+atexit.register(_cleanup_test_tmp)

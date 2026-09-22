@@ -5,6 +5,8 @@ Tests cover saving, retrieving, deleting, and managing cached cover images.
 """
 
 import os
+import tempfile
+from pathlib import Path
 
 from django.conf import settings
 from django.test import TestCase
@@ -20,6 +22,16 @@ class CoverCacheTestCase(TestCase):
         self.test_book_path = "/media/books/test_book.epub"
         self.test_internal_path = "OEBPS/cover.jpg"
         self.test_cover_data = b"fake image data for testing"
+        # Safety: refuse to clear a real (non-temp) cache. Assert MEDIA_ROOT is
+        # inside the system temp dir before touching it, so clear_all() can
+        # never delete real cover files if the test settings regress.
+        media_root = Path(settings.MEDIA_ROOT).resolve()
+        tmp_root = Path(tempfile.gettempdir()).resolve()
+        self.assertTrue(
+            media_root == tmp_root or tmp_root in media_root.parents,
+            f"MEDIA_ROOT={settings.MEDIA_ROOT} is not inside the system temp "
+            f"directory; refusing to clear the cover cache.",
+        )
         # Start from an empty cache so cleanup_orphans/clear_all counts are
         # deterministic regardless of what earlier tests left in the shared
         # (temp) MEDIA_ROOT/cover_cache.
