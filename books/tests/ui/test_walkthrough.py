@@ -126,6 +126,8 @@ def test_rescan_scratch_folder_quick_scan(authenticated_page, app_url):
 
     # "Rescan books in folder" is the default choice; select the scratch folder
     # by name (its option label is "scratch (N books)") rather than a hardcoded id.
+    # Wait for the folder select to be populated with the scratch option.
+    page.wait_for_selector("#folder_id option:has-text(\"scratch\")", timeout=5000)
     scratch_value = (
         page.locator("#folder_id option").filter(has_text="scratch").first.get_attribute("value")
     )
