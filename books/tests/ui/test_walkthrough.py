@@ -124,8 +124,12 @@ def test_rescan_scratch_folder_quick_scan(authenticated_page, app_url):
     page.get_by_role("button", name="Start New Scan").click()
     page.click("#book-rescan-tab")
 
-    # "Rescan books in folder" is the default choice; select the scratch folder.
-    page.select_option("#folder_id", "1")
+    # "Rescan books in folder" is the default choice; select the scratch folder
+    # by name (its option label is "scratch (N books)") rather than a hardcoded id.
+    scratch_value = (
+        page.locator("#folder_id option").filter(has_text="scratch").first.get_attribute("value")
+    )
+    page.select_option("#folder_id", scratch_value)
     # Quick rescan: turn off Deep Scan (ISBN + external APIs).
     page.uncheck("#enable_external_apis_rescan")
 
