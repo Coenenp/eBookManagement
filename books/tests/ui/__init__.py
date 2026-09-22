@@ -1,0 +1,1 @@
+"""Make books/tests/ui a package so pytest-django collections are clean."""
