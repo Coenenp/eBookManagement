@@ -855,14 +855,39 @@ def _enrich_with_comicvine(book, extracted_data):
         # Search for the issue
         issue_result = api.search_issue(search_query)
 
+        from books.models import UnresolvedReason
+        from books.scanner.match_verification import Verdict, mark_resolved, mark_unresolved, verify_comic
+
         if issue_result:
-            logger.info(f"Found Comic Vine match for {search_query}: {issue_result.get('name', 'Unknown')}")
-            # Save Comic Vine metadata to database
-            api.save_comic_metadata(book, issue_result)
+            # Verify identity before merging (M1 match verification gate).
+            volume = issue_result.get("volume") or {}
+            result_series = volume.get("name")
+            result_issue = issue_result.get("issue_number")
+            result_publisher = (volume.get("publisher") or {}).get("name")
+
+            verdict = verify_comic(
+                series_name,
+                issue_number,
+                result_series,
+                result_issue,
+                result_publisher=result_publisher,
+            )
+
+            if verdict is Verdict.VERIFIED:
+                mark_resolved(book)
+                logger.info(f"Found Comic Vine match for {search_query}: {issue_result.get('name', 'Unknown')}")
+                # Save Comic Vine metadata to database
+                api.save_comic_metadata(book, issue_result)
+            elif verdict is Verdict.UNCERTAIN:
+                mark_unresolved(book, UnresolvedReason.UNCERTAIN)
+                logger.info(f"[COMICVINE] Uncertain match for {search_query} — held for review")
+            else:
+                logger.info(f"[COMICVINE] Rejected non-matching candidate for {search_query}")
         elif raw_series_name and not has_alias(raw_series_name):
             # Flag, don't silently drop: an unmapped Dutch series failed naive
             # ComicVine search. Surface it so it can be added to SERIES_ALIASES
             # deliberately rather than discovered by accident.
+            mark_unresolved(book, UnresolvedReason.UNMAPPED_SERIES)
             logger.warning(
                 f"[COMICVINE UNMAPPED SERIES] No match for unmapped series "
                 f"'{raw_series_name}' (query '{search_query}') — consider adding "

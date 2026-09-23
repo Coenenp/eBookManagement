@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 
 from django.test import TestCase, override_settings
 
+from books.models import Book, FinalMetadata, ScanFolder, UnresolvedReason
 from books.scanner.extractors.comic import _enrich_with_comicvine
 from books.scanner.extractors.comicvine_aliases import SERIES_ALIASES, canonicalize_series, has_alias
 
@@ -80,13 +81,16 @@ class ComicVineAliasWiringTests(TestCase):
         mock_api.search_issue.return_value = None
         mock_api_class.return_value = mock_api
 
-        book = Mock()
-        book.id = 3
+        scan_folder = ScanFolder.objects.create(path="/tmp/unmapped-test", name="Unmapped Test")
+        book = Book.objects.create(content_type="comic", scan_folder=scan_folder)
 
         with self.assertLogs("books.scanner", level="DEBUG") as cm:
             _enrich_with_comicvine(book, {"series": "De Dooltocht van Alex", "series_number": "1"})
 
         self.assertTrue(any("[COMICVINE UNMAPPED SERIES]" in m for m in cm.output))
+        # The flag is now also persisted per-book, not just logged.
+        fm = FinalMetadata.objects.get(book=book)
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.UNMAPPED_SERIES)
 
     @patch("books.scanner.extractors.comicvine.ComicVineAPI")
     @override_settings(COMICVINE_API_KEY="test_key")

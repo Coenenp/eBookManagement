@@ -26,7 +26,9 @@ from books.models import (
     DataSource,
     Genre,
     Publisher,
+    UnresolvedReason,
 )
+from books.scanner.match_verification import Verdict, mark_resolved, mark_unresolved, verify_title_author
 from books.scanner.rate_limiting import get_api_client
 from books.utils.author import attach_authors
 from books.utils.cache_key import make_cache_key
@@ -288,20 +290,29 @@ def _query_open_library_combined(book, title, author, isbn=None):
         # Process metadata from best match
         best_match = docs[0]
 
-        # For ISBN searches, we have high confidence since it's an exact match
-        if isbn:
-            match_confidence = 0.95  # High confidence for ISBN matches
-        else:
-            match_confidence = _calculate_match_confidence(
-                title,
-                author,
-                best_match.get("title", ""),
-                best_match.get("author_name", []),
-            )
+        # Verify identity before merging (M1 match verification gate).
+        verdict = verify_title_author(
+            title,
+            author,
+            best_match.get("title", ""),
+            best_match.get("author_name", []),
+            query_isbn=isbn,
+            result_isbn=best_match.get("isbn"),
+        )
 
-        if match_confidence > 0.5:
+        if verdict is Verdict.VERIFIED:
+            mark_resolved(book)
+            # For ISBN searches, we have high confidence since it's an exact match
+            match_confidence = 0.95 if isbn else _calculate_match_confidence(
+                title, author, best_match.get("title", ""), best_match.get("author_name", [])
+            )
             metadata_confidence = _calculate_final_confidence(metadata_source, match_confidence)
             _process_open_library_metadata(book, metadata_source, best_match, metadata_confidence)
+        elif verdict is Verdict.UNCERTAIN:
+            mark_unresolved(book, UnresolvedReason.UNCERTAIN)
+            logger.info(f"[OPEN LIBRARY] Uncertain match for '{title}' — held for review")
+        else:
+            logger.info(f"[OPEN LIBRARY] Rejected non-matching candidate for '{title}'")
 
         # Process covers from all results
         for doc in docs:
@@ -363,15 +374,28 @@ def _query_google_books_combined(book, title, author, isbn=None):
         # Process metadata from best match
         best = items[0].get("volumeInfo", {})
 
-        # For ISBN searches, we have high confidence since it's an exact match
-        if isbn:
-            match_confidence = 0.95  # High confidence for ISBN matches
-        else:
-            match_confidence = _calculate_match_confidence(title, author, best.get("title", ""), best.get("authors", []))
+        # Verify identity before merging (M1 match verification gate).
+        gb_isbns = [i.get("identifier") for i in best.get("industryIdentifiers", []) if i.get("type") in ("ISBN_13", "ISBN_10")]
+        verdict = verify_title_author(
+            title,
+            author,
+            best.get("title", ""),
+            best.get("authors", []),
+            query_isbn=isbn,
+            result_isbn=gb_isbns,
+        )
 
-        if match_confidence > 0.5:
+        if verdict is Verdict.VERIFIED:
+            mark_resolved(book)
+            # For ISBN searches, we have high confidence since it's an exact match
+            match_confidence = 0.95 if isbn else _calculate_match_confidence(title, author, best.get("title", ""), best.get("authors", []))
             metadata_confidence = _calculate_final_confidence(metadata_source, match_confidence)
             _process_google_books_metadata(book, metadata_source, best, metadata_confidence)
+        elif verdict is Verdict.UNCERTAIN:
+            mark_unresolved(book, UnresolvedReason.UNCERTAIN)
+            logger.info(f"[GOOGLE BOOKS] Uncertain match for '{title}' — held for review")
+        else:
+            logger.info(f"[GOOGLE BOOKS] Rejected non-matching candidate for '{title}'")
 
         # Process covers from all results
         for item in items:
@@ -423,9 +447,24 @@ def _query_goodreads_combined(book, title, author, isbn=None):
         best = data[0]
         match_confidence = _calculate_match_confidence(title, author, best.get("title", ""), [best.get("authorName", "")])
 
-        if match_confidence > 0.5:
+        # Verify identity before merging (M1 match verification gate).
+        verdict = verify_title_author(
+            title,
+            author,
+            best.get("title", ""),
+            [best.get("authorName", "")],
+            query_isbn=isbn,
+        )
+
+        if verdict is Verdict.VERIFIED:
+            mark_resolved(book)
             metadata_confidence = _calculate_final_confidence(metadata_source, match_confidence)
             _process_goodreads_metadata(book, metadata_source, best, metadata_confidence)
+        elif verdict is Verdict.UNCERTAIN:
+            mark_unresolved(book, UnresolvedReason.UNCERTAIN)
+            logger.info(f"[GOODREADS] Uncertain match for '{title}' — held for review")
+        else:
+            logger.info(f"[GOODREADS] Rejected non-matching candidate for '{title}'")
 
         # Process covers from all results
         for item in data:
