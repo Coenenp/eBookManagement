@@ -62,6 +62,22 @@ class ComicVineAPITests(TestCase):
         self.assertEqual(params["format"], "json")
 
     @patch("books.scanner.extractors.comicvine.get_api_client")
+    @override_settings(COMICVINE_API_KEY="test_key", COMICVINE_USER_AGENT="eBookManagement-Test/1.0")
+    def test_make_request_sends_user_agent_header(self, mock_get_client):
+        """Comic Vine rejects requests without a unique User-Agent (HTTP 403),
+        so every request must forward the configured User-Agent header."""
+        mock_client = Mock()
+        mock_client.make_request.return_value = {"status_code": 1, "results": []}
+        mock_get_client.return_value = mock_client
+
+        api = ComicVineAPI()
+        api._make_request("test_endpoint", {"param": "value"})
+
+        kwargs = mock_client.make_request.call_args.kwargs
+        headers = kwargs.get("headers", {})
+        self.assertEqual(headers.get("User-Agent"), "eBookManagement-Test/1.0")
+
+    @patch("books.scanner.extractors.comicvine.get_api_client")
     @override_settings(COMICVINE_API_KEY="test_key")
     def test_make_request_api_error(self, mock_get_client):
         """Test API request with API error response"""

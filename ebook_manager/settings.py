@@ -221,6 +221,13 @@ GOOGLE_BOOKS_API_KEY = os.getenv("GOOGLE_BOOKS_API_KEY")
 # Comic Vine API Key
 COMICVINE_API_KEY = os.getenv("COMICVINE_API_KEY")
 
+# Comic Vine requires every request to carry a unique, identifying User-Agent.
+# Without one the API returns HTTP 403 for otherwise-valid requests.
+COMICVINE_USER_AGENT = os.getenv(
+    "COMICVINE_USER_AGENT",
+    "eBookManagement/1.0 (+https://github.com/Coenenp/eBookManagement)",
+)
+
 # Apify API Token for Goodreads scraping (optional)
 APIFY_API_TOKEN = os.getenv("APIFY_API_TOKEN")
 
