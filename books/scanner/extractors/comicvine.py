@@ -55,6 +55,13 @@ class ComicVineAPI:
 
         url = f"{self.BASE_URL}/{endpoint}/"
         cache_key = f"comicvine_{endpoint}_{hash(str(sorted(params.items())))}"
+        headers = {
+            "User-Agent": getattr(
+                settings,
+                "COMICVINE_USER_AGENT",
+                "eBookManagement/1.0 (+https://github.com/Coenenp/eBookManagement)",
+            ),
+        }
 
         try:
             logger.debug(f"[COMICVINE REQUEST] {endpoint} with params: {params}")
@@ -62,6 +69,7 @@ class ComicVineAPI:
             data = self.client.make_request(
                 url,
                 params=params,
+                headers=headers,
                 cache_key=cache_key,
                 cache_timeout=3600,  # 1 hour cache for Comic Vine data
             )
