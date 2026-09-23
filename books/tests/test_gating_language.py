@@ -1,9 +1,9 @@
 """Tests for PR D: explicit language recording, content-type gating (Google
 Books fallback for Dutch comics), and NO_MATCH / NEITHER_SOURCE aggregation."""
 
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from books.models import (
     Book,
@@ -14,7 +14,7 @@ from books.models import (
     ScanFolder,
     UnresolvedReason,
 )
-from books.scanner.extractors.comic import _google_books_fallback_for_comic
+from books.scanner.extractors.comic import _enrich_with_comicvine, _google_books_fallback_for_comic
 from books.scanner.match_verification import mark_unresolved
 from books.scanner.resolver import finalize_unresolved_reason, resolve_final_metadata
 from books.utils.language import detect_language
@@ -131,3 +131,41 @@ class ComicGoogleBooksFallbackTests(TestCase):
     def test_no_title_or_series_skips_fallback(self, mock_gb):
         _google_books_fallback_for_comic(self.book, {})
         mock_gb.assert_not_called()
+
+
+class ComicEnrichmentFallbackWiringTests(TestCase):
+    """The enrichment gate (verified=False) must actually call the fallback."""
+
+    @patch("books.scanner.extractors.comic._google_books_fallback_for_comic")
+    @patch("books.scanner.extractors.comicvine.ComicVineAPI")
+    @override_settings(COMICVINE_API_KEY="test_key")
+    def test_unresolved_comic_triggers_gb_fallback(self, mock_api_class, mock_fallback):
+        mock_api = Mock()
+        mock_api.search_issue.return_value = None
+        mock_api_class.return_value = mock_api
+
+        scan_folder = ScanFolder.objects.create(path="/tmp/wiring", name="Wiring", language="nl")
+        book = Book.objects.create(content_type="comic", scan_folder=scan_folder)
+
+        _enrich_with_comicvine(book, {"series": "De Dooltocht van Alex", "series_number": "1"})
+
+        mock_fallback.assert_called_once()
+
+    @patch("books.scanner.extractors.comic._google_books_fallback_for_comic")
+    @patch("books.scanner.extractors.comicvine.ComicVineAPI")
+    @override_settings(COMICVINE_API_KEY="test_key")
+    def test_verified_comic_skips_gb_fallback(self, mock_api_class, mock_fallback):
+        mock_api = Mock()
+        mock_api.search_issue.return_value = {
+            "name": "Le Fils de Spartacus",
+            "issue_number": "17",
+            "volume": {"name": "Alix", "publisher": {"name": "Casterman"}},
+        }
+        mock_api_class.return_value = mock_api
+
+        scan_folder = ScanFolder.objects.create(path="/tmp/wiring-v", name="WiringV", language="nl")
+        book = Book.objects.create(content_type="comic", scan_folder=scan_folder)
+
+        _enrich_with_comicvine(book, {"series": "Alex", "series_number": "17"})
+
+        mock_fallback.assert_not_called()
