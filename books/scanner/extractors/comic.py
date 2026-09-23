@@ -832,7 +832,9 @@ def _enrich_with_comicvine(book, extracted_data):
         api = ComicVineAPI()
 
         # Build search query from extracted data
-        series_name = extracted_data.get("series")
+        from books.scanner.extractors.comicvine_aliases import canonicalize_series
+
+        series_name = canonicalize_series(extracted_data.get("series"))
         issue_number = extracted_data.get("series_number") or extracted_data.get("issue")
         title = extracted_data.get("title")
 
