@@ -16,6 +16,20 @@ def _normalize(value):
     return (value or "").strip().lower()
 
 
+class UnresolvedReason(models.TextChoices):
+    """Why a book's metadata is unresolved, surfaced in the review queue.
+
+    Blank (default) means resolved. Each value is its own filterable category;
+    UNCERTAIN is kept distinct so the uncalibrated middle band can be watched
+    in practice before the gold set lands.
+    """
+
+    UNCERTAIN = "uncertain", "Uncertain match"
+    UNMAPPED_SERIES = "unmapped_series", "Unmapped series"
+    NO_MATCH = "no_match", "No matching candidate"
+    NEITHER_SOURCE = "neither_source", "Neither source resolved"
+
+
 class FinalMetadata(models.Model):
     """
     Final, consolidated metadata for a book after review.
@@ -65,6 +79,7 @@ class FinalMetadata(models.Model):
     # Status
     is_reviewed = models.BooleanField(default=False)
     is_renamed = models.BooleanField(default=False)
+    unresolved_reason = models.CharField(max_length=20, choices=UnresolvedReason.choices, blank=True, default="")
     final_path = models.CharField(max_length=1000, blank=True)
     last_updated = models.DateTimeField(auto_now=True)
 

@@ -985,7 +985,7 @@ class BookMetadata(FinalMetadataSyncMixin, SourceConfidenceMixin, HashFieldMixin
 # Re-export models that live in focused sibling modules so existing imports
 # such as ``from books.models import FinalMetadata`` keep working unchanged.
 from .models_api import APIAccessLog, BookAPICompleteness, ScanSession  # noqa: E402,F401
-from .models_metadata import FinalMetadata  # noqa: E402,F401
+from .models_metadata import FinalMetadata, UnresolvedReason  # noqa: E402,F401
 from .models_operations import (  # noqa: E402,F401
     AIFeedback,
     FileOperation,

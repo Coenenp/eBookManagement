@@ -350,7 +350,7 @@ class FinalMetadataAdmin(admin.ModelAdmin):
         "is_reviewed",
         "has_cover",
     )
-    list_filter = ("is_reviewed", "has_cover", "overall_confidence", "completeness_score", "language", "publication_year")
+    list_filter = ("is_reviewed", "unresolved_reason", "has_cover", "overall_confidence", "completeness_score", "language", "publication_year")
     search_fields = ("final_title", "final_author", "book__files__file_path")
     readonly_fields = ("overall_confidence", "completeness_score", "last_updated")
 
