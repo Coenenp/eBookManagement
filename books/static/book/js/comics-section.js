@@ -121,8 +121,10 @@ class ComicsSectionManager extends BaseSectionManager {
                     const bAuthor = b.books[0]?.author || '';
                     return aAuthor.localeCompare(bAuthor);
                 case 'date':
-                    const aLatest = Math.max(...a.books.map((book) => new Date(book.last_scanned || 0)));
-                    const bLatest = Math.max(...b.books.map((book) => new Date(book.last_scanned || 0)));
+                    // Comic issues carry `date_added` (not `last_scanned`), so
+                    // sort on that; fall back to `last_scanned` for robustness.
+                    const aLatest = Math.max(...a.books.map((book) => new Date(book.date_added || book.last_scanned || 0)));
+                    const bLatest = Math.max(...b.books.map((book) => new Date(book.date_added || book.last_scanned || 0)));
                     return bLatest - aLatest;
                 case 'size':
                     return b.total_size - a.total_size;

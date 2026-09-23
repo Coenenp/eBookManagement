@@ -14,8 +14,8 @@ import os
 
 import pytest
 
-# The walkthrough server (uitest copy).
-APP_BASE = "http://127.0.0.1:8001"
+# The walkthrough server (uitest copy). Overridable for local verification runs.
+APP_BASE = os.environ.get("EBOOK_UI_BASE_URL", "http://127.0.0.1:8001")
 
 
 def _require_env(name):
