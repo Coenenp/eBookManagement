@@ -52,6 +52,23 @@ class DetectLanguageTests(TestCase):
         )
         self.assertEqual(detect_language(self.book), "nl")
 
+    def test_undetermined_metadata_falls_through_to_folder(self):
+        # "und" is not a concrete language, so a concrete folder language wins.
+        BookMetadata.objects.create(
+            book=self.book, field_name="language", field_value="und",
+            source=self.source, confidence=0.9, is_active=True,
+        )
+        self.assertEqual(detect_language(self.book), "nl")
+
+    def test_only_undetermined_signal_returns_und(self):
+        scan_folder = ScanFolder.objects.create(path="/tmp/lang-und", name="Und")
+        book = Book.objects.create(content_type="ebook", scan_folder=scan_folder)
+        BookMetadata.objects.create(
+            book=book, field_name="language", field_value="other",
+            source=self.source, confidence=0.9, is_active=True,
+        )
+        self.assertEqual(detect_language(book), "und")
+
 
 class ResolverLanguageTests(TestCase):
     def test_resolve_records_language_explicitly(self):

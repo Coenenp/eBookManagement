@@ -100,11 +100,18 @@ def normalize_language(value):
         # Hebrew mis-capitalizations
         "Heb": "he",
         "HEB": "he",
-        # Unknown or undefined - return None to be filtered out
-        "und": None,
+        # Undetermined / catch-all markers collapse to a single canonical "und"
+        "und": "und",
+        "other": "und",
+        "unknown": "und",
+        "undefined": "und",
+        "undetermined": "und",
+        "unspecified": "und",
+        "not defined": "und",
+        "not specified": "und",
+        # No linguistic content / empty still mean "no language" -> None
         "zxx": None,
         "": None,
-        "unknown": None,
     }
 
     # Import here to avoid circular imports
@@ -128,23 +135,29 @@ def normalize_language(value):
 def detect_language(book):
     """Determine a book's language explicitly, in priority order:
 
-    1. the highest-confidence embedded/external metadata language, and
-    2. the scan folder's language.
+    1. a concrete embedded/external metadata language (not "und"), then
+    2. a concrete scan-folder language.
 
-    Returns a normalized ISO language code (e.g. "nl"), or None when no
-    signal is available. This is the single place language is detected, so
-    callers (the resolver, the Dutch-comic Google Books fallback) agree on it.
+    Returns a normalized ISO language code (e.g. "nl"), "und" when the only
+    signals are "undetermined" markers (und / other / unknown), or None when
+    there is no signal at all. This is the single place language is detected,
+    so callers (the resolver, the Dutch-comic Google Books fallback) agree on it.
     """
+    signals = []
     best = book.metadata.filter(field_name="language", is_active=True).order_by("-confidence").first()
     if best and best.field_value:
-        lang = normalize_language(best.field_value)
-        if lang:
-            return lang
-
+        signals.append(best.field_value)
     scan_folder = getattr(book, "scan_folder", None)
     if scan_folder and scan_folder.language:
-        lang = normalize_language(scan_folder.language)
-        if lang:
+        signals.append(scan_folder.language)
+
+    for signal in signals:
+        lang = normalize_language(signal)
+        if lang and lang != "und":
             return lang
+
+    # Only "undetermined" markers present -> canonical "und".
+    if any(normalize_language(signal) == "und" for signal in signals):
+        return "und"
 
     return None
