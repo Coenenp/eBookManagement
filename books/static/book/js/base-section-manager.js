@@ -618,75 +618,7 @@ if (typeof BaseSectionManager === 'undefined') {
         // Virtual methods that can be overridden
         onItemActivate(itemId) {
             // Override in child classes for double-click or enter key handling
-        }
-    };
-}
 
-/**
- * BaseSectionManager - Parent class for all section managers
- */
-if (typeof BaseSectionManager === 'undefined') {
-    window.BaseSectionManager = class BaseSectionManager {
-        constructor(sectionType, config) {
-            console.log(`Creating ${sectionType} manager with config:`, config);
-            this.sectionType = sectionType;
-            this.config = config;
-            this.currentData = [];
-            this.filteredData = [];
-            this.selectedItem = null;
-
-            // Auto-initialize
-            console.log(`Auto-initializing ${sectionType} manager`);
-            this.initialize();
-        }
-
-        async initialize() {
-            console.log(`Initializing ${this.sectionType} manager`);
-            try {
-                // Load initial data
-                console.log(`Loading data for ${this.sectionType}`);
-                await this.loadInitialData();
-
-                // Initialize filters
-                console.log(`Initializing filters for ${this.sectionType}`);
-                this.initializeFilters();
-
-                // Bind events
-                console.log(`Binding events for ${this.sectionType}`);
-                this.bindEvents();
-
-                // Render initial view
-                console.log(`Rendering initial view for ${this.sectionType}`);
-                this.renderList();
-
-                console.log(`${this.sectionType} manager initialized successfully`);
-            } catch (error) {
-                console.error(`Error initializing ${this.sectionType}:`, error);
-                const container = document.querySelector(this.config.listContainer);
-                if (container && typeof MediaLibraryUtils !== 'undefined') {
-                    MediaLibraryUtils.showErrorState(container, `Failed to load ${this.sectionType}: ${error.message}`);
-                }
-            }
-        }
-
-        async loadInitialData() {
-            console.log(`loadInitialData called for ${this.sectionType}`);
-            try {
-                // Call the child class's loadData method
-                if (this.loadData) {
-                    await this.loadData();
-                    console.log(`Data loaded for ${this.sectionType}, now calling renderList`);
-
-                    // IMPORTANT: Render the list after data loads
-                    if (this.renderList) {
-                        this.renderList();
-                        console.log(`renderList called successfully for ${this.sectionType}`);
-                    } else {
-                        console.warn(`renderList method not available for ${this.sectionType}`);
-                    }
-                } else {
-                    console.warn(`loadData method not implemented in ${this.sectionType} manager`);
-                }
             } catch (error) {
                 console.error(`Error in loadInitialData for ${this.sectionType}:`, error);
                 throw error;
