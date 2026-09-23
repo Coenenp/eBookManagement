@@ -16,12 +16,20 @@ class SeriesSectionManager extends BaseSectionManager {
     }
 
     filterItems(searchTerm, sortBy, formatFilter, statusFilter) {
+        const term = (searchTerm || "").toLowerCase();
         this.filteredData = this.currentData.filter((series) => {
-            // Search filter
+            // Search filter: match the series name, an author, OR any book
+            // title/author inside the series (a reviewer searches by book, not
+            // only by series name).
             const matchesSearch =
-                !searchTerm ||
-                series.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                series.authors.some((author) => author.toLowerCase().includes(searchTerm.toLowerCase()));
+                !term ||
+                series.name.toLowerCase().includes(term) ||
+                series.authors.some((author) => author.toLowerCase().includes(term)) ||
+                (series.books || []).some(
+                    (book) =>
+                        (book.title && book.title.toLowerCase().includes(term)) ||
+                        (book.author && book.author.toLowerCase().includes(term))
+                );
 
             // Format filter
             const matchesFormat = !formatFilter || series.formats.includes(formatFilter);
