@@ -832,9 +832,10 @@ def _enrich_with_comicvine(book, extracted_data):
         api = ComicVineAPI()
 
         # Build search query from extracted data
-        from books.scanner.extractors.comicvine_aliases import canonicalize_series
+        from books.scanner.extractors.comicvine_aliases import canonicalize_series, has_alias
 
-        series_name = canonicalize_series(extracted_data.get("series"))
+        raw_series_name = extracted_data.get("series")
+        series_name = canonicalize_series(raw_series_name)
         issue_number = extracted_data.get("series_number") or extracted_data.get("issue")
         title = extracted_data.get("title")
 
@@ -858,6 +859,15 @@ def _enrich_with_comicvine(book, extracted_data):
             logger.info(f"Found Comic Vine match for {search_query}: {issue_result.get('name', 'Unknown')}")
             # Save Comic Vine metadata to database
             api.save_comic_metadata(book, issue_result)
+        elif raw_series_name and not has_alias(raw_series_name):
+            # Flag, don't silently drop: an unmapped Dutch series failed naive
+            # ComicVine search. Surface it so it can be added to SERIES_ALIASES
+            # deliberately rather than discovered by accident.
+            logger.warning(
+                f"[COMICVINE UNMAPPED SERIES] No match for unmapped series "
+                f"'{raw_series_name}' (query '{search_query}') — consider adding "
+                f"a Dutch->canonical alias to SERIES_ALIASES"
+            )
         else:
             logger.debug(f"No Comic Vine results found for {search_query}")
 

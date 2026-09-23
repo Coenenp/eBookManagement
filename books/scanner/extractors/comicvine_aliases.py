@@ -28,3 +28,10 @@ def canonicalize_series(series_name):
     if not series_name:
         return series_name
     return SERIES_ALIASES.get(series_name.strip().lower(), series_name)
+
+
+def has_alias(series_name):
+    """Return True if the series name has a canonical alias entry."""
+    if not series_name:
+        return False
+    return series_name.strip().lower() in SERIES_ALIASES
