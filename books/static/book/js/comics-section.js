@@ -13,6 +13,19 @@ class ComicsSectionManager extends BaseSectionManager {
         });
 
         this.expandedSeries = new Set();
+
+        // Column-header sort state (click a header to sort, click again to reverse)
+        this.sortColumn = null;
+        this.sortDirection = 'asc';
+        this.bindColumnSort();
+
+        // Re-filter when the search-field selector changes
+        const searchField = document.getElementById('search-field');
+        if (searchField) {
+            searchField.addEventListener('change', () => {
+                if (typeof this.handleSearch === 'function') this.handleSearch();
+            });
+        }
     }
 
     /**
@@ -82,16 +95,11 @@ class ComicsSectionManager extends BaseSectionManager {
     }
 
     filterItems(searchTerm, sortBy, formatFilter, statusFilter) {
+        const term = (searchTerm || "").toLowerCase();
+        const searchField = document.getElementById('search-field')?.value || 'all';
         // Filter comics data
         this.filteredData = this.currentData.filter((series) => {
-            const matchesSearch =
-                !searchTerm ||
-                series.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                series.books.some(
-                    (book) =>
-                        book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        book.author.toLowerCase().includes(searchTerm.toLowerCase())
-                );
+            const matchesSearch = !term || this.matchesSearch(series, term, searchField);
 
             const matchesFormat = !formatFilter || series.books.some((book) => book.file_format === formatFilter);
 
@@ -104,11 +112,28 @@ class ComicsSectionManager extends BaseSectionManager {
             return matchesSearch && matchesFormat && matchesStatus;
         });
 
-        // Sort results
+        // Sort results (dropdown sort takes precedence; clears any active column sort)
+        this.sortColumn = null;
         this.sortComicsData(sortBy);
 
         this.renderList();
         this.updateItemCount(this.filteredData.length);
+    }
+
+    // Search matching scoped by the search-field selector. "all" matches any
+    // metadata (series name, issue title, issue author); "title" matches the
+    // series name or issue titles; "author" matches issue authors only.
+    matchesSearch(series, term, field) {
+        const has = (s) => (s || '').toLowerCase().includes(term);
+        switch (field) {
+            case 'title':
+                return has(series.name) || series.books.some((book) => has(book.title));
+            case 'author':
+                return series.books.some((book) => has(book.author));
+            case 'all':
+            default:
+                return has(series.name) || series.books.some((book) => has(book.title) || has(book.author));
+        }
     }
 
     sortComicsData(sortBy) {
@@ -133,6 +158,58 @@ class ComicsSectionManager extends BaseSectionManager {
             }
         });
     }
+
+    // Column-header sorting (clickable table headers). Independent of the
+    // sort dropdown: clicking a header sorts by that column and clicking it
+    // again reverses the order.
+    bindColumnSort() {
+        const container = document.querySelector(this.config.listContainer);
+        if (!container) return;
+        container.addEventListener('click', (e) => {
+            const th = e.target.closest('th[data-sort]');
+            if (!th) return;
+            this.handleColumnSort(th.dataset.sort);
+        });
+    }
+
+    handleColumnSort(column) {
+        if (this.sortColumn === column) {
+            this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.sortColumn = column;
+            this.sortDirection = 'asc';
+        }
+        this.sortByColumn(column, this.sortDirection);
+        this.renderList();
+    }
+
+    sortByColumn(column, direction) {
+        const dir = direction === 'desc' ? -1 : 1;
+        this.filteredData.sort((a, b) => {
+            let cmp = 0;
+            switch (column) {
+                case 'name':
+                    cmp = (a.name || '').localeCompare(b.name || '');
+                    break;
+                case 'authors':
+                    cmp = (a.authors[0] || a.books[0]?.author || '').localeCompare(b.authors[0] || b.books[0]?.author || '');
+                    break;
+                case 'formats':
+                    cmp = (a.formats[0] || '').localeCompare(b.formats[0] || '');
+                    break;
+                case 'total_books':
+                    cmp = (a.total_books || 0) - (b.total_books || 0);
+                    break;
+                case 'total_size':
+                    cmp = (a.total_size || 0) - (b.total_size || 0);
+                    break;
+                default:
+                    cmp = (a.name || '').localeCompare(b.name || '');
+            }
+            return cmp * dir;
+        });
+    }
+
 
     renderList(viewType = null) {
         const container = document.querySelector(this.config.listContainer);

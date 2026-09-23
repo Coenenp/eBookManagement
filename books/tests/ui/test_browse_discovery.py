@@ -103,3 +103,76 @@ def test_comics_sort_by_date_reorders(authenticated_page, app_url):
     # acceptable (it must at least not error or drop rows).
     if len(set(date_order)) > 1:
         assert date_order != title_order, "sort-by-date did not reorder the comic series"
+
+
+def test_series_column_sort_toggles(authenticated_page, app_url):
+    """Clicking a column header sorts; clicking it again reverses the order."""
+    page = authenticated_page
+    page.goto(f"{app_url}/series/")
+    page.wait_for_load_state("networkidle")
+    _wait_for_rows(page, "#series-list-container")
+
+    def names():
+        return page.locator("table.condensed-table tbody tr td.col-title").all_inner_texts()
+
+    # First click on "Series name" -> ascending.
+    page.click('th[data-sort="name"]')
+    page.wait_for_timeout(400)
+    asc = names()
+    assert len(asc) > 0
+
+    # Second click -> descending (the min and max must swap ends).
+    page.click('th[data-sort="name"]')
+    page.wait_for_timeout(400)
+    desc = names()
+    assert len(desc) == len(asc)
+    assert asc[0] == desc[-1] and asc[-1] == desc[0], "second click must reverse the sort order"
+
+    # A different column ("Author(s)") sorts by author and keeps the row count.
+    page.click('th[data-sort="authors"]')
+    page.wait_for_timeout(400)
+    by_author = names()
+    assert len(by_author) == len(asc)
+
+
+def test_series_search_field_author_scopes(authenticated_page, app_url):
+    """The search-field selector must scope the term: Author restricts to authors."""
+    page = authenticated_page
+    page.goto(f"{app_url}/series/")
+    page.wait_for_load_state("networkidle")
+    _wait_for_rows(page, "#series-list-container")
+
+    # Pick an author word that does not appear in its own series name, so we can
+    # distinguish author-matching from title-matching.
+    probe = page.evaluate(
+        """() => {
+            const data = window.seriesManager?.currentData || [];
+            for (const s of data) {
+                for (const a of (s.authors || [])) {
+                    for (const w of (a || '').split(/\\s+/)) {
+                        if (w.length >= 5 && !s.name.toLowerCase().includes(w.toLowerCase())) {
+                            return { name: s.name, word: w };
+                        }
+                    }
+                }
+            }
+            return null;
+        }"""
+    )
+    if probe is None:
+        pytest.skip("no author word distinct from its series name")
+
+    def names():
+        return [n.strip() for n in page.locator("table.condensed-table tbody tr td.col-title").all_inner_texts()]
+
+    # Author-scoped search matches the series whose author contains the word.
+    page.select_option("#search-field", "author")
+    page.fill("#search-filter", probe["word"])
+    page.wait_for_timeout(800)
+    assert probe["name"] in names(), "author-scoped search must match the author's series"
+
+    # Title-scoped search must NOT match that same series (word is author-only).
+    page.select_option("#search-field", "title")
+    page.fill("#search-filter", probe["word"])
+    page.wait_for_timeout(800)
+    assert probe["name"] not in names(), "title-scoped search must not match an author-only word"
