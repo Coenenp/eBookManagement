@@ -1,6 +1,7 @@
 """Final consolidated metadata model for the books app."""
 
 import logging
+from difflib import SequenceMatcher
 
 from django.db import models
 from django.utils import timezone
@@ -8,6 +9,11 @@ from django.utils import timezone
 from books.utils.language import normalize_language
 
 logger = logging.getLogger("books.scanner")
+
+
+def _normalize(value):
+    """Lowercase and strip a string for loose comparison."""
+    return (value or "").strip().lower()
 
 
 class FinalMetadata(models.Model):
@@ -48,6 +54,7 @@ class FinalMetadata(models.Model):
     # Overall metrics
     overall_confidence = models.FloatField(default=0.0)
     completeness_score = models.FloatField(default=0.0)
+    accuracy_score = models.FloatField(default=0.0)
 
     # Denormalized flags for faster filtering
     has_cover = models.BooleanField(default=False)
@@ -95,6 +102,72 @@ class FinalMetadata(models.Model):
 
         self.completeness_score = sum(fields) / len(fields)
         return self.completeness_score
+
+    def calculate_accuracy_score(self):
+        """Calculate a per-book accuracy score: how likely the metadata is CORRECT.
+
+        Distinct from ``overall_confidence`` (source trust) and
+        ``completeness_score`` (field fill rate). Measures evidence agreement:
+
+            accuracy = 0.35 * title_corroboration
+                     + 0.35 * author_corroboration
+                     + 0.30 * identifier_strength
+
+        - title/author corroboration: how strongly independent candidate values
+          agree with the final value. A lone value is uncorroborated (0.5 at
+          best); multiple agreeing values raise the score toward 1.0.
+        - identifier_strength: 1.0 when an ISBN is present, else 0.0 (correctness
+          then rests on title/author agreement alone, capping ISBN-less books).
+
+        Match verification (rejecting non-matching external candidates before
+        merge) feeds this score by keeping wrong high-trust values out of the
+        candidate set. Thresholds are calibrated on the gold set in a later
+        milestone.
+        """
+        self.accuracy_score = (
+            0.35 * self._corroboration(self.final_title, self._candidate_titles())
+            + 0.35 * self._corroboration(self.final_author, self._candidate_authors())
+            + 0.30 * self._identifier_strength()
+        )
+        return self.accuracy_score
+
+    def _candidate_titles(self):
+        return [t.title for t in self.book.titles.filter(is_active=True) if t.title]
+
+    def _candidate_authors(self):
+        return [
+            a.author.name
+            for a in self.book.author_relationships.select_related("author").filter(is_active=True)
+            if a.author and a.author.name
+        ]
+
+    @staticmethod
+    def _corroboration(final_value, candidates):
+        """Agreement of candidates with the final value, in [0, 1].
+
+        A single candidate that equals the final value is uncorroborated (0.5);
+        agreement across two or more independent candidates raises the score.
+        """
+        final_n = _normalize(final_value)
+        if not final_n:
+            return 0.0
+        sims = [_normalize(c) for c in candidates]
+        sims = [SequenceMatcher(None, final_n, c).ratio() for c in sims if c]
+        if not sims:
+            return 0.0
+        if len(sims) == 1:
+            return 0.5 if sims[0] >= 0.8 else 0.0
+        agreeing = sum(1 for s in sims if s >= 0.8)
+        return agreeing / len(sims)
+
+    def _identifier_strength(self):
+        # A present ISBN is a strong identifier (boosts accuracy toward 1.0).
+        # Absent, it contributes nothing: correctness then rests on title/author
+        # corroboration alone (capping ISBN-less books below the ISBN-backed case).
+        # Checksum verification and ISBN match are handled by match verification
+        # (strong-identifier rule); comics rely on series+issue corroboration,
+        # which is added in a later step.
+        return 1.0 if self.isbn else 0.0
 
     def update_dynamic_field(self, field_name):
         """Update a single dynamic field from metadata sources."""
@@ -232,6 +305,7 @@ class FinalMetadata(models.Model):
             # Recalculate scores
             self.calculate_overall_confidence()
             self.calculate_completeness_score()
+            self.calculate_accuracy_score()
 
             # Update denormalized flags
             self.has_isbn = bool(self.isbn)
@@ -246,6 +320,7 @@ class FinalMetadata(models.Model):
                     "author": self.final_author,
                     "confidence": f"{self.overall_confidence:.2f}",
                     "completeness": f"{self.completeness_score:.2f}",
+                    "accuracy": f"{self.accuracy_score:.2f}",
                 },
             )
 
@@ -270,6 +345,7 @@ class FinalMetadata(models.Model):
                         "description",
                         "overall_confidence",
                         "completeness_score",
+                        "accuracy_score",
                         "has_cover",
                         "has_isbn",
                         "has_description",
@@ -381,6 +457,8 @@ class FinalMetadata(models.Model):
             self.calculate_overall_confidence()
         if not self.completeness_score:
             self.calculate_completeness_score()
+        if not self.accuracy_score:
+            self.calculate_accuracy_score()
 
         self.metadata_complete = self.completeness_score >= 0.8
 
@@ -412,6 +490,7 @@ class FinalMetadata(models.Model):
             models.Index(fields=["is_reviewed"]),
             models.Index(fields=["overall_confidence"]),
             models.Index(fields=["completeness_score"]),
+            models.Index(fields=["accuracy_score"]),
             models.Index(fields=["has_cover"]),
             models.Index(fields=["has_isbn"]),
             models.Index(fields=["metadata_complete"]),
