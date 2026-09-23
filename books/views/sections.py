@@ -299,10 +299,45 @@ class ComicsMainView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
 
         Book = apps.get_model("books", "Book")
+        FinalMetadata = apps.get_model("books", "FinalMetadata")
 
-        # Count comics from scan folders designated as 'comics'
-        # Use distinct() to avoid counting books with multiple files twice
-        comics_count = Book.objects.filter(scan_folder__content_type="comics", scan_folder__is_active=True, files__file_format__in=COMIC_FORMATS).distinct().count()
+        # The comics list groups issues into SERIES plus standalone comics, so the
+        # badge must count those top-level rows, not the underlying issue count.
+        # Resolve the series name the same way comics_ajax_list does (FinalMetadata
+        # is the source of truth here) and count distinct series + standalone.
+        comics_with_metadata = FinalMetadata.objects.filter(
+            book__scan_folder__content_type="comics",
+            book__scan_folder__is_active=True,
+            book__files__file_format__in=COMIC_FORMATS,
+        )
+
+        if comics_with_metadata.exists():
+            series_count = (
+                comics_with_metadata.filter(final_series__isnull=False)
+                .exclude(final_series="")
+                .values("final_series")
+                .distinct()
+                .count()
+            )
+            standalone_count = (
+                comics_with_metadata.filter(Q(final_series__isnull=True) | Q(final_series=""))
+                .values("book_id")
+                .distinct()
+                .count()
+            )
+            comics_count = series_count + standalone_count
+        else:
+            # No consolidated metadata yet: fall back to counting comic-format books.
+            comics_count = (
+                Book.objects.filter(
+                    scan_folder__content_type="comics",
+                    scan_folder__is_active=True,
+                    files__file_format__in=COMIC_FORMATS,
+                )
+                .values("id")
+                .distinct()
+                .count()
+            )
 
         context["comics_count"] = comics_count
 
