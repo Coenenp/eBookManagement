@@ -7,7 +7,9 @@ sources and calculating confidence scores for metadata accuracy.
 import logging
 import re
 
-from books.models import FinalMetadata
+from books.models import DataSource, FinalMetadata, UnresolvedReason
+
+from books.utils.language import detect_language
 
 logger = logging.getLogger("books.scanner")
 
@@ -55,9 +57,8 @@ def resolve_final_metadata(book):
         final_metadata.final_publisher = best_pub.publisher.name
         final_metadata.final_publisher_confidence = best_pub.confidence
 
-    # Additional metadata
+    # Additional metadata (language handled explicitly below)
     metadata_fields = {
-        "language": "language",
         "isbn": "isbn",
         "publication_year": "publication_year",
         "description": "description",
@@ -83,11 +84,47 @@ def resolve_final_metadata(book):
                     logger.warning(f"[YEAR CAST ERROR] field_value='{value}' — {e}")
             else:
                 setattr(final_metadata, attr_name, value)
-        elif field_name == "language" and book.scan_folder and book.scan_folder.language:
-            # Inherit language from scan folder if not found in metadata
-            final_metadata.language = book.scan_folder.language
-            logger.info(f"[LANGUAGE INHERIT] Book {book.id} inheriting language '{book.scan_folder.language}' from scan folder")
+
+    # Explicit language recording: detect from embedded/external metadata
+    # first, then inherit from the scan folder, normalized to a canonical code.
+    detected_language = detect_language(book)
+    if detected_language:
+        final_metadata.language = detected_language
+        logger.info(f"[LANGUAGE DETECTED] Book {book.id} -> '{detected_language}'")
 
     # Confidence aggregation
     final_metadata.calculate_overall_confidence()
     final_metadata.save()
+
+    # Flag books no external source resolved (routing: "flag what neither
+    # source resolves").
+    finalize_unresolved_reason(book)
+
+
+EXTERNAL_SOURCE_NAMES = (
+    DataSource.OPEN_LIBRARY,
+    DataSource.GOOGLE_BOOKS,
+    DataSource.COMICVINE,
+)
+
+
+def finalize_unresolved_reason(book):
+    """Set NEITHER_SOURCE once all sources are exhausted.
+
+    After external lookup + resolution, a book that still has no metadata from
+    any external source (and no more-specific flag like UNCERTAIN / NO_MATCH /
+    UNMAPPED_SERIES) was resolved by neither source, so it is flagged for the
+    review queue.
+    """
+    final_metadata = FinalMetadata.objects.filter(book=book).first()
+    if final_metadata is None or final_metadata.unresolved_reason:
+        # No record to flag, or a more specific reason already set.
+        return
+
+    external_sources = DataSource.objects.filter(name__in=EXTERNAL_SOURCE_NAMES)
+    has_external_title = book.titles.filter(source__in=external_sources, is_active=True).exists()
+    has_external_author = book.author_relationships.filter(source__in=external_sources, is_active=True).exists()
+    if not (has_external_title or has_external_author):
+        final_metadata.unresolved_reason = UnresolvedReason.NEITHER_SOURCE
+        final_metadata.save(update_fields=["unresolved_reason"])
+        logger.info(f"[NEITHER SOURCE] Book {book.id} unresolved by any external source")

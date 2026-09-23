@@ -123,3 +123,28 @@ def normalize_language(value):
 
     # Return the first valid code, or None if no valid codes found
     return normalized_values[0] if normalized_values else None
+
+
+def detect_language(book):
+    """Determine a book's language explicitly, in priority order:
+
+    1. the highest-confidence embedded/external metadata language, and
+    2. the scan folder's language.
+
+    Returns a normalized ISO language code (e.g. "nl"), or None when no
+    signal is available. This is the single place language is detected, so
+    callers (the resolver, the Dutch-comic Google Books fallback) agree on it.
+    """
+    best = book.metadata.filter(field_name="language", is_active=True).order_by("-confidence").first()
+    if best and best.field_value:
+        lang = normalize_language(best.field_value)
+        if lang:
+            return lang
+
+    scan_folder = getattr(book, "scan_folder", None)
+    if scan_folder and scan_folder.language:
+        lang = normalize_language(scan_folder.language)
+        if lang:
+            return lang
+
+    return None

@@ -314,6 +314,7 @@ def _query_open_library_combined(book, title, author, isbn=None):
             mark_unresolved(book, UnresolvedReason.UNCERTAIN)
             logger.info(f"[OPEN LIBRARY] Uncertain match for '{title}' — held for review")
         else:
+            mark_unresolved(book, UnresolvedReason.NO_MATCH)
             logger.info(f"[OPEN LIBRARY] Rejected non-matching candidate for '{title}'")
 
         # Process covers from all results
@@ -398,6 +399,7 @@ def _query_google_books_combined(book, title, author, isbn=None):
             mark_unresolved(book, UnresolvedReason.UNCERTAIN)
             logger.info(f"[GOOGLE BOOKS] Uncertain match for '{title}' — held for review")
         else:
+            mark_unresolved(book, UnresolvedReason.NO_MATCH)
             logger.info(f"[GOOGLE BOOKS] Rejected non-matching candidate for '{title}'")
 
         # Process covers from all results
@@ -467,6 +469,7 @@ def _query_goodreads_combined(book, title, author, isbn=None):
             mark_unresolved(book, UnresolvedReason.UNCERTAIN)
             logger.info(f"[GOODREADS] Uncertain match for '{title}' — held for review")
         else:
+            mark_unresolved(book, UnresolvedReason.NO_MATCH)
             logger.info(f"[GOODREADS] Rejected non-matching candidate for '{title}'")
 
         # Process covers from all results
