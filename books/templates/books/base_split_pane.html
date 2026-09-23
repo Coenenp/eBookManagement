@@ -38,7 +38,7 @@
                 {% block filters %}
                 <div class="filter-section">
                     <!-- Search Bar with Icon -->
-                    <div class="position-relative mb-3">
+                    <div class="position-relative mb-2">
                         <i class="fas fa-search search-icon"></i>
                         <input type="text" class="form-control form-control-sm ps-5" 
                                id="search-filter" placeholder="{% block search_placeholder %}Search...{% endblock %}">
@@ -46,6 +46,15 @@
                                 title="Clear search">
                             <i class="fas fa-times"></i>
                         </button>
+                    </div>
+                    
+                    <!-- Search field selector: restrict the search term to one field -->
+                    <div class="mb-3">
+                        <select class="form-select form-select-sm" id="search-field" aria-label="Search field">
+                            <option value="all" selected>All fields</option>
+                            <option value="title">Title</option>
+                            <option value="author">Author</option>
+                        </select>
                     </div>
                     
                     <!-- Filter Controls Row -->
