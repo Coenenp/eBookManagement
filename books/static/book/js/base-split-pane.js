@@ -26,8 +26,18 @@ function initializeFilters() {
     const formatFilter = document.getElementById('format-filter');
     const statusFilter = document.getElementById('status-filter');
 
+    // If a section manager exists, it handles search input. Otherwise, fall back to shared handler.
     if (searchFilter) {
-        searchFilter.addEventListener('input', debounce(handleSearchInput, 300));
+        searchFilter.addEventListener('input', function (e) {
+            // If a manager exists for the current section, let it handle input.
+            if (typeof customFilterItems === 'function') {
+                // Delegate to the manager via the compatibility layer
+                debounce(() => customFilterItems(searchFilter.value || '', sortFilter?.value || 'title', formatFilter?.value || '', statusFilter?.value || ''), 300)();
+            } else {
+                // No manager: call the shared handler directly
+                debounce(handleSearchInput, 300)();
+            }
+        });
     }
 
     if (sortFilter) {

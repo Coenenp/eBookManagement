@@ -19,11 +19,16 @@ class SeriesSectionManager extends BaseSectionManager {
         this.sortDirection = 'asc';
         this.bindColumnSort();
 
-        // Re-filter when the search-field selector changes
+        // Legacy search-field selector removed in favor of an all-fields search.
+        // No-op: kept for backward compatibility in case markup lingers, but it does nothing now.
         const searchField = document.getElementById('search-field');
         if (searchField) {
+            // Wire it to re-run the all-fields search using the main input
             searchField.addEventListener('change', () => {
-                if (typeof this.handleSearch === 'function') this.handleSearch();
+                const searchInput = document.getElementById('search-filter');
+                if (searchInput) {
+                    if (typeof this.handleSearch === 'function') this.handleSearch();
+                }
             });
         }
     }

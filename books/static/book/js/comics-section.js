@@ -19,11 +19,17 @@ class ComicsSectionManager extends BaseSectionManager {
         this.sortDirection = 'asc';
         this.bindColumnSort();
 
-        // Re-filter when the search-field selector changes
+        // Legacy search-field selector removed in favor of an all-fields search.
+        // No-op: kept for backward compatibility in case markup lingers, but it does nothing now.
         const searchField = document.getElementById('search-field');
         if (searchField) {
+            // If found, wire it to update the all-fields search value into the main search input
             searchField.addEventListener('change', () => {
-                if (typeof this.handleSearch === 'function') this.handleSearch();
+                const searchInput = document.getElementById('search-filter');
+                if (searchInput) {
+                    // No scope semantics: just re-run search using the existing input
+                    if (typeof this.handleSearch === 'function') this.handleSearch();
+                }
             });
         }
     }
