@@ -718,14 +718,40 @@ def scan_folder_in_background(
 
 
 def get_all_active_scans() -> List[Dict]:
-    """Get all currently active scan jobs."""
+    """Get all currently active scan jobs.
+
+    A scan is registered via ``add_active_scan`` the moment it starts, but its
+    first ``ScanProgress.update`` only fires after the background thread has
+    finished initialising (AI system + API availability checks), which can take
+    seconds. During that window the progress cache entry does not exist yet, so
+    the previous implementation silently dropped the job and the dashboard
+    showed "No active scan jobs" even though a scan was running. Surface a
+    synthetic "Starting" entry for any registered job whose progress has not
+    been written yet.
+    """
     job_ids = cache.get("active_scan_job_ids", [])
     active_scans = []
 
     for job_id in job_ids:
         progress_data = cache.get(f"scan_progress_{job_id}")
-        if progress_data and not progress_data.get("completed", False):
+        if progress_data:
+            # Safety net for jobs whose ``complete()`` wrote a terminal entry but
+            # failed to remove themselves from the active list.
+            if progress_data.get("completed", False):
+                continue
             active_scans.append(progress_data)
+        else:
+            active_scans.append(
+                {
+                    "job_id": job_id,
+                    "current": 0,
+                    "total": 0,
+                    "percentage": 0,
+                    "status": "Starting",
+                    "details": "Initialising scan...",
+                    "start_time": None,
+                }
+            )
 
     return active_scans
 

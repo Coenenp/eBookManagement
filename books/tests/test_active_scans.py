@@ -59,6 +59,25 @@ class ActiveScansTests(TestCase):
         self.assertEqual(active_scans[0]["job_id"], test_job_id)
         self.assertEqual(active_scans[0]["status"], "Starting")
 
+    def test_registered_scan_without_progress_is_visible(self):
+        """A registered scan must be visible before its first progress update.
+
+        Right after "Start Scan", ``add_active_scan`` registers the job but the
+        background thread only writes progress after initialising (AI system +
+        API checks), which takes seconds. The dashboard must not show "No active
+        scan jobs" during that window.
+        """
+        test_job_id = "registered-no-progress"
+
+        # Register the scan but do NOT write progress yet.
+        add_active_scan(test_job_id)
+
+        active_scans = get_all_active_scans()
+        self.assertEqual(len(active_scans), 1)
+        self.assertEqual(active_scans[0]["job_id"], test_job_id)
+        self.assertEqual(active_scans[0]["status"], "Starting")
+        self.assertEqual(active_scans[0]["percentage"], 0)
+
     def test_multiple_active_scans(self):
         """Test handling multiple active scans"""
         job_ids = ["job-1", "job-2", "job-3"]
