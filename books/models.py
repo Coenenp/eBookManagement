@@ -76,6 +76,7 @@ LANGUAGE_CHOICES = [
     ("tr", "Turkish"),
     ("ca", "Catalan"),
     ("id", "Indonesian"),
+    ("und", "Undetermined"),
 ]
 
 

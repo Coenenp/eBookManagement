@@ -87,11 +87,18 @@ class LanguageUtilsTests(TestCase):
 
     def test_normalize_language_unknown_codes(self):
         """Test normalization of unknown language codes"""
-        unknown_codes = ["und", "zxx", "", "unknown", "xyz"]
+        unknown_codes = ["zxx", "", "xyz"]
         for code in unknown_codes:
             with self.subTest(code=code):
                 result = normalize_language(code)
                 self.assertIsNone(result)
+
+    def test_normalize_language_undetermined_codes(self):
+        """UND / OTHER and synonyms collapse to a single canonical 'und'."""
+        undetermined_codes = ["und", "other", "unknown", "undefined", "undetermined", "unspecified", "not defined"]
+        for code in undetermined_codes:
+            with self.subTest(code=code):
+                self.assertEqual(normalize_language(code), "und")
 
     def test_normalize_language_hebrew_codes(self):
         """Test normalization of Hebrew language codes"""
@@ -132,12 +139,12 @@ class LanguageUtilsTests(TestCase):
 
     def test_normalize_language_all_unknown(self):
         """Test normalization when all values are unknown"""
-        result = normalize_language("unknown, xyz, zxx")
+        result = normalize_language("xyz, zxx")
         self.assertIsNone(result)
 
     def test_normalize_language_mixed_valid_invalid(self):
         """Test normalization with mix of valid and invalid codes"""
-        result = normalize_language("unknown, fr, xyz")
+        result = normalize_language("xyz, fr, abc")
         self.assertEqual(result, "fr")
 
     def test_normalize_language_numeric_input(self):
@@ -231,7 +238,7 @@ class LanguageUtilsEdgeCaseTests(TestCase):
     def test_normalize_language_special_iso_codes(self):
         """Test normalization with special ISO language codes"""
         special_codes = [
-            ("und", None),  # Undefined language
+            ("und", "und"),  # Undetermined (collapses to canonical "und")
             ("zxx", None),  # No linguistic content
             ("mul", None),  # Multiple languages
             ("mis", None),  # Uncoded languages

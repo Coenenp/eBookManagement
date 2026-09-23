@@ -858,6 +858,7 @@ def _enrich_with_comicvine(book, extracted_data):
         from books.models import UnresolvedReason
         from books.scanner.match_verification import Verdict, mark_resolved, mark_unresolved, verify_comic
 
+        verified = False
         if issue_result:
             # Verify identity before merging (M1 match verification gate).
             volume = issue_result.get("volume") or {}
@@ -876,6 +877,7 @@ def _enrich_with_comicvine(book, extracted_data):
             )
 
             if verdict is Verdict.VERIFIED:
+                verified = True
                 mark_resolved(book)
                 logger.info(f"Found Comic Vine match for {search_query}: {issue_result.get('name', 'Unknown')}")
                 # Save Comic Vine metadata to database
@@ -884,6 +886,7 @@ def _enrich_with_comicvine(book, extracted_data):
                 mark_unresolved(book, UnresolvedReason.UNCERTAIN)
                 logger.info(f"[COMICVINE] Uncertain match for {search_query} — held for review")
             else:
+                mark_unresolved(book, UnresolvedReason.NO_MATCH)
                 logger.info(f"[COMICVINE] Rejected non-matching candidate for {search_query}")
         elif raw_series_name and not has_alias(raw_series_name):
             # Flag, don't silently drop: an unmapped Dutch series failed naive
@@ -898,7 +901,45 @@ def _enrich_with_comicvine(book, extracted_data):
         else:
             logger.debug(f"No Comic Vine results found for {search_query}")
 
+        if not verified:
+            _google_books_fallback_for_comic(book, extracted_data)
+
     except ImportError:
         logger.warning("Comic Vine API wrapper not available, skipping Comic Vine enrichment")
     except Exception as e:
         logger.warning(f"Error enriching comic metadata with Comic Vine: {e}")
+
+
+def _google_books_fallback_for_comic(book, extracted_data):
+    """Google Books fallback for DUTCH comics ComicVine could not resolve.
+
+    Per routing: ComicVine-first for all comics, then a Google Books fallback
+    (with title/series context, not title-only) for Dutch comics that got no
+    confident match. Open Library is skipped for comics.
+    """
+    try:
+        from books.utils.language import detect_language
+
+        if detect_language(book) != "nl":
+            return
+
+        series = (extracted_data.get("series") or "").strip()
+        title = (extracted_data.get("title") or "").strip()
+        query_title = f"{series} {title}".strip() if series and title else (series or title)
+        if not query_title:
+            return
+
+        author = None
+        best_author = book.author_relationships.filter(is_active=True).order_by("-confidence").first()
+        if best_author:
+            author = best_author.author.name
+
+        from books.scanner.external import _query_google_books_combined
+
+        logger.info(
+            f"[COMIC GB FALLBACK] Dutch comic unresolved by ComicVine, "
+            f"querying Google Books: '{query_title}'"
+        )
+        _query_google_books_combined(book, query_title, author)
+    except Exception as e:
+        logger.warning(f"Google Books fallback for comic failed: {e}")
