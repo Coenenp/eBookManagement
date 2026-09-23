@@ -871,6 +871,8 @@ def _enrich_with_comicvine(book, extracted_data):
                 result_series,
                 result_issue,
                 result_publisher=result_publisher,
+                query_title=title,
+                result_title=issue_result.get("name"),
             )
 
             if verdict is Verdict.VERIFIED:

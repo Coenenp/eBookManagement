@@ -28,7 +28,7 @@ from books.models import (
     Publisher,
     UnresolvedReason,
 )
-from books.scanner.match_verification import Verdict, mark_resolved, mark_unresolved, verify_title_author
+from books.scanner.match_verification import Verdict, isbn_match, mark_resolved, mark_unresolved, verify_title_author
 from books.scanner.rate_limiting import get_api_client
 from books.utils.author import attach_authors
 from books.utils.cache_key import make_cache_key
@@ -302,8 +302,10 @@ def _query_open_library_combined(book, title, author, isbn=None):
 
         if verdict is Verdict.VERIFIED:
             mark_resolved(book)
-            # For ISBN searches, we have high confidence since it's an exact match
-            match_confidence = 0.95 if isbn else _calculate_match_confidence(
+            # Confidence must reflect HOW the match verified: an exact ISBN
+            # match is high-confidence; a title/author match (e.g. an ISBN
+            # query whose candidate had no ISBN) uses title/author similarity.
+            match_confidence = 0.95 if isbn_match(isbn, best_match.get("isbn")) else _calculate_match_confidence(
                 title, author, best_match.get("title", ""), best_match.get("author_name", [])
             )
             metadata_confidence = _calculate_final_confidence(metadata_source, match_confidence)
@@ -387,8 +389,9 @@ def _query_google_books_combined(book, title, author, isbn=None):
 
         if verdict is Verdict.VERIFIED:
             mark_resolved(book)
-            # For ISBN searches, we have high confidence since it's an exact match
-            match_confidence = 0.95 if isbn else _calculate_match_confidence(title, author, best.get("title", ""), best.get("authors", []))
+            # Confidence must reflect HOW the match verified: an exact ISBN
+            # match is high-confidence; a title/author match uses similarity.
+            match_confidence = 0.95 if isbn_match(isbn, gb_isbns) else _calculate_match_confidence(title, author, best.get("title", ""), best.get("authors", []))
             metadata_confidence = _calculate_final_confidence(metadata_source, match_confidence)
             _process_google_books_metadata(book, metadata_source, best, metadata_confidence)
         elif verdict is Verdict.UNCERTAIN:

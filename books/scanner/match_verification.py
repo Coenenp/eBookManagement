@@ -35,6 +35,7 @@ COMBINED_REJECT = 0.60
 # Rule 3 — comic series + issue + publisher
 SERIES_ACCEPT = 0.85
 PUBLISHER_ACCEPT = 0.85
+SERIES_TITLE_FALLBACK = 0.90
 
 
 def title_similarity(a, b):
@@ -71,6 +72,14 @@ def first_isbn(value):
                 return n
         return None
     return normalize_isbn(value)
+
+
+def isbn_match(query_isbn, result_isbn):
+    """True if both sides carry the same checksum-valid ISBN."""
+    q = first_isbn(query_isbn)
+    if not q:
+        return False
+    return first_isbn(result_isbn) == q
 
 
 def verify_title_author(query_title, query_author, result_title, result_authors, query_isbn=None, result_isbn=None):
@@ -116,12 +125,13 @@ def _issues_match(a, b):
         return False
 
 
-def verify_comic(query_series, query_issue, result_series, result_issue, query_publisher=None, result_publisher=None):
+def verify_comic(query_series, query_issue, result_series, result_issue, query_publisher=None, result_publisher=None, query_title=None, result_title=None):
     """Rule 3: verdict for a comic candidate (series + issue + publisher).
 
     Issue number is the comic's strong identifier (the ISBN equivalent); a
     publisher mismatch demotes to UNCERTAIN (reprints/reissues exist) rather
-    than rejecting.
+    than rejecting. When no issue number is known, fall back to series + title
+    similarity (both >= SERIES_TITLE_FALLBACK) instead of auto-verifying.
     """
     series_score = title_similarity(query_series, result_series)
     if series_score < SERIES_ACCEPT:
@@ -136,7 +146,10 @@ def verify_comic(query_series, query_issue, result_series, result_issue, query_p
             return Verdict.UNCERTAIN
         return Verdict.VERIFIED
 
-    # No issue number to pin identity: cannot verify -> hold for review.
+    # No issue number to pin identity: fall back to series + title similarity.
+    title_score = title_similarity(query_title, result_title)
+    if series_score >= SERIES_TITLE_FALLBACK and title_score >= SERIES_TITLE_FALLBACK:
+        return Verdict.VERIFIED
     return Verdict.UNCERTAIN
 
 

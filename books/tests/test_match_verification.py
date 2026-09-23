@@ -10,12 +10,13 @@ import tempfile
 
 from django.test import TestCase
 
-from books.models import Book, FinalMetadata, ScanFolder, UnresolvedReason
+from books.models import Book, BookTitle, DataSource, FinalMetadata, ScanFolder, UnresolvedReason
 from books.scanner.match_verification import (
     Verdict,
     _issues_match,
     combined_match_confidence,
     first_isbn,
+    isbn_match,
     mark_resolved,
     mark_unresolved,
     title_similarity,
@@ -87,6 +88,18 @@ class ComicVerdictTests(TestCase):
     def test_missing_issue_is_uncertain(self):
         self.assertIs(verify_comic("Alix", None, "Alix", "17"), Verdict.UNCERTAIN)
 
+    def test_missing_issue_falls_back_to_series_and_title(self):
+        # No issue number -> series + title similarity, both >= 0.90, verifies.
+        v = verify_comic(
+            "Alix", None, "Alix", "17",
+            query_title="Le Fils de Spartacus", result_title="Le Fils de Spartacus",
+        )
+        self.assertIs(v, Verdict.VERIFIED)
+
+    def test_missing_issue_weak_title_stays_uncertain(self):
+        v = verify_comic("Alix", None, "Alix", "17", query_title="Wrong", result_title="Different")
+        self.assertIs(v, Verdict.UNCERTAIN)
+
     def test_publisher_mismatch_demotes_to_uncertain(self):
         v = verify_comic("Alix", "17", "Alix", "17", query_publisher="Casterman", result_publisher="Marvel")
         self.assertIs(v, Verdict.UNCERTAIN)
@@ -115,6 +128,12 @@ class FirstIsbnTests(TestCase):
         self.assertIsNone(first_isbn(None))
         self.assertIsNone(first_isbn("not an isbn"))
 
+    def test_isbn_match(self):
+        self.assertTrue(isbn_match(ISBN_A13, ISBN_A13))
+        self.assertFalse(isbn_match(ISBN_A13, ISBN_B13))
+        self.assertFalse(isbn_match(ISBN_A13, None))
+        self.assertFalse(isbn_match(None, ISBN_A13))
+
 
 class UnresolvedReasonFlagTests(TestCase):
     def setUp(self):
@@ -136,6 +155,18 @@ class UnresolvedReasonFlagTests(TestCase):
         mark_resolved(self.book)
         fm = FinalMetadata.objects.get(book=self.book)
         self.assertEqual(fm.unresolved_reason, "")
+
+    def test_mark_unresolved_does_not_auto_sync_on_creation(self):
+        # Give the book a title source: a real auto-sync would promote it into
+        # final_title. auto_sync=False on the creation path must prevent that.
+        source, _ = DataSource.objects.get_or_create(name="mv-test", defaults={"trust_level": 0.8})
+        BookTitle.objects.create(book=self.book, title="Some Title", source=source, confidence=0.9, is_active=True)
+
+        mark_unresolved(self.book, UnresolvedReason.UNCERTAIN)
+
+        fm = FinalMetadata.objects.get(book=self.book)
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.UNCERTAIN)
+        self.assertEqual(fm.final_title, "")  # no sync happened
 
     def test_unresolved_reason_choices(self):
         # Guard: UNCERTAIN is a distinct, named choice (not lumped with the rest).
