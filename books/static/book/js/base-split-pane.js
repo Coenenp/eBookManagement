@@ -7,41 +7,19 @@ document.addEventListener('DOMContentLoaded', function () {
     // Initialize split pane functionality
     initializeSplitPane();
 
-    // Initialize filtering
-    initializeFilters();
-
-    // Initialize enhanced UI features
+    // Initialize enhanced UI features (view toggle, clear, keyboard, delegation).
+    // Filtering itself is owned by the section managers (BaseSectionManager.bindEvents),
+    // which bind the search/sort/format/status controls; base-split-pane must not
+    // double-bind them.
     initializeEnhancedUI();
 
-    // Load initial data
+    // Load initial data (delegates to the section manager's loadData via the
+    // customLoadItems compatibility function).
     loadItems();
 
     // Initialize keyboard navigation
     initializeKeyboardNavigation();
 });
-
-function initializeFilters() {
-    const searchFilter = document.getElementById('search-filter');
-    const sortFilter = document.getElementById('sort-filter');
-    const formatFilter = document.getElementById('format-filter');
-    const statusFilter = document.getElementById('status-filter');
-
-    if (searchFilter) {
-        searchFilter.addEventListener('input', debounce(handleSearchInput, 300));
-    }
-
-    if (sortFilter) {
-        sortFilter.addEventListener('change', filterItems);
-    }
-
-    if (formatFilter) {
-        formatFilter.addEventListener('change', filterItems);
-    }
-
-    if (statusFilter) {
-        statusFilter.addEventListener('change', filterItems);
-    }
-}
 
 function initializeEnhancedUI() {
     // Initialize view toggle
@@ -146,26 +124,13 @@ function clearSearch() {
         searchFilter.value = '';
         searchFilter.focus();
 
-        // Trigger input event to update any listeners
+        // Dispatch an input event; the section manager's own listener re-filters.
         searchFilter.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
     if (clearBtn) {
         clearBtn.style.display = 'none';
     }
-
-    filterItems();
-}
-
-function handleSearchInput() {
-    const searchFilter = document.getElementById('search-filter');
-    const clearBtn = document.getElementById('clear-search');
-
-    if (clearBtn) {
-        clearBtn.style.display = searchFilter && searchFilter.value ? 'block' : 'none';
-    }
-
-    filterItems();
 }
 
 function toggleFilters() {
@@ -282,31 +247,6 @@ function initializeKeyboardNavigation() {
     });
 }
 
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
-
-function filterItems() {
-    // Implementation will be customized per media type
-    const searchTerm = document.getElementById('search-filter')?.value || '';
-    const sortBy = document.getElementById('sort-filter')?.value || 'title';
-    const formatFilter = document.getElementById('format-filter')?.value || '';
-    const statusFilter = document.getElementById('status-filter')?.value || '';
-
-    // Trigger custom filter function
-    if (typeof customFilterItems === 'function') {
-        customFilterItems(searchTerm, sortBy, formatFilter, statusFilter);
-    }
-}
-
 function loadItems() {
     // Implementation will be customized per media type
     if (typeof customLoadItems === 'function') {
@@ -396,6 +336,5 @@ window.BaseSplitPane = {
     refreshItems,
     selectItem,
     updateItemCount,
-    filterItems,
     loadItems,
 };
