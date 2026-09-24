@@ -48,28 +48,19 @@
                         </button>
                     </div>
                     
-                    <!-- Search field selector: restrict the search term to one field -->
-                    <div class="mb-3">
-                        <select class="form-select form-select-sm" id="search-field" aria-label="Search field">
-                            <option value="all" selected>All fields</option>
-                            <option value="title">Title</option>
-                            <option value="author">Author</option>
-                        </select>
-                    </div>
-                    
                     <!-- Filter Controls Row -->
                     <div class="row g-2">
                         <div class="col-6">
                             <select class="form-select form-select-sm" id="sort-filter" aria-label="Sort options">
-                                <option value="title">📚 Title</option>
-                                <option value="author">👤 Author</option>
-                                <option value="date">📅 Date</option>
-                                <option value="size">💾 Size</option>
+                                <option value="title">Title</option>
+                                <option value="author">Author</option>
+                                <option value="date">Date</option>
+                                <option value="size">Size</option>
                             </select>
                         </div>
                         <div class="col-6">
                             <select class="form-select form-select-sm" id="format-filter" aria-label="Format filter">
-                                <option value="">🔄 All Formats</option>
+                                <option value="">All Formats</option>
                                 {% block format_options %}{% endblock %}
                             </select>
                         </div>
@@ -90,10 +81,10 @@
                         <div class="row g-2">
                             <div class="col-12">
                                 <select class="form-select form-select-sm" id="status-filter" aria-label="Status filter">
-                                    <option value="">📊 All Status</option>
-                                    <option value="read">✅ Read</option>
-                                    <option value="unread">⏳ Unread</option>
-                                    <option value="reading">📖 Reading</option>
+                                    <option value="">All Status</option>
+                                    <option value="read">Read</option>
+                                    <option value="unread">Unread</option>
+                                    <option value="reading">Reading</option>
                                 </select>
                             </div>
                         </div>
