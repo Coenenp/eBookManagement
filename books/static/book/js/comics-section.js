@@ -18,14 +18,6 @@ class ComicsSectionManager extends BaseSectionManager {
         this.sortColumn = null;
         this.sortDirection = 'asc';
         this.bindColumnSort();
-
-        // Re-filter when the search-field selector changes
-        const searchField = document.getElementById('search-field');
-        if (searchField) {
-            searchField.addEventListener('change', () => {
-                if (typeof this.handleSearch === 'function') this.handleSearch();
-            });
-        }
     }
 
     /**
@@ -96,10 +88,9 @@ class ComicsSectionManager extends BaseSectionManager {
 
     filterItems(searchTerm, sortBy, formatFilter, statusFilter) {
         const term = (searchTerm || "").toLowerCase();
-        const searchField = document.getElementById('search-field')?.value || 'all';
         // Filter comics data
         this.filteredData = this.currentData.filter((series) => {
-            const matchesSearch = !term || this.matchesSearch(series, term, searchField);
+            const matchesSearch = !term || this.matchesSearch(series, term);
 
             const matchesFormat = !formatFilter || series.books.some((book) => book.file_format === formatFilter);
 
@@ -120,20 +111,11 @@ class ComicsSectionManager extends BaseSectionManager {
         this.updateItemCount(this.filteredData.length);
     }
 
-    // Search matching scoped by the search-field selector. "all" matches any
-    // metadata (series name, issue title, issue author); "title" matches the
-    // series name or issue titles; "author" matches issue authors only.
-    matchesSearch(series, term, field) {
+    // Search matching across all metadata: series name, issue title, issue
+    // author (all-fields search; the per-field scope selector was removed).
+    matchesSearch(series, term) {
         const has = (s) => (s || '').toLowerCase().includes(term);
-        switch (field) {
-            case 'title':
-                return has(series.name) || series.books.some((book) => has(book.title));
-            case 'author':
-                return series.books.some((book) => has(book.author));
-            case 'all':
-            default:
-                return has(series.name) || series.books.some((book) => has(book.title) || has(book.author));
-        }
+        return has(series.name) || series.books.some((book) => has(book.title) || has(book.author));
     }
 
     sortComicsData(sortBy) {

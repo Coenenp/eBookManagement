@@ -135,15 +135,16 @@ def test_series_column_sort_toggles(authenticated_page, app_url):
     assert len(by_author) == len(asc)
 
 
-def test_series_search_field_author_scopes(authenticated_page, app_url):
-    """The search-field selector must scope the term: Author restricts to authors."""
+def test_series_search_defaults_to_all_fields(authenticated_page, app_url):
+    """Search matches across all fields: an author-only word surfaces its series."""
     page = authenticated_page
     page.goto(f"{app_url}/series/")
     page.wait_for_load_state("networkidle")
     _wait_for_rows(page, "#series-list-container")
 
     # Pick an author word that does not appear in its own series name, so we can
-    # distinguish author-matching from title-matching.
+    # verify all-fields matching finds it via the author path (there is no longer
+    # a search-field scope selector — search is all-fields by default).
     probe = page.evaluate(
         """() => {
             const data = window.seriesManager?.currentData || [];
@@ -165,14 +166,7 @@ def test_series_search_field_author_scopes(authenticated_page, app_url):
     def names():
         return [n.strip() for n in page.locator("table.condensed-table tbody tr td.col-title").all_inner_texts()]
 
-    # Author-scoped search matches the series whose author contains the word.
-    page.select_option("#search-field", "author")
+    # All-fields search matches the series whose author contains the word.
     page.fill("#search-filter", probe["word"])
     page.wait_for_timeout(800)
-    assert probe["name"] in names(), "author-scoped search must match the author's series"
-
-    # Title-scoped search must NOT match that same series (word is author-only).
-    page.select_option("#search-field", "title")
-    page.fill("#search-filter", probe["word"])
-    page.wait_for_timeout(800)
-    assert probe["name"] not in names(), "title-scoped search must not match an author-only word"
+    assert probe["name"] in names(), "all-fields search must match the author's series"
