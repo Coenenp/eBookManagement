@@ -88,6 +88,17 @@ class TitleAuthorVerdictTests(TestCase):
         )
         self.assertIs(v, Verdict.VERIFIED)
 
+    def test_same_title_different_author_different_isbn_uncertain(self):
+        # Same title but a different author and a different valid ISBN: the
+        # title agrees but the author and ISBN disagree, so identity is not
+        # established. Not verified (author mismatch) and not hard-rejected
+        # (title matches), so the verdict is UNCERTAIN.
+        v = verify_title_author(
+            "The Hobbit", "J.R.R. Tolkien", "The Hobbit", ["J.K. Rowling"],
+            query_isbn=ISBN_A13, result_isbn=ISBN_B13,
+        )
+        self.assertIs(v, Verdict.UNCERTAIN)
+
     def test_invalid_query_isbn_falls_through_to_title_author(self):
         # Checksum-invalid ISBN is ignored; clean title+author still verifies.
         v = verify_title_author("The Hobbit", "Tolkien", "The Hobbit", ["Tolkien"], query_isbn=INVALID_ISBN)
@@ -232,16 +243,11 @@ class IsbnDisambiguationTests(TestCase):
         self.assertEqual(result.isbn, ISBN_A13)
         self.assertEqual(result.reason, "")
 
-    def test_same_work_another_format_disambiguation(self):
-        # Two different ISBNs of the same work (e.g. hardcover vs paperback) at
-        # the same rank is still a tie locally; disambiguation cannot resolve
-        # format identity without an external call, so it flags rather than guesses.
-        result = disambiguate_isbn([
-            (ISBN_RANK_DECLARED, ISBN_A13),
-            (ISBN_RANK_DECLARED, ISBN_B13),
-        ])
-        self.assertIsNone(result.isbn)
-        self.assertEqual(result.reason, UnresolvedReason.AMBIGUOUS_ISBN)
+    def test_unknown_rank_raises_value_error(self):
+        # A rank outside the known set is a caller bug, not a candidate to
+        # silently drop; surface it loudly.
+        with self.assertRaises(ValueError):
+            disambiguate_isbn([("title-page", ISBN_A13)])
 
 
 class UnresolvedReasonFlagTests(TestCase):

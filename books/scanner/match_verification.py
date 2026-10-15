@@ -36,6 +36,9 @@ ISBN_RANK_BACK = "back"            # back matter; only when the sole candidate
 # Priority order of the non-back-matter ranks.
 _ISBN_RANK_PRIORITY = (ISBN_RANK_DECLARED, ISBN_RANK_FRONT, ISBN_RANK_ELSEWHERE)
 
+# Every rank a caller may tag a candidate with; anything else is a bug.
+_ISBN_RANK_VALID = (ISBN_RANK_DECLARED, ISBN_RANK_FRONT, ISBN_RANK_ELSEWHERE, ISBN_RANK_BACK)
+
 
 class IsbnDisambiguation(NamedTuple):
     """Outcome of disambiguating a book's local ISBN candidates."""
@@ -109,6 +112,10 @@ def disambiguate_isbn(candidates):
     - Several distinct candidates at the same (best) rank: return no ISBN plus
       a reason code so the book is flagged. Never guess.
 
+    Raises ``ValueError`` if any candidate carries a rank outside
+    ``ISBN_RANK_DECLARED`` / ``ISBN_RANK_FRONT`` / ``ISBN_RANK_ELSEWHERE`` /
+    ``ISBN_RANK_BACK``.
+
     Returns an ``IsbnDisambiguation``. A declared ISBN that disagrees with a
     lower-rank candidate still wins, but the disagreement is recorded via the
     ``conflict`` flag.
@@ -118,6 +125,8 @@ def disambiguate_isbn(candidates):
     # 1. Keep only checksum-valid, normalized ISBNs, grouped by rank (dedup).
     ranked = {}
     for rank, raw in candidates:
+        if rank not in _ISBN_RANK_VALID:
+            raise ValueError(f"Unknown ISBN rank: {rank!r}")
         n = normalize_isbn(raw)
         if n is None:
             continue
