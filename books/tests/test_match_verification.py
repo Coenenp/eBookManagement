@@ -15,6 +15,7 @@ from books.scanner.match_verification import (
     Verdict,
     _issues_match,
     combined_match_confidence,
+    disambiguate_isbn,
     first_isbn,
     isbn_match,
     mark_resolved,
@@ -23,11 +24,18 @@ from books.scanner.match_verification import (
     verify_comic,
     verify_title_author,
 )
+from books.scanner.match_verification import (
+    ISBN_RANK_BACK,
+    ISBN_RANK_DECLARED,
+    ISBN_RANK_ELSEWHERE,
+    ISBN_RANK_FRONT,
+)
 
 # Valid ISBN-13, a second (different) valid ISBN for mismatch tests, and a
 # checksum-invalid ISBN that must fall through to title/author matching.
 ISBN_A13 = "9780306406157"
 ISBN_B13 = "9780132350884"
+ISBN_C13 = "9780747532699"
 INVALID_ISBN = "9780123456789"  # wrong check digit
 
 
@@ -62,12 +70,23 @@ class TitleAuthorVerdictTests(TestCase):
         )
         self.assertIs(v, Verdict.VERIFIED)
 
-    def test_isbn_mismatch_rejects(self):
+    def test_isbn_mismatch_with_mismatched_title_author_rejects(self):
+        # Different ISBNs AND clearly mismatched title/author -> reject. (Rule 5:
+        # a different-format ISBN only counts when title+author also match.)
         v = verify_title_author(
-            "Same Title", "Same Author", "Same Title", ["Same Author"],
+            "The Hobbit", "Tolkien", "Completely Different", ["Nobody"],
             query_isbn=ISBN_A13, result_isbn=ISBN_B13,
         )
         self.assertIs(v, Verdict.REJECTED)
+
+    def test_isbn_mismatch_with_matching_title_author_verifies(self):
+        # Rule 5: a different-format ISBN of the same work counts (verifies)
+        # when title+author match above threshold.
+        v = verify_title_author(
+            "The Hobbit", "J.R.R. Tolkien", "The Hobbit", ["J.R.R. Tolkien"],
+            query_isbn=ISBN_A13, result_isbn=ISBN_B13,
+        )
+        self.assertIs(v, Verdict.VERIFIED)
 
     def test_invalid_query_isbn_falls_through_to_title_author(self):
         # Checksum-invalid ISBN is ignored; clean title+author still verifies.
@@ -133,6 +152,96 @@ class FirstIsbnTests(TestCase):
         self.assertFalse(isbn_match(ISBN_A13, ISBN_B13))
         self.assertFalse(isbn_match(ISBN_A13, None))
         self.assertFalse(isbn_match(None, ISBN_A13))
+
+
+class IsbnDisambiguationTests(TestCase):
+    def test_tie_at_same_rank_returns_no_isbn_and_reason(self):
+        # Two distinct declared ISBNs at the same (best) rank: do not guess.
+        result = disambiguate_isbn([
+            (ISBN_RANK_DECLARED, ISBN_A13),
+            (ISBN_RANK_DECLARED, ISBN_B13),
+        ])
+        self.assertIsNone(result.isbn)
+        self.assertEqual(result.reason, UnresolvedReason.AMBIGUOUS_ISBN)
+        self.assertFalse(result.conflict)
+
+    def test_invalid_checksum_is_not_a_candidate(self):
+        # A checksum-invalid ISBN is dropped; with nothing valid left, no ISBN.
+        result = disambiguate_isbn([(ISBN_RANK_DECLARED, INVALID_ISBN)])
+        self.assertIsNone(result.isbn)
+        self.assertEqual(result.reason, "")
+
+    def test_invalid_checksum_ignored_alongside_valid(self):
+        result = disambiguate_isbn([
+            (ISBN_RANK_DECLARED, INVALID_ISBN),
+            (ISBN_RANK_DECLARED, ISBN_A13),
+        ])
+        self.assertEqual(result.isbn, ISBN_A13)
+        self.assertEqual(result.reason, "")
+
+    def test_sole_back_matter_isbn_counts(self):
+        # Back-matter ISBN is the sole candidate -> it counts.
+        result = disambiguate_isbn([(ISBN_RANK_BACK, ISBN_A13)])
+        self.assertEqual(result.isbn, ISBN_A13)
+        self.assertEqual(result.reason, "")
+
+    def test_back_matter_ignored_when_front_exists(self):
+        # Front-matter beats back-matter: back only counts when sole.
+        result = disambiguate_isbn([
+            (ISBN_RANK_FRONT, ISBN_A13),
+            (ISBN_RANK_BACK, ISBN_B13),
+        ])
+        self.assertEqual(result.isbn, ISBN_A13)
+        self.assertEqual(result.reason, "")
+
+    def test_list_of_isbns_for_other_books_ties(self):
+        # A list of several distinct ISBNs elsewhere (likely other books) with
+        # no declared/front ISBN: no single identifier -> flagged, not guessed.
+        result = disambiguate_isbn([
+            (ISBN_RANK_ELSEWHERE, ISBN_A13),
+            (ISBN_RANK_ELSEWHERE, ISBN_B13),
+            (ISBN_RANK_ELSEWHERE, ISBN_C13),
+        ])
+        self.assertIsNone(result.isbn)
+        self.assertEqual(result.reason, UnresolvedReason.AMBIGUOUS_ISBN)
+
+    def test_declared_wins_over_ocr_conflict_and_records_conflict(self):
+        # Declared ISBN beats a differing OCR (elsewhere) ISBN, but the
+        # disagreement is recorded.
+        result = disambiguate_isbn([
+            (ISBN_RANK_DECLARED, ISBN_A13),
+            (ISBN_RANK_ELSEWHERE, ISBN_B13),
+        ])
+        self.assertEqual(result.isbn, ISBN_A13)
+        self.assertEqual(result.reason, "")
+        self.assertTrue(result.conflict)
+
+    def test_declared_no_conflict_when_lower_rank_agrees(self):
+        result = disambiguate_isbn([
+            (ISBN_RANK_DECLARED, ISBN_A13),
+            (ISBN_RANK_ELSEWHERE, ISBN_A13),
+        ])
+        self.assertEqual(result.isbn, ISBN_A13)
+        self.assertFalse(result.conflict)
+
+    def test_front_beats_elsewhere(self):
+        result = disambiguate_isbn([
+            (ISBN_RANK_ELSEWHERE, ISBN_B13),
+            (ISBN_RANK_FRONT, ISBN_A13),
+        ])
+        self.assertEqual(result.isbn, ISBN_A13)
+        self.assertEqual(result.reason, "")
+
+    def test_same_work_another_format_disambiguation(self):
+        # Two different ISBNs of the same work (e.g. hardcover vs paperback) at
+        # the same rank is still a tie locally; disambiguation cannot resolve
+        # format identity without an external call, so it flags rather than guesses.
+        result = disambiguate_isbn([
+            (ISBN_RANK_DECLARED, ISBN_A13),
+            (ISBN_RANK_DECLARED, ISBN_B13),
+        ])
+        self.assertIsNone(result.isbn)
+        self.assertEqual(result.reason, UnresolvedReason.AMBIGUOUS_ISBN)
 
 
 class UnresolvedReasonFlagTests(TestCase):

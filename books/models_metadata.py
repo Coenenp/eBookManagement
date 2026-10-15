@@ -28,6 +28,7 @@ class UnresolvedReason(models.TextChoices):
     UNMAPPED_SERIES = "unmapped_series", "Unmapped series"
     NO_MATCH = "no_match", "No matching candidate"
     NEITHER_SOURCE = "neither_source", "Neither source resolved"
+    AMBIGUOUS_ISBN = "ambiguous_isbn", "Ambiguous ISBN"
 
 
 class FinalMetadata(models.Model):
