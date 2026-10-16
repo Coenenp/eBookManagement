@@ -331,8 +331,8 @@ def _query_open_library_combined(book, title, author, isbn=None):
             # Confidence must reflect HOW the match verified: an exact ISBN
             # match is high-confidence; a title/author match (e.g. an ISBN
             # query whose candidate had no ISBN) uses title/author similarity.
-            match_confidence = 0.95 if isbn_match(isbn, best_match.get("isbn")) else _calculate_match_confidence(
-                title, author, best_match.get("title", ""), best_match.get("author_name", [])
+            match_confidence = (
+                0.95 if isbn_match(isbn, best_match.get("isbn")) else _calculate_match_confidence(title, author, best_match.get("title", ""), best_match.get("author_name", []))
             )
             metadata_confidence = _calculate_final_confidence(metadata_source, match_confidence)
             _process_open_library_metadata(book, metadata_source, best_match, metadata_confidence)

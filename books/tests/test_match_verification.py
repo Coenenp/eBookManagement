@@ -12,6 +12,10 @@ from django.test import TestCase
 
 from books.models import Book, BookTitle, DataSource, FinalMetadata, ScanFolder, UnresolvedReason
 from books.scanner.match_verification import (
+    ISBN_RANK_BACK,
+    ISBN_RANK_DECLARED,
+    ISBN_RANK_ELSEWHERE,
+    ISBN_RANK_FRONT,
     Verdict,
     _issues_match,
     combined_match_confidence,
@@ -25,12 +29,6 @@ from books.scanner.match_verification import (
     title_similarity,
     verify_comic,
     verify_title_author,
-)
-from books.scanner.match_verification import (
-    ISBN_RANK_BACK,
-    ISBN_RANK_DECLARED,
-    ISBN_RANK_ELSEWHERE,
-    ISBN_RANK_FRONT,
 )
 
 # Valid ISBN-13, a second (different) valid ISBN for mismatch tests, and a
