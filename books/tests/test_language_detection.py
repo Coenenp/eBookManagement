@@ -13,6 +13,7 @@ from books.models import Book, BookMetadata, DataSource, FinalMetadata, ScanFold
 from books.utils.language import (
     MIN_LANGUAGE_CONFIDENCE,
     MIN_LANGUAGE_TEXT_CHARS,
+    _get_langid_identifier,
     detect_language,
     detect_language_from_text,
     registered_scan_folder_languages,
@@ -124,13 +125,24 @@ class DetectLanguageFromTextTests(TestCase):
         code, _ = detect_language_from_text(DUTCH_TEXT, languages=["en", "nl", "fr", "de"])
         self.assertEqual(code, "nl")
 
+    def test_distinct_identifiers_per_language_set(self):
+        # A restricted identifier is a distinct object from the full-model one,
+        # so a narrowed candidate set never mutates the shared full identifier.
+        full = _get_langid_identifier()
+        restricted = _get_langid_identifier(["en", "nl"])
+        self.assertIsNot(full, restricted)
+        # Interleaving restricted and full-model detections stays correct.
+        self.assertEqual(detect_language_from_text(FRENCH_TEXT)[0], "fr")
+        self.assertEqual(detect_language_from_text(DUTCH_TEXT, languages=["en", "nl"])[0], "nl")
+        self.assertEqual(detect_language_from_text(GERMAN_TEXT)[0], "de")
+
 
 class DetectLanguageIntegrationTests(TestCase):
     """detect_language(book, extracted_text=...) uses embedded + folder signals."""
 
     def setUp(self):
-        # Register both an English and a Dutch folder so the production language
-        # restriction resolves to {en, nl}.
+        # Register both an English and a Dutch folder to exercise folder-language
+        # agreement and contradiction signals.
         self.en_folder = ScanFolder.objects.create(path="/tmp/lang-en", name="English", language="en")
         self.nl_folder = ScanFolder.objects.create(path="/tmp/lang-nl", name="Nederlands", language="nl")
         self.book = Book.objects.create(content_type="ebook", scan_folder=self.en_folder)
@@ -140,18 +152,21 @@ class DetectLanguageIntegrationTests(TestCase):
         self.assertEqual(registered_scan_folder_languages(), {"en", "nl"})
 
     def test_disagreement_with_embedded_tag_flags(self):
-        # Embedded metadata says English, but the extracted text is Dutch.
+        # The book sits in a Dutch folder and the extracted text is Dutch (they
+        # agree), but the embedded tag says English: only the embedded tag
+        # disagrees, so the book is flagged.
+        book = Book.objects.create(content_type="ebook", scan_folder=self.nl_folder)
         BookMetadata.objects.create(
-            book=self.book,
+            book=book,
             field_name="language",
             field_value="eng",
             source=self.source,
             confidence=0.9,
             is_active=True,
         )
-        lang = detect_language(self.book, extracted_text=DUTCH_TEXT)
+        lang = detect_language(book, extracted_text=DUTCH_TEXT)
         self.assertEqual(lang, "nl")
-        fm = FinalMetadata.objects.get(book=self.book)
+        fm = FinalMetadata.objects.get(book=book)
         self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_DISAGREEMENT)
 
     def test_contradiction_with_folder_flags(self):
@@ -161,6 +176,40 @@ class DetectLanguageIntegrationTests(TestCase):
         self.assertEqual(lang, "nl")
         fm = FinalMetadata.objects.get(book=self.book)
         self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_DISAGREEMENT)
+
+    def test_french_sample_in_english_folder_flags(self):
+        # A French sample in an English folder: no candidate-language restriction
+        # means French is detected, and the folder contradiction flags the book.
+        lang = detect_language(self.book, extracted_text=FRENCH_TEXT)
+        self.assertEqual(lang, "fr")
+        fm = FinalMetadata.objects.get(book=self.book)
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_DISAGREEMENT)
+
+    def test_all_signals_agree_no_flag(self):
+        # Embedded tag, folder, and extracted text all agree on Dutch: no flag.
+        book = Book.objects.create(content_type="ebook", scan_folder=self.nl_folder)
+        BookMetadata.objects.create(
+            book=book,
+            field_name="language",
+            field_value="nld",
+            source=self.source,
+            confidence=0.9,
+            is_active=True,
+        )
+        lang = detect_language(book, extracted_text=DUTCH_TEXT)
+        self.assertEqual(lang, "nl")
+        # No flag was written: no FinalMetadata row carries a non-empty reason.
+        self.assertFalse(FinalMetadata.objects.filter(book=book).exclude(unresolved_reason="").exists())
+
+    def test_language_flag_does_not_overwrite_existing_reason(self):
+        # First reason wins: a language flag never overwrites an existing
+        # non-empty unresolved_reason.
+        fm = FinalMetadata(book=self.book, unresolved_reason=UnresolvedReason.NO_MATCH)
+        fm.save(auto_sync=False)
+        lang = detect_language(self.book, extracted_text=DUTCH_TEXT)  # folder en -> would flag
+        self.assertEqual(lang, "nl")
+        fm.refresh_from_db()
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.NO_MATCH)
 
     def test_gate_failure_flags_undetermined(self):
         # Extracted text too short: flagged LANGUAGE_UNDETERMINED, language "und",

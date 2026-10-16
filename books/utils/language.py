@@ -4,19 +4,32 @@
 MIN_LANGUAGE_TEXT_CHARS = 300
 MIN_LANGUAGE_CONFIDENCE = 0.90
 
-# langid identifier in normalized-probability mode, created lazily so importing
-# this module never loads the ~2 MB model until detection is actually needed.
-_langid_identifier = None
+# langid identifiers in normalized-probability mode, one per candidate language
+# set (a ``frozenset`` of codes, or ``None`` for the full model), created lazily
+# so importing this module never loads the ~2 MB model until detection is needed.
+# A restricted identifier is a distinct object, so the shared full-model
+# identifier is never mutated when a caller narrows the candidate set.
+_langid_identifiers = {}
 
 
-def _get_langid_identifier():
-    """Return the shared langid identifier (normalized-probability mode)."""
-    global _langid_identifier
-    if _langid_identifier is None:
-        from langid.langid import LanguageIdentifier, model
+def _get_langid_identifier(languages=None):
+    """Return a langid identifier for ``languages``, cached per language set.
 
-        _langid_identifier = LanguageIdentifier.from_modelstring(model, norm_probs=True)
-    return _langid_identifier
+    ``languages`` is a list/set of ISO codes restricting the candidate set;
+    ``None`` means the full model. Each distinct set gets its own identifier,
+    built with ``set_languages`` at creation time, so callers never mutate an
+    identifier that another language set shares.
+    """
+    from langid.langid import LanguageIdentifier, model
+
+    key = frozenset(languages) if languages else None
+    identifier = _langid_identifiers.get(key)
+    if identifier is None:
+        identifier = LanguageIdentifier.from_modelstring(model, norm_probs=True)
+        if languages:
+            identifier.set_languages(list(languages))
+        _langid_identifiers[key] = identifier
+    return identifier
 
 
 def detect_language_from_text(text, languages=None):
@@ -28,7 +41,8 @@ def detect_language_from_text(text, languages=None):
 
     ``languages`` optionally restricts the candidate set langid scores against
     (e.g. the registered scan-folder languages). When ``None``, the full model
-    is used.
+    is used. Production detection passes no restriction so any language is
+    detected.
     """
     if not text:
         return None
@@ -36,15 +50,8 @@ def detect_language_from_text(text, languages=None):
     if non_ws < MIN_LANGUAGE_TEXT_CHARS:
         return None
 
-    identifier = _get_langid_identifier()
-    if languages:
-        identifier.set_languages(list(languages))
-        try:
-            code, confidence = identifier.classify(text)
-        finally:
-            identifier.set_languages(None)
-    else:
-        code, confidence = identifier.classify(text)
+    identifier = _get_langid_identifier(languages)
+    code, confidence = identifier.classify(text)
 
     if confidence < MIN_LANGUAGE_CONFIDENCE:
         return None
@@ -214,26 +221,23 @@ def _contradicts(signal, detected):
 
 
 def _flag_language(book, reason):
-    """Record a language-detection flag on the book's FinalMetadata."""
-    from books.models import FinalMetadata
+    """Record a language-detection flag (first reason wins)."""
+    from books.scanner.match_verification import flag_unresolved
 
-    fm = FinalMetadata.objects.filter(book=book).first()
-    if fm is None:
-        fm = FinalMetadata(book=book)
-        fm.save(auto_sync=False)
-    fm.unresolved_reason = reason
-    fm.save(update_fields=["unresolved_reason"])
+    flag_unresolved(book, reason)
 
 
 def detect_language(book, extracted_text=None):
     """Determine a book's language explicitly.
 
     When ``extracted_text`` is provided (born-digital content), langid is the
-    primary signal, gated on length + confidence. The embedded metadata language
+    primary signal, gated on length + confidence, with no candidate-language
+    restriction so any language is detected. The embedded metadata language
     and the scan-folder language are comparison signals only: a confident
     detection that contradicts either flags the book (LANGUAGE_DISAGREEMENT),
     and a sample that fails the gates flags it LANGUAGE_UNDETERMINED with
-    language "und". The folder language is never written as a detection.
+    language "und". The folder language is never written as a detection. A
+    language flag never overwrites an existing non-empty unresolved reason.
 
     Without ``extracted_text`` the existing fallback applies: a concrete
     embedded metadata language, then a concrete scan-folder language, then
@@ -247,7 +251,7 @@ def detect_language(book, extracted_text=None):
     folder = _folder_language(book)
 
     if extracted_text:
-        result = detect_language_from_text(extracted_text, languages=registered_scan_folder_languages() or None)
+        result = detect_language_from_text(extracted_text)
         if result is None:
             _flag_language(book, UnresolvedReason.LANGUAGE_UNDETERMINED)
             return "und"
