@@ -12,23 +12,23 @@ from django.test import TestCase
 
 from books.models import Book, BookTitle, DataSource, FinalMetadata, ScanFolder, UnresolvedReason
 from books.scanner.match_verification import (
+    ISBN_RANK_BACK,
+    ISBN_RANK_DECLARED,
+    ISBN_RANK_ELSEWHERE,
+    ISBN_RANK_FRONT,
     Verdict,
     _issues_match,
     combined_match_confidence,
     disambiguate_isbn,
     first_isbn,
+    flag_unresolved,
     isbn_match,
+    isbn_rank_from_source,
     mark_resolved,
     mark_unresolved,
     title_similarity,
     verify_comic,
     verify_title_author,
-)
-from books.scanner.match_verification import (
-    ISBN_RANK_BACK,
-    ISBN_RANK_DECLARED,
-    ISBN_RANK_ELSEWHERE,
-    ISBN_RANK_FRONT,
 )
 
 # Valid ISBN-13, a second (different) valid ISBN for mismatch tests, and a
@@ -287,3 +287,33 @@ class UnresolvedReasonFlagTests(TestCase):
         # Guard: UNCERTAIN is a distinct, named choice (not lumped with the rest).
         self.assertEqual(UnresolvedReason.UNCERTAIN, "uncertain")
         self.assertIn(("uncertain", "Uncertain match"), UnresolvedReason.choices)
+
+    def test_flag_unresolved_sets_reason_when_blank(self):
+        flag_unresolved(self.book, UnresolvedReason.AMBIGUOUS_ISBN)
+        fm = FinalMetadata.objects.get(book=self.book)
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.AMBIGUOUS_ISBN)
+
+    def test_flag_unresolved_first_reason_wins(self):
+        # A flag never overwrites an existing non-empty unresolved_reason.
+        mark_unresolved(self.book, UnresolvedReason.NO_MATCH)
+        flag_unresolved(self.book, UnresolvedReason.AMBIGUOUS_ISBN)
+        fm = FinalMetadata.objects.get(book=self.book)
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.NO_MATCH)
+
+
+class IsbnRankFromSourceTests(TestCase):
+    """isbn_rank_from_source maps local sources to ranks; external -> None."""
+
+    def test_embedded_sources_are_declared(self):
+        self.assertEqual(isbn_rank_from_source(DataSource.EPUB_INTERNAL), ISBN_RANK_DECLARED)
+        self.assertEqual(isbn_rank_from_source(DataSource.OPF_FILE), ISBN_RANK_DECLARED)
+
+    def test_legacy_content_scan_is_elsewhere(self):
+        self.assertEqual(isbn_rank_from_source(DataSource.CONTENT_SCAN), ISBN_RANK_ELSEWHERE)
+
+    def test_external_sources_are_not_local_candidates(self):
+        for name in (DataSource.OPEN_LIBRARY, DataSource.GOOGLE_BOOKS, DataSource.COMICVINE):
+            self.assertIsNone(isbn_rank_from_source(name))
+
+    def test_unknown_source_is_not_a_candidate(self):
+        self.assertIsNone(isbn_rank_from_source("some-unknown-source"))

@@ -40,6 +40,28 @@ _ISBN_RANK_PRIORITY = (ISBN_RANK_DECLARED, ISBN_RANK_FRONT, ISBN_RANK_ELSEWHERE)
 _ISBN_RANK_VALID = (ISBN_RANK_DECLARED, ISBN_RANK_FRONT, ISBN_RANK_ELSEWHERE, ISBN_RANK_BACK)
 
 
+def isbn_rank_from_source(source_name):
+    """Map a DataSource name to a local ISBN candidate rank (or None).
+
+    Only the file's own ISBN evidence is a local candidate:
+
+    - EPUB/OPF embedded metadata is the file's declared ISBN -> DECLARED.
+    - A legacy ``CONTENT_SCAN`` row carries no front/back location, so it is
+      treated as ELSEWHERE: several of them tie, which ``disambiguate_isbn``
+      turns into AMBIGUOUS_ISBN rather than a guess, until a rescan retags
+      them front/back.
+    - External query results (Open Library, Google Books, ComicVine, ...) and
+      anything unknown return None — they are never fed to disambiguate_isbn.
+    """
+    from books.models import DataSource
+
+    if source_name in (DataSource.EPUB_INTERNAL, DataSource.OPF_FILE):
+        return ISBN_RANK_DECLARED
+    if source_name == DataSource.CONTENT_SCAN:
+        return ISBN_RANK_ELSEWHERE
+    return None
+
+
 class IsbnDisambiguation(NamedTuple):
     """Outcome of disambiguating a book's local ISBN candidates."""
 
