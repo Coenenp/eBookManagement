@@ -28,7 +28,7 @@ from books.models import (
     Publisher,
     UnresolvedReason,
 )
-from books.scanner.match_verification import Verdict, isbn_match, mark_resolved, mark_unresolved, verify_title_author
+from books.scanner.match_verification import Verdict, flag_unresolved, isbn_match, mark_resolved, mark_unresolved, verify_title_author
 from books.scanner.rate_limiting import get_api_client
 from books.utils.author import attach_authors
 from books.utils.cache_key import make_cache_key
@@ -43,7 +43,10 @@ def query_metadata_and_covers(book):
     try:
         title = _get_best_title(book)
         author = _get_best_author(book)
-        isbn = _get_best_isbn(book)
+        isbn_result = _get_best_isbn(book)
+        isbn = isbn_result.isbn
+        if isbn_result.reason == UnresolvedReason.AMBIGUOUS_ISBN:
+            flag_unresolved(book, UnresolvedReason.AMBIGUOUS_ISBN)
 
         logger.info(f"Retrieving metadata and covers for {title or 'Unknown'} ({author or 'Unknown'})...")
         logger.info(f"[DEBUG] Title resolved: {title}, Author resolved: {author}, ISBN resolved: {isbn}")
@@ -158,9 +161,25 @@ def _get_best_author(book):
 
 
 def _get_best_isbn(book):
-    """Return the best active ISBN from BookMetadata (highest confidence first)."""
-    best = BookMetadata.objects.filter(book=book, field_name="isbn", is_active=True).order_by("-confidence").first()
-    return normalize_isbn(best.field_value) if best else None
+    """Disambiguate the book's local ISBN candidates (local sources only).
+
+    Collects every active ISBN whose source maps to a local candidate rank and
+    feeds them to ``disambiguate_isbn``. External query-result ISBNs (Open
+    Library / Google Books) are excluded — only the file's own evidence
+    (declared metadata, content scan) is a candidate. Returns the
+    ``IsbnDisambiguation`` result: ``.isbn`` is the chosen ISBN-13 (or None when
+    the candidates are ambiguous or absent), and ``.reason`` is a non-empty
+    ``UnresolvedReason`` value when disambiguation flags the book.
+    """
+    from books.scanner.match_verification import disambiguate_isbn, isbn_rank_from_source
+
+    rows = BookMetadata.objects.filter(book=book, field_name="isbn", is_active=True)
+    candidates = []
+    for row in rows:
+        rank = isbn_rank_from_source(row.source.name)
+        if rank is not None:
+            candidates.append((rank, row.field_value))
+    return disambiguate_isbn(candidates)
 
 
 def _calculate_match_confidence(query_title, query_author, result_title, result_authors):

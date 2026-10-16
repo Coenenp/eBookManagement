@@ -40,6 +40,28 @@ _ISBN_RANK_PRIORITY = (ISBN_RANK_DECLARED, ISBN_RANK_FRONT, ISBN_RANK_ELSEWHERE)
 _ISBN_RANK_VALID = (ISBN_RANK_DECLARED, ISBN_RANK_FRONT, ISBN_RANK_ELSEWHERE, ISBN_RANK_BACK)
 
 
+def isbn_rank_from_source(source_name):
+    """Map a DataSource name to a local ISBN candidate rank (or None).
+
+    Only the file's own ISBN evidence is a local candidate:
+
+    - EPUB/OPF embedded metadata is the file's declared ISBN -> DECLARED.
+    - A legacy ``CONTENT_SCAN`` row carries no front/back location, so it is
+      treated as ELSEWHERE: several of them tie, which ``disambiguate_isbn``
+      turns into AMBIGUOUS_ISBN rather than a guess, until a rescan retags
+      them front/back.
+    - External query results (Open Library, Google Books, ComicVine, ...) and
+      anything unknown return None — they are never fed to disambiguate_isbn.
+    """
+    from books.models import DataSource
+
+    if source_name in (DataSource.EPUB_INTERNAL, DataSource.OPF_FILE):
+        return ISBN_RANK_DECLARED
+    if source_name == DataSource.CONTENT_SCAN:
+        return ISBN_RANK_ELSEWHERE
+    return None
+
+
 class IsbnDisambiguation(NamedTuple):
     """Outcome of disambiguating a book's local ISBN candidates."""
 
@@ -256,6 +278,22 @@ def mark_resolved(book):
 
 def mark_unresolved(book, reason):
     """Record the unresolved reason on the book's FinalMetadata."""
+    _set_unresolved_reason(book, reason)
+
+
+def flag_unresolved(book, reason):
+    """Record a review flag unless a reason is already set (first reason wins).
+
+    Unlike ``mark_unresolved`` (which records the latest match-verification
+    verdict), this never overwrites an existing non-empty ``unresolved_reason``:
+    the first flag wins, so an earlier signal is preserved. Used by
+    language-detection flags and ISBN-disambiguation ambiguity.
+    """
+    from books.models import FinalMetadata
+
+    fm = FinalMetadata.objects.filter(book=book).first()
+    if fm is not None and fm.unresolved_reason:
+        return
     _set_unresolved_reason(book, reason)
 
 
