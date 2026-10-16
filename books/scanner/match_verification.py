@@ -259,6 +259,22 @@ def mark_unresolved(book, reason):
     _set_unresolved_reason(book, reason)
 
 
+def flag_unresolved(book, reason):
+    """Record a review flag unless a reason is already set (first reason wins).
+
+    Unlike ``mark_unresolved`` (which records the latest match-verification
+    verdict), this never overwrites an existing non-empty ``unresolved_reason``:
+    the first flag wins, so an earlier signal is preserved. Used by
+    language-detection flags and ISBN-disambiguation ambiguity.
+    """
+    from books.models import FinalMetadata
+
+    fm = FinalMetadata.objects.filter(book=book).first()
+    if fm is not None and fm.unresolved_reason:
+        return
+    _set_unresolved_reason(book, reason)
+
+
 def _set_unresolved_reason(book, reason):
     from books.models import FinalMetadata
 

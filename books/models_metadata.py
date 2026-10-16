@@ -29,6 +29,8 @@ class UnresolvedReason(models.TextChoices):
     NO_MATCH = "no_match", "No matching candidate"
     NEITHER_SOURCE = "neither_source", "Neither source resolved"
     AMBIGUOUS_ISBN = "ambiguous_isbn", "Ambiguous ISBN"
+    LANGUAGE_UNDETERMINED = "language_undetermined", "Language undetermined"
+    LANGUAGE_DISAGREEMENT = "language_disagreement", "Language disagreement"
 
 
 class FinalMetadata(models.Model):
@@ -80,7 +82,7 @@ class FinalMetadata(models.Model):
     # Status
     is_reviewed = models.BooleanField(default=False)
     is_renamed = models.BooleanField(default=False)
-    unresolved_reason = models.CharField(max_length=20, choices=UnresolvedReason.choices, blank=True, default="")
+    unresolved_reason = models.CharField(max_length=32, choices=UnresolvedReason.choices, blank=True, default="")
     final_path = models.CharField(max_length=1000, blank=True)
     last_updated = models.DateTimeField(auto_now=True)
 
