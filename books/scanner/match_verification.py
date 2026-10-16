@@ -16,6 +16,7 @@ in a later milestone (M4).
 
 from difflib import SequenceMatcher
 from enum import Enum
+from typing import NamedTuple, Optional
 
 from books.utils.isbn import normalize_isbn
 
@@ -24,6 +25,27 @@ class Verdict(Enum):
     VERIFIED = "verified"
     REJECTED = "rejected"
     UNCERTAIN = "uncertain"
+
+
+# ISBN source ranks for disambiguation (TASK.md item 4), highest priority first.
+ISBN_RANK_DECLARED = "declared"    # declared in the file's own metadata
+ISBN_RANK_FRONT = "front"          # front matter near the title
+ISBN_RANK_ELSEWHERE = "elsewhere"  # anywhere else in the text
+ISBN_RANK_BACK = "back"            # back matter; only when the sole candidate
+
+# Priority order of the non-back-matter ranks.
+_ISBN_RANK_PRIORITY = (ISBN_RANK_DECLARED, ISBN_RANK_FRONT, ISBN_RANK_ELSEWHERE)
+
+# Every rank a caller may tag a candidate with; anything else is a bug.
+_ISBN_RANK_VALID = (ISBN_RANK_DECLARED, ISBN_RANK_FRONT, ISBN_RANK_ELSEWHERE, ISBN_RANK_BACK)
+
+
+class IsbnDisambiguation(NamedTuple):
+    """Outcome of disambiguating a book's local ISBN candidates."""
+
+    isbn: Optional[str]  # chosen normalized ISBN-13, or None if ambiguous/none
+    reason: str          # "" if resolved, else an UnresolvedReason value
+    conflict: bool       # True if a declared ISBN disagreed with a lower-rank ISBN
 
 
 # Rule 1 — title/author similarity (ebooks/audiobooks)
@@ -74,6 +96,79 @@ def first_isbn(value):
     return normalize_isbn(value)
 
 
+def disambiguate_isbn(candidates):
+    """Choose the single ISBN identifying this book from local candidates.
+
+    ``candidates`` is an iterable of ``(rank, raw_isbn)`` tuples where ``rank``
+    is one of ``ISBN_RANK_DECLARED`` / ``ISBN_RANK_FRONT`` / ``ISBN_RANK_ELSEWHERE``
+    / ``ISBN_RANK_BACK``.
+
+    Rules (TASK.md item 4), implemented exactly:
+
+    - Only checksum-valid ISBNs are candidates; the rest are dropped.
+    - Rank by source: declared > front > elsewhere. A back-matter ISBN counts
+      only when it is the sole candidate.
+    - Disambiguation is local-only (no external call).
+    - Several distinct candidates at the same (best) rank: return no ISBN plus
+      a reason code so the book is flagged. Never guess.
+
+    Raises ``ValueError`` if any candidate carries a rank outside
+    ``ISBN_RANK_DECLARED`` / ``ISBN_RANK_FRONT`` / ``ISBN_RANK_ELSEWHERE`` /
+    ``ISBN_RANK_BACK``.
+
+    Returns an ``IsbnDisambiguation``. A declared ISBN that disagrees with a
+    lower-rank candidate still wins, but the disagreement is recorded via the
+    ``conflict`` flag.
+    """
+    from books.models import UnresolvedReason
+
+    # 1. Keep only checksum-valid, normalized ISBNs, grouped by rank (dedup).
+    ranked = {}
+    for rank, raw in candidates:
+        if rank not in _ISBN_RANK_VALID:
+            raise ValueError(f"Unknown ISBN rank: {rank!r}")
+        n = normalize_isbn(raw)
+        if n is None:
+            continue
+        ranked.setdefault(rank, set()).add(n)
+
+    # 2. Back matter only counts when it is the sole candidate.
+    non_back = {}
+    for rank in _ISBN_RANK_PRIORITY:
+        non_back[rank] = ranked.get(rank, set())
+    has_non_back = any(non_back.values())
+    back = ranked.get(ISBN_RANK_BACK, set()) if not has_non_back else set()
+
+    # 3. Choose the highest-priority rank that has candidates.
+    for rank in _ISBN_RANK_PRIORITY:
+        vals = non_back[rank]
+        if not vals:
+            continue
+        if len(vals) == 1:
+            return _disambiguate_result(next(iter(vals)), rank, ranked)
+        # Several distinct ISBNs at the same rank: do not guess.
+        return IsbnDisambiguation(None, UnresolvedReason.AMBIGUOUS_ISBN, False)
+
+    # 4. No front/elsewhere/declared candidates: back matter is the sole source.
+    if back:
+        if len(back) == 1:
+            return IsbnDisambiguation(next(iter(back)), "", False)
+        return IsbnDisambiguation(None, UnresolvedReason.AMBIGUOUS_ISBN, False)
+
+    return IsbnDisambiguation(None, "", False)
+
+
+def _disambiguate_result(chosen, rank, ranked):
+    """Wrap a single-candidate win, recording any declared-vs-lower conflict."""
+    conflict = False
+    if rank == ISBN_RANK_DECLARED:
+        lower = set()
+        for r in _ISBN_RANK_PRIORITY[1:]:
+            lower |= ranked.get(r, set())
+        conflict = any(v != chosen for v in lower)
+    return IsbnDisambiguation(chosen, "", conflict)
+
+
 def isbn_match(query_isbn, result_isbn):
     """True if both sides carry the same checksum-valid ISBN."""
     q = first_isbn(query_isbn)
@@ -96,9 +191,10 @@ def verify_title_author(query_title, query_author, result_title, result_authors,
             r = first_isbn(result_isbn)
             if r == q:
                 return Verdict.VERIFIED
-            if r:
-                return Verdict.REJECTED
-            # Candidate carries no ISBN: fall through to title/author.
+            # If r is a differing valid ISBN (a different format of the same
+            # work) or absent, fall through to title/author matching: rule 5
+            # lets a different-format ISBN verify only when title+author also
+            # match above threshold, which the Rule 1 block below enforces.
 
     # Rule 1 — title/author similarity.
     title_score = title_similarity(query_title, result_title)
