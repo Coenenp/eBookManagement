@@ -28,7 +28,14 @@ from books.models import (
     Publisher,
     UnresolvedReason,
 )
-from books.scanner.match_verification import Verdict, flag_unresolved, isbn_match, mark_resolved, mark_unresolved, verify_title_author
+from books.scanner.match_verification import (
+    Verdict,
+    flag_unresolved,
+    isbn_match,
+    mark_resolved,
+    mark_unresolved,
+    verify_title_author,
+)
 from books.scanner.rate_limiting import get_api_client
 from books.utils.author import attach_authors
 from books.utils.cache_key import make_cache_key
@@ -173,7 +180,7 @@ def _get_best_isbn(book):
     """
     from books.scanner.match_verification import disambiguate_isbn, isbn_rank_from_source
 
-    rows = BookMetadata.objects.filter(book=book, field_name="isbn", is_active=True)
+    rows = BookMetadata.objects.filter(book=book, field_name="isbn", is_active=True).select_related("source")
     candidates = []
     for row in rows:
         rank = isbn_rank_from_source(row.source.name)
