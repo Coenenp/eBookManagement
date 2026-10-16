@@ -88,8 +88,10 @@ class QueryMetadataAndCoversAmbiguousTests(TestCase):
 
     Documents that the AMBIGUOUS_ISBN flag written up front is later overwritten
     by the match-verification verdict: mark_resolved clears it (VERIFIED) and
-    mark_unresolved replaces it (UNCERTAIN / NO_MATCH), because both call
-    _set_unresolved_reason unconditionally. See the proposal in PROGRESS.md.
+    mark_unresolved replaces it (UNCERTAIN / NO_MATCH). AMBIGUOUS_ISBN is a
+    verdict reason, so a concrete verdict supersedes the ISBN-ambiguity flag;
+    only the language flags (language_undetermined / language_disagreement) are
+    left alone by a verdict.
     """
 
     TITLE = "Alpha Beta Gamma"
