@@ -39,6 +39,14 @@ _ISBN_RANK_PRIORITY = (ISBN_RANK_DECLARED, ISBN_RANK_FRONT, ISBN_RANK_ELSEWHERE)
 # Every rank a caller may tag a candidate with; anything else is a bug.
 _ISBN_RANK_VALID = (ISBN_RANK_DECLARED, ISBN_RANK_FRONT, ISBN_RANK_ELSEWHERE, ISBN_RANK_BACK)
 
+# Language flags a match-verification verdict must never clear or overwrite.
+# Language detection (books.utils.language) records these; they persist until
+# re-detection or review, so mark_resolved / mark_unresolved leave them alone.
+_LANGUAGE_FLAG_REASONS = frozenset({
+    "language_undetermined",
+    "language_disagreement",
+})
+
 
 def isbn_rank_from_source(source_name):
     """Map a DataSource name to a local ISBN candidate rank (or None).
@@ -272,13 +280,42 @@ def verify_comic(query_series, query_issue, result_series, result_issue, query_p
 
 
 def mark_resolved(book):
-    """Clear any unresolved flag: a verified match resolved this book."""
-    _set_unresolved_reason(book, "")
+    """Clear a match-verification verdict reason, preserving language flags.
+
+    A VERIFIED match resolves the book's identity, so the verdict reasons
+    (uncertain, unmapped_series, no_match, neither_source) and the
+    ambiguous_isbn flag are cleared. A language flag (language_undetermined /
+    language_disagreement) is NOT cleared: it persists until re-detection or
+    review.
+    """
+    from books.models import FinalMetadata
+
+    fm = FinalMetadata.objects.filter(book=book).first()
+    if fm is None:
+        fm = FinalMetadata(book=book)
+        fm.save(auto_sync=False)
+    if fm.unresolved_reason not in _LANGUAGE_FLAG_REASONS:
+        fm.unresolved_reason = ""
+        fm.save(update_fields=["unresolved_reason"])
 
 
 def mark_unresolved(book, reason):
-    """Record the unresolved reason on the book's FinalMetadata."""
-    _set_unresolved_reason(book, reason)
+    """Record a match-verification verdict reason, preserving language flags.
+
+    Sets ``reason`` (a verdict reason) unless a language flag
+    (language_undetermined / language_disagreement) is already recorded, in
+    which case the language flag persists and the verdict is not written.
+    """
+    from books.models import FinalMetadata
+
+    fm = FinalMetadata.objects.filter(book=book).first()
+    if fm is None:
+        fm = FinalMetadata(book=book)
+        fm.save(auto_sync=False)
+    if fm.unresolved_reason in _LANGUAGE_FLAG_REASONS:
+        return
+    fm.unresolved_reason = reason
+    fm.save(update_fields=["unresolved_reason"])
 
 
 def flag_unresolved(book, reason):

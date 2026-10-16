@@ -271,6 +271,36 @@ class UnresolvedReasonFlagTests(TestCase):
         fm = FinalMetadata.objects.get(book=self.book)
         self.assertEqual(fm.unresolved_reason, "")
 
+    def test_mark_resolved_keeps_language_flag(self):
+        # A VERIFIED verdict clears a verdict reason, but a language flag set by
+        # language detection persists until re-detection or review.
+        flag_unresolved(self.book, UnresolvedReason.LANGUAGE_DISAGREEMENT)
+        mark_resolved(self.book)
+        fm = FinalMetadata.objects.get(book=self.book)
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_DISAGREEMENT)
+
+    def test_mark_unresolved_keeps_language_flag(self):
+        # An UNCERTAIN verdict must not overwrite an existing language flag.
+        flag_unresolved(self.book, UnresolvedReason.LANGUAGE_UNDETERMINED)
+        mark_unresolved(self.book, UnresolvedReason.UNCERTAIN)
+        fm = FinalMetadata.objects.get(book=self.book)
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_UNDETERMINED)
+
+    def test_mark_resolved_clears_ambiguous_isbn(self):
+        # VERIFIED clears the ambiguous-ISBN flag (a verdict reason, not a
+        # language flag).
+        flag_unresolved(self.book, UnresolvedReason.AMBIGUOUS_ISBN)
+        mark_resolved(self.book)
+        fm = FinalMetadata.objects.get(book=self.book)
+        self.assertEqual(fm.unresolved_reason, "")
+
+    def test_mark_resolved_clears_uncertain(self):
+        # VERIFIED clears a prior UNCERTAIN verdict.
+        mark_unresolved(self.book, UnresolvedReason.UNCERTAIN)
+        mark_resolved(self.book)
+        fm = FinalMetadata.objects.get(book=self.book)
+        self.assertEqual(fm.unresolved_reason, "")
+
     def test_mark_unresolved_does_not_auto_sync_on_creation(self):
         # Give the book a title source: a real auto-sync would promote it into
         # final_title. auto_sync=False on the creation path must prevent that.
