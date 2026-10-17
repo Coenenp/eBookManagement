@@ -98,7 +98,7 @@ def _extract_trailing_year(text: str) -> Tuple[Optional[str], Optional[int]]:
     if not match:
         return text, None
     inner = match.group(1).strip()
-    year_match = re.search(r"(?<!\d)(?:19|20)\d{2}(?!\d)$", inner)
+    year_match = re.search(r"(?<!\d)(?:1[4-9]\d{2}|20\d{2})(?!\d)$", inner)
     if not year_match:
         return text, None
     year = int(year_match.group(0))
