@@ -4,7 +4,7 @@ Test cases for Scanner Parsing
 
 from django.test import TestCase
 
-from books.scanner.parsing import parse_path_metadata, resolve_title_author_ambiguity
+from books.scanner.parsing import parse_comic_metadata, parse_path_metadata, resolve_title_author_ambiguity
 
 
 class ScannerParsingTests(TestCase):
@@ -214,3 +214,77 @@ class ScannerParsingTests(TestCase):
                 metadata = parse_path_metadata(filename)
                 self.assertEqual(metadata["title"], expected_title)
                 self.assertEqual(set(metadata["authors"]), set(expected_authors))
+
+
+class FilenameYearAndHyphenatedForenameTests(TestCase):
+    """Trailing-year stripping, hyphenated forenames, and volume-vs-year rules."""
+
+    def test_parse_path_metadata_strips_trailing_year(self):
+        metadata = parse_path_metadata(
+            "Klein, Naomi - Why the DNC Must Hold a Climate Debate (2019).epub"
+        )
+        self.assertEqual(metadata["title"], "Why the DNC Must Hold a Climate Debate")
+        self.assertEqual(metadata["authors"], ["Naomi Klein"])
+        self.assertEqual(metadata["publication_year"], 2019)
+
+    def test_parse_path_metadata_strips_year_after_event_text(self):
+        metadata = parse_path_metadata(
+            "Klein, Naomi - Baghdad Year Zero (Dalton Camp Lecture, 2004).epub"
+        )
+        self.assertEqual(metadata["title"], "Baghdad Year Zero")
+        self.assertEqual(metadata["authors"], ["Naomi Klein"])
+        self.assertEqual(metadata["publication_year"], 2004)
+
+    def test_parse_path_metadata_strips_year_after_publisher_text(self):
+        metadata = parse_path_metadata(
+            "Schwarz-Bart, André - Last of the Just (Atheneum, 1960).epub"
+        )
+        self.assertEqual(metadata["title"], "Last of the Just")
+        self.assertEqual(metadata["authors"], ["André Schwarz-Bart"])
+        self.assertEqual(metadata["publication_year"], 1960)
+
+    def test_parse_path_metadata_hyphenated_forename(self):
+        metadata = parse_path_metadata(
+            "Sartre, Jean-Paul - Being and Nothingness (1943).epub"
+        )
+        self.assertEqual(metadata["title"], "Being and Nothingness")
+        self.assertEqual(metadata["authors"], ["Jean-Paul Sartre"])
+        self.assertEqual(metadata["publication_year"], 1943)
+
+    def test_parse_comic_metadata_strips_trailing_year(self):
+        metadata = parse_comic_metadata(
+            "Largo Winch 03 - H - Dutch Connection (2008).cbz"
+        )
+        self.assertEqual(metadata["title"], "H - Dutch Connection")
+        self.assertEqual(metadata["series"], "Largo Winch")
+        self.assertEqual(metadata["series_number"], 3.0)
+        self.assertEqual(metadata["publication_year"], 2008)
+
+    def test_parse_path_metadata_keeps_non_year_parenthetical(self):
+        metadata = parse_path_metadata("1984 (Nineteen Eighty-Four).epub")
+        self.assertEqual(metadata["title"], "1984 (Nineteen Eighty-Four)")
+        self.assertIsNone(metadata["publication_year"])
+
+    def test_parse_path_metadata_keeps_volume_parenthetical(self):
+        metadata = parse_path_metadata("Book Title (Volume 2).epub")
+        self.assertEqual(metadata["title"], "Book Title (Volume 2)")
+        self.assertIsNone(metadata["publication_year"])
+
+    def test_parse_path_metadata_year_only_title_is_not_stripped(self):
+        metadata = parse_path_metadata("1984.epub")
+        self.assertEqual(metadata["title"], "1984")
+        self.assertIsNone(metadata["publication_year"])
+
+    def test_parse_path_metadata_four_digit_never_series_volume(self):
+        # A four-digit year must never become a series volume, even after an author.
+        metadata = parse_path_metadata("Orwell, George - 1984.epub")
+        self.assertEqual(metadata["title"], "1984")
+        self.assertEqual(metadata["authors"], ["George Orwell"])
+        self.assertIsNone(metadata["series_number"])
+        self.assertIsNone(metadata["publication_year"])
+
+    def test_parse_path_metadata_returns_publication_year_key(self):
+        metadata = parse_path_metadata("Book Title.epub")
+        self.assertIn("publication_year", metadata)
+        self.assertIsNone(metadata["publication_year"])
+
