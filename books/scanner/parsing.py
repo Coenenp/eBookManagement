@@ -82,15 +82,40 @@ def resolve_title_author_ambiguity(part1: str, part2: str) -> Tuple[str, List[st
                 return part2_clean, normalize_surnames(split_authors(part1_clean))
 
 
+def _extract_trailing_year(text: str) -> Tuple[Optional[str], Optional[int]]:
+    """Strip a trailing parenthetical that ends in a four-digit year.
+
+    Returns ``(cleaned_text, year)``. A parenthetical such as ``(2019)``,
+    ``(Atheneum, 1960)`` or ``(Dalton Camp Lecture, 2004)`` is removed from the
+    title/series and its year returned; the leading publisher/event text is
+    dropped (this parser carries no publisher field). A parenthetical that does
+    not end in a four-digit year (e.g. ``(Volume 2)``, ``(Nineteen Eighty-Four)``)
+    is left untouched.
+    """
+    if not text:
+        return text, None
+    match = re.search(r"\s*\(\s*([^()]*?)\s*\)\s*$", text)
+    if not match:
+        return text, None
+    inner = match.group(1).strip()
+    year_match = re.search(r"(?<!\d)(?:1[4-9]\d{2}|20\d{2})(?!\d)$", inner)
+    if not year_match:
+        return text, None
+    year = int(year_match.group(0))
+    return text[: match.start()].rstrip(), year
+
+
 def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
     path = Path(file_path)
     base_name = path.stem.replace("_", " ").strip()
 
-    metadata = {"title": None, "authors": [], "series": None, "series_number": None}
+    metadata = {"title": None, "authors": [], "series": None, "series_number": None, "publication_year": None}
 
     series_number = extract_number_from_filename(base_name)
     if series_number and not metadata["series_number"]:
         metadata["series_number"] = series_number
+
+    title_author_parens_pattern = r"^(?P<title>.+?)\s*\((?P<author>.+?)\)$"
 
     patterns = [
         r"^(?P<num>\d{1,2}(?:\.\d)?)\.\s+(?P<title>.+)$",
@@ -98,10 +123,10 @@ def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
         r"^(?P<series>.+?)\s+-\s+(?P<num>\d{1,2}(?:\.\d)?)\s+-\s+(?P<title>.+?)\s+-\s+(?P<author>.+)$",
         r"^(?P<num>\d{1,2}(?:\.\d)?)\s+[-.]\s+(?P<title>.+?)\s+[-.]\s+(?P<author>.+)$",
         r"^(?P<title>.+?)\s+by\s+(?P<author>.+)$",
-        r"^(?P<author_last>[^,]+),\s*(?P<author_first>[^\-]+)\s*-\s*(?P<title>.+)$",  # Move this before general patterns
-        r"^(?P<author>.+?)\s*-\s*(?P<title>.+)$",
-        r"^(?P<title>.+?)\s*-\s*(?P<author>.+)$",
-        r"^(?P<title>.+?)\s*\((?P<author>.+?)\)$",
+        r"^(?P<author_last>[^,]+),\s*(?P<author_first>.+?)\s+-\s+(?P<title>.+)$",  # "Last, First - Title" (hyphenated forenames allowed)
+        r"^(?P<author>.+?)\s+-\s+(?P<title>.+)$",
+        r"^(?P<title>.+?)\s+-\s+(?P<author>.+)$",
+        title_author_parens_pattern,
         r"^(?P<title>.+)$",
     ]
 
@@ -112,6 +137,21 @@ def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
             continue
 
         groups = match.groupdict()
+
+        # "Title (Author)": only treat the parenthetical as an author when it looks
+        # like a person's name and the leading text is not a bare number. Otherwise
+        # the parenthetical is part of the title ("Book Title (Volume 2)", "1984
+        # (Nineteen Eighty-Four)"). A parenthetical made only of digits, spaces,
+        # dots, commas or hyphens (e.g. a year like "(1399)" or a page range) is
+        # never an author either.
+        if pattern == title_author_parens_pattern:
+            parenthetical = groups.get("author", "").strip()
+            if re.fullmatch(r"[\d\s.,\-]+", parenthetical):
+                continue
+            if not is_probable_author(parenthetical):
+                continue
+            if re.fullmatch(r"\d+", groups.get("title", "").strip()):
+                continue
 
         # Intelligent resolution
         if "title" in groups and "author" in groups:
@@ -163,6 +203,17 @@ def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
         if series_number is not None:
             metadata["series_number"] = series_number
 
+    # Strip a trailing parenthetical year from the title and series; the year is
+    # recorded on publication_year and is never treated as a series volume.
+    if metadata["title"]:
+        metadata["title"], year = _extract_trailing_year(metadata["title"])
+        if year is not None:
+            metadata["publication_year"] = year
+    if metadata["series"] and metadata["publication_year"] is None:
+        metadata["series"], year = _extract_trailing_year(metadata["series"])
+        if year is not None:
+            metadata["publication_year"] = year
+
     return metadata
 
 
@@ -178,7 +229,7 @@ def parse_comic_metadata(file_path: str) -> Dict[str, Optional[str]]:
     path = Path(file_path)
     base_name = path.stem.replace("_", " ").strip()
 
-    metadata = {"title": None, "authors": [], "series": None, "series_number": None}
+    metadata = {"title": None, "authors": [], "series": None, "series_number": None, "publication_year": None}
 
     # Comic-specific patterns (ordered by specificity - most specific first)
     comic_patterns = [
@@ -229,6 +280,16 @@ def parse_comic_metadata(file_path: str) -> Dict[str, Optional[str]]:
 
     # Prefer comic-specific author detection
     metadata["authors"] = comic_authors or folder_clues.get("all_authors", [])
+
+    # Strip a trailing parenthetical year from the title and series.
+    if metadata["title"]:
+        metadata["title"], year = _extract_trailing_year(metadata["title"])
+        if year is not None:
+            metadata["publication_year"] = year
+    if metadata["series"] and metadata["publication_year"] is None:
+        metadata["series"], year = _extract_trailing_year(metadata["series"])
+        if year is not None:
+            metadata["publication_year"] = year
 
     return metadata
 
