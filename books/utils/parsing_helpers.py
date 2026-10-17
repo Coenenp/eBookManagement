@@ -243,7 +243,7 @@ def extract_number_from_filename(filename: str) -> Optional[float]:
 
 
 def fallback_segment_resolution(base_name: str) -> Tuple[Optional[str], List[str]]:
-    tokens = re.split(r"\s*[-–—]\s*", base_name)
+    tokens = re.split(r"\s+[-–—]\s+", base_name)
     if len(tokens) < 2:
         return base_name.strip(), []
 

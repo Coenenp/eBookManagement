@@ -4,7 +4,7 @@ Test cases for Scanner Parsing
 
 from django.test import TestCase
 
-from books.scanner.parsing import parse_path_metadata, resolve_title_author_ambiguity
+from books.scanner.parsing import parse_comic_metadata, parse_path_metadata, resolve_title_author_ambiguity
 
 
 class ScannerParsingTests(TestCase):
@@ -214,3 +214,142 @@ class ScannerParsingTests(TestCase):
                 metadata = parse_path_metadata(filename)
                 self.assertEqual(metadata["title"], expected_title)
                 self.assertEqual(set(metadata["authors"]), set(expected_authors))
+
+
+class FilenameYearAndHyphenatedForenameTests(TestCase):
+    """Trailing-year stripping, hyphenated forenames, and volume-vs-year rules."""
+
+    def test_parse_path_metadata_strips_trailing_year(self):
+        metadata = parse_path_metadata("Klein, Naomi - Why the DNC Must Hold a Climate Debate (2019).epub")
+        self.assertEqual(metadata["title"], "Why the DNC Must Hold a Climate Debate")
+        self.assertEqual(metadata["authors"], ["Naomi Klein"])
+        self.assertEqual(metadata["publication_year"], 2019)
+
+    def test_parse_path_metadata_strips_year_after_event_text(self):
+        metadata = parse_path_metadata("Klein, Naomi - Baghdad Year Zero (Dalton Camp Lecture, 2004).epub")
+        self.assertEqual(metadata["title"], "Baghdad Year Zero")
+        self.assertEqual(metadata["authors"], ["Naomi Klein"])
+        self.assertEqual(metadata["publication_year"], 2004)
+
+    def test_parse_path_metadata_strips_year_after_publisher_text(self):
+        metadata = parse_path_metadata("Schwarz-Bart, André - Last of the Just (Atheneum, 1960).epub")
+        self.assertEqual(metadata["title"], "Last of the Just")
+        self.assertEqual(metadata["authors"], ["André Schwarz-Bart"])
+        self.assertEqual(metadata["publication_year"], 1960)
+
+    def test_parse_path_metadata_hyphenated_forename(self):
+        metadata = parse_path_metadata("Sartre, Jean-Paul - Being and Nothingness (1943).epub")
+        self.assertEqual(metadata["title"], "Being and Nothingness")
+        self.assertEqual(metadata["authors"], ["Jean-Paul Sartre"])
+        self.assertEqual(metadata["publication_year"], 1943)
+
+    def test_parse_comic_metadata_strips_trailing_year(self):
+        metadata = parse_comic_metadata("Largo Winch 03 - H - Dutch Connection (2008).cbz")
+        self.assertEqual(metadata["title"], "H - Dutch Connection")
+        self.assertEqual(metadata["series"], "Largo Winch")
+        self.assertEqual(metadata["series_number"], 3.0)
+        self.assertEqual(metadata["publication_year"], 2008)
+
+    def test_parse_path_metadata_keeps_non_year_parenthetical(self):
+        metadata = parse_path_metadata("1984 (Nineteen Eighty-Four).epub")
+        self.assertEqual(metadata["title"], "1984 (Nineteen Eighty-Four)")
+        self.assertIsNone(metadata["publication_year"])
+
+    def test_parse_path_metadata_keeps_volume_parenthetical(self):
+        metadata = parse_path_metadata("Book Title (Volume 2).epub")
+        self.assertEqual(metadata["title"], "Book Title (Volume 2)")
+        self.assertIsNone(metadata["publication_year"])
+
+    def test_parse_path_metadata_numeric_parenthetical_is_not_an_author(self):
+        # A parenthetical made only of digits is never an author; it stays
+        # part of the title. 1399 is below the 1400-2099 year range, so it is
+        # also not stripped as a publication year.
+        metadata = parse_path_metadata("Book Title (1399).epub")
+        self.assertEqual(metadata["title"], "Book Title (1399)")
+        self.assertEqual(metadata["authors"], [])
+        self.assertIsNone(metadata["publication_year"])
+
+    def test_parse_path_metadata_pre_1400_year_parenthetical_is_not_an_author(self):
+        metadata = parse_path_metadata("Chronicle (1066).epub")
+        self.assertEqual(metadata["title"], "Chronicle (1066)")
+        self.assertEqual(metadata["authors"], [])
+        self.assertIsNone(metadata["publication_year"])
+
+    def test_parse_path_metadata_post_2099_year_parenthetical_is_not_an_author(self):
+        metadata = parse_path_metadata("Book Title (2100).epub")
+        self.assertEqual(metadata["title"], "Book Title (2100)")
+        self.assertEqual(metadata["authors"], [])
+        self.assertIsNone(metadata["publication_year"])
+
+    def test_parse_path_metadata_year_only_title_is_not_stripped(self):
+        metadata = parse_path_metadata("1984.epub")
+        self.assertEqual(metadata["title"], "1984")
+        self.assertIsNone(metadata["publication_year"])
+
+    def test_parse_path_metadata_four_digit_never_series_volume(self):
+        # A four-digit year must never become a series volume, even after an author.
+        metadata = parse_path_metadata("Orwell, George - 1984.epub")
+        self.assertEqual(metadata["title"], "1984")
+        self.assertEqual(metadata["authors"], ["George Orwell"])
+        self.assertIsNone(metadata["series_number"])
+        self.assertIsNone(metadata["publication_year"])
+
+    def test_parse_path_metadata_returns_publication_year_key(self):
+        metadata = parse_path_metadata("Book Title.epub")
+        self.assertIn("publication_year", metadata)
+        self.assertIsNone(metadata["publication_year"])
+
+    def test_parse_path_metadata_strips_pre_1900_year(self):
+        # Year range is 1400-2099, so a 17th-century year must also strip.
+        metadata = parse_path_metadata("Cervantes, Miguel de - Don Quijote (1605).epub")
+        self.assertEqual(metadata["title"], "Don Quijote")
+        self.assertEqual(metadata["authors"], ["Miguel de Cervantes"])
+        self.assertEqual(metadata["publication_year"], 1605)
+
+    def test_parse_path_metadata_strips_year_lower_bound(self):
+        # Lower bound of the extended range (1400) must strip.
+        metadata = parse_path_metadata("Author, Jane - Early Work (1400).epub")
+        self.assertEqual(metadata["title"], "Early Work")
+        self.assertEqual(metadata["authors"], ["Jane Author"])
+        self.assertEqual(metadata["publication_year"], 1400)
+
+
+class DashSeparatorWhitespaceTests(TestCase):
+    """A dash is a title/author separator only when surrounded by whitespace.
+
+    This is a deliberate behaviour change from master: master split
+    "Tolkien-The Hobbit" and "Tolkien -The Hobbit" on the bare dash into
+    title/author; this branch keeps them whole (no author) because the dash is
+    not surrounded by whitespace on both sides.
+    """
+
+    def test_dash_without_surrounding_whitespace_is_not_a_separator(self):
+        # Deliberate change from master (which split this on the bare dash into
+        # title "The Hobbit" / author "Tolkien"): no whitespace around the dash,
+        # so the branch keeps the name whole.
+        metadata = parse_path_metadata("Tolkien-The Hobbit.epub")
+        self.assertEqual(metadata["title"], "Tolkien-The Hobbit")
+        self.assertEqual(metadata["authors"], [])
+
+    def test_dash_with_trailing_whitespace_only_is_not_a_separator(self):
+        # Deliberate change from master (which split this on the dash into title
+        # "The Hobbit" / author "Tolkien"): whitespace only before the dash, so
+        # the branch keeps the name whole.
+        metadata = parse_path_metadata("Tolkien -The Hobbit.epub")
+        self.assertEqual(metadata["title"], "Tolkien -The Hobbit")
+        self.assertEqual(metadata["authors"], [])
+
+    def test_person_like_author_in_parentheses_is_extracted(self):
+        metadata = parse_path_metadata("The Hobbit (Tolkien).epub")
+        self.assertEqual(metadata["title"], "The Hobbit")
+        self.assertEqual(metadata["authors"], ["Tolkien"])
+
+    def test_dash_with_surrounding_whitespace_is_a_separator(self):
+        metadata = parse_path_metadata("Tolkien - The Hobbit.epub")
+        self.assertEqual(metadata["title"], "The Hobbit")
+        self.assertEqual(metadata["authors"], ["Tolkien"])
+
+    def test_by_separator_still_works(self):
+        metadata = parse_path_metadata("The Hobbit by Tolkien.epub")
+        self.assertEqual(metadata["title"], "The Hobbit")
+        self.assertEqual(metadata["authors"], ["Tolkien"])
