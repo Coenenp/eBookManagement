@@ -10,6 +10,7 @@ from django.db import IntegrityError
 from ebooklib import epub
 
 from books.models import BookMetadata, BookPublisher, BookTitle, DataSource, Publisher
+from books.scanner.extractors.denylist import is_denylisted
 from books.utils.author import attach_authors
 from books.utils.isbn import normalize_isbn
 from books.utils.language import normalize_language
@@ -32,7 +33,7 @@ def extract(book):
         titles = epub_book.get_metadata("DC", "title")
         if titles and titles[0][0]:
             title_text = titles[0][0].strip()
-            if title_text:  # Only create if non-empty after stripping
+            if title_text and not is_denylisted(title_text):  # skip placeholders
                 BookTitle.objects.get_or_create(
                     book=book,
                     title=title_text,
@@ -42,7 +43,7 @@ def extract(book):
 
         # Authors
         creators = epub_book.get_metadata("DC", "creator")
-        raw_names = [c[0] for c in creators if c and c[0]]
+        raw_names = [c[0] for c in creators if c and c[0] and not is_denylisted(c[0])]
         attach_authors(book, raw_names, source, confidence=source.trust_level)
 
         # Publisher

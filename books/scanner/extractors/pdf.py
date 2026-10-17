@@ -9,6 +9,7 @@ import logging
 from PyPDF2 import PdfReader
 
 from books.models import BookMetadata, BookTitle, DataSource
+from books.scanner.extractors.denylist import is_denylisted
 from books.utils.author import attach_authors
 
 logger = logging.getLogger("books.scanner")
@@ -28,7 +29,7 @@ def extract(book):
 
         if meta.title:
             title_text = meta.title.strip()
-            if title_text:  # Only create if non-empty after stripping
+            if title_text and not is_denylisted(title_text):  # skip placeholders
                 BookTitle.objects.get_or_create(
                     book=book,
                     title=title_text,
@@ -38,7 +39,7 @@ def extract(book):
 
         if meta.author:
             author_text = meta.author.strip()
-            if author_text:  # Only create if non-empty after stripping
+            if author_text and not is_denylisted(author_text):  # skip placeholders
                 raw_names = [author_text]
                 attach_authors(book, raw_names, source, confidence=source.trust_level)
 

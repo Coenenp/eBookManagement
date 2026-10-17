@@ -18,6 +18,7 @@ from books.models import (
     EBOOK_FORMATS,
     Book,
     BookFile,
+    BookMetadata,
     BookSeries,
     BookTitle,
     DataSource,
@@ -522,8 +523,12 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False, 
 def _extract_filename_metadata(book, ai_recognizer=None):
     source = _get_initial_scan_source()
 
-    # Use comic-specific parsing for comic books
-    is_comic = book.primary_file.file_format.lower() in COMIC_FORMATS if book.primary_file else False
+    # Use comic-specific parsing for comic books. The content type (set by the
+    # scan folder) is authoritative: a PDF is both a comic and an ebook format,
+    # so the file extension alone must not route an ebook PDF through the comic
+    # parser, which cannot split "Last, First - Title (Year)" and would pull
+    # the author from the enclosing folder instead of the filename.
+    is_comic = book.content_type == "comic"
     if is_comic:
         from books.scanner.parsing import parse_comic_metadata
 
@@ -541,11 +546,35 @@ def _extract_filename_metadata(book, ai_recognizer=None):
     logger.info(f"[FILENAME PARSE] Parsed series: {parsed.get('series')} (#{parsed.get('series_number')})")
 
     if parsed.get("title"):
+        # Store the parsed title as the active title, and demote the raw-
+        # filename seed (a title equal to the file's stem) to inactive when it
+        # differs, so resolve_final_metadata resolves the parsed title rather
+        # than the raw filename.
         BookTitle.objects.get_or_create(
             book=book,
             title=parsed["title"],
             source=source,
-            defaults={"confidence": source.trust_level},
+            defaults={"confidence": source.trust_level, "is_active": True},
+        )
+        BookTitle.objects.filter(book=book, title=parsed["title"]).update(is_active=True)
+
+        if book.primary_file:
+            raw_stem = os.path.splitext(os.path.basename(book.primary_file.file_path))[0]
+            if raw_stem != parsed["title"]:
+                BookTitle.objects.filter(book=book, title=raw_stem, is_active=True).update(is_active=False)
+
+    # Persist the publication year parsed from the filename so it is not
+    # silently dropped.
+    if parsed.get("publication_year") is not None:
+        BookMetadata.objects.get_or_create(
+            book=book,
+            field_name="publication_year",
+            source=source,
+            defaults={
+                "field_value": str(parsed["publication_year"]),
+                "confidence": source.trust_level,
+                "is_active": True,
+            },
         )
 
     raw_names = parsed.get("authors", [])[:3]
