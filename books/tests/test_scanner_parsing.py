@@ -260,6 +260,27 @@ class FilenameYearAndHyphenatedForenameTests(TestCase):
         self.assertEqual(metadata["title"], "Book Title (Volume 2)")
         self.assertIsNone(metadata["publication_year"])
 
+    def test_parse_path_metadata_numeric_parenthetical_is_not_an_author(self):
+        # A parenthetical made only of digits is never an author; it stays
+        # part of the title. 1399 is below the 1400-2099 year range, so it is
+        # also not stripped as a publication year.
+        metadata = parse_path_metadata("Book Title (1399).epub")
+        self.assertEqual(metadata["title"], "Book Title (1399)")
+        self.assertEqual(metadata["authors"], [])
+        self.assertIsNone(metadata["publication_year"])
+
+    def test_parse_path_metadata_pre_1400_year_parenthetical_is_not_an_author(self):
+        metadata = parse_path_metadata("Chronicle (1066).epub")
+        self.assertEqual(metadata["title"], "Chronicle (1066)")
+        self.assertEqual(metadata["authors"], [])
+        self.assertIsNone(metadata["publication_year"])
+
+    def test_parse_path_metadata_post_2099_year_parenthetical_is_not_an_author(self):
+        metadata = parse_path_metadata("Book Title (2100).epub")
+        self.assertEqual(metadata["title"], "Book Title (2100)")
+        self.assertEqual(metadata["authors"], [])
+        self.assertIsNone(metadata["publication_year"])
+
     def test_parse_path_metadata_year_only_title_is_not_stripped(self):
         metadata = parse_path_metadata("1984.epub")
         self.assertEqual(metadata["title"], "1984")
@@ -294,16 +315,26 @@ class FilenameYearAndHyphenatedForenameTests(TestCase):
 
 
 class DashSeparatorWhitespaceTests(TestCase):
-    """A dash is a title/author separator only when surrounded by whitespace."""
+    """A dash is a title/author separator only when surrounded by whitespace.
+
+    This is a deliberate behaviour change from master: master split
+    "Tolkien-The Hobbit" and "Tolkien -The Hobbit" on the bare dash into
+    title/author; this branch keeps them whole (no author) because the dash is
+    not surrounded by whitespace on both sides.
+    """
 
     def test_dash_without_surrounding_whitespace_is_not_a_separator(self):
-        # "Tolkien-The Hobbit" has no whitespace around the dash: keep it whole.
+        # Deliberate change from master (which split this on the bare dash into
+        # title "The Hobbit" / author "Tolkien"): no whitespace around the dash,
+        # so the branch keeps the name whole.
         metadata = parse_path_metadata("Tolkien-The Hobbit.epub")
         self.assertEqual(metadata["title"], "Tolkien-The Hobbit")
         self.assertEqual(metadata["authors"], [])
 
     def test_dash_with_trailing_whitespace_only_is_not_a_separator(self):
-        # "Tolkien -The Hobbit" lacks whitespace after the dash: keep it whole.
+        # Deliberate change from master (which split this on the dash into title
+        # "The Hobbit" / author "Tolkien"): whitespace only before the dash, so
+        # the branch keeps the name whole.
         metadata = parse_path_metadata("Tolkien -The Hobbit.epub")
         self.assertEqual(metadata["title"], "Tolkien -The Hobbit")
         self.assertEqual(metadata["authors"], [])

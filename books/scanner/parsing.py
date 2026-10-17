@@ -141,9 +141,14 @@ def parse_path_metadata(file_path: str) -> Dict[str, Optional[str]]:
         # "Title (Author)": only treat the parenthetical as an author when it looks
         # like a person's name and the leading text is not a bare number. Otherwise
         # the parenthetical is part of the title ("Book Title (Volume 2)", "1984
-        # (Nineteen Eighty-Four)").
+        # (Nineteen Eighty-Four)"). A parenthetical made only of digits, spaces,
+        # dots, commas or hyphens (e.g. a year like "(1399)" or a page range) is
+        # never an author either.
         if pattern == title_author_parens_pattern:
-            if not is_probable_author(groups.get("author", "")):
+            parenthetical = groups.get("author", "").strip()
+            if re.fullmatch(r"[\d\s.,\-]+", parenthetical):
+                continue
+            if not is_probable_author(parenthetical):
                 continue
             if re.fullmatch(r"\d+", groups.get("title", "").strip()):
                 continue
