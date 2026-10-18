@@ -38,23 +38,24 @@ def _get_langid_identifier(languages=None):
     return identifier
 
 
-def detect_language_from_slices(slices, languages=None):
-    """Vote a language code from disjoint text slices (normalized langid).
+def _vote_slices(slices, languages=None):
+    """Vote a language code across disjoint text slices.
 
     A slice votes only when it has at least ``SLICE_VOTE_CHARS`` non-whitespace
-    characters. Returns the agreed code when at least ``SLICE_VOTE_MIN_SLICES``
-    slices vote, all voting slices agree, and the total non-whitespace across
-    all slices reaches ``MIN_LANGUAGE_TEXT_CHARS`` — else ``None``. There is no
-    confidence gate: langid's normalized probability saturates near 1.0 for any
-    length-gated sample and discriminates nothing.
+    characters. Returns ``(code, disagreed)``:
 
-    ``languages`` optionally restricts the candidate set langid scores against
-    (e.g. the registered scan-folder languages). When ``None``, the full model
-    is used. Production detection passes no restriction so any language is
-    detected.
+    - ``code`` is the agreed code when at least ``SLICE_VOTE_MIN_SLICES`` slices
+      vote, all voting slices agree, and the total non-whitespace reaches
+      ``MIN_LANGUAGE_TEXT_CHARS`` — else ``None``.
+    - ``disagreed`` is True when at least two slices voted with differing codes
+      (genuinely ambiguous), and False when the slices simply could not vote
+      (too little text, a single slice, or an empty sample).
+
+    There is no confidence gate: langid's normalized probability saturates near
+    1.0 for any length-gated sample and discriminates nothing.
     """
     if not slices:
-        return None
+        return None, False
 
     identifier = _get_langid_identifier(languages)
     votes = []
@@ -70,12 +71,27 @@ def detect_language_from_slices(slices, languages=None):
         votes.append(code)
 
     if len(votes) < SLICE_VOTE_MIN_SLICES:
-        return None
+        return None, False
     if len(set(votes)) != 1:
-        return None
+        return None, True
     if total < MIN_LANGUAGE_TEXT_CHARS:
-        return None
-    return votes[0]
+        return None, False
+    return votes[0], False
+
+
+def detect_language_from_slices(slices, languages=None):
+    """Vote a language code from disjoint text slices (normalized langid).
+
+    Returns the agreed code when the slices vote and agree, else ``None``.
+    See ``_vote_slices`` for the exact gates.
+
+    ``languages`` optionally restricts the candidate set langid scores against
+    (e.g. the registered scan-folder languages). When ``None``, the full model
+    is used. Production detection passes no restriction so any language is
+    detected.
+    """
+    code, _disagreed = _vote_slices(slices, languages)
+    return code
 
 
 def registered_scan_folder_languages():
@@ -291,23 +307,25 @@ def detect_language(book, text_slices=None):
     """Determine a book's language explicitly.
 
     When ``text_slices`` is provided (a list of disjoint text slices extracted
-    from the file, born-digital content), slice voting is the primary signal:
-    a code is accepted only when at least two slices vote and all agree (see
-    ``detect_language_from_slices``). On acceptance the code is written as a
-    Content Scan ``BookMetadata`` language row, and it outranks the embedded
-    metadata language and the scan-folder language, so it is what the resolver
-    records. A contradiction with the embedded metadata language flags the book
-    (LANGUAGE_DISAGREEMENT) but the code still wins; a contradiction with the
-    scan-folder language is not an error and raises no flag. A sample that
-    fails the vote gate flags the book LANGUAGE_UNDETERMINED with language
-    "und" and writes no content-scan row. A language flag never overwrites an
-    existing non-empty unresolved reason.
+    from the file, born-digital content), slice voting is the primary signal.
+    A code is accepted only when at least two slices vote and all agree (see
+    ``_vote_slices``). On acceptance the code is written as a Content Scan
+    ``BookMetadata`` language row and outranks the embedded metadata language
+    and the scan-folder language. A contradiction with the embedded metadata
+    language flags the book (LANGUAGE_DISAGREEMENT) but the code still wins; a
+    contradiction with the scan-folder language is not an error.
 
-    Without ``text_slices`` the existing fallback applies: a concrete embedded
-    metadata language, then a concrete scan-folder language, then "und" for
-    undetermined-only markers, else None. This is the single place language is
-    detected, so callers (the resolver, the Dutch-comic Google Books fallback)
-    agree on it.
+    When the slices vote but disagree, the book is genuinely ambiguous and is
+    flagged LANGUAGE_UNDETERMINED with language "und".
+
+    When the slices simply cannot vote (too little text, a single slice, or an
+    empty/unreadable sample), the result is exactly what it would be without
+    text: the embedded metadata language, then the scan-folder language, then
+    "und" for undetermined-only markers, else None. LANGUAGE_UNDETERMINED is
+    raised in this case only when no embedded or folder language exists.
+
+    Without ``text_slices`` the same fallback applies. A language flag never
+    overwrites an existing non-empty unresolved reason.
     """
     from books.models import UnresolvedReason
 
@@ -315,22 +333,31 @@ def detect_language(book, text_slices=None):
     folder = _folder_language(book)
 
     if text_slices:
-        code = detect_language_from_slices(text_slices)
-        if code is None:
+        code, disagreed = _vote_slices(text_slices)
+        if code is not None:
+            _write_content_scan_language(book, code)
+            if _contradicts(embedded, code):
+                _flag_language(book, UnresolvedReason.LANGUAGE_DISAGREEMENT)
+            return code
+
+        if disagreed:
             _flag_language(book, UnresolvedReason.LANGUAGE_UNDETERMINED)
             return "und"
 
-        _write_content_scan_language(book, code)
-
-        if _contradicts(embedded, code):
-            _flag_language(book, UnresolvedReason.LANGUAGE_DISAGREEMENT)
-        return code
+        # Slices could not vote: fall through to the embedded/folder fallback
+        # below, flagging undetermined only when nothing concrete exists.
 
     for signal in (embedded, folder):
         if signal and signal != "und":
             return signal
 
     if embedded == "und" or folder == "und":
+        return "und"
+
+    if text_slices:
+        # We had text but it could not vote and there is no embedded/folder
+        # language to fall back on.
+        _flag_language(book, UnresolvedReason.LANGUAGE_UNDETERMINED)
         return "und"
 
     return None

@@ -121,23 +121,28 @@ class DetectLanguageIntegrationTests(TestCase):
         # No language flag was raised.
         self.assertFalse(FinalMetadata.objects.filter(book=self.book).exclude(unresolved_reason="").exists())
 
-    def test_single_voting_slice_rejected(self):
+    def test_single_voting_slice_falls_back_to_folder(self):
+        # Only one slice clears the vote floor, so the slices cannot vote; the
+        # result falls back to the folder language with no flag and no row.
         short = "Deze tekst is te kort."
         lang = detect_language(self.book, text_slices=[DUTCH_TEXT, short])
-        self.assertEqual(lang, "und")
-        fm = FinalMetadata.objects.get(book=self.book)
-        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_UNDETERMINED)
+        self.assertEqual(lang, "en")
+        self.assertFalse(
+            FinalMetadata.objects.filter(book=self.book).exclude(unresolved_reason="").exists()
+        )
         self.assertFalse(
             BookMetadata.objects.filter(
                 book=self.book, field_name="language", source__name=DataSource.CONTENT_SCAN
             ).exists()
         )
 
-    def test_short_text_rejected(self):
+    def test_short_text_falls_back_to_folder(self):
+        # Both slices are below the vote floor -> cannot vote -> folder language.
         lang = detect_language(self.book, text_slices=["a" * 10, "b" * 10])
-        self.assertEqual(lang, "und")
-        fm = FinalMetadata.objects.get(book=self.book)
-        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_UNDETERMINED)
+        self.assertEqual(lang, "en")
+        self.assertFalse(
+            FinalMetadata.objects.filter(book=self.book).exclude(unresolved_reason="").exists()
+        )
 
     def test_disagreeing_slices_rejected(self):
         lang = detect_language(self.book, text_slices=[DUTCH_TEXT, ENGLISH_TEXT])
@@ -194,6 +199,78 @@ class DetectLanguageIntegrationTests(TestCase):
     def test_no_slices_falls_back_to_folder(self):
         # Backward-compatible path: no text -> existing embedded/folder fallback.
         self.assertEqual(detect_language(self.book), "en")
+
+
+class NotAcceptedPathTests(TestCase):
+    """When slices cannot vote, detect_language falls back exactly as without
+    text instead of forcing 'und'; LANGUAGE_UNDETERMINED is raised only when
+    voting slices disagree or no embedded/folder language exists."""
+
+    def setUp(self):
+        self.nl_folder = ScanFolder.objects.create(path="/tmp/no-vote-nl", name="Nederlands", language="nl")
+        self.en_folder = ScanFolder.objects.create(path="/tmp/no-vote-en", name="English", language="en")
+        self.source, _ = DataSource.objects.get_or_create(name=DataSource.INITIAL_SCAN, defaults={"trust_level": 0.5})
+
+    def test_epub_embedded_nl_under_6000_chars_returns_nl(self):
+        # An EPUB under 6000 non-whitespace chars yields a single slice, which
+        # cannot vote. It must fall back to the embedded 'nl', not 'und'.
+        book = Book.objects.create(content_type="ebook", scan_folder=self.en_folder)
+        BookMetadata.objects.create(
+            book=book, field_name="language", field_value="nl",
+            source=self.source, confidence=0.9, is_active=True,
+        )
+        lang = detect_language(book, text_slices=["Dit is een korte Nederlandse zin."])
+        self.assertEqual(lang, "nl")
+        self.assertFalse(
+            BookMetadata.objects.filter(book=book, field_name="language", source__name=DataSource.CONTENT_SCAN).exists()
+        )
+        self.assertFalse(FinalMetadata.objects.filter(book=book).exclude(unresolved_reason="").exists())
+
+    def test_five_page_pdf_in_nl_folder_returns_nl(self):
+        # A 5-page PDF yields one slice (no middle), which cannot vote; fall back
+        # to the scan-folder language.
+        book = Book.objects.create(content_type="ebook", scan_folder=self.nl_folder)
+        lang = detect_language(book, text_slices=["kort tekstje"])
+        self.assertEqual(lang, "nl")
+        self.assertFalse(
+            BookMetadata.objects.filter(book=book, field_name="language", source__name=DataSource.CONTENT_SCAN).exists()
+        )
+
+    def test_unreadable_file_returns_same_as_no_text(self):
+        # An unreadable file yields no usable text; the result must match
+        # detect_language(book) with no text at all.
+        book = Book.objects.create(content_type="ebook", scan_folder=self.nl_folder)
+        expected = detect_language(book)
+        self.assertEqual(detect_language(book, text_slices=[""]), expected)
+
+    def test_no_content_scan_row_and_no_und_preview(self):
+        # None of the not-accepted paths writes a Content Scan row, and none
+        # resolves to 'und' (so the rename preview never renders '[und]').
+        from books.utils.renaming_engine import RenamingEngine
+
+        book = Book.objects.create(content_type="ebook", scan_folder=self.nl_folder)
+        lang = detect_language(book, text_slices=["te kort"])
+        self.assertEqual(lang, "nl")
+        self.assertNotEqual(lang, "und")
+        self.assertFalse(
+            BookMetadata.objects.filter(book=book, field_name="language", source__name=DataSource.CONTENT_SCAN).exists()
+        )
+        fm = FinalMetadata.objects.get_or_create(book=book)[0]
+        fm.language = lang
+        fm.save(auto_sync=False)
+        engine = RenamingEngine()
+        preview = engine.process_template("${language}", book)
+        self.assertEqual(engine._get_language(), "nl")
+        self.assertNotIn("[und]", preview)
+
+    def test_no_vote_without_any_language_flags_undetermined(self):
+        # No embedded or folder language AND slices cannot vote -> 'und' + flag.
+        folder = ScanFolder.objects.create(path="/tmp/no-vote-none", name="No Lang")
+        book = Book.objects.create(content_type="ebook", scan_folder=folder)
+        lang = detect_language(book, text_slices=["te kort"])
+        self.assertEqual(lang, "und")
+        fm = FinalMetadata.objects.get(book=book)
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_UNDETERMINED)
 
 
 class RescanLanguageTests(TestCase):
@@ -264,7 +341,8 @@ class VerdictStageKeepsLanguageFlagsTests(TestCase):
 
         folder = ScanFolder.objects.create(path="/tmp/verdict", name="Verdict", language="nl")
         book = Book.objects.create(content_type="ebook", scan_folder=folder)
-        lang = detect_language(book, text_slices=["x" * 5, "y" * 5])  # short -> undetermined
+        # Disagreeing slices -> genuinely undetermined -> flag.
+        lang = detect_language(book, text_slices=[DUTCH_TEXT, ENGLISH_TEXT])
         self.assertEqual(lang, "und")
         mark_resolved(book)
         fm = FinalMetadata.objects.get(book=book)
