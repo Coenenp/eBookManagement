@@ -1,25 +1,33 @@
-"""Tests for M1-OCR item 1: langid-based language detection.
+"""Tests for M1-OCR item 2: slice-voting language detection.
 
-Covers the pure text-detection function (length + confidence gates) and the
-``detect_language`` integration (embedded-metadata and scan-folder languages
-as comparison signals that flag the book on disagreement).
+Covers the pure slice-voting function (vote floor + agreement + total gates,
+no confidence gate) and the ``detect_language`` integration (embedded-metadata
+and scan-folder languages as comparison signals; the content code wins; a
+folder contradiction raises no flag; an embedded contradiction raises
+LANGUAGE_DISAGREEMENT).
 """
 
 from unittest import mock
 
 from django.test import TestCase
 
-from books.models import Book, BookMetadata, DataSource, FinalMetadata, ScanFolder, UnresolvedReason
+from books.models import (
+    Book,
+    BookMetadata,
+    DataSource,
+    FinalMetadata,
+    ScanFolder,
+    UnresolvedReason,
+)
 from books.utils.language import (
-    MIN_LANGUAGE_CONFIDENCE,
-    MIN_LANGUAGE_TEXT_CHARS,
-    _get_langid_identifier,
+    SLICE_VOTE_CHARS,
     detect_language,
-    detect_language_from_text,
+    detect_language_from_slices,
     registered_scan_folder_languages,
 )
 
-# Sample texts, each well above the 300-non-whitespace-character gate.
+# Sample texts, each well above the 150-char per-slice vote floor and 300-char
+# total gate.
 DUTCH_TEXT = (
     "Nederland is een land in West-Europa dat bekend staat om zijn windmolens, "
     "tulpen en grachten. De hoofdstad van Nederland is Amsterdam, maar de regering "
@@ -50,99 +58,49 @@ ENGLISH_TEXT = (
     "to modern life around the world."
 )
 
-FRENCH_TEXT = (
-    "La langue française est une langue romane parlée par des millions de personnes "
-    "à travers le monde, notamment en France, en Belgique, en Suisse, au Canada et "
-    "dans plusieurs pays d'Afrique. Elle est issue du latin et a évolué au fil des "
-    "siècles pour devenir une langue de culture, de diplomatie et de littérature. "
-    "La littérature française compte des écrivains célèbres tels que Victor Hugo, "
-    "Marcel Proust, Gustave Flaubert et Albert Camus. Le français est réputé pour "
-    "sa richesse et sa précision, mais aussi pour la complexité de sa grammaire et "
-    "de son orthographe. De nombreux mots français ont été empruntés par d'autres "
-    "langues, notamment dans les domaines de la cuisine, de la mode et des arts. "
-    "Chaque année, la francophonie est célébrée à travers le monde par des "
-    "festivals et des rencontres culturelles."
-)
 
-GERMAN_TEXT = (
-    "Die deutsche Sprache ist eine westgermanische Sprache, die von über hundert "
-    "Millionen Menschen als Mutter- oder Zweitsprache gesprochen wird. Sie ist die "
-    "Amtssprache in Deutschland, Österreich, der Schweiz, Luxemburg und "
-    "Liechtenstein und wird darüber hinaus in vielen anderen Ländern gesprochen. "
-    "Die deutsche Literatur zählt berühmte Schriftsteller wie Johann Wolfgang von "
-    "Goethe, Friedrich Schiller, Thomas Mann und Hermann Hesse. Die deutsche "
-    "Grammatik gilt als anspruchsvoll, insbesondere wegen der vier Fälle, der drei "
-    "Geschlechter und der zusammengesetzten Wörter, die sehr lang werden können. "
-    "Deutschland ist bekannt für seine Musik, seine Philosophie und seine "
-    "Wissenschaft, und viele bedeutende Denker und Künstler haben auf Deutsch "
-    "geschrieben und gearbeitet. Jedes Jahr lernen viele Menschen auf der ganzen "
-    "Welt Deutsch, um in diesen reichen Traditionen zu lesen und zu forschen."
-)
+class DetectLanguageFromSlicesTests(TestCase):
+    """The pure voting function: vote floor + agreement + total, no confidence."""
 
+    def test_two_agreeing_slices_accepted(self):
+        self.assertEqual(detect_language_from_slices([DUTCH_TEXT, DUTCH_TEXT]), "nl")
+        self.assertEqual(detect_language_from_slices([ENGLISH_TEXT, ENGLISH_TEXT]), "en")
 
-class DetectLanguageFromTextTests(TestCase):
-    """The pure detection function: correct detection + the two gates."""
+    def test_single_voting_slice_rejected(self):
+        # Only one slice clears the vote floor, so no code is accepted.
+        short = "Deze tekst is te kort."
+        self.assertIsNone(detect_language_from_slices([DUTCH_TEXT, short]))
 
-    def test_dutch_sample(self):
-        code, confidence = detect_language_from_text(DUTCH_TEXT)
-        self.assertEqual(code, "nl")
-        self.assertGreaterEqual(confidence, MIN_LANGUAGE_CONFIDENCE)
+    def test_short_text_rejected(self):
+        # Both slices are below the vote floor.
+        short_a = "a" * (SLICE_VOTE_CHARS - 1)
+        short_b = "b" * (SLICE_VOTE_CHARS - 1)
+        self.assertIsNone(detect_language_from_slices([short_a, short_b]))
 
-    def test_english_sample(self):
-        code, confidence = detect_language_from_text(ENGLISH_TEXT)
-        self.assertEqual(code, "en")
-        self.assertGreaterEqual(confidence, MIN_LANGUAGE_CONFIDENCE)
+    def test_disagreeing_slices_rejected(self):
+        self.assertIsNone(detect_language_from_slices([DUTCH_TEXT, ENGLISH_TEXT]))
 
-    def test_french_sample(self):
-        code, confidence = detect_language_from_text(FRENCH_TEXT)
-        self.assertEqual(code, "fr")
-        self.assertGreaterEqual(confidence, MIN_LANGUAGE_CONFIDENCE)
+    def test_empty_or_none_slices_rejected(self):
+        self.assertIsNone(detect_language_from_slices(None))
+        self.assertIsNone(detect_language_from_slices([]))
+        self.assertIsNone(detect_language_from_slices(["", ""]))
 
-    def test_german_sample(self):
-        code, confidence = detect_language_from_text(GERMAN_TEXT)
-        self.assertEqual(code, "de")
-        self.assertGreaterEqual(confidence, MIN_LANGUAGE_CONFIDENCE)
-
-    def test_short_sample_fails_length_gate(self):
-        # Far below MIN_LANGUAGE_TEXT_CHARS non-whitespace characters.
-        short = "The quick brown fox jumps over the lazy dog."
-        self.assertLess(sum(1 for c in short if not c.isspace()), MIN_LANGUAGE_TEXT_CHARS)
-        self.assertIsNone(detect_language_from_text(short))
-
-    def test_empty_text_fails_length_gate(self):
-        self.assertIsNone(detect_language_from_text(""))
-        self.assertIsNone(detect_language_from_text(None))
-
-    @mock.patch("books.utils.language._get_langid_identifier")
-    def test_low_confidence_sample_fails_confidence_gate(self, mock_identifier):
-        # A long enough sample whose detector confidence is below the floor.
-        mock_identifier.return_value.classify.return_value = ("en", 0.50)
-        self.assertIsNone(detect_language_from_text(ENGLISH_TEXT))
+    def test_no_confidence_gate(self):
+        # A detector reporting very low confidence still yields the code: langid
+        # normalized confidence is no longer a decision gate.
+        with mock.patch("books.utils.language._get_langid_identifier") as m:
+            m.return_value.classify.return_value = ("nl", 0.01)
+            self.assertEqual(detect_language_from_slices([DUTCH_TEXT, DUTCH_TEXT]), "nl")
 
     def test_restricted_language_set(self):
-        # Dutch text classified against an explicit candidate set still resolves
-        # to Dutch; against a set without Dutch it cannot.
-        code, _ = detect_language_from_text(DUTCH_TEXT, languages=["en", "nl", "fr", "de"])
+        code = detect_language_from_slices([DUTCH_TEXT, DUTCH_TEXT], languages=["en", "nl", "fr", "de"])
         self.assertEqual(code, "nl")
-
-    def test_distinct_identifiers_per_language_set(self):
-        # A restricted identifier is a distinct object from the full-model one,
-        # so a narrowed candidate set never mutates the shared full identifier.
-        full = _get_langid_identifier()
-        restricted = _get_langid_identifier(["en", "nl"])
-        self.assertIsNot(full, restricted)
-        # Interleaving restricted and full-model detections stays correct.
-        self.assertEqual(detect_language_from_text(FRENCH_TEXT)[0], "fr")
-        self.assertEqual(detect_language_from_text(DUTCH_TEXT, languages=["en", "nl"])[0], "nl")
-        self.assertEqual(detect_language_from_text(GERMAN_TEXT)[0], "de")
 
 
 class DetectLanguageIntegrationTests(TestCase):
-    """detect_language(book, extracted_text=...) uses embedded + folder signals."""
+    """detect_language(book, text_slices=...) uses embedded + folder signals."""
 
     def setUp(self):
-        # Register both an English and a Dutch folder to exercise folder-language
-        # agreement and contradiction signals.
         self.en_folder = ScanFolder.objects.create(path="/tmp/lang-en", name="English", language="en")
         self.nl_folder = ScanFolder.objects.create(path="/tmp/lang-nl", name="Nederlands", language="nl")
         self.book = Book.objects.create(content_type="ebook", scan_folder=self.en_folder)
@@ -151,74 +109,116 @@ class DetectLanguageIntegrationTests(TestCase):
     def test_registered_scan_folder_languages(self):
         self.assertEqual(registered_scan_folder_languages(), {"en", "nl"})
 
-    def test_disagreement_with_embedded_tag_flags(self):
-        # The book sits in a Dutch folder and the extracted text is Dutch (they
-        # agree), but the embedded tag says English: only the embedded tag
-        # disagrees, so the book is flagged.
-        book = Book.objects.create(content_type="ebook", scan_folder=self.nl_folder)
-        BookMetadata.objects.create(
-            book=book,
-            field_name="language",
-            field_value="eng",
-            source=self.source,
-            confidence=0.9,
-            is_active=True,
-        )
-        lang = detect_language(book, extracted_text=DUTCH_TEXT)
+    def test_accepted_writes_content_scan_row_and_returns_code(self):
+        lang = detect_language(self.book, text_slices=[DUTCH_TEXT, DUTCH_TEXT])
         self.assertEqual(lang, "nl")
-        fm = FinalMetadata.objects.get(book=book)
-        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_DISAGREEMENT)
+        # Provenance row written under the same source content-ISBN uses.
+        row = BookMetadata.objects.filter(
+            book=self.book, field_name="language", source__name=DataSource.CONTENT_SCAN
+        ).first()
+        self.assertIsNotNone(row)
+        self.assertEqual(row.field_value, "nl")
+        # No language flag was raised.
+        self.assertFalse(FinalMetadata.objects.filter(book=self.book).exclude(unresolved_reason="").exists())
 
-    def test_contradiction_with_folder_flags(self):
-        # No embedded language; the book sits in an English folder but the text
-        # is Dutch. The folder language must never be written as the detection.
-        lang = detect_language(self.book, extracted_text=DUTCH_TEXT)
-        self.assertEqual(lang, "nl")
+    def test_single_voting_slice_rejected(self):
+        short = "Deze tekst is te kort."
+        lang = detect_language(self.book, text_slices=[DUTCH_TEXT, short])
+        self.assertEqual(lang, "und")
         fm = FinalMetadata.objects.get(book=self.book)
-        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_DISAGREEMENT)
-
-    def test_french_sample_in_english_folder_flags(self):
-        # A French sample in an English folder: no candidate-language restriction
-        # means French is detected, and the folder contradiction flags the book.
-        lang = detect_language(self.book, extracted_text=FRENCH_TEXT)
-        self.assertEqual(lang, "fr")
-        fm = FinalMetadata.objects.get(book=self.book)
-        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_DISAGREEMENT)
-
-    def test_all_signals_agree_no_flag(self):
-        # Embedded tag, folder, and extracted text all agree on Dutch: no flag.
-        book = Book.objects.create(content_type="ebook", scan_folder=self.nl_folder)
-        BookMetadata.objects.create(
-            book=book,
-            field_name="language",
-            field_value="nld",
-            source=self.source,
-            confidence=0.9,
-            is_active=True,
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_UNDETERMINED)
+        self.assertFalse(
+            BookMetadata.objects.filter(
+                book=self.book, field_name="language", source__name=DataSource.CONTENT_SCAN
+            ).exists()
         )
-        lang = detect_language(book, extracted_text=DUTCH_TEXT)
-        self.assertEqual(lang, "nl")
-        # No flag was written: no FinalMetadata row carries a non-empty reason.
-        self.assertFalse(FinalMetadata.objects.filter(book=book).exclude(unresolved_reason="").exists())
 
-    def test_language_flag_does_not_overwrite_existing_reason(self):
-        # First reason wins: a language flag never overwrites an existing
-        # non-empty unresolved_reason.
-        fm = FinalMetadata(book=self.book, unresolved_reason=UnresolvedReason.NO_MATCH)
-        fm.save(auto_sync=False)
-        lang = detect_language(self.book, extracted_text=DUTCH_TEXT)  # folder en -> would flag
-        self.assertEqual(lang, "nl")
-        fm.refresh_from_db()
-        self.assertEqual(fm.unresolved_reason, UnresolvedReason.NO_MATCH)
-
-    def test_gate_failure_flags_undetermined(self):
-        # Extracted text too short: flagged LANGUAGE_UNDETERMINED, language "und",
-        # and the folder language (en) is NOT written as the detection.
-        lang = detect_language(self.book, extracted_text="Hello there.")
+    def test_short_text_rejected(self):
+        lang = detect_language(self.book, text_slices=["a" * 10, "b" * 10])
         self.assertEqual(lang, "und")
         fm = FinalMetadata.objects.get(book=self.book)
         self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_UNDETERMINED)
 
-    def test_no_extracted_text_falls_back_to_folder(self):
+    def test_disagreeing_slices_rejected(self):
+        lang = detect_language(self.book, text_slices=[DUTCH_TEXT, ENGLISH_TEXT])
+        self.assertEqual(lang, "und")
+        fm = FinalMetadata.objects.get(book=self.book)
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_UNDETERMINED)
+
+    def test_embedded_contradiction_flags_and_content_wins(self):
+        # Burgersdijk shape: a Dutch translation whose embedded tag says English.
+        # The content code (nl) wins and the book is flagged for the disagreement.
+        book = Book.objects.create(content_type="ebook", scan_folder=self.nl_folder)
+        BookMetadata.objects.create(
+            book=book, field_name="language", field_value="eng",
+            source=self.source, confidence=0.9, is_active=True,
+        )
+        lang = detect_language(book, text_slices=[DUTCH_TEXT, DUTCH_TEXT])
+        self.assertEqual(lang, "nl")
+        fm = FinalMetadata.objects.get(book=book)
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_DISAGREEMENT)
+
+    def test_dutch_in_english_folder_no_flag(self):
+        # A folder contradiction is not an error: the content code wins with no
+        # flag, so the book is reclassified rather than sent to review.
+        lang = detect_language(self.book, text_slices=[DUTCH_TEXT, DUTCH_TEXT])
+        self.assertEqual(lang, "nl")
+        self.assertFalse(FinalMetadata.objects.filter(book=self.book).exclude(unresolved_reason="").exists())
+
+    def test_bilingual_file_stays_undetermined(self):
+        # Genuinely bilingual content: the slices disagree, so the book stays
+        # undetermined even though embedded and folder each suggest a language.
+        book = Book.objects.create(content_type="ebook", scan_folder=self.nl_folder)
+        BookMetadata.objects.create(
+            book=book, field_name="language", field_value="eng",
+            source=self.source, confidence=0.9, is_active=True,
+        )
+        lang = detect_language(book, text_slices=[ENGLISH_TEXT, DUTCH_TEXT])
+        self.assertEqual(lang, "und")
+        fm = FinalMetadata.objects.get(book=book)
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_UNDETERMINED)
+
+    def test_language_flag_does_not_overwrite_existing_reason(self):
+        book = Book.objects.create(content_type="ebook", scan_folder=self.nl_folder)
+        BookMetadata.objects.create(
+            book=book, field_name="language", field_value="eng",
+            source=self.source, confidence=0.9, is_active=True,
+        )
+        fm = FinalMetadata(book=book, unresolved_reason=UnresolvedReason.NO_MATCH)
+        fm.save(auto_sync=False)
+        lang = detect_language(book, text_slices=[DUTCH_TEXT, DUTCH_TEXT])
+        self.assertEqual(lang, "nl")
+        fm.refresh_from_db()
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.NO_MATCH)
+
+    def test_no_slices_falls_back_to_folder(self):
         # Backward-compatible path: no text -> existing embedded/folder fallback.
         self.assertEqual(detect_language(self.book), "en")
+
+
+class VerdictStageKeepsLanguageFlagsTests(TestCase):
+    """The verdict stage must not clear language flags (M1-OCR item 4 isolation)."""
+
+    def test_mark_resolved_preserves_language_flag(self):
+        from books.scanner.match_verification import mark_resolved
+
+        folder = ScanFolder.objects.create(path="/tmp/verdict", name="Verdict", language="nl")
+        book = Book.objects.create(content_type="ebook", scan_folder=folder)
+        lang = detect_language(book, text_slices=["x" * 5, "y" * 5])  # short -> undetermined
+        self.assertEqual(lang, "und")
+        mark_resolved(book)
+        fm = FinalMetadata.objects.get(book=book)
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_UNDETERMINED)
+
+
+class ResolverLanguageTests(TestCase):
+    """resolve_final_metadata passes text slices through to detect_language."""
+
+    def test_resolve_records_content_language_over_folder(self):
+        from books.scanner.resolver import resolve_final_metadata
+
+        folder = ScanFolder.objects.create(path="/tmp/resolve", name="Resolve", language="en")
+        book = Book.objects.create(content_type="ebook", scan_folder=folder)
+        resolve_final_metadata(book, text_slices=[DUTCH_TEXT, DUTCH_TEXT])
+        fm = FinalMetadata.objects.get(book=book)
+        self.assertEqual(fm.language, "nl")

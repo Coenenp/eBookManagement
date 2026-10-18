@@ -14,7 +14,7 @@ from books.utils.language import detect_language
 logger = logging.getLogger("books.scanner")
 
 
-def resolve_final_metadata(book):
+def resolve_final_metadata(book, text_slices=None):
     """Generate final metadata suggestions for a book"""
     final_metadata, _ = FinalMetadata.objects.get_or_create(book=book)
 
@@ -87,7 +87,7 @@ def resolve_final_metadata(book):
 
     # Explicit language recording: detect from embedded/external metadata
     # first, then inherit from the scan folder, normalized to a canonical code.
-    detected_language = detect_language(book)
+    detected_language = detect_language(book, text_slices=text_slices)
     if detected_language:
         final_metadata.language = detected_language
         logger.info(f"[LANGUAGE DETECTED] Book {book.id} -> '{detected_language}'")

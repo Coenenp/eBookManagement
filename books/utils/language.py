@@ -1,8 +1,14 @@
-# Language-detection gates (M1-OCR item 1). A text sample must clear both to be
-# trusted as a language signal; otherwise the book is flagged with language
-# "undetermined" and never guessed from the folder name alone.
+# Language-detection gates (M1-OCR item 2). A slice only votes when it carries
+# at least ``SLICE_VOTE_CHARS`` non-whitespace characters; a code is accepted
+# only when at least ``SLICE_VOTE_MIN_SLICES`` slices vote, all voting slices
+# agree, and the total non-whitespace across slices reaches
+# ``MIN_LANGUAGE_TEXT_CHARS``. A book that fails the gate is flagged
+# LANGUAGE_UNDETERMINED and never guessed from the folder name alone. langid's
+# normalized confidence is not a decision gate (it saturates near 1.0 for any
+# length-gated sample, so it discriminates nothing).
+SLICE_VOTE_CHARS = 150
+SLICE_VOTE_MIN_SLICES = 2
 MIN_LANGUAGE_TEXT_CHARS = 300
-MIN_LANGUAGE_CONFIDENCE = 0.90
 
 # langid identifiers in normalized-probability mode, one per candidate language
 # set (a ``frozenset`` of codes, or ``None`` for the full model), created lazily
@@ -32,30 +38,44 @@ def _get_langid_identifier(languages=None):
     return identifier
 
 
-def detect_language_from_text(text, languages=None):
-    """Detect a text's language with langid (normalized-probability mode).
+def detect_language_from_slices(slices, languages=None):
+    """Vote a language code from disjoint text slices (normalized langid).
 
-    Returns ``(code, confidence)`` when the sample clears both gates — at least
-    ``MIN_LANGUAGE_TEXT_CHARS`` non-whitespace characters and a detector
-    confidence of at least ``MIN_LANGUAGE_CONFIDENCE`` — else ``None``.
+    A slice votes only when it has at least ``SLICE_VOTE_CHARS`` non-whitespace
+    characters. Returns the agreed code when at least ``SLICE_VOTE_MIN_SLICES``
+    slices vote, all voting slices agree, and the total non-whitespace across
+    all slices reaches ``MIN_LANGUAGE_TEXT_CHARS`` — else ``None``. There is no
+    confidence gate: langid's normalized probability saturates near 1.0 for any
+    length-gated sample and discriminates nothing.
 
     ``languages`` optionally restricts the candidate set langid scores against
     (e.g. the registered scan-folder languages). When ``None``, the full model
     is used. Production detection passes no restriction so any language is
     detected.
     """
-    if not text:
-        return None
-    non_ws = sum(1 for ch in text if not ch.isspace())
-    if non_ws < MIN_LANGUAGE_TEXT_CHARS:
+    if not slices:
         return None
 
     identifier = _get_langid_identifier(languages)
-    code, confidence = identifier.classify(text)
+    votes = []
+    total = 0
+    for text in slices:
+        if not text:
+            continue
+        non_ws = sum(1 for ch in text if not ch.isspace())
+        total += non_ws
+        if non_ws < SLICE_VOTE_CHARS:
+            continue
+        code, _confidence = identifier.classify(text)
+        votes.append(code)
 
-    if confidence < MIN_LANGUAGE_CONFIDENCE:
+    if len(votes) < SLICE_VOTE_MIN_SLICES:
         return None
-    return code, confidence
+    if len(set(votes)) != 1:
+        return None
+    if total < MIN_LANGUAGE_TEXT_CHARS:
+        return None
+    return votes[0]
 
 
 def registered_scan_folder_languages():
@@ -227,36 +247,65 @@ def _flag_language(book, reason):
     flag_unresolved(book, reason)
 
 
-def detect_language(book, extracted_text=None):
+def _write_content_scan_language(book, code):
+    """Record a content-derived language under the Content Scan source.
+
+    Uses the same ``DataSource`` that content-ISBN extraction uses
+    (``DataSource.CONTENT_SCAN``), so the text-derived language is provenance-
+    tracked and survives re-resolution like other content-scan metadata. No new
+    source is created.
+    """
+    from books.models import BookMetadata, DataSource
+
+    source, _ = DataSource.objects.get_or_create(
+        name=DataSource.CONTENT_SCAN,
+        defaults={"trust_level": 0.85},
+    )
+    BookMetadata.objects.get_or_create(
+        book=book,
+        field_name="language",
+        field_value=code,
+        source=source,
+        defaults={"confidence": source.trust_level},
+    )
+
+
+def detect_language(book, text_slices=None):
     """Determine a book's language explicitly.
 
-    When ``extracted_text`` is provided (born-digital content), langid is the
-    primary signal, gated on length + confidence, with no candidate-language
-    restriction so any language is detected. The embedded metadata language
-    and the scan-folder language are comparison signals only: a confident
-    detection that contradicts either flags the book (LANGUAGE_DISAGREEMENT),
-    and a sample that fails the gates flags it LANGUAGE_UNDETERMINED with
-    language "und". The folder language is never written as a detection. A
-    language flag never overwrites an existing non-empty unresolved reason.
+    When ``text_slices`` is provided (a list of disjoint text slices extracted
+    from the file, born-digital content), slice voting is the primary signal:
+    a code is accepted only when at least two slices vote and all agree (see
+    ``detect_language_from_slices``). On acceptance the code is written as a
+    Content Scan ``BookMetadata`` language row, and it outranks the embedded
+    metadata language and the scan-folder language, so it is what the resolver
+    records. A contradiction with the embedded metadata language flags the book
+    (LANGUAGE_DISAGREEMENT) but the code still wins; a contradiction with the
+    scan-folder language is not an error and raises no flag. A sample that
+    fails the vote gate flags the book LANGUAGE_UNDETERMINED with language
+    "und" and writes no content-scan row. A language flag never overwrites an
+    existing non-empty unresolved reason.
 
-    Without ``extracted_text`` the existing fallback applies: a concrete
-    embedded metadata language, then a concrete scan-folder language, then
-    "und" for undetermined-only markers, else None. This is the single place
-    language is detected, so callers (the resolver, the Dutch-comic Google
-    Books fallback) agree on it.
+    Without ``text_slices`` the existing fallback applies: a concrete embedded
+    metadata language, then a concrete scan-folder language, then "und" for
+    undetermined-only markers, else None. This is the single place language is
+    detected, so callers (the resolver, the Dutch-comic Google Books fallback)
+    agree on it.
     """
     from books.models import UnresolvedReason
 
     embedded = _embedded_language(book)
     folder = _folder_language(book)
 
-    if extracted_text:
-        result = detect_language_from_text(extracted_text)
-        if result is None:
+    if text_slices:
+        code = detect_language_from_slices(text_slices)
+        if code is None:
             _flag_language(book, UnresolvedReason.LANGUAGE_UNDETERMINED)
             return "und"
-        code, _confidence = result
-        if _contradicts(embedded, code) or _contradicts(folder, code):
+
+        _write_content_scan_language(book, code)
+
+        if _contradicts(embedded, code):
             _flag_language(book, UnresolvedReason.LANGUAGE_DISAGREEMENT)
         return code
 

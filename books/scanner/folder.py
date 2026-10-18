@@ -489,6 +489,18 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False, 
         except Exception as e:
             logger.warning(f"Content ISBN extraction failed: {str(e)}")
 
+    # Language text slices (PDF text layer / EPUB chapters) for detection. One
+    # extraction per book per scan; no OCR. Runs after content-ISBN, before
+    # final resolution, so detect_language can vote on real file text.
+    text_slices = None
+    if not is_comic:
+        try:
+            from books.scanner.extractors.text_slices import extract_text_slices
+
+            text_slices = extract_text_slices(file_path)
+        except Exception as e:
+            logger.warning(f"Language text-slice extraction failed: {str(e)}")
+
     logger.info(f"[OPF PARSE] Path: {book.primary_file.file_path if book.primary_file else 'No file'}")
     if book.primary_file and book.primary_file.opf_path:
         try:
@@ -509,7 +521,7 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False, 
 
     try:
         logger.info(f"[FINAL METADATA RESOLVE] Path: {book.primary_file.file_path if book.primary_file else 'No file'}")
-        resolve_final_metadata(book)
+        resolve_final_metadata(book, text_slices=text_slices)
     except Exception as e:
         logger.error(f"Final metadata resolution failed for {book.primary_file.file_path if book.primary_file else 'No file'}: {str(e)}")
         # Optionally create a minimal FinalMetadata record here
