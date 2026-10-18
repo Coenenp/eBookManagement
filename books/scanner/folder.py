@@ -549,24 +549,28 @@ def _extract_filename_metadata(book, ai_recognizer=None):
         # Store the parsed title as the active title, and demote the raw-
         # filename seed (a title equal to the file's stem) to inactive when it
         # differs, so resolve_final_metadata resolves the parsed title rather
-        # than the raw filename.
+        # than the raw filename. Both the reactivation and the demotion are
+        # scoped to the Initial Scan source so a title a reviewer deactivated
+        # (or an embedded/external title that happens to equal the stem) is
+        # never touched.
         BookTitle.objects.get_or_create(
             book=book,
             title=parsed["title"],
             source=source,
             defaults={"confidence": source.trust_level, "is_active": True},
         )
-        BookTitle.objects.filter(book=book, title=parsed["title"]).update(is_active=True)
+        BookTitle.objects.filter(book=book, title=parsed["title"], source=source).update(is_active=True)
 
         if book.primary_file:
             raw_stem = os.path.splitext(os.path.basename(book.primary_file.file_path))[0]
             if raw_stem != parsed["title"]:
-                BookTitle.objects.filter(book=book, title=raw_stem, is_active=True).update(is_active=False)
+                BookTitle.objects.filter(book=book, title=raw_stem, source=source, is_active=True).update(is_active=False)
 
     # Persist the publication year parsed from the filename so it is not
-    # silently dropped.
+    # silently dropped. update_or_create keeps a single row and updates it when
+    # the parsed year changes on a rescan (a renamed file).
     if parsed.get("publication_year") is not None:
-        BookMetadata.objects.get_or_create(
+        BookMetadata.objects.update_or_create(
             book=book,
             field_name="publication_year",
             source=source,

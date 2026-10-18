@@ -13,12 +13,14 @@ structural folder names and placeholder embedded metadata:
 """
 
 from pathlib import Path
+from unittest.mock import patch
 
 from django.test import TestCase
 
-from books.models import Book, BookFile, BookMetadata, BookTitle, DataSource
+from books.models import Book, BookFile, BookMetadata, BookTitle, DataSource, FinalMetadata
 from books.scanner.extractors.denylist import is_denylisted
 from books.scanner.folder import _extract_filename_metadata
+from books.scanner.resolver import resolve_final_metadata
 from books.utils.parsing_helpers import extract_folder_clues
 
 
@@ -130,3 +132,113 @@ class FilenameMetadataPersistenceTests(TestCase):
                 is_active=True,
             ).exists()
         )
+
+    def test_reviewer_deactivated_title_stays_inactive_on_rescan(self):
+        # A reviewer deactivated an embedded-PDF title that happens to equal
+        # the filename-parsed title. A rescan must NOT reactivate it.
+        book, file_path = self._make_klein_book("Klein, Naomi - A Summer of Wildfires and Hurricanes (2017).pdf")
+        pdf_source, _ = DataSource.objects.get_or_create(name=DataSource.PDF_INTERNAL, defaults={"trust_level": 0.6})
+        BookTitle.objects.create(
+            book=book,
+            title="A Summer of Wildfires and Hurricanes",
+            source=pdf_source,
+            confidence=0.6,
+            is_active=False,
+        )
+
+        _extract_filename_metadata(book)
+
+        self.assertFalse(
+            BookTitle.objects.filter(
+                book=book,
+                title="A Summer of Wildfires and Hurricanes",
+                source=pdf_source,
+                is_active=True,
+            ).exists()
+        )
+
+    def test_embedded_pdf_title_equal_to_stem_not_demoted(self):
+        # An embedded-PDF title equal to the raw filename stem must stay active;
+        # only the Initial Scan raw-filename seed may be demoted.
+        book, file_path = self._make_klein_book("Klein, Naomi - A Summer of Wildfires and Hurricanes (2017).pdf")
+        raw_stem = "Klein, Naomi - A Summer of Wildfires and Hurricanes (2017)"
+        pdf_source, _ = DataSource.objects.get_or_create(name=DataSource.PDF_INTERNAL, defaults={"trust_level": 0.6})
+        BookTitle.objects.create(
+            book=book,
+            title=raw_stem,
+            source=pdf_source,
+            confidence=0.6,
+            is_active=True,
+        )
+
+        _extract_filename_metadata(book)
+
+        self.assertTrue(BookTitle.objects.filter(book=book, title=raw_stem, source=pdf_source, is_active=True).exists())
+
+    def test_year_row_updates_on_rescan(self):
+        book, file_path = self._make_klein_book("Klein, Naomi - A Summer of Wildfires and Hurricanes (2017).pdf")
+        _extract_filename_metadata(book)
+
+        # The file is renamed with a different year; a rescan must update the
+        # existing year row, not leave the stale one or create a second row.
+        primary_file = book.primary_file
+        primary_file.file_path = "/library/Klein, Naomi/Papers/Klein, Naomi - A Summer of Wildfires and Hurricanes (2020).pdf"
+        primary_file.save()
+        _extract_filename_metadata(book)
+
+        rows = BookMetadata.objects.filter(book=book, field_name="publication_year", source=self.source)
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows.first().field_value, "2020")
+
+    def test_final_metadata_publication_year_populated(self):
+        book, file_path = self._make_klein_book("Klein, Naomi - A Summer of Wildfires and Hurricanes (2017).pdf")
+        _extract_filename_metadata(book)
+
+        resolve_final_metadata(book)
+
+        final_metadata = FinalMetadata.objects.get(book=book)
+        self.assertEqual(final_metadata.publication_year, 2017)
+
+
+class FilenameParserRoutingTests(TestCase):
+    """The comic/ebook parser choice follows content_type, not the extension."""
+
+    def setUp(self):
+        super().setUp()
+        self.source, _ = DataSource.objects.get_or_create(name=DataSource.INITIAL_SCAN, defaults={"trust_level": 0.2})
+
+    def test_comic_content_type_uses_comic_parser(self):
+        book = Book.objects.create(content_type="comic")
+        BookFile.objects.create(
+            book=book,
+            file_path="/library/Klein, Naomi/Some Comic.pdf",
+            file_format="pdf",
+        )
+        with (
+            patch(
+                "books.scanner.parsing.parse_comic_metadata",
+                return_value={"title": "Comic Title", "authors": [], "series": None},
+            ) as comic_mock,
+            patch("books.scanner.folder.parse_path_metadata") as path_mock,
+        ):
+            _extract_filename_metadata(book)
+            comic_mock.assert_called_once()
+            path_mock.assert_not_called()
+
+    def test_ebook_content_type_uses_path_parser(self):
+        book = Book.objects.create(content_type="ebook")
+        BookFile.objects.create(
+            book=book,
+            file_path="/library/Klein, Naomi/Some Book.pdf",
+            file_format="pdf",
+        )
+        with (
+            patch(
+                "books.scanner.folder.parse_path_metadata",
+                return_value={"title": "Path Title", "authors": [], "series": None},
+            ) as path_mock,
+            patch("books.scanner.parsing.parse_comic_metadata") as comic_mock,
+        ):
+            _extract_filename_metadata(book)
+            path_mock.assert_called_once()
+            comic_mock.assert_not_called()
