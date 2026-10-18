@@ -315,8 +315,10 @@ def detect_language(book, text_slices=None):
     language flags the book (LANGUAGE_DISAGREEMENT) but the code still wins; a
     contradiction with the scan-folder language is not an error.
 
-    When the slices vote but disagree, the book is genuinely ambiguous and is
-    flagged LANGUAGE_UNDETERMINED with language "und".
+    When the slices vote but disagree, the book is genuinely ambiguous: it is
+    flagged LANGUAGE_UNDETERMINED and resolves to the embedded metadata
+    language, then the scan-folder language, and "und" only when neither
+    exists.
 
     When the slices simply cannot vote (too little text, a single slice, or an
     empty/unreadable sample), the result is exactly what it would be without
@@ -336,16 +338,23 @@ def detect_language(book, text_slices=None):
         code, disagreed = _vote_slices(text_slices)
         if code is not None:
             _write_content_scan_language(book, code)
-            if _contradicts(embedded, code):
+            # Flag disagreement when the embedded metadata contradicts the code,
+            # OR when the code is not one of the registered scan-folder languages
+            # (an out-of-library detection such as "pt"/"la" needs a human look).
+            if _contradicts(embedded, code) or code not in registered_scan_folder_languages():
                 _flag_language(book, UnresolvedReason.LANGUAGE_DISAGREEMENT)
             return code
 
         if disagreed:
+            # Genuinely ambiguous: keep the LANGUAGE_UNDETERMINED flag but fall
+            # through to the embedded -> folder -> "und" fallback below instead
+            # of forcing "und", so the preview shows a real language when one is
+            # available from the embedded metadata or the scan folder.
             _flag_language(book, UnresolvedReason.LANGUAGE_UNDETERMINED)
-            return "und"
 
-        # Slices could not vote: fall through to the embedded/folder fallback
-        # below, flagging undetermined only when nothing concrete exists.
+        # Slices could not vote (or disagreed): fall through to the
+        # embedded/folder fallback below, flagging undetermined only when
+        # nothing concrete exists.
 
     for signal in (embedded, folder):
         if signal and signal != "und":

@@ -144,9 +144,12 @@ class DetectLanguageIntegrationTests(TestCase):
             FinalMetadata.objects.filter(book=self.book).exclude(unresolved_reason="").exists()
         )
 
-    def test_disagreeing_slices_rejected(self):
+    def test_disagreeing_slices_return_folder_language(self):
+        # Disagreeing slices keep the LANGUAGE_UNDETERMINED flag but return the
+        # folder language (en) instead of "und", so the preview shows a real
+        # language rather than "[und]".
         lang = detect_language(self.book, text_slices=[DUTCH_TEXT, ENGLISH_TEXT])
-        self.assertEqual(lang, "und")
+        self.assertEqual(lang, "en")
         fm = FinalMetadata.objects.get(book=self.book)
         self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_UNDETERMINED)
 
@@ -165,21 +168,61 @@ class DetectLanguageIntegrationTests(TestCase):
 
     def test_dutch_in_english_folder_no_flag(self):
         # A folder contradiction is not an error: the content code wins with no
-        # flag, so the book is reclassified rather than sent to review.
+        # flag, so the book is reclassified rather than sent to review. "nl" is
+        # a registered scan-folder language, so no LANGUAGE_DISAGREEMENT flag is
+        # raised even though the folder is English.
         lang = detect_language(self.book, text_slices=[DUTCH_TEXT, DUTCH_TEXT])
         self.assertEqual(lang, "nl")
         self.assertFalse(FinalMetadata.objects.filter(book=self.book).exclude(unresolved_reason="").exists())
 
-    def test_bilingual_file_stays_undetermined(self):
-        # Genuinely bilingual content: the slices disagree, so the book stays
-        # undetermined even though embedded and folder each suggest a language.
+    def test_disagreeing_slices_in_nl_folder_return_nl_and_no_und_preview(self):
+        # Disagreeing slices keep the LANGUAGE_UNDETERMINED flag but resolve to
+        # the folder language (nl), and the rename preview renders no "[und]".
+        from books.utils.renaming_engine import RenamingEngine
+
+        book = Book.objects.create(content_type="ebook", scan_folder=self.nl_folder)
+        lang = detect_language(book, text_slices=[DUTCH_TEXT, ENGLISH_TEXT])
+        self.assertEqual(lang, "nl")
+        fm = FinalMetadata.objects.get(book=book)
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_UNDETERMINED)
+        fm.language = lang
+        fm.save(auto_sync=False)
+        preview = RenamingEngine().process_template("${language}", book)
+        self.assertNotIn("[und]", preview)
+
+    def test_unregistered_code_pt_flags_disagreement(self):
+        # A code not among the registered scan-folder languages (pt) is accepted
+        # and written, but the book is flagged LANGUAGE_DISAGREEMENT.
+        with mock.patch("books.utils.language._get_langid_identifier") as m:
+            m.return_value.classify.return_value = ("pt", 1.0)
+            lang = detect_language(self.book, text_slices=[DUTCH_TEXT, DUTCH_TEXT])
+        self.assertEqual(lang, "pt")
+        self.assertEqual(
+            FinalMetadata.objects.get(book=self.book).unresolved_reason,
+            UnresolvedReason.LANGUAGE_DISAGREEMENT,
+        )
+
+    def test_unregistered_code_la_flags_disagreement(self):
+        with mock.patch("books.utils.language._get_langid_identifier") as m:
+            m.return_value.classify.return_value = ("la", 1.0)
+            lang = detect_language(self.book, text_slices=[DUTCH_TEXT, DUTCH_TEXT])
+        self.assertEqual(lang, "la")
+        self.assertEqual(
+            FinalMetadata.objects.get(book=self.book).unresolved_reason,
+            UnresolvedReason.LANGUAGE_DISAGREEMENT,
+        )
+
+    def test_bilingual_file_returns_embedded_language(self):
+        # Genuinely bilingual content: the slices disagree, so the book is
+        # flagged undetermined but resolves to the embedded language (en), then
+        # the folder language, rather than "und".
         book = Book.objects.create(content_type="ebook", scan_folder=self.nl_folder)
         BookMetadata.objects.create(
             book=book, field_name="language", field_value="eng",
             source=self.source, confidence=0.9, is_active=True,
         )
         lang = detect_language(book, text_slices=[ENGLISH_TEXT, DUTCH_TEXT])
-        self.assertEqual(lang, "und")
+        self.assertEqual(lang, "en")
         fm = FinalMetadata.objects.get(book=book)
         self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_UNDETERMINED)
 
@@ -343,7 +386,7 @@ class VerdictStageKeepsLanguageFlagsTests(TestCase):
         book = Book.objects.create(content_type="ebook", scan_folder=folder)
         # Disagreeing slices -> genuinely undetermined -> flag.
         lang = detect_language(book, text_slices=[DUTCH_TEXT, ENGLISH_TEXT])
-        self.assertEqual(lang, "und")
+        self.assertEqual(lang, "nl")
         mark_resolved(book)
         fm = FinalMetadata.objects.get(book=book)
         self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_UNDETERMINED)
