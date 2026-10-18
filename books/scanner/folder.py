@@ -499,7 +499,9 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False, 
 
             text_slices = extract_text_slices(file_path)
         except Exception as e:
-            logger.warning(f"Language text-slice extraction failed: {str(e)}")
+            logger.warning(
+                f"Language text-slice extraction failed ({type(e).__name__}): {e}"
+            )
 
     logger.info(f"[OPF PARSE] Path: {book.primary_file.file_path if book.primary_file else 'No file'}")
     if book.primary_file and book.primary_file.opf_path:

@@ -220,8 +220,20 @@ def normalize_language(value):
 
 
 def _embedded_language(book):
-    """Normalized concrete embedded language, or None / "und"."""
-    best = book.metadata.filter(field_name="language", is_active=True).order_by("-confidence").first()
+    """Normalized concrete embedded language, or None / "und".
+
+    Content Scan language rows are excluded: they record a prior text-derived
+    detection, not embedded metadata, so a rescan must not read the previous
+    run's own answer back as if the file declared it.
+    """
+    from books.models import DataSource
+
+    best = (
+        book.metadata.filter(field_name="language", is_active=True)
+        .exclude(source__name=DataSource.CONTENT_SCAN)
+        .order_by("-confidence")
+        .first()
+    )
     if best and best.field_value:
         return normalize_language(best.field_value)
     return None
@@ -261,12 +273,17 @@ def _write_content_scan_language(book, code):
         name=DataSource.CONTENT_SCAN,
         defaults={"trust_level": 0.85},
     )
-    BookMetadata.objects.get_or_create(
+    # update_or_create keyed on (book, field, source) so a changed detection
+    # replaces the earlier content row rather than adding a second active one.
+    BookMetadata.objects.update_or_create(
         book=book,
         field_name="language",
-        field_value=code,
         source=source,
-        defaults={"confidence": source.trust_level},
+        defaults={
+            "field_value": code,
+            "confidence": source.trust_level,
+            "is_active": True,
+        },
     )
 
 

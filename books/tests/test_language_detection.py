@@ -196,6 +196,66 @@ class DetectLanguageIntegrationTests(TestCase):
         self.assertEqual(detect_language(self.book), "en")
 
 
+class RescanLanguageTests(TestCase):
+    """Rescan behaviour: LANGUAGE_DISAGREEMENT persists across a second scan
+    when embedded metadata still contradicts the content code, and a changed
+    content detection replaces the earlier Content Scan row."""
+
+    def setUp(self):
+        self.nl_folder = ScanFolder.objects.create(path="/tmp/rescan-lang", name="Nederlands", language="nl")
+        self.book = Book.objects.create(content_type="ebook", scan_folder=self.nl_folder)
+        self.source, _ = DataSource.objects.get_or_create(name=DataSource.INITIAL_SCAN, defaults={"trust_level": 0.5})
+
+    def test_second_scan_keeps_language_disagreement(self):
+        # Embedded metadata claims English; content is Dutch. First scan flags
+        # disagreement and the content code wins.
+        BookMetadata.objects.create(
+            book=self.book, field_name="language", field_value="eng",
+            source=self.source, confidence=0.9, is_active=True,
+        )
+        lang = detect_language(self.book, text_slices=[DUTCH_TEXT, DUTCH_TEXT])
+        self.assertEqual(lang, "nl")
+        self.assertEqual(
+            FinalMetadata.objects.get(book=self.book).unresolved_reason,
+            UnresolvedReason.LANGUAGE_DISAGREEMENT,
+        )
+
+        # A second scan (same embedded contradiction) must KEEP the flag, not
+        # overwrite it and not re-derive "und".
+        lang2 = detect_language(self.book, text_slices=[DUTCH_TEXT, DUTCH_TEXT])
+        self.assertEqual(lang2, "nl")
+        self.assertEqual(
+            FinalMetadata.objects.get(book=self.book).unresolved_reason,
+            UnresolvedReason.LANGUAGE_DISAGREEMENT,
+        )
+
+    def test_changed_detection_replaces_earlier_content_row(self):
+        # First detection is Dutch -> one Content Scan row "nl".
+        detect_language(self.book, text_slices=[DUTCH_TEXT, DUTCH_TEXT])
+        rows = BookMetadata.objects.filter(
+            book=self.book, field_name="language", source__name=DataSource.CONTENT_SCAN
+        )
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows.first().field_value, "nl")
+
+        # A changed detection (English) must replace the row, not add a second.
+        detect_language(self.book, text_slices=[ENGLISH_TEXT, ENGLISH_TEXT])
+        rows = BookMetadata.objects.filter(
+            book=self.book, field_name="language", source__name=DataSource.CONTENT_SCAN
+        )
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows.first().field_value, "en")
+
+    def test_embedded_language_excludes_content_scan_rows(self):
+        # After a content scan writes a Content Scan row, _embedded_language must
+        # NOT read it back as embedded metadata (otherwise a rescan would treat
+        # its own prior answer as the file's declaration).
+        from books.utils.language import _embedded_language
+
+        detect_language(self.book, text_slices=[DUTCH_TEXT, DUTCH_TEXT])  # writes "nl" row
+        self.assertIsNone(_embedded_language(self.book))
+
+
 class VerdictStageKeepsLanguageFlagsTests(TestCase):
     """The verdict stage must not clear language flags (M1-OCR item 4 isolation)."""
 
