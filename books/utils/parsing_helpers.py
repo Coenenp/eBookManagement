@@ -133,6 +133,32 @@ def normalize_surnames(authors: List[str]) -> List[str]:
     return normalized
 
 
+def is_structural_folder_name(name: str) -> bool:
+    """True when a folder name is organisational, never a title or author clue.
+
+    Covers literal structural names (Papers, Miscellaneous Articles, ...) and
+    folders that describe a collection size like "(N books, M papers)".
+    """
+    name = name.strip()
+    if not name:
+        return True
+    if name.lower() in _STRUCTURAL_FOLDER_NAMES:
+        return True
+    return bool(_STRUCTURAL_FOLDER_PATTERN.fullmatch(name))
+
+
+_STRUCTURAL_FOLDER_NAMES = frozenset(
+    {
+        "papers",
+        "miscellaneous articles",
+        "miscellaneous papers",
+        "anarchist library reprints",
+    }
+)
+
+_STRUCTURAL_FOLDER_PATTERN = re.compile(r"\(\s*\d+\s+books?\s*,\s*\d+\s+papers?\s*\)", re.IGNORECASE)
+
+
 def extract_folder_clues(path: Path, max_depth: int = 4) -> Dict[str, Optional[str]]:
     """
     Traverse parent folders to extract possible title/author/series hints.
@@ -154,7 +180,7 @@ def extract_folder_clues(path: Path, max_depth: int = 4) -> Dict[str, Optional[s
             clues["series"] = re.sub(r"\bseries\b", "", folder_name, flags=re.IGNORECASE).strip()
 
         if i == len(folders) - 1 and not clues["likely_author"]:
-            if looks_like_author(folder_name):
+            if looks_like_author(folder_name) and not is_structural_folder_name(folder_name):
                 clues["likely_author"] = folder_name.strip()
                 clues["all_authors"] = [folder_name.strip()]
 
