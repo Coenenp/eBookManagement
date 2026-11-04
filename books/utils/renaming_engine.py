@@ -15,6 +15,19 @@ from django.db import models
 logger = logging.getLogger(__name__)
 
 
+def is_renamable(book):
+    """Return True when a book is fully approved and may be renamed or moved.
+
+    A book with no ``FinalMetadata`` row, or whose ``is_reviewed`` is False, is
+    not renamable. Only fully approved books may be renamed or moved.
+    """
+    from books.models import FinalMetadata
+
+    if book.pk is None:
+        return False
+    return FinalMetadata.objects.filter(book=book, is_reviewed=True).exists()
+
+
 class RenamingEngine:
     """
     Core template engine for ebook renaming with JMTE-style token processing.

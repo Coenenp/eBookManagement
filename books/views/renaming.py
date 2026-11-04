@@ -138,6 +138,23 @@ class BookRenamerPreviewView(LoginRequiredMixin, TemplateView):
         for book_id in selected_books:
             try:
                 book = Book.objects.get(id=book_id)
+
+                from books.utils.renaming_engine import RenamingEngine, is_renamable
+
+                if not is_renamable(book):
+                    from books.models import FinalMetadata
+
+                    fm = FinalMetadata.objects.filter(book=book).first()
+                    preview_items.append(
+                        {
+                            "book_id": book_id,
+                            "skipped": True,
+                            "reason": "not approved",
+                            "unresolved_reason": fm.unresolved_reason if fm else "",
+                        }
+                    )
+                    continue
+
                 old_path = book.file_path if book.file_path else f"Book {book_id}"
 
                 # Generate preview using RenamingEngine
