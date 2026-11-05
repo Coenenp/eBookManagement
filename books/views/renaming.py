@@ -523,6 +523,11 @@ def rename_book(request, book_id):
             Book = get_model("Book")
             book = Book.objects.get(id=book_id)
 
+            from books.utils.renaming_engine import is_renamable
+
+            if not is_renamable(book):
+                return JsonResponse({"success": False, "error": "Book not approved for renaming"})
+
             new_filename = request.POST.get("new_filename")
             if not new_filename:
                 return JsonResponse({"success": False, "error": "New filename is required"})

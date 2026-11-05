@@ -43,7 +43,7 @@ class BatchRenamerTestCase(TransactionTestCase):
         BookSeries.objects.create(book=self.book1, series=self.series, source=self.source, series_number="1")
 
         # Create FinalMetadata for renaming engine
-        FinalMetadata.objects.create(book=self.book1, final_title="Foundation", final_author="Isaac Asimov")
+        FinalMetadata.objects.create(book=self.book1, final_title="Foundation", final_author="Isaac Asimov", is_reviewed=True)
 
         self.book2_path = Path(self.temp_dir) / "Second Foundation.epub"
         self.book2_path.touch()
@@ -53,7 +53,7 @@ class BatchRenamerTestCase(TransactionTestCase):
         BookSeries.objects.create(book=self.book2, series=self.series, source=self.source, series_number="2")
 
         # Create FinalMetadata for renaming engine
-        FinalMetadata.objects.create(book=self.book2, final_title="Second Foundation", final_author="Isaac Asimov")
+        FinalMetadata.objects.create(book=self.book2, final_title="Second Foundation", final_author="Isaac Asimov", is_reviewed=True)
 
         self.renamer = BatchRenamer()
 

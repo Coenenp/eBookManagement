@@ -604,6 +604,12 @@ def ajax_bulk_rename_execute(request):
 
                     book = Book.objects.get(id=book_id)
 
+                    from books.utils.renaming_engine import is_renamable
+
+                    if not is_renamable(book):
+                        results.append({"book_id": book_id, "status": "error", "message": "not approved"})
+                        continue
+
                     # Get the primary file
                     primary_file = book.primary_file
                     if not primary_file:
