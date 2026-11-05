@@ -335,6 +335,9 @@ class TC9MediaTypeRulesTests(BatchRenamerTestCase):
         """TC9.4 – Maintain consistent folder-level mediatype mapping"""
         # Rename books and ensure media type classification is preserved
 
+        # Approve the comic so it is renamable and resolves to "Test Comic".
+        FinalMetadata.objects.create(book=self.comic_book, final_title="Test Comic", is_reviewed=True)
+
         # Rename ebook
         self.renamer.add_books([self.book1], folder_pattern="Library/Ebooks/${author.sortname}", filename_pattern="${title}.${ext}")
 

@@ -447,7 +447,7 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
             return updated_fields
 
         if not is_renamable(book):
-            messages.error(request, "Book is not approved for renaming")
+            logger.debug("Skipping file operations for unapproved book", extra={"book_id": book.id})
             return updated_fields
 
         try:

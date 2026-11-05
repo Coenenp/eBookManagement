@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.messages import get_messages
 from django.test import RequestFactory, TransactionTestCase
 from django.urls import reverse
 
@@ -262,3 +263,18 @@ class RenameGateTests(TransactionTestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertTrue(path.exists())
         self.assertFalse((Path(self.temp_dir) / "Approved" / "renamed.epub").exists())
+
+    def test_metadata_update_unapproved_default_patterns_no_move_no_error(self):
+        book, path = self._make_book_with_scan_folder("mv3.epub", is_reviewed=False)
+        user = get_user_model().objects.create_user(username="mv3", password="p")
+        self.client.force_login(user)
+        resp = self.client.post(
+            reverse("books:book_metadata_update", kwargs={"pk": book.id}),
+            {"final_title": "Unmovable", "folder_pattern": "${author.sortname}", "filename_pattern": "${title}.${ext}"},
+        )
+        self.assertEqual(resp.status_code, 302)
+        # no move
+        self.assertTrue(path.exists())
+        # no error message mentioning "not approved"
+        messages = list(get_messages(resp.wsgi_request))
+        self.assertFalse(any("not approved" in str(m) for m in messages))
