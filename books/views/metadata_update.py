@@ -125,6 +125,17 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
                 if duplicate_ids:
                     messages.info(request, f"Deleted {len(duplicate_ids)} duplicate(s).")
 
+            # Handle review status FIRST — an approval in this same save must be
+            # persisted before any file operation reads is_renamable(book).
+            is_reviewed = "is_reviewed" in request.POST or action == "save_next"
+            if is_reviewed != final_metadata.is_reviewed:
+                final_metadata.is_reviewed = is_reviewed
+                updated_fields.append("reviewed status")
+
+            # Persist review status now, before any move/rename is attempted.
+            final_metadata._manual_update = True
+            final_metadata.save()
+
             # Handle file operations if patterns provided
             folder_pattern = request.POST.get("folder_pattern", "").strip()
             filename_pattern = request.POST.get("filename_pattern", "").strip()
@@ -138,13 +149,7 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
                 self._download_covers(request, book, cover_urls)
                 updated_fields.append("downloaded covers")
 
-            # Handle review status
-            is_reviewed = "is_reviewed" in request.POST or action == "save_next"
-            if is_reviewed != final_metadata.is_reviewed:
-                final_metadata.is_reviewed = is_reviewed
-                updated_fields.append("reviewed status")
-
-            # Save with flag to prevent auto-update
+            # Save again to persist any file-operation side effects.
             final_metadata._manual_update = True
             final_metadata.save()
 
@@ -433,12 +438,16 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
         from pathlib import Path
 
         from books.utils.opf_generator import get_opf_filename, save_opf_file
-        from books.utils.renaming_engine import RenamingEngine
+        from books.utils.renaming_engine import RenamingEngine, is_renamable
 
         updated_fields = []
         book_file = book.files.first()
 
         if not book_file or not book_file.file_path:
+            return updated_fields
+
+        if not is_renamable(book):
+            logger.debug("Skipping file operations for unapproved book", extra={"book_id": book.id})
             return updated_fields
 
         try:

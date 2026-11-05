@@ -489,6 +489,7 @@ class TC1to9ComprehensiveTests(ComprehensiveRenamingTestCase):
 
             book = create_test_book_with_file(file_path=str(book_path), file_size=1024000, file_format="epub")
             BookAuthor.objects.create(book=book, author=self.asimov, source=self.data_source, confidence=0.8, is_main_author=True)
+            FinalMetadata.objects.create(book=book, final_title=f"Book {i}", final_author="Isaac Asimov", is_reviewed=True)
             books.append(book)
 
         # Test batch processing performance

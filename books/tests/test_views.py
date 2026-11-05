@@ -1677,6 +1677,7 @@ class BookRenamerViewTests(BaseViewTestCase):
             final_author="Test Author",
             final_series="Test Series",
             final_series_number="1",
+            is_reviewed=True,
         )
 
     def test_book_renamer_view_loads(self):

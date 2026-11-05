@@ -192,6 +192,7 @@ class BatchRenamer:
         self.companion_finder = CompanionFileFinder()
         self.operations: List[FileOperation] = []
         self.rollback_log: List[Dict] = []
+        self.skipped_books: List[Dict] = []
 
     def add_book(self, book: Book, folder_pattern: str, filename_pattern: str, embed_metadata: bool = True) -> None:
         """
@@ -226,6 +227,20 @@ class BatchRenamer:
 
     def _add_single_book(self, book: Book, folder_pattern: str, filename_pattern: str, embed_metadata: bool) -> None:
         """Add a single book and its operations to the batch."""
+        from books.models import FinalMetadata
+        from books.utils.renaming_engine import is_renamable
+
+        if not is_renamable(book):
+            fm = FinalMetadata.objects.filter(book=book).first()
+            self.skipped_books.append(
+                {
+                    "book_id": book.id,
+                    "reason": "not approved",
+                    "unresolved_reason": fm.unresolved_reason if fm else "",
+                }
+            )
+            return
+
         if not book.file_path or not os.path.exists(book.file_path):
             logger.warning(f"Book {book.id} file not found: {book.file_path}")
             return
@@ -361,6 +376,21 @@ class BatchRenamer:
         book_operations = self._group_operations_by_book()
 
         for book_id, ops in book_operations.items():
+            from books.models import FinalMetadata
+            from books.utils.renaming_engine import is_renamable
+
+            book = Book.objects.filter(id=book_id).first()
+            if book is None or not is_renamable(book):
+                fm = FinalMetadata.objects.filter(book=book).first() if book else None
+                self.skipped_books.append(
+                    {
+                        "book_id": book_id,
+                        "reason": "not approved",
+                        "unresolved_reason": fm.unresolved_reason if fm else "",
+                    }
+                )
+                continue
+
             try:
                 self._execute_book_operations(book_id, ops)
                 successful += len(ops)
@@ -499,6 +529,10 @@ class BatchRenamer:
             logger.error(f"Error embedding EPUB metadata for book {book_id}: {e}", exc_info=True)
             # Don't raise - metadata embedding failure shouldn't fail the rename
 
+    def get_skipped_books(self) -> List[Dict]:
+        """Return the books skipped by the approval gate, with reason and flag."""
+        return self.skipped_books
+
     def get_operation_summary(self) -> Dict:
         """Get a summary of queued operations."""
         main_files = sum(1 for op in self.operations if op.operation_type == "main_rename")
@@ -506,7 +540,7 @@ class BatchRenamer:
 
         unique_books = len(set(op.book_id for op in self.operations if op.book_id))
 
-        return {"total_operations": len(self.operations), "main_files": main_files, "companion_files": companion_files, "books_affected": unique_books, "dry_run": self.dry_run}
+        return {"total_operations": len(self.operations), "main_files": main_files, "companion_files": companion_files, "books_affected": unique_books, "dry_run": self.dry_run, "skipped_books": self.skipped_books}
 
 
 class RenamingHistory:
