@@ -8,6 +8,7 @@ unchanged, a second run changes nothing, and the output path differs from input.
 
 import hashlib
 import io
+import os
 import shutil
 import tempfile
 import zipfile
@@ -15,6 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import SimpleTestCase
 
 from books.utils.epub_check import check_epub
@@ -124,11 +126,11 @@ class EpubFixTests(SimpleTestCase):
         _write_zip(p, files, **kwargs)
         return p
 
-    def _assert_lossless(self, files, code, *, order=None, compress=None, changed=()):
+    def _assert_lossless(self, files, code, *, order=None, compress=None, changed=(), fix_encoding=False):
         src = self._write("in.epub", files, order=order, compress=compress)
         src_hash = _sha256(src)
         before = _entry_hashes(src)
-        out = Path(fix_epub(src))
+        out = Path(fix_epub(src, fix_encoding=fix_encoding))
         self.assertNotEqual(out.resolve(), src.resolve())
         self.assertEqual(_sha256(src), src_hash)
         self.assertNotIn(code, _codes(check_epub(out)))
@@ -190,7 +192,7 @@ class EpubFixTests(SimpleTestCase):
     def test_htm002_adds_encoding_declaration(self):
         files = valid_files()
         files["OEBPS/chapter1.xhtml"] = NO_DECL_XHTML
-        self._assert_lossless(files, "HTM-002", changed=("OEBPS/chapter1.xhtml",))
+        self._assert_lossless(files, "HTM-002", changed=("OEBPS/chapter1.xhtml",), fix_encoding=True)
 
     # -- writer ---------------------------------------------------------------
 
@@ -294,3 +296,193 @@ class EpubFixTests(SimpleTestCase):
         call_command("epub_fix", str(src), stdout=out)
         self.assertIn("Plan for", out.getvalue())
         self.assertFalse(self._path("book_fixed.epub").exists())
+
+    # -- write_epub source check ---------------------------------------------
+
+    def test_write_epub_refuses_equal_output_path(self):
+        src = self._write("in.epub", valid_files())
+        h = _sha256(src)
+        with self.assertRaises(ValueError):
+            write_epub(src, src)
+        self.assertEqual(_sha256(src), h)
+
+    # -- durability -----------------------------------------------------------
+
+    def test_writer_fsyncs_part_before_replace(self):
+        src = self._write("s.epub", valid_files())
+        out = self._path("out.epub")
+        order = []
+        real_replace = os.replace
+
+        def fake_replace(a, b):
+            order.append("replace")
+            return real_replace(a, b)
+
+        with mock.patch("books.utils.epub_fix.writer.os.replace", side_effect=fake_replace), \
+                mock.patch("books.utils.epub_fix.writer.os.fsync", side_effect=lambda fd: order.append("fsync")):
+            write_epub(src, out)
+        self.assertIn("fsync", order)
+        self.assertLess(order.index("fsync"), order.index("replace"))
+
+    def test_writer_removes_part_on_keyboard_interrupt(self):
+        src = self._write("s.epub", valid_files())
+        out = self._path("out.epub")
+        with mock.patch("books.utils.epub_fix.writer.os.fsync", side_effect=KeyboardInterrupt()):
+            with self.assertRaises(KeyboardInterrupt):
+                write_epub(src, out)
+        self.assertFalse(Path(str(out) + ".part").exists())
+        self.assertFalse(out.exists())
+
+    # -- OPF fidelity ---------------------------------------------------------
+
+    def test_opf006_preserves_opf_fidelity(self):
+        from lxml import etree
+        opf = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="uid" '
+            'xmlns:dc="http://purl.org/dc/elements/1.1/" '
+            'xmlns:dcterms="http://purl.org/dc/terms/" '
+            'xmlns:opf="http://www.idpf.org/2007/opf" '
+            'xmlns:calibre="http://calibre.kovidgoyal.net/2009/metadata">'
+            '<!-- keep this comment -->'
+            '<metadata>'
+            '<dc:identifier id="uid">urn:uuid:test</dc:identifier>'
+            '<dc:title>Test</dc:title><dc:language>en</dc:language>'
+            '<dcterms:modified>2024-01-01T00:00:00Z</dcterms:modified>'
+            '<meta name="calibre:series" content="Foo"/>'
+            '</metadata>'
+            '<manifest>'
+            '<item id="c1" href="chapter1.xhtml" media-type="image/jpeg" opf:role="doc" opf:file-as="Chapter One"/>'
+            '<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>'
+            '</manifest>'
+            '<spine><itemref idref="c1"/><itemref idref="cover"/></spine>'
+            '</package>'
+        ).encode("utf-8")
+        files = valid_files()
+        files["OEBPS/content.opf"] = opf
+        src = self._write("in.epub", files)
+        out = Path(fix_epub(src))
+        parser = etree.XMLParser(remove_comments=False)
+        in_root = etree.fromstring(opf, parser)
+        with zipfile.ZipFile(out) as z:
+            out_opf_bytes = z.read("OEBPS/content.opf")
+        out_root = etree.fromstring(out_opf_bytes, parser)
+        for root in (in_root, out_root):
+            for el in root.iter():
+                if "media-type" in el.attrib:
+                    del el.attrib["media-type"]
+        self.assertEqual(etree.tostring(out_root), etree.tostring(in_root))
+        self.assertIn(b'media-type="application/xhtml+xml"', out_opf_bytes)
+
+    # -- cover safety ---------------------------------------------------------
+
+    def test_cover_keeps_old_file_when_referenced(self):
+        files = valid_files()
+        files["OEBPS/cover.xhtml"] = _xhtml(body='<img src="cover.jpg" alt="c"/>')
+        src = self._write("in.epub", files)
+        cover = self._cover_file("new.png", data=b"\x89PNG\r\n\x1a\n")
+        out = Path(fix_epub(src, cover=str(cover)))
+        with zipfile.ZipFile(out) as z:
+            names = z.namelist()
+        self.assertIn("OEBPS/cover.jpg", names)
+        self.assertIn("OEBPS/cover.png", names)
+
+    def test_cover_uses_unique_id_when_taken(self):
+        import re
+        files = valid_files()
+        items = [("cover-image", "some.xhtml", "application/xhtml+xml", "")] + [
+            it for it in DEFAULT_ITEMS if it[0] != "cover-image"
+        ]
+        files["OEBPS/content.opf"] = _opf(items, DEFAULT_SPINE)
+        files["OEBPS/some.xhtml"] = _xhtml()
+        src = self._write("in.epub", files)
+        cover = self._cover_file("new.jpg")
+        out = Path(fix_epub(src, cover=str(cover)))
+        with zipfile.ZipFile(out) as z:
+            opf = z.read("OEBPS/content.opf").decode("utf-8")
+        m = re.search(r'<meta name="cover" content="([^"]+)"', opf)
+        self.assertIsNotNone(m)
+        self.assertNotEqual(m.group(1), "cover-image")
+        self.assertIn('id="%s"' % m.group(1), opf)
+
+    def test_cover_refuses_missing_manifest_or_metadata(self):
+        opf_no_meta = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="uid">'
+            '<manifest><item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/></manifest>'
+            '<spine><itemref idref="c1"/></spine></package>'
+        ).encode("utf-8")
+        files = valid_files()
+        files["OEBPS/content.opf"] = opf_no_meta
+        src = self._write("in.epub", files)
+        cover = self._cover_file("new.jpg")
+        with self.assertRaises(ValueError):
+            fix_epub(src, cover=str(cover))
+        self.assertEqual(list(Path(self.temp_dir).glob("*_fixed.epub")), [])
+
+    def test_plan_lists_cover_embed(self):
+        files = valid_files()
+        src = self._write("in.epub", files)
+        cover = self._cover_file("new.jpg")
+        plan = plan_fixes(src, cover=str(cover))
+        self.assertTrue(any(f.code == "COVER-EMBED" for f in plan))
+
+    # -- HTM-002 opt-in -------------------------------------------------------
+
+    def test_htm002_off_by_default(self):
+        files = valid_files()
+        files["OEBPS/chapter1.xhtml"] = NO_DECL_XHTML
+        src = self._write("in.epub", files)
+        before = _entry_hashes(src)["OEBPS/chapter1.xhtml"]
+        out = Path(fix_epub(src))
+        self.assertIn("HTM-002", _codes(check_epub(out)))
+        self.assertEqual(_entry_hashes(out)["OEBPS/chapter1.xhtml"], before)
+
+    def test_htm002_applied_with_flag(self):
+        files = valid_files()
+        files["OEBPS/chapter1.xhtml"] = NO_DECL_XHTML
+        src = self._write("in.epub", files)
+        out = Path(fix_epub(src, fix_encoding=True))
+        self.assertNotIn("HTM-002", _codes(check_epub(out)))
+
+    def test_htm002_keeps_bom_first(self):
+        files = valid_files()
+        files["OEBPS/chapter1.xhtml"] = b"\xef\xbb\xbf" + NO_DECL_XHTML
+        src = self._write("in.epub", files)
+        out = Path(fix_epub(src, fix_encoding=True))
+        with zipfile.ZipFile(out) as z:
+            data = z.read("OEBPS/chapter1.xhtml")
+        self.assertTrue(data.startswith(b"\xef\xbb\xbf"))
+        self.assertIn(b'encoding="utf-8"', data)
+
+    def test_htm002_encoding_before_standalone(self):
+        files = valid_files()
+        standalone = (
+            '<?xml version="1.0" standalone="yes"?>\n'
+            '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>t</title></head>'
+            '<body><p>x</p></body></html>'
+        ).encode("utf-8")
+        files["OEBPS/chapter1.xhtml"] = standalone
+        src = self._write("in.epub", files)
+        out = Path(fix_epub(src, fix_encoding=True))
+        with zipfile.ZipFile(out) as z:
+            data = z.read("OEBPS/chapter1.xhtml").decode("utf-8")
+        self.assertRegex(data, r'encoding="utf-8"[^>]*standalone=')
+        self.assertNotRegex(data, r'standalone=[^>]*encoding=')
+
+    # -- command: --apply ValueError -> CommandError --------------------------
+
+    def test_command_apply_cover_error_is_command_error(self):
+        files = valid_files()
+        src = self._write("book.epub", files)
+        with self.assertRaises(CommandError):
+            call_command("epub_fix", str(src), apply=True, cover=str(self._path("missing.jpg")), output_dir=self.temp_dir)
+        self.assertEqual(list(Path(self.temp_dir).glob("*_fixed.epub")), [])
+
+    def test_command_plan_lists_cover_embed(self):
+        files = valid_files()
+        src = self._write("book.epub", files)
+        cover = self._cover_file("new.jpg")
+        out = io.StringIO()
+        call_command("epub_fix", str(src), cover=str(cover), stdout=out)
+        self.assertIn("COVER-EMBED", out.getvalue())
