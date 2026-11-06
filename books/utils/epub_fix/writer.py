@@ -7,7 +7,7 @@ from pathlib import Path
 from books.utils.epub_fix.fixer import _compute
 
 
-def write_epub(source_path, output_path, cover_path=None):
+def write_epub(source_path, output_path, cover_path=None, fix_encoding=False):
     """Fix and write an EPUB safely, never opening the source for writing.
 
     Reads the source read-only, applies the lossless fixes and (optionally)
@@ -16,12 +16,16 @@ def write_epub(source_path, output_path, cover_path=None):
     entry is deflated. Writes to ``<output>.part`` then atomically replaces the
     target with ``os.replace``; the partial file is removed on any failure.
     """
-    _plan, entries, _dropped, _modified = _compute(str(source_path), cover_path)
-    _write_entries(str(output_path), entries)
-    return str(output_path)
+    src = Path(source_path)
+    out = Path(output_path)
+    if out.resolve() == src.resolve():
+        raise ValueError("output path must differ from the input path")
+    _plan, entries, _dropped, _modified = _compute(str(src), cover_path, fix_encoding)
+    _write_entries(str(out), entries)
+    return str(out)
 
 
-def fix_epub(input_path, output_path=None, cover=None):
+def fix_epub(input_path, output_path=None, cover=None, fix_encoding=False):
     """Apply lossless fixes to a new file and return its path.
 
     Default output is ``<stem>_fixed.epub`` beside the input. Refuses an output
@@ -33,7 +37,7 @@ def fix_epub(input_path, output_path=None, cover=None):
     output_path = Path(output_path)
     if output_path.resolve() == src.resolve():
         raise ValueError("output path must differ from the input path")
-    write_epub(src, output_path, cover_path=cover)
+    write_epub(src, output_path, cover_path=cover, fix_encoding=fix_encoding)
     return str(output_path)
 
 
@@ -47,8 +51,25 @@ def _write_entries(output_path, entries):
                 if name == "mimetype":
                     continue
                 z.writestr(name, data, compress_type=zipfile.ZIP_DEFLATED)
+        # Flush and fsync the .part file before the atomic replace, so the data
+        # is durable before the rename becomes visible.
+        with open(part, "rb") as f:
+            os.fsync(f.fileno())
         os.replace(part, str(output_path))
-    except Exception:
+        # Best-effort fsync of the output directory to persist the rename.
+        directory = os.path.dirname(os.path.abspath(str(output_path))) or "."
+        try:
+            dir_fd = os.open(directory, os.O_RDONLY)
+        except OSError:
+            dir_fd = None
+        if dir_fd is not None:
+            try:
+                os.fsync(dir_fd)
+            except OSError:
+                pass
+            finally:
+                os.close(dir_fd)
+    except BaseException:
         try:
             os.unlink(part)
         except OSError:

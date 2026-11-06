@@ -3,6 +3,7 @@
 Usage::
 
     python manage.py epub_fix <path> [--apply] [--output-dir DIR] [--cover FILE]
+                             [--fix-encoding]
 
 Without ``--apply`` the command only prints the plan of fixes and writes
 nothing. With ``--apply`` it writes ``<stem>_fixed.epub`` into ``--output-dir``
@@ -24,6 +25,7 @@ class Command(BaseCommand):
         parser.add_argument("--apply", action="store_true", help="Write the fixed EPUB (default: print plan only).")
         parser.add_argument("--output-dir", help="Directory for the fixed output (default: beside the input).")
         parser.add_argument("--cover", help="Cover image to embed (used with --apply).")
+        parser.add_argument("--fix-encoding", action="store_true", help="Opt in to the HTM-002 encoding-declaration fix.")
 
     def handle(self, *args, **options):
         src = Path(options["path"])
@@ -31,6 +33,7 @@ class Command(BaseCommand):
             raise CommandError(f"Path not found: {src}")
 
         cover = options["cover"]
+        fix_encoding = options["fix_encoding"]
 
         if options["apply"]:
             out_dir = Path(options["output_dir"]) if options["output_dir"] else src.parent
@@ -38,11 +41,14 @@ class Command(BaseCommand):
             output = out_dir / (src.stem + "_fixed" + src.suffix)
             if output.resolve() == src.resolve():
                 raise CommandError("output path must differ from the input path")
-            fix_epub(src, output, cover=cover)
+            try:
+                fix_epub(src, output, cover=cover, fix_encoding=fix_encoding)
+            except ValueError as exc:
+                raise CommandError(str(exc))
             self.stdout.write(f"Wrote: {output}")
         else:
             try:
-                plan = plan_fixes(src, cover=cover)
+                plan = plan_fixes(src, cover=cover, fix_encoding=fix_encoding)
             except ValueError as exc:
                 raise CommandError(str(exc))
             if not plan:

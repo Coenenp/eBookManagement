@@ -6,21 +6,21 @@ never rewrites the bytes of an entry that does not need a change.
 """
 
 import posixpath
-import xml.etree.ElementTree as ET
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from lxml import etree as ET
+
 from books.utils.epub_check.reader import EpubReader
 from books.utils.epub_check.rules import MEDIA_TYPE_BY_EXT, XHTML_MEDIA_TYPES
 
 OPF_NS = "http://www.idpf.org/2007/opf"
-DC_NS = "http://purl.org/dc/elements/1.1/"
 
-# Keep the default (OPF) and dc namespaces stable when re-serialising the OPF.
-ET.register_namespace("", OPF_NS)
-ET.register_namespace("dc", DC_NS)
+# lxml preserves comments and namespace prefixes natively on round-trip, so the
+# OPF is edited with lxml and no global namespace registration is needed.
+_OPF_PARSER = ET.XMLParser(remove_comments=False)
 
 MIMETYPE_VALUE = b"application/epub+zip"
 
@@ -32,6 +32,8 @@ IMAGE_MEDIA_BY_EXT = {
     ".svg": "image/svg+xml",
 }
 
+_REFERENCE_EXTS = (".xhtml", ".html", ".htm", ".css", ".svg")
+
 
 @dataclass
 class Fix:
@@ -39,9 +41,9 @@ class Fix:
     description: str
 
 
-def plan_fixes(input_path, cover=None) -> List[Fix]:
+def plan_fixes(input_path, cover=None, fix_encoding=False) -> List[Fix]:
     """Return the fixes that would be applied to ``input_path`` (no writes)."""
-    plan, _entries, _dropped, _modified = _compute(str(input_path), cover)
+    plan, _entries, _dropped, _modified = _compute(str(input_path), cover, fix_encoding)
     return plan
 
 
@@ -70,6 +72,21 @@ def _validate_cover(cover_path) -> Tuple[bytes, str, str]:
     return data, ext, media_type
 
 
+def _cover_referenced(href, source, names) -> bool:
+    """True if any XHTML/CSS/SVG entry references the cover's file name."""
+    base = posixpath.basename(href)
+    if not base:
+        return False
+    needle = base.encode("utf-8")
+    for arc in names:
+        ext = posixpath.splitext(arc)[1].lower()
+        if ext in _REFERENCE_EXTS:
+            data = source.get(arc)
+            if data and needle in data:
+                return True
+    return False
+
+
 # --------------------------------------------------------------------------- #
 # encoding declaration
 # --------------------------------------------------------------------------- #
@@ -87,12 +104,27 @@ def _needs_encoding_decl(raw: bytes) -> bool:
 
 
 def _add_encoding_decl(raw: bytes) -> bytes:
+    # Keep a leading UTF-8 BOM first, and insert the encoding declaration
+    # before any standalone= pseudo-attribute (the XML spec requires that order).
+    bom = b""
+    if raw.startswith(b"\xef\xbb\xbf"):
+        bom = b"\xef\xbb\xbf"
+        raw = raw[3:]
     text = raw.decode("utf-8")
-    if text.lstrip().startswith("<?xml"):
-        idx = text.find("?>")
-        if idx != -1:
-            return (text[:idx] + ' encoding="utf-8"' + text[idx:]).encode("utf-8")
-    return ('<?xml version="1.0" encoding="utf-8"?>\n' + text).encode("utf-8")
+    stripped = text.lstrip()
+    if stripped.startswith("<?xml") and "?>" in text:
+        end = text.find("?>")
+        decl = text[:end]
+        if "encoding=" not in decl:
+            if "standalone=" in decl:
+                i = decl.find("standalone=")
+                decl = decl[:i] + 'encoding="utf-8" ' + decl[i:]
+            else:
+                decl = decl + ' encoding="utf-8"'
+        text = decl + text[end:]
+    else:
+        text = '<?xml version="1.0" encoding="utf-8"?>\n' + text
+    return bom + text.encode("utf-8")
 
 
 # --------------------------------------------------------------------------- #
@@ -100,7 +132,7 @@ def _add_encoding_decl(raw: bytes) -> bytes:
 # --------------------------------------------------------------------------- #
 
 
-def _compute(input_path, cover=None):
+def _compute(input_path, cover=None, fix_encoding=False):
     """Analyze the EPUB and return (plan, entries, dropped, modified).
 
     ``entries`` is an ordered arcname -> bytes map of the final package (the
@@ -161,15 +193,16 @@ def _compute(input_path, cover=None):
                 fixes.append(Fix("OPF-006", f"media-type '{m['media_type']}' -> '{expected}' for '{m['href']}'"))
 
         enc_fix: List[str] = []
-        for m in manifest_kept:
-            if m["media_type"] in XHTML_MEDIA_TYPES and m["resolved"] in names:
-                if _needs_encoding_decl(source[m["resolved"]]):
-                    enc_fix.append(m["resolved"])
-                    fixes.append(Fix("HTM-002", f"add XML encoding declaration to '{m['href']}'"))
+        if fix_encoding:
+            for m in manifest_kept:
+                if m["media_type"] in XHTML_MEDIA_TYPES and m["resolved"] in names:
+                    if _needs_encoding_decl(source[m["resolved"]]):
+                        enc_fix.append(m["resolved"])
+                        fixes.append(Fix("HTM-002", f"add XML encoding declaration to '{m['href']}'"))
 
         # --- OPF mutation ------------------------------------------------- #
         opf_bytes = source.get(opf_path) if opf_path else None
-        opf_root = ET.fromstring(opf_bytes) if opf_bytes is not None else None
+        opf_root = ET.fromstring(opf_bytes, _OPF_PARSER) if opf_bytes is not None else None
         cover_arc: Optional[str] = None
         removed_cover_files: List[str] = []
 
@@ -198,8 +231,17 @@ def _compute(input_path, cover=None):
                         item.set("media-type", media_fix_ids[mid])
                         changed = True
 
-            if cover_info is not None and manifest_el is not None and metadata_el is not None:
+            if cover_info is not None:
+                if manifest_el is None or metadata_el is None:
+                    raise ValueError("package has no manifest or metadata element; cannot embed cover")
                 cdata, cext, cmt = cover_info
+                # Choose a unique manifest id when "cover-image" is already taken.
+                new_cover_id = "cover-image"
+                if new_cover_id in manifest_ids:
+                    n = 2
+                    while f"cover-image-{n}" in manifest_ids:
+                        n += 1
+                    new_cover_id = f"cover-image-{n}"
                 for item in list(manifest_el.findall("opf:item", NS)):
                     if "cover-image" in (item.get("properties") or "").split():
                         removed_cover_files.append(item.get("href", ""))
@@ -209,19 +251,20 @@ def _compute(input_path, cover=None):
                 cover_href = "cover" + cext
                 cover_arc = posixpath.normpath(posixpath.join(opf_dir, cover_href)) if opf_dir else cover_href
                 item = ET.SubElement(manifest_el, f"{{{OPF_NS}}}item")
-                item.set("id", "cover-image")
+                item.set("id", new_cover_id)
                 item.set("href", cover_href)
                 item.set("media-type", cmt)
                 item.set("properties", "cover-image")
                 changed = True
                 for meta in list(metadata_el.findall("opf:meta", NS)):
                     if meta.get("name") == "cover":
-                        meta.set("content", "cover-image")
+                        meta.set("content", new_cover_id)
                         break
                 else:
                     meta = ET.SubElement(metadata_el, f"{{{OPF_NS}}}meta")
                     meta.set("name", "cover")
-                    meta.set("content", "cover-image")
+                    meta.set("content", new_cover_id)
+                fixes.append(Fix("COVER-EMBED", f"embed cover image as '{cover_href}' (manifest id '{new_cover_id}')"))
 
             if changed:
                 entries[opf_path] = ET.tostring(opf_root, encoding="utf-8", xml_declaration=True)
@@ -232,13 +275,14 @@ def _compute(input_path, cover=None):
             entries[arc] = _add_encoding_decl(source[arc])
             modified.append(arc)
 
-        # --- cover file replacement --------------------------------------- #
+        # --- cover file replacement (keep referenced old files) ----------- #
         for href in removed_cover_files:
             opf_dir = posixpath.dirname(opf_path) if opf_path else ""
             resolved = posixpath.normpath(posixpath.join(opf_dir, href)) if opf_dir else href
             if resolved in entries and resolved != cover_arc:
-                del entries[resolved]
-                dropped.append(resolved)
+                if not _cover_referenced(href, source, names):
+                    del entries[resolved]
+                    dropped.append(resolved)
 
         if cover_info is not None and cover_arc is not None:
             entries[cover_arc] = cover_info[0]
