@@ -20,7 +20,9 @@ OPF_NS = "http://www.idpf.org/2007/opf"
 
 # lxml preserves comments and namespace prefixes natively on round-trip, so the
 # OPF is edited with lxml and no global namespace registration is needed.
-_OPF_PARSER = ET.XMLParser(remove_comments=False)
+# resolve_entities=False + no_network=True: a hostile OPF must not exfiltrate
+# local files or fetch remote resources (XXE-safe).
+_OPF_PARSER = ET.XMLParser(remove_comments=False, resolve_entities=False, no_network=True)
 
 MIMETYPE_VALUE = b"application/epub+zip"
 
@@ -85,6 +87,25 @@ def _cover_referenced(href, source, names) -> bool:
             if data and needle in data:
                 return True
     return False
+
+
+def _choose_cover_href(ext, manifest_hrefs, names, opf_dir):
+    """Pick ``cover.<ext>``, or the smallest free ``cover-<n>.<ext>``.
+
+    ``cover.<ext>`` is used only when that href is not already declared in the
+    manifest and its resolved package path is not present in ``names``.
+    Otherwise ``cover-<n>.<ext>`` is chosen with the smallest free ``n``
+    (starting at 2), so the new cover never collides with an existing item or
+    entry.
+    """
+    candidate = "cover" + ext
+    n = 2
+    while True:
+        resolved = posixpath.normpath(posixpath.join(opf_dir, candidate)) if opf_dir else candidate
+        if candidate not in manifest_hrefs and resolved not in names:
+            return candidate, resolved
+        candidate = f"cover-{n}{ext}"
+        n += 1
 
 
 # --------------------------------------------------------------------------- #
@@ -153,6 +174,7 @@ def _compute(input_path, cover=None, fix_encoding=False):
         source = {n: reader.read(n) for n in names}
         opf_path = reader.opf_path
         manifest = list(reader.manifest)
+        manifest_hrefs = {m["href"] for m in manifest}
         spine = list(reader.spine)
 
         entries: Dict[str, bytes] = {n: source[n] for n in names}
@@ -242,14 +264,26 @@ def _compute(input_path, cover=None, fix_encoding=False):
                     while f"cover-image-{n}" in manifest_ids:
                         n += 1
                     new_cover_id = f"cover-image-{n}"
-                for item in list(manifest_el.findall("opf:item", NS)):
-                    if "cover-image" in (item.get("properties") or "").split():
-                        removed_cover_files.append(item.get("href", ""))
-                        manifest_el.remove(item)
-                        changed = True
                 opf_dir = posixpath.dirname(opf_path) if opf_path else ""
-                cover_href = "cover" + cext
-                cover_arc = posixpath.normpath(posixpath.join(opf_dir, cover_href)) if opf_dir else cover_href
+                # Replace the existing cover. A page-referenced old image keeps
+                # its manifest item (declared) but loses the cover-image
+                # property; an unreferenced old image is dropped entirely.
+                for item in list(manifest_el.findall("opf:item", NS)):
+                    props = (item.get("properties") or "").split()
+                    if "cover-image" in props:
+                        href = item.get("href", "")
+                        if _cover_referenced(href, source, names):
+                            remaining = [p for p in props if p != "cover-image"]
+                            if remaining:
+                                item.set("properties", " ".join(remaining))
+                            else:
+                                item.attrib.pop("properties", None)
+                            changed = True
+                        else:
+                            removed_cover_files.append(href)
+                            manifest_el.remove(item)
+                            changed = True
+                cover_href, cover_arc = _choose_cover_href(cext, manifest_hrefs, names, opf_dir)
                 item = ET.SubElement(manifest_el, f"{{{OPF_NS}}}item")
                 item.set("id", new_cover_id)
                 item.set("href", cover_href)
@@ -267,7 +301,7 @@ def _compute(input_path, cover=None, fix_encoding=False):
                 fixes.append(Fix("COVER-EMBED", f"embed cover image as '{cover_href}' (manifest id '{new_cover_id}')"))
 
             if changed:
-                entries[opf_path] = ET.tostring(opf_root, encoding="utf-8", xml_declaration=True)
+                entries[opf_path] = ET.tostring(opf_root.getroottree(), encoding="utf-8", xml_declaration=True)
                 modified.append(opf_path)
 
         # --- HTM-002 entry rewrite ---------------------------------------- #
@@ -275,14 +309,13 @@ def _compute(input_path, cover=None, fix_encoding=False):
             entries[arc] = _add_encoding_decl(source[arc])
             modified.append(arc)
 
-        # --- cover file replacement (keep referenced old files) ----------- #
+        # --- cover file replacement (drop unreferenced old cover files) ---- #
         for href in removed_cover_files:
             opf_dir = posixpath.dirname(opf_path) if opf_path else ""
             resolved = posixpath.normpath(posixpath.join(opf_dir, href)) if opf_dir else href
             if resolved in entries and resolved != cover_arc:
-                if not _cover_referenced(href, source, names):
-                    del entries[resolved]
-                    dropped.append(resolved)
+                del entries[resolved]
+                dropped.append(resolved)
 
         if cover_info is not None and cover_arc is not None:
             entries[cover_arc] = cover_info[0]

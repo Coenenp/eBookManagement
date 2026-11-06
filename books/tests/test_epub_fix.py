@@ -486,3 +486,95 @@ class EpubFixTests(SimpleTestCase):
         out = io.StringIO()
         call_command("epub_fix", str(src), cover=str(cover), stdout=out)
         self.assertIn("COVER-EMBED", out.getvalue())
+
+    # -- cover replacement: keep referenced old cover declared ----------------
+
+    def test_cover_kept_item_declared_without_cover_property(self):
+        from lxml import etree
+
+        files = valid_files()
+        # A page references the old cover, so the old file must stay. Its
+        # manifest item must also stay declared, only losing cover-image.
+        files["OEBPS/cover.xhtml"] = _xhtml(body='<img src="cover.jpg" alt="c"/>')
+        src = self._write("in.epub", files)
+        cover = self._cover_file("new.png", data=b"\x89PNG\r\n\x1a\n")
+        out = Path(fix_epub(src, cover=str(cover)))
+        with zipfile.ZipFile(out) as z:
+            names = z.namelist()
+            root = etree.fromstring(z.read("OEBPS/content.opf"))
+        NS = {"opf": "http://www.idpf.org/2007/opf"}
+        self.assertIn("OEBPS/cover.jpg", names)
+        manifest = root.find("opf:manifest", NS)
+        by_href = {it.get("href"): it for it in manifest.findall("opf:item", NS)}
+        self.assertIn("cover.jpg", by_href)
+        self.assertNotIn("cover-image", (by_href["cover.jpg"].get("properties") or "").split())
+        cover_items = [
+            it for it in manifest.findall("opf:item", NS)
+            if "cover-image" in (it.get("properties") or "").split()
+        ]
+        self.assertEqual(len(cover_items), 1)
+        self.assertEqual(cover_items[0].get("href"), "cover.png")
+
+    # -- XXE-safe OPF parsing -------------------------------------------------
+
+    def test_opf_external_entity_not_resolved(self):
+        secret = self._path("secret.txt")
+        secret.write_text("XXE_LEAKED_MARKER")
+        files = valid_files()
+        opf = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<!DOCTYPE package [<!ENTITY xxe SYSTEM "file://' + str(secret) + '">]>\n'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="uid">'
+            '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            '<dc:identifier id="uid">urn:uuid:test</dc:identifier>'
+            '<dc:title>&xxe;</dc:title><dc:language>en</dc:language></metadata>'
+            '<manifest><item id="c1" href="chapter1.xhtml" media-type="image/jpeg"/></manifest>'
+            '<spine><itemref idref="c1"/></spine></package>'
+        ).encode("utf-8")
+        files["OEBPS/content.opf"] = opf
+        src = self._write("in.epub", files)
+        out = Path(fix_epub(src))
+        with zipfile.ZipFile(out) as z:
+            out_opf = z.read("OEBPS/content.opf")
+        self.assertNotIn(b"XXE_LEAKED_MARKER", out_opf)
+
+    # -- prolog comment survives serialization -------------------------------
+
+    def test_comment_before_root_survives(self):
+        files = valid_files()
+        items = [("c1", "chapter1.xhtml", "image/jpeg", "")] + [
+            it for it in DEFAULT_ITEMS if it[0] != "c1"
+        ]
+        opf = (
+            _opf(items, DEFAULT_SPINE).decode("utf-8").replace(
+                "?>\n", "?>\n<!-- leading comment -->\n", 1
+            ).encode("utf-8")
+        )
+        files["OEBPS/content.opf"] = opf
+        src = self._write("in.epub", files)
+        out = Path(fix_epub(src))
+        with zipfile.ZipFile(out) as z:
+            out_opf = z.read("OEBPS/content.opf").decode("utf-8")
+        self.assertIn("<!-- leading comment -->", out_opf)
+
+    # -- cover href collision -------------------------------------------------
+
+    def test_cover_href_used_when_free(self):
+        files = valid_files()
+        items = [it for it in DEFAULT_ITEMS if it[0] != "cover-image"]
+        files["OEBPS/content.opf"] = _opf(items, DEFAULT_SPINE)
+        del files["OEBPS/cover.jpg"]
+        src = self._write("in.epub", files)
+        cover = self._cover_file("new.jpg")
+        out = Path(fix_epub(src, cover=str(cover)))
+        with zipfile.ZipFile(out) as z:
+            self.assertIn("OEBPS/cover.jpg", z.namelist())
+
+    def test_cover_href_collision_uses_numbered(self):
+        files = valid_files()  # "cover.jpg" already declared and present
+        src = self._write("in.epub", files)
+        cover = self._cover_file("new.jpg")
+        out = Path(fix_epub(src, cover=str(cover)))
+        with zipfile.ZipFile(out) as z:
+            names = z.namelist()
+        self.assertIn("OEBPS/cover-2.jpg", names)
