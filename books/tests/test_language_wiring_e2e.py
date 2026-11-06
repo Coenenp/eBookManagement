@@ -1,6 +1,8 @@
-"""End-to-end test: scanning a Dutch EPUB registered in an English folder must
-resolve FinalMetadata.language to the content language ("nl"), write exactly one
-Content Scan language row, and raise no language flag."""
+"""End-to-end test: scanning a Dutch EPUB whose embedded metadata declares
+English (filed in an English folder) must resolve FinalMetadata.language to the
+content language ("nl") and record the embedded contradiction as designed
+(LANGUAGE_DISAGREEMENT), which the resolver must not clobber. An English-only
+book in the English folder must resolve cleanly to "en" with no flag."""
 
 import shutil
 import tempfile
@@ -33,14 +35,42 @@ DUTCH_CHAPTER = (
     "natuurgebied dat op de werelderfgoedlijst van UNESCO staat."
 )
 
+ENGLISH_CHAPTER = (
+    "English is a West Germanic language that originated in medieval England and "
+    "is now the most widely spoken language in the world. It is the official or "
+    "primary language of many countries, including the United Kingdom, the United "
+    "States, Canada, Australia, and New Zealand. English literature has produced "
+    "celebrated authors such as William Shakespeare, Charles Dickens, Jane Austen, "
+    "and Mark Twain. The language has a rich vocabulary borrowed from Latin, "
+    "French, and Germanic roots, giving it one of the largest lexicons of any "
+    "language. English grammar is relatively simple compared to many other "
+    "languages, but its spelling is famously irregular and often confuses learners. "
+    "Every year thousands of new words are added to English dictionaries as the "
+    "language continues to evolve and adapt to modern life. English is the dominant "
+    "language of science, technology, business, and international communication. "
+    "Many people study English as a second language because it opens doors to "
+    "education and employment around the world. The history of the English language "
+    "is a story of invasion, trade, and cultural exchange over more than a thousand "
+    "years. Writers and poets have shaped English into a flexible and expressive "
+    "medium, capable of both formal prose and everyday conversation. Today English "
+    "is spoken by hundreds of millions of people across every continent."
+)
 
-def _write_dutch_epub(directory):
-    """Write a real EPUB whose chapters are all Dutch text."""
+
+def _write_dutch_epub(directory, embedded_language=None):
+    """Write a real EPUB whose chapters are all Dutch text.
+
+    ``embedded_language`` optionally declares a (contradicting) dc:language in
+    the EPUB's own metadata, so the extraction pipeline records it as embedded
+    metadata.
+    """
     from ebooklib import epub
 
     book = epub.EpubBook()
     book.set_identifier("test-dutch-1")
     book.set_title("Nederlands Testboek")
+    if embedded_language:
+        book.set_language(embedded_language)
 
     chapters = []
     for i in range(12):
@@ -63,24 +93,69 @@ def _write_dutch_epub(directory):
     return str(path)
 
 
+def _write_english_epub(directory):
+    """Write a real EPUB whose chapters are all English text."""
+    from ebooklib import epub
+
+    book = epub.EpubBook()
+    book.set_identifier("test-english-1")
+    book.set_title("English Test Book")
+
+    chapters = []
+    for i in range(12):
+        ch = epub.EpubHtml(
+            title=f"Chapter {i}",
+            file_name=f"chap_{i}.xhtml",
+        )
+        ch.content = f"<html><body><p>{ENGLISH_CHAPTER * 3}</p></body></html>"
+        book.add_item(ch)
+        chapters.append(ch)
+
+    book.toc = tuple(chapters)
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+    book.spine = ["nav"] + chapters
+
+    path = Path(directory) / "english_test_book.epub"
+    epub.write_epub(str(path), book)
+    return str(path)
+
+
 class LanguageSliceWiringEndToEndTests(TestCase):
     def setUp(self):
-        self.temp_dir = tempfile.mkdtemp(prefix="lang_wiring_")
-        self.addCleanup(lambda: shutil.rmtree(self.temp_dir, ignore_errors=True))
-
-    def test_scan_dutch_epub_in_english_folder_resolves_nl(self):
-        epub_path = _write_dutch_epub(self.temp_dir)
-        folder = ScanFolder.objects.create(
+        self.en_dir = tempfile.mkdtemp(prefix="lang_wiring_en_")
+        self.nl_dir = tempfile.mkdtemp(prefix="lang_wiring_nl_")
+        self.addCleanup(lambda: shutil.rmtree(self.en_dir, ignore_errors=True))
+        self.addCleanup(lambda: shutil.rmtree(self.nl_dir, ignore_errors=True))
+        # Register both en and nl as library scan-folder languages. This makes
+        # "nl" a registered (in-library) code, so the flag below is the embedded
+        # contradiction (the book's own metadata claims English), not an
+        # out-of-library detection.
+        self.en_folder = ScanFolder.objects.create(
             name="English Folder",
-            path=self.temp_dir,
+            path=self.en_dir,
             content_type="ebooks",
             language="en",
         )
+        ScanFolder.objects.create(
+            name="Nederlands Folder",
+            path=self.nl_dir,
+            content_type="ebooks",
+            language="nl",
+        )
 
-        scan_directory(self.temp_dir, folder, enable_external_apis=False)
+    def test_dutch_book_in_english_folder_records_contradiction(self):
+        # A Dutch book filed in the English folder whose embedded metadata
+        # declares English: the content code ("nl") wins, and the embedded
+        # contradiction is recorded as designed (LANGUAGE_DISAGREEMENT), which
+        # the resolver must persist.
+        _write_dutch_epub(self.en_dir, embedded_language="en")
 
-        fm = FinalMetadata.objects.get(book__scan_folder=folder)
+        scan_directory(self.en_dir, self.en_folder, enable_external_apis=False)
+
+        fm = FinalMetadata.objects.get(book__scan_folder=self.en_folder)
         self.assertEqual(fm.language, "nl")
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_DISAGREEMENT)
 
         rows = BookMetadata.objects.filter(
             book=fm.book,
@@ -90,7 +165,15 @@ class LanguageSliceWiringEndToEndTests(TestCase):
         self.assertEqual(rows.count(), 1)
         self.assertEqual(rows.first().field_value, "nl")
 
-        # No LANGUAGE flag may be raised (folder contradiction is not an error).
+    def test_english_book_in_english_folder_clean(self):
+        # "en only" case: an English book in the English folder resolves to "en"
+        # with a clean result (no language flag, no contradiction).
+        _write_english_epub(self.en_dir)
+
+        scan_directory(self.en_dir, self.en_folder, enable_external_apis=False)
+
+        fm = FinalMetadata.objects.get(book__scan_folder=self.en_folder)
+        self.assertEqual(fm.language, "en")
         self.assertNotIn(
             fm.unresolved_reason,
             {UnresolvedReason.LANGUAGE_DISAGREEMENT, UnresolvedReason.LANGUAGE_UNDETERMINED},

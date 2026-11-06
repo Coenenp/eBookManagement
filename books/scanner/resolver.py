@@ -94,7 +94,34 @@ def resolve_final_metadata(book, text_slices=None):
 
     # Confidence aggregation
     final_metadata.calculate_overall_confidence()
-    final_metadata.save()
+    # Persist only the fields this resolver computes. detect_language writes the
+    # language flag (unresolved_reason) and the verdict stage writes the
+    # verification reasons / ambiguous_isbn directly on their own save; a full
+    # save here would clobber those with the stale values loaded by
+    # get_or_create above (losing LANGUAGE_DISAGREEMENT and letting
+    # finalize_unresolved_reason stamp NEITHER_SOURCE).
+    final_metadata.save(
+        update_fields=[
+            "final_title",
+            "final_title_confidence",
+            "final_author",
+            "final_author_confidence",
+            "final_series",
+            "final_series_number",
+            "final_series_confidence",
+            "final_cover_path",
+            "final_cover_confidence",
+            "has_cover",
+            "final_publisher",
+            "final_publisher_confidence",
+            "isbn",
+            "publication_year",
+            "description",
+            "language",
+            "overall_confidence",
+            "last_updated",
+        ]
+    )
 
     # Flag books no external source resolved (routing: "flag what neither
     # source resolves").

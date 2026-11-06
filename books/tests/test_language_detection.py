@@ -403,3 +403,24 @@ class ResolverLanguageTests(TestCase):
         resolve_final_metadata(book, text_slices=[DUTCH_TEXT, DUTCH_TEXT])
         fm = FinalMetadata.objects.get(book=book)
         self.assertEqual(fm.language, "nl")
+
+    def test_resolve_persists_language_disagreement_flag(self):
+        from books.scanner.resolver import resolve_final_metadata
+
+        # Embedded metadata claims English; the Dutch content votes "nl" and
+        # contradicts it, so detect_language raises LANGUAGE_DISAGREEMENT. The
+        # resolver must persist that flag rather than clobber it with its own
+        # save (which would let finalize_unresolved_reason stamp NEITHER_SOURCE).
+        nl_folder = ScanFolder.objects.create(path="/tmp/resolve-flag", name="Nederlands", language="nl")
+        book = Book.objects.create(content_type="ebook", scan_folder=nl_folder)
+        source, _ = DataSource.objects.get_or_create(name=DataSource.INITIAL_SCAN, defaults={"trust_level": 0.5})
+        BookMetadata.objects.create(
+            book=book, field_name="language", field_value="eng",
+            source=source, confidence=0.9, is_active=True,
+        )
+
+        resolve_final_metadata(book, text_slices=[DUTCH_TEXT, DUTCH_TEXT])
+
+        fm = FinalMetadata.objects.get(book=book)
+        self.assertEqual(fm.language, "nl")
+        self.assertEqual(fm.unresolved_reason, UnresolvedReason.LANGUAGE_DISAGREEMENT)
