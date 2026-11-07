@@ -538,6 +538,26 @@ class EpubFixTests(SimpleTestCase):
             out_opf = z.read("OEBPS/content.opf")
         self.assertNotIn(b"XXE_LEAKED_MARKER", out_opf)
 
+    def test_write_epub_refuses_internal_entity(self):
+        files = valid_files()
+        opf = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<!DOCTYPE package [<!ENTITY foo "bar">]>\n'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="uid">'
+            '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            '<dc:identifier id="uid">urn:uuid:test</dc:identifier>'
+            '<dc:title>Test</dc:title><dc:language>en</dc:language></metadata>'
+            '<manifest><item id="c1" href="chapter1.xhtml" media-type="application/xhtml+xml"/></manifest>'
+            '<spine><itemref idref="c1"/></spine></package>'
+        ).encode("utf-8")
+        files["OEBPS/content.opf"] = opf
+        src = self._write("in.epub", files)
+        out = self._path("out.epub")
+        with self.assertRaisesRegex(ValueError, "OPF declares entities"):
+            write_epub(src, out)
+        self.assertFalse(out.exists())
+        self.assertFalse(Path(str(out) + ".part").exists())
+
     # -- prolog comment survives serialization -------------------------------
 
     def test_comment_before_root_survives(self):

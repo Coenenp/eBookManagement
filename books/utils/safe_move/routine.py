@@ -123,7 +123,12 @@ def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
     tgt.parent.mkdir(parents=True, exist_ok=True)
     repacked = False
     if repack_epub and src.suffix.lower() in _EPUB_SUFFIXES:
-        write_epub(str(src), str(tmp), cover_path=cover_path, fix_encoding=fix_encoding)
+        try:
+            write_epub(str(src), str(tmp), cover_path=cover_path, fix_encoding=fix_encoding)
+        except Exception as exc:  # BadZipFile, ValueError, KeyError, lxml errors
+            _remove(tmp)
+            _remove(str(tmp) + ".part")
+            raise NeedsReview([f"repack-failed:{type(exc).__name__}"]) from exc
         repacked = True
     else:
         shutil.copy2(str(src), str(tmp))
@@ -174,6 +179,14 @@ def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
     state["archived_sha256"] = archived_hash
     _notify(on_step, "archived", state)
 
+    # Re-check that the target was not created by a concurrent writer between
+    # the initial existence check and the atomic replace below.
+    if tgt.exists():
+        _remove(tmp)
+        _remove(str(tmp) + ".part")
+        _remove(archived_path)
+        raise FileExistsError(f"target already exists: {target}")
+
     # Commit: atomically replace the target with the verified temporary file.
     os.replace(str(tmp), str(tgt))
     _fsync_dir(tgt.parent)
@@ -213,6 +226,8 @@ def finalize_move(result):
         raise NeedsReview(["archive-hash"])
     if not Path(result.target).is_file():
         raise NeedsReview(["target-missing"])
+    if _sha256(result.target) != result.new_sha256:
+        raise NeedsReview(["target-hash"])
 
     _notify(result.on_step, "finalized", state)
     os.unlink(result.source)
