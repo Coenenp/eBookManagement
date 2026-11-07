@@ -33,6 +33,7 @@ from books.scanner.parsing import parse_path_metadata
 from books.scanner.resolver import resolve_final_metadata
 from books.utils.author import attach_authors
 from books.utils.cover_cache import CoverCache
+from books.utils.safe_move.archive import ARCHIVE_FOLDER_NAME
 from books.utils.cover_extractor import (
     ArchiveCoverExtractor,
     CoverExtractionError,
@@ -430,6 +431,8 @@ def discover_books_in_folder(directory, ebook_extensions=None, cover_extensions=
 def _collect_files(directory, ebook_exts, cover_exts):
     ebook_files, cover_files, opf_files = [], [], []
     for root, dirs, files in os.walk(directory):
+        # Never enumerate the archive mirror directory.
+        dirs[:] = [d for d in dirs if d != ARCHIVE_FOLDER_NAME]
         for file in files:
             file_path = os.path.join(root, file)
             ext = Path(file).suffix.lower()

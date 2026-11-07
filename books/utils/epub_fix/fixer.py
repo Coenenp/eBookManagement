@@ -6,6 +6,7 @@ never rewrites the bytes of an entry that does not need a change.
 """
 
 import posixpath
+import re
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,6 +26,12 @@ OPF_NS = "http://www.idpf.org/2007/opf"
 _OPF_PARSER = ET.XMLParser(remove_comments=False, resolve_entities=False, no_network=True)
 
 MIMETYPE_VALUE = b"application/epub+zip"
+
+# An internal ENTITY declaration in the OPF (``<!ENTITY name "value">``) is a
+# red flag for hostile input; the fixer refuses to write any output rather than
+# round-trip it. External entities (SYSTEM/PUBLIC) are already handled by the
+# XXE-safe parser and are deliberately not matched here.
+_OPF_INTERNAL_ENTITY = re.compile(rb"<!\s*ENTITY\s+[\w:.-]+\s+\"", re.IGNORECASE)
 
 IMAGE_MEDIA_BY_EXT = {
     ".jpg": "image/jpeg",
@@ -224,6 +231,8 @@ def _compute(input_path, cover=None, fix_encoding=False):
 
         # --- OPF mutation ------------------------------------------------- #
         opf_bytes = source.get(opf_path) if opf_path else None
+        if opf_bytes is not None and _OPF_INTERNAL_ENTITY.search(opf_bytes):
+            raise ValueError("OPF declares entities")
         opf_root = ET.fromstring(opf_bytes, _OPF_PARSER) if opf_bytes is not None else None
         cover_arc: Optional[str] = None
         removed_cover_files: List[str] = []

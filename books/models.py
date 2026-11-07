@@ -162,6 +162,22 @@ class DataSource(models.Model):
         ordering = ["-trust_level", "name"]
 
 
+def _paths_overlap(a, b):
+    """True when ``a`` equals, contains, or lies inside ``b`` (either direction)."""
+    try:
+        pa = Path(a).resolve()
+        pb = Path(b).resolve()
+    except (OSError, RuntimeError):
+        return False
+    for first, second in ((pa, pb), (pb, pa)):
+        try:
+            first.relative_to(second)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
 class ScanFolder(HashFieldMixin, models.Model):
     CONTENT_TYPE_CHOICES = [
         ("ebooks", "Ebooks"),
@@ -214,6 +230,32 @@ class ScanFolder(HashFieldMixin, models.Model):
                             raise ValidationError({"path": f'"{folder.name}" ({folder.path}) is a subfolder of this path. ' f"Remove the subfolder first."})
                     except (OSError, RuntimeError):
                         pass  # Skip unresolvable paths
+
+                # Reject any path that overlaps the archive location: the
+                # configured archive root, the default archive root of any
+                # existing scan folder, or a folder literally named after the
+                # archive folder.
+                from books.utils.safe_move.archive import ARCHIVE_FOLDER_NAME, default_archive_root
+
+                if Path(self.path).name == ARCHIVE_FOLDER_NAME:
+                    raise ValidationError(
+                        {"path": f'This folder is named "{ARCHIVE_FOLDER_NAME}".'}
+                    )
+
+                archive_roots = []
+                from django.conf import settings as _django_settings
+
+                configured_archive_root = getattr(_django_settings, "ARCHIVE_ROOT", None)
+                if configured_archive_root:
+                    archive_roots.append(str(configured_archive_root))
+                for other_folder in ScanFolder.objects.exclude(id=self.id):
+                    archive_roots.append(default_archive_root(other_folder.path))
+
+                for archive_root in archive_roots:
+                    if _paths_overlap(self.path, archive_root):
+                        raise ValidationError(
+                            {"path": f'This folder overlaps the archive location "{archive_root}".'}
+                        )
 
                 # Only validate if we can resolve the path
                 if path.exists():
@@ -987,6 +1029,7 @@ class BookMetadata(FinalMetadataSyncMixin, SourceConfidenceMixin, HashFieldMixin
 # such as ``from books.models import FinalMetadata`` keep working unchanged.
 from .models_api import APIAccessLog, BookAPICompleteness, ScanSession  # noqa: E402,F401
 from .models_metadata import FinalMetadata, UnresolvedReason  # noqa: E402,F401
+from .models_moves import FileMove  # noqa: E402,F401
 from .models_operations import (  # noqa: E402,F401
     AIFeedback,
     FileOperation,
