@@ -53,21 +53,43 @@ def _flag_companion_failure(parent, source):
     FileMove.objects.filter(pk=parent.pk).update(review_flags=flags)
 
 
+def _flag_companion_shared(parent, source):
+    """Append ``companion-shared:<file name>`` to the parent's review flags."""
+    name = Path(source).name
+    flag = f"companion-shared:{name}"
+    parent.refresh_from_db()
+    flags = list(parent.review_flags or [])
+    if flag not in flags:
+        flags.append(flag)
+    FileMove.objects.filter(pk=parent.pk).update(review_flags=flags)
+
+
 def _discover_companions(primary_file, target_path):
-    """Return ``[(source, db_field, target), ...]`` for the book's companions.
+    """Return ``([(source, db_field, target), ...], [shared_name, ...])``.
 
     Sources are ``BookFile.cover_path`` / ``BookFile.opf_path`` (tracked with a
     ``db_field``) plus any sidecar files ``CompanionFileFinder`` discovers. Each
     target is the main file's stem plus the companion's own extension, in the
     main file's target folder; two companions with the same extension get a
     `` (2)``, `` (3)`` suffix.
+
+    A cover/OPF path also referenced by another book, or a sidecar that belongs
+    to another book (another book's tracked cover/OPF path, or a file whose
+    stem matches another book's primary file), is never claimed: it is left in
+    place and reported in the returned ``shared`` list instead.
     """
     finder = CompanionFileFinder()
     target_folder = Path(target_path).parent
     main_stem = Path(target_path).stem
 
+    other = BookFile.objects.exclude(pk=primary_file.pk)
+    other_primary_stems = {Path(bf.file_path).stem for bf in other if bf.file_path}
+    other_tracked = {bf.cover_path for bf in other if bf.cover_path}
+    other_tracked |= {bf.opf_path for bf in other if bf.opf_path}
+
     ordered = []  # (source, db_field, extension)
     seen_sources = set()
+    shared = []
 
     def add(source, db_field):
         s = str(source)
@@ -77,10 +99,21 @@ def _discover_companions(primary_file, target_path):
         ordered.append((s, db_field, Path(s).suffix.lower()))
 
     if primary_file.cover_path and Path(primary_file.cover_path).is_file():
-        add(primary_file.cover_path, FileMove.DBField.COVER_PATH)
+        if str(primary_file.cover_path) in other_tracked:
+            shared.append(str(primary_file.cover_path))
+        else:
+            add(primary_file.cover_path, FileMove.DBField.COVER_PATH)
     if primary_file.opf_path and Path(primary_file.opf_path).is_file():
-        add(primary_file.opf_path, FileMove.DBField.OPF_PATH)
+        if str(primary_file.opf_path) in other_tracked:
+            shared.append(str(primary_file.opf_path))
+        else:
+            add(primary_file.opf_path, FileMove.DBField.OPF_PATH)
     for cf in finder.find_companion_files(primary_file.file_path):
+        s = str(cf)
+        if s in other_tracked or Path(s).stem in other_primary_stems:
+            if s not in shared and s not in seen_sources:
+                shared.append(s)
+            continue
         add(cf, "")
 
     result = []
@@ -93,7 +126,7 @@ def _discover_companions(primary_file, target_path):
             name = f"{main_stem}{ext}"
         seen_ext[ext] = n + 1
         result.append((source, db_field, str(target_folder / name)))
-    return result
+    return result, shared
 
 
 def _move_companion(book, parent, source, target, db_field, *, scan_folder, scan_label, archive_root):
@@ -292,7 +325,9 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
         return row
 
     # Discover companions while the main source still exists (finalize deletes it).
-    companions = _discover_companions(primary_file, target)
+    companions, shared = _discover_companions(primary_file, target)
+    for shared_source in shared:
+        _flag_companion_shared(row, shared_source)
 
     # (g) Finalize (delete the source only after re-verification), then purge
     # ledger state pending_deletion.

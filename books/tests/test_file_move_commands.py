@@ -258,6 +258,117 @@ class ResolverTests(TestCase):
         self.assertEqual(row.error, "archive-missing-after-source-removed")
         self.assertTrue(target.exists())  # nothing deleted
 
+    # -- negative deletion paths: a hash disagreeing with the journal must -----
+    # -- keep every file and end the row failed, never delete. ------------------
+
+    def test_resolve_archived_target_hash_differs_keeps_everything_fails(self):
+        src = self.scan_root / "book.txt"
+        src.write_bytes(b"data")
+        target = self.root / "Moved" / "book.txt"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b"tampered")  # hash differs from the journal's new_sha256
+        archive = self.archive_root / "Sample [To Delete] 1" / "book.txt"
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        archive.write_bytes(b"data")
+        h = _sha256(src)
+        row = self._row(FileMove.State.ARCHIVED, src, target, archive=archive,
+                        original=h, archived=h, new=h, book_file_path=str(src))
+        self.assertEqual(resolve_move(row), "failed")
+        row.refresh_from_db()
+        self.assertEqual(row.state, FileMove.State.FAILED)
+        self.assertTrue(row.error)
+        self.assertTrue(target.exists())   # kept (hash disagrees -> never delete)
+        self.assertTrue(src.exists())      # kept
+        self.assertTrue(archive.exists())  # kept
+
+    def test_resolve_planned_like_states_keep_archive_when_source_missing(self):
+        for state in (FileMove.State.PLANNED, FileMove.State.TMP_WRITTEN, FileMove.State.TMP_VERIFIED):
+            with self.subTest(state=state):
+                src = self.scan_root / "book.txt"  # never written -> source missing
+                archive = self.archive_root / "Sample [To Delete] 1" / "book.txt"
+                archive.parent.mkdir(parents=True, exist_ok=True)
+                archive.write_bytes(b"data")
+                h = _sha256(archive)
+                row = self._row(state, src, self.root / "Moved" / "book.txt",
+                                archive=archive, original=h)
+                self.assertEqual(resolve_move(row), "failed")
+                row.refresh_from_db()
+                self.assertEqual(row.state, FileMove.State.FAILED)
+                self.assertTrue(row.error)
+                self.assertTrue(archive.exists())  # never deleted
+
+    def test_resolve_planned_like_states_keep_archive_when_source_changed(self):
+        for state in (FileMove.State.PLANNED, FileMove.State.TMP_WRITTEN, FileMove.State.TMP_VERIFIED):
+            with self.subTest(state=state):
+                src = self.scan_root / "book.txt"
+                src.write_bytes(b"changed source")  # hash differs from original_sha256
+                archive = self.archive_root / "Sample [To Delete] 1" / "book.txt"
+                archive.parent.mkdir(parents=True, exist_ok=True)
+                archive.write_bytes(b"data")
+                original_h = _sha256(archive)  # journal says the original was "data"
+                row = self._row(state, src, self.root / "Moved" / "book.txt",
+                                archive=archive, original=original_h)
+                self.assertEqual(resolve_move(row), "failed")
+                row.refresh_from_db()
+                self.assertEqual(row.state, FileMove.State.FAILED)
+                self.assertTrue(row.error)
+                self.assertTrue(archive.exists())  # never deleted
+                self.assertTrue(src.exists())
+
+    def test_resolve_planned_like_states_keep_archive_when_archive_differs(self):
+        for state in (FileMove.State.PLANNED, FileMove.State.TMP_WRITTEN, FileMove.State.TMP_VERIFIED):
+            with self.subTest(state=state):
+                src = self.scan_root / "book.txt"
+                src.write_bytes(b"data")
+                archive = self.archive_root / "Sample [To Delete] 1" / "book.txt"
+                archive.parent.mkdir(parents=True, exist_ok=True)
+                archive.write_bytes(b"other file, do not delete")  # hash differs
+                h = _sha256(src)
+                row = self._row(state, src, self.root / "Moved" / "book.txt",
+                                archive=archive, original=h)
+                self.assertEqual(resolve_move(row), "failed")
+                row.refresh_from_db()
+                self.assertEqual(row.state, FileMove.State.FAILED)
+                self.assertTrue(row.error)
+                self.assertTrue(archive.exists())  # never deleted
+                self.assertTrue(src.exists())
+
+    def test_resolve_db_updated_source_gone_target_hash_differs_fails(self):
+        src = self.scan_root / "book.txt"  # never written -> already gone
+        target = self.root / "Moved" / "book.txt"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b"tampered")  # hash differs from new_sha256
+        archive = self.archive_root / "Sample [To Delete] 1" / "book.txt"
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        archive.write_bytes(b"data")
+        h = _sha256(archive)
+        row = self._row(FileMove.State.DB_UPDATED, src, target, archive=archive,
+                        original=h, archived=h, new=h, book_file_path=str(target))
+        self.assertEqual(resolve_move(row), "failed")
+        row.refresh_from_db()
+        self.assertEqual(row.state, FileMove.State.FAILED)
+        self.assertTrue(row.error)
+        self.assertTrue(target.exists())   # kept (hash disagrees)
+        self.assertTrue(archive.exists())  # kept
+
+    def test_resolve_db_updated_source_gone_archive_hash_differs_fails(self):
+        src = self.scan_root / "book.txt"  # never written -> already gone
+        target = self.root / "Moved" / "book.txt"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b"data")
+        archive = self.archive_root / "Sample [To Delete] 1" / "book.txt"
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        archive.write_bytes(b"other file")  # hash differs from archived_sha256
+        h = _sha256(target)
+        row = self._row(FileMove.State.DB_UPDATED, src, target, archive=archive,
+                        original=h, archived=h, new=h, book_file_path=str(target))
+        self.assertEqual(resolve_move(row), "failed")
+        row.refresh_from_db()
+        self.assertEqual(row.state, FileMove.State.FAILED)
+        self.assertTrue(row.error)
+        self.assertTrue(target.exists())   # kept
+        self.assertTrue(archive.exists())  # kept (hash disagrees)
+
     # -- child (companion) rows recover against db_field ----------------------
 
     def _child_row(self, state, source, target, *, db_field=FileMove.DBField.COVER_PATH,

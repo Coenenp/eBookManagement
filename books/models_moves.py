@@ -41,7 +41,7 @@ class FileMove(models.Model):
     book = models.ForeignKey(Book, on_delete=models.SET_NULL, null=True, blank=True, related_name="file_moves")
 
     parent = models.ForeignKey(
-        "self", on_delete=models.CASCADE, null=True, blank=True, related_name="companion_moves"
+        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="companion_moves"
     )
     kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.MAIN)
     db_field = models.CharField(max_length=32, choices=DBField.choices, blank=True, default="")

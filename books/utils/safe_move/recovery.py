@@ -53,6 +53,16 @@ def _archive_matches(row):
     return bool(expected) and _sha256(row.archived_path) == expected
 
 
+def _archive_present(row):
+    return bool(row.archived_path) and Path(row.archived_path).is_file()
+
+
+def _source_matches(row):
+    if not row.source_path or not Path(row.source_path).is_file():
+        return False
+    return bool(row.original_sha256) and _sha256(row.source_path) == row.original_sha256
+
+
 def _remove_archive_if_match(row):
     if _archive_matches(row):
         _remove(row.archived_path)
@@ -140,9 +150,20 @@ def resolve_move(row, apply=True):
             _remove(row.tmp_path)
             _remove(row.tmp_path + ".part")
             # A partial archive copy may have been written before the crash;
-            # remove it when it matches the original hash.
-            _remove_archive_if_match(row)
-            _set_state(row, S.ROLLED_BACK)
+            # remove it only when the source is still intact and both the
+            # source and the archive hash to the journal's original. Otherwise
+            # keep every file and fail (the archive may be the only good copy).
+            if _archive_present(row):
+                if _source_matches(row) and _archive_matches(row):
+                    _remove(row.archived_path)
+                    _set_state(row, S.ROLLED_BACK)
+                else:
+                    FileMove.objects.filter(pk=row.pk).update(
+                        state=S.FAILED, error="archive-unverifiable-before-rollback"
+                    )
+                    return "failed"
+            else:
+                _set_state(row, S.ROLLED_BACK)
         return "rolled_back"
 
     if state == S.ARCHIVED:
@@ -153,6 +174,12 @@ def resolve_move(row, apply=True):
             # advanced to committed; remove the target too when it is ours.
             pf = _book_file(row)
             tgt = Path(row.target_path)
+            if tgt.is_file() and row.new_sha256 and _sha256(tgt) != row.new_sha256:
+                # Target hash disagrees with the journal: keep every file and fail.
+                FileMove.objects.filter(pk=row.pk).update(
+                    state=S.FAILED, error="target-hash-mismatch"
+                )
+                return "failed"
             if (
                 tgt.is_file()
                 and row.new_sha256

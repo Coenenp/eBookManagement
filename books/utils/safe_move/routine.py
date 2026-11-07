@@ -143,6 +143,7 @@ def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
     # Check B: structural verification of the temporary file.
     suffix = src.suffix.lower()
     review_flags: List[str] = []
+    verified_hash = None
     if suffix in _EPUB_SUFFIXES:
         report = check_epub(str(tmp))
         blocking = sorted({f.code for f in report.findings if f.code in _BLOCKING_CODES})
@@ -160,12 +161,13 @@ def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
             _remove(tmp)
             raise NeedsReview(["zip-corrupt"])
     else:
-        if _sha256(tmp) != src_hash:
+        verified_hash = _sha256(tmp)
+        if verified_hash != src_hash:
             _remove(tmp)
             raise NeedsReview(["hash-mismatch"])
 
     state["review_flags"] = review_flags
-    state["new_sha256"] = _sha256(tmp)
+    state["new_sha256"] = verified_hash if verified_hash is not None else _sha256(tmp)
     _notify(on_step, "tmp_verified", state)
 
     # Archive the original (copy2), then verify the copy matches (check D).
