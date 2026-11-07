@@ -165,6 +165,7 @@ def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
             raise NeedsReview(["hash-mismatch"])
 
     state["review_flags"] = review_flags
+    state["new_sha256"] = _sha256(tmp)
     _notify(on_step, "tmp_verified", state)
 
     # Archive the original (copy2), then verify the copy matches (check D).
