@@ -265,3 +265,138 @@ class SafeMoveBookTests(TestCase):
         self.assertTrue(src.exists())
         self.assertFalse(target.exists())
         self.assertFalse(Path(row.archived_path).exists())
+
+    # -- item 1: safe_move_book failures --------------------------------------
+
+    def test_missing_source_ends_failed(self):
+        book, src = self._make_book("sub/book.txt", data=b"gone soon")
+        src.unlink()
+        target = self.target_dir / "book.txt"
+        with self.assertRaises(FileNotFoundError):
+            safe_move_book(book, str(target))
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.FAILED)
+        self.assertTrue(row.error)
+
+    def test_existing_target_ends_failed(self):
+        book, src = self._make_book("sub/book.txt", data=b"keep me")
+        target = self.target_dir / "book.txt"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"already here")
+        with self.assertRaises(FileExistsError):
+            safe_move_book(book, str(target))
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.FAILED)
+        self.assertTrue(src.exists())
+
+    def test_oserror_at_archive_step_ends_failed_and_cleans_up(self):
+        book, src = self._make_book("sub/book.txt", data=b"keep me")
+        target = self.target_dir / "book.txt"
+        calls = []
+
+        def fake_fsync(path):
+            calls.append(str(path))
+            if len(calls) == 2:  # second fsync is the archive copy
+                raise OSError("fsync failed")
+
+        with mock.patch("books.utils.safe_move.routine._fsync_file", side_effect=fake_fsync):
+            with self.assertRaises(OSError):
+                safe_move_book(book, str(target))
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.FAILED)
+        self.assertTrue(row.error)
+        self.assertTrue(src.exists())  # source intact
+        self.assertFalse(target.exists())
+        self.assertFalse(Path(str(target) + ".moving").exists())
+        self.assertFalse(Path(row.archived_path).exists())  # archive removed
+
+    # -- item 5: history row + stale saves ------------------------------------
+
+    def test_check_c_failure_marks_history_reverted(self):
+        book, src = self._make_book("sub/book.txt", data=b"verify me")
+        target = self.target_dir / "book.txt"
+        with mock.patch("books.utils.safe_move.book._check_c_passes", return_value=False):
+            row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.ROLLED_BACK)
+        op = FileOperation.objects.get(book=book, operation_type="rename")
+        self.assertEqual(op.status, "reverted")
+
+    def test_move_preserves_final_metadata_fields(self):
+        book, src = self._make_book("sub/book.txt", data=b"move me")
+        fm = FinalMetadata.objects.get(book=book)
+        fm.language = "en"
+        fm.save(update_fields=["language"])
+        target = self.target_dir / "book.txt"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        fm.refresh_from_db()
+        self.assertEqual(fm.language, "en")  # not clobbered by a full save
+
+    # -- item 6/7/9: companions ----------------------------------------------
+
+    def _make_book_with_companions(self):
+        book, src = self._make_book("sub/book.pdf", data=b"%PDF-1.4 fake pdf")
+        sub = src.parent
+        cover = sub / "cover.jpg"
+        cover.write_bytes(b"\xff\xd8\xff\xd9")
+        opf = sub / "book.opf"
+        opf.write_bytes(b"<package></package>")
+        txt = sub / "book.txt"
+        txt.write_bytes(b"sidecar text")
+        bf = BookFile.objects.get(book=book)
+        bf.cover_path = str(cover)
+        bf.opf_path = str(opf)
+        bf.save(update_fields=["cover_path", "opf_path"])
+        return book, src, cover, opf, txt
+
+    def test_book_with_companions_moves_completely(self):
+        book, src, cover, opf, txt = self._make_book_with_companions()
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        # Main moved, source gone.
+        self.assertFalse(src.exists())
+        self.assertTrue(target.is_file())
+        # Companions recreated under the new stem in the target folder.
+        self.assertTrue((self.target_dir / "book.jpg").is_file())
+        self.assertTrue((self.target_dir / "book.opf").is_file())
+        self.assertTrue((self.target_dir / "book.txt").is_file())
+        # Companion originals gone; archive copies present.
+        self.assertFalse(cover.exists())
+        self.assertFalse(opf.exists())
+        self.assertFalse(txt.exists())
+        children = FileMove.objects.filter(parent=row, kind=FileMove.Kind.COMPANION)
+        self.assertEqual(children.count(), 3)
+        for c in children:
+            self.assertEqual(c.state, FileMove.State.PENDING_DELETION)
+            self.assertTrue(Path(c.archived_path).is_file())
+        # DB fields updated.
+        bf = BookFile.objects.get(book=book)
+        self.assertEqual(bf.file_path, str(target))
+        self.assertEqual(bf.cover_path, str(self.target_dir / "book.jpg"))
+        self.assertEqual(bf.opf_path, str(self.target_dir / "book.opf"))
+
+    def test_failing_companion_leaves_main_done_and_flags_parent(self):
+        book, src, cover, opf, txt = self._make_book_with_companions()
+        target = self.target_dir / "book.pdf"
+        real = safe_move_file
+
+        def fake(source, tgt, **kw):
+            if str(source).endswith("book.txt"):
+                raise NeedsReview(["companion-bad"])
+            return real(source, tgt, **kw)
+
+        with mock.patch("books.utils.safe_move.book.safe_move_file", side_effect=fake):
+            row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)  # main done
+        self.assertFalse(src.exists())
+        self.assertTrue(target.is_file())
+        self.assertTrue((self.target_dir / "book.jpg").is_file())
+        self.assertTrue((self.target_dir / "book.opf").is_file())
+        # Failing companion: original in place, no target, flag on parent.
+        self.assertTrue(txt.exists())
+        self.assertFalse((self.target_dir / "book.txt").exists())
+        row.refresh_from_db()
+        self.assertIn("companion-failed:book.txt", row.review_flags)
+        child = FileMove.objects.get(parent=row, source_path=str(txt))
+        self.assertEqual(child.state, FileMove.State.NEEDS_REVIEW)

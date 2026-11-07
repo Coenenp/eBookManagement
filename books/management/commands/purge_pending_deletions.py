@@ -5,8 +5,10 @@ Usage::
     python manage.py purge_pending_deletions [--older-than DAYS] [--limit M]
     python manage.py purge_pending_deletions --confirm N [--older-than DAYS]
 
-Without ``--confirm`` it lists every eligible row and deletes nothing (exit 0).
-With ``--confirm N`` it deletes the archive files only when ``N`` exactly
+Without ``--confirm`` it lists every eligible row and deletes nothing, and it
+never writes (no row is demoted, no file deleted). With ``--confirm N`` it
+demotes definite mismatches to ``failed_verification``, leaves unreadable rows
+``pending_deletion``, and deletes the archive files only when ``N`` exactly
 matches the eligible count computed at run time; otherwise it deletes nothing
 and exits with an error. Only the archive file is deleted (never the library
 source, which was already removed by ``finalize_move``); empty folders below
@@ -25,22 +27,38 @@ from books.utils.safe_move.archive import default_archive_root
 from books.utils.safe_move.routine import _sha256
 
 
-def _row_passes(row):
-    """A pending-deletion row is purgeable only when its archive copy and its
-    target both verify against the recorded hashes."""
-    if not row.archived_path or not Path(row.archived_path).is_file():
-        return False
-    if _sha256(row.archived_path) != row.original_sha256:
-        return False
+def _row_reason(row):
+    """Return a failure reason for a pending-deletion row, or None if purgeable.
+
+    Reasons: ``archive-missing``, ``archive-hash``, ``target-changed``,
+    ``path-changed`` (the DB no longer points at the target via the row's
+    ``db_field``), or ``unreadable`` (an OSError reading a file).
+    """
+    if not row.archived_path:
+        return "archive-missing"
+    if not Path(row.archived_path).is_file():
+        return "archive-missing"
+    try:
+        archive_hash = _sha256(row.archived_path)
+    except OSError:
+        return "unreadable"
+    if archive_hash != row.original_sha256:
+        return "archive-hash"
+
     book = row.book
     pf = book.primary_file if book is not None else None
-    if pf is None or pf.file_path != row.target_path:
-        return False
+    field = row.db_field if row.kind == FileMove.Kind.COMPANION else FileMove.DBField.FILE_PATH
+    if field and (pf is None or getattr(pf, field) != row.target_path):
+        return "path-changed"
     if not Path(row.target_path).is_file():
-        return False
-    if _sha256(row.target_path) != row.new_sha256:
-        return False
-    return True
+        return "target-changed"
+    try:
+        target_hash = _sha256(row.target_path)
+    except OSError:
+        return "unreadable"
+    if target_hash != row.new_sha256:
+        return "target-changed"
+    return None
 
 
 def _prune_empty_dirs(path, archive_root):
@@ -81,19 +99,19 @@ class Command(BaseCommand):
             qs = qs[:limit]
 
         rows = list(qs)
-        eligible = [r for r in rows if _row_passes(r)]
-        failed = [r for r in rows if r not in eligible]
+        categorized = [(r, _row_reason(r)) for r in rows]
+        eligible = [r for r, reason in categorized if reason is None]
+        failed = [(r, reason) for r, reason in categorized if reason is not None]
 
-        # A row that fails verification is marked and skipped, never purged.
-        for r in failed:
-            r.state = FileMove.State.FAILED_VERIFICATION
-            r.save(update_fields=["state", "updated_at"])
+        for r, reason in failed:
+            self.stdout.write(f"FAIL {r.pk} book={r.book_id} reason={reason} {r.archived_path}")
 
         count = len(eligible)
         for r in eligible:
             self.stdout.write(f"{r.pk} book={r.book_id} {r.archived_path}")
 
         if confirm is None:
+            # Dry run: report only, write nothing (no state changes, no deletes).
             self.stdout.write(f"{count} eligible row(s); no files deleted")
             return
 
@@ -102,14 +120,24 @@ class Command(BaseCommand):
                 f"confirmation count {confirm} does not match eligible count {count}; nothing deleted"
             )
 
+        # Demote definite mismatches to failed_verification; unreadable rows
+        # stay pending_deletion (re-reported, not demoted).
+        for r, reason in failed:
+            if reason != "unreadable":
+                r.state = FileMove.State.FAILED_VERIFICATION
+                r.save(update_fields=["state", "updated_at"])
+
         purged = 0
+        failed_unlink = 0
         for r in eligible:
             archive_root = self._archive_root_for(r)
             archived = r.archived_path
             parent = str(Path(archived).parent)
             try:
                 os.unlink(archived)
-            except OSError:
+            except OSError as exc:
+                self.stdout.write(f"UNLINK-FAILED {r.pk} book={r.book_id} {archived}: {exc}")
+                failed_unlink += 1
                 continue
             if archive_root:
                 _prune_empty_dirs(parent, archive_root)
@@ -118,6 +146,8 @@ class Command(BaseCommand):
             r.save(update_fields=["state", "purged_at", "updated_at"])
             purged += 1
         self.stdout.write(f"Purged {purged} archive file(s)")
+        if failed_unlink:
+            self.stdout.write(f"{failed_unlink} unlink failure(s)")
 
     def _archive_root_for(self, row):
         book = row.book
