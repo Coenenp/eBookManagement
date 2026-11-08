@@ -438,6 +438,126 @@ class ResolverTests(TestCase):
                 self.assertFalse(archive.exists())
                 self.assertTrue(src.exists())
 
+    # -- sidecar (blank db_field) recovery ----------------------------------
+
+    def _sidecar_row(self, state, source, target, *, archive=None, original=None,
+                     archived=None, new=None, tmp=None):
+        book = _book_with_file(self.scan_folder, str(self.scan_root / "book.txt"))
+        return FileMove.objects.create(
+            book=book, kind=FileMove.Kind.COMPANION, db_field="",
+            source_path=str(source), target_path=str(target),
+            archived_path=str(archive) if archive else "",
+            tmp_path=str(tmp) if tmp else "", state=state,
+            original_sha256=original or "", archived_sha256=archived or "", new_sha256=new or "",
+            previous_paths={},
+        )
+
+    def test_resolve_sidecar_committed_archived_rolls_back(self):
+        for state in (FileMove.State.COMMITTED, FileMove.State.ARCHIVED):
+            with self.subTest(state=state):
+                src = self.scan_root / "book.txt"
+                src.write_bytes(b"data")
+                target = self.root / "Moved" / "book.txt"
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(b"data")
+                archive = self.archive_root / "Sample [To Delete] 1" / "book.txt"
+                archive.parent.mkdir(parents=True, exist_ok=True)
+                archive.write_bytes(b"data")
+                h = _sha256(src)
+                row = self._sidecar_row(state, src, target, archive=archive,
+                                        original=h, archived=h, new=h)
+                self.assertEqual(resolve_move(row), "rolled_back")
+                row.refresh_from_db()
+                self.assertEqual(row.state, FileMove.State.ROLLED_BACK)
+                self.assertFalse(target.exists())
+                self.assertFalse(archive.exists())
+                self.assertTrue(src.exists())
+
+    def test_resolve_sidecar_hash_disagreement_ends_failed(self):
+        for state in (FileMove.State.COMMITTED, FileMove.State.ARCHIVED):
+            with self.subTest(state=state):
+                src = self.scan_root / "book.txt"
+                src.write_bytes(b"data")
+                target = self.root / "Moved" / "book.txt"
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(b"tampered")  # differs from new_sha256
+                archive = self.archive_root / "Sample [To Delete] 1" / "book.txt"
+                archive.parent.mkdir(parents=True, exist_ok=True)
+                archive.write_bytes(b"data")
+                h = _sha256(src)
+                row = self._sidecar_row(state, src, target, archive=archive,
+                                        original=h, archived=h, new=h)
+                self.assertEqual(resolve_move(row), "failed")
+                row.refresh_from_db()
+                self.assertEqual(row.state, FileMove.State.FAILED)
+                self.assertTrue(row.error)
+                self.assertTrue(target.exists())
+                self.assertTrue(archive.exists())
+                self.assertTrue(src.exists())
+
+    # -- apply vs no-apply parity -------------------------------------------
+
+    def _build(self, state, *, kind=FileMove.Kind.MAIN, db_field=FileMove.DBField.FILE_PATH,
+               original=None, archived=None, new=None,
+               src_exists=True, src_data=b"data",
+               tgt_exists=True, tgt_data=b"data",
+               arch_exists=True, arch_data=b"data",
+               book_file_path=None):
+        src = self.scan_root / "book.txt"
+        target = self.root / "Moved" / "book.txt"
+        archive = self.archive_root / "Sample [To Delete] 1" / "book.txt"
+
+        def _write(p, exists, data):
+            p.parent.mkdir(parents=True, exist_ok=True)
+            if exists:
+                p.write_bytes(data)
+            elif p.exists():
+                p.unlink()
+
+        _write(src, src_exists, src_data)
+        _write(target, tgt_exists, tgt_data)
+        _write(archive, arch_exists, arch_data)
+
+        book = _book_with_file(self.scan_folder, book_file_path or str(src))
+        return FileMove.objects.create(
+            book=book, kind=kind, db_field=db_field,
+            source_path=str(src), target_path=str(target),
+            archived_path=str(archive) if arch_exists else "",
+            tmp_path="", state=state,
+            original_sha256=original or "", archived_sha256=archived or "", new_sha256=new or "",
+            previous_paths={"file_path": str(src), "cover_path": "", "opf_path": "", "final_path": ""},
+        )
+
+    def test_resolve_move_apply_and_no_apply_return_same_verdict(self):
+        S = FileMove.State
+        H = hashlib.sha256(b"data").hexdigest()
+        target = str(self.root / "Moved" / "book.txt")
+        source = str(self.scan_root / "book.txt")
+        scenarios = [
+            ("planned_no_archive", dict(state=S.PLANNED, src_exists=False)),
+            ("planned_archive_match", dict(state=S.PLANNED, original=H, archived=H)),
+            ("planned_archive_differs", dict(state=S.PLANNED, arch_data=b"other", original=H, archived=H)),
+            ("planned_source_missing", dict(state=S.PLANNED, src_exists=False, original=H, archived=H)),
+            ("planned_source_changed", dict(state=S.PLANNED, src_data=b"changed", original=H, archived=H)),
+            ("archived_target_missing", dict(state=S.ARCHIVED, tgt_exists=False, original=H, archived=H)),
+            ("archived_target_match_not_pointing", dict(state=S.ARCHIVED, original=H, archived=H, new=H, book_file_path=source)),
+            ("archived_target_mismatch", dict(state=S.ARCHIVED, tgt_data=b"tampered", original=H, archived=H, new=H)),
+            ("committed_not_pointing", dict(state=S.COMMITTED, original=H, archived=H, new=H, book_file_path=source)),
+            ("committed_pointing", dict(state=S.COMMITTED, original=H, archived=H, new=H, book_file_path=target)),
+            ("db_updated_finalize", dict(state=S.DB_UPDATED, original=H, archived=H, new=H, book_file_path=target)),
+            ("db_updated_checkc_fail", dict(state=S.DB_UPDATED, tgt_data=b"tampered", original=H, archived=H, new=H, book_file_path=target)),
+            ("db_updated_source_gone_finalize", dict(state=S.DB_UPDATED, src_exists=False, original=H, archived=H, new=H, book_file_path=target)),
+            ("db_updated_source_gone_archive_missing", dict(state=S.DB_UPDATED, src_exists=False, arch_exists=False, original=H, archived=H, new=H, book_file_path=target)),
+            ("db_updated_source_gone_target_mismatch", dict(state=S.DB_UPDATED, src_exists=False, tgt_data=b"tampered", original=H, archived=H, new=H, book_file_path=target)),
+            ("sidecar_committed_consistent", dict(state=S.COMMITTED, kind=FileMove.Kind.COMPANION, db_field="", original=H, archived=H, new=H)),
+            ("sidecar_archived_target_mismatch", dict(state=S.ARCHIVED, kind=FileMove.Kind.COMPANION, db_field="", tgt_data=b"tampered", original=H, archived=H, new=H)),
+        ]
+        for name, kwargs in scenarios:
+            with self.subTest(scenario=name):
+                va = resolve_move(self._build(**kwargs), apply=True)
+                vb = resolve_move(self._build(**kwargs), apply=False)
+                self.assertEqual(va, vb, f"apply=True -> {va!r}, apply=False -> {vb!r}")
+
 
 class PurgeCommandTests(TestCase):
     """Item 5: ``purge_pending_deletions``."""

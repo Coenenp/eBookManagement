@@ -133,6 +133,48 @@ def _set_state(row, state):
     row.save(update_fields=["state", "updated_at"])
 
 
+def _is_sidecar(row):
+    """True for a companion row with a blank ``db_field`` (no DB field to track)."""
+    return row.kind == FileMove.Kind.COMPANION and not row.db_field
+
+
+def _rollback_sidecar(row, apply):
+    """Roll back a sidecar (blank-db_field) companion row.
+
+    The DB has no field pointing at a sidecar, so rollback is decided purely by
+    file hashes: the source and archive must match the journal, and the target
+    (if present) must match ``new_sha256``. Any disagreement ends the row failed
+    with an error string and deletes nothing.
+    """
+    tgt = Path(row.target_path)
+    if tgt.is_file() and (not row.new_sha256 or _sha256(tgt) != row.new_sha256):
+        if apply:
+            FileMove.objects.filter(pk=row.pk).update(
+                state=FileMove.State.FAILED, error="target-hash-mismatch"
+            )
+        return "failed"
+    if not _source_matches(row):
+        if apply:
+            FileMove.objects.filter(pk=row.pk).update(
+                state=FileMove.State.FAILED, error="source-mismatch-before-rollback"
+            )
+        return "failed"
+    if _archive_present(row) and not _archive_matches(row):
+        if apply:
+            FileMove.objects.filter(pk=row.pk).update(
+                state=FileMove.State.FAILED, error="archive-hash-mismatch-before-rollback"
+            )
+        return "failed"
+    if apply:
+        _remove(row.tmp_path)
+        _remove(row.tmp_path + ".part")
+        if tgt.is_file():
+            _remove(row.target_path)
+        _remove_archive_if_match(row)
+        _set_state(row, FileMove.State.ROLLED_BACK)
+    return "rolled_back"
+
+
 def resolve_move(row, apply=True):
     """Resume or roll back an interrupted move; returns the action taken.
 
@@ -146,52 +188,53 @@ def resolve_move(row, apply=True):
     state = row.state
 
     if state in (S.PLANNED, S.TMP_WRITTEN, S.TMP_VERIFIED):
+        # A partial archive copy may have been written before the crash; remove
+        # it only when the source is intact and both the source and the archive
+        # hash to the journal's original. Otherwise keep every file and fail.
+        fail = _archive_present(row) and not (_source_matches(row) and _archive_matches(row))
         if apply:
             _remove(row.tmp_path)
             _remove(row.tmp_path + ".part")
-            # A partial archive copy may have been written before the crash;
-            # remove it only when the source is still intact and both the
-            # source and the archive hash to the journal's original. Otherwise
-            # keep every file and fail (the archive may be the only good copy).
-            if _archive_present(row):
-                if _source_matches(row) and _archive_matches(row):
-                    _remove(row.archived_path)
-                    _set_state(row, S.ROLLED_BACK)
-                else:
-                    FileMove.objects.filter(pk=row.pk).update(
-                        state=S.FAILED, error="archive-unverifiable-before-rollback"
-                    )
-                    return "failed"
+            if fail:
+                FileMove.objects.filter(pk=row.pk).update(
+                    state=S.FAILED, error="archive-unverifiable-before-rollback"
+                )
+            elif _archive_present(row):
+                _remove(row.archived_path)
+                _set_state(row, S.ROLLED_BACK)
             else:
                 _set_state(row, S.ROLLED_BACK)
-        return "rolled_back"
+        return "failed" if fail else "rolled_back"
 
     if state == S.ARCHIVED:
+        if _is_sidecar(row):
+            return _rollback_sidecar(row, apply)
+        tgt = Path(row.target_path)
+        fail = tgt.is_file() and bool(row.new_sha256) and _sha256(tgt) != row.new_sha256
         if apply:
             _remove(row.tmp_path)
             _remove(row.tmp_path + ".part")
-            # The commit (os.replace) may have happened before the state was
-            # advanced to committed; remove the target too when it is ours.
-            pf = _book_file(row)
-            tgt = Path(row.target_path)
-            if tgt.is_file() and row.new_sha256 and _sha256(tgt) != row.new_sha256:
+            if fail:
                 # Target hash disagrees with the journal: keep every file and fail.
                 FileMove.objects.filter(pk=row.pk).update(
                     state=S.FAILED, error="target-hash-mismatch"
                 )
-                return "failed"
-            if (
-                tgt.is_file()
-                and row.new_sha256
-                and _sha256(tgt) == row.new_sha256
-                and not _db_path_matches(row, pf)
-            ):
-                _remove(row.target_path)
-            _remove_archive_if_match(row)
-            _set_state(row, S.ROLLED_BACK)
-        return "rolled_back"
+            else:
+                pf = _book_file(row)
+                if (
+                    tgt.is_file()
+                    and row.new_sha256
+                    and _sha256(tgt) == row.new_sha256
+                    and not _db_path_matches(row, pf)
+                ):
+                    _remove(row.target_path)
+                _remove_archive_if_match(row)
+                _set_state(row, S.ROLLED_BACK)
+        return "failed" if fail else "rolled_back"
 
     if state == S.COMMITTED:
+        if _is_sidecar(row):
+            return _rollback_sidecar(row, apply)
         # Target exists and the DB still points at the old source: undo.
         pf = _book_file(row)
         if Path(row.target_path).is_file() and not _db_path_matches(row, pf):

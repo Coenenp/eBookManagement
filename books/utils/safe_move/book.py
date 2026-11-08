@@ -64,8 +64,19 @@ def _flag_companion_shared(parent, source):
     FileMove.objects.filter(pk=parent.pk).update(review_flags=flags)
 
 
+def _flag_companion_outside(parent, source):
+    """Append ``companion-outside:<file name>`` to the parent's review flags."""
+    name = Path(source).name
+    flag = f"companion-outside:{name}"
+    parent.refresh_from_db()
+    flags = list(parent.review_flags or [])
+    if flag not in flags:
+        flags.append(flag)
+    FileMove.objects.filter(pk=parent.pk).update(review_flags=flags)
+
+
 def _discover_companions(primary_file, target_path):
-    """Return ``([(source, db_field, target), ...], [shared_name, ...])``.
+    """Return ``([(source, db_field, target), ...], [shared], [outside])``.
 
     Sources are ``BookFile.cover_path`` / ``BookFile.opf_path`` (tracked with a
     ``db_field``) plus any sidecar files ``CompanionFileFinder`` discovers. Each
@@ -75,21 +86,46 @@ def _discover_companions(primary_file, target_path):
 
     A cover/OPF path also referenced by another book, or a sidecar that belongs
     to another book (another book's tracked cover/OPF path, or a file whose
-    stem matches another book's primary file), is never claimed: it is left in
-    place and reported in the returned ``shared`` list instead.
+    stem matches another book's primary file in the same folder), is never
+    claimed: it is left in place and reported in the returned ``shared`` list
+    instead. A cover/OPF path outside the main file's source folder tree is
+    also left in place and reported in the ``outside`` list.
     """
     finder = CompanionFileFinder()
     target_folder = Path(target_path).parent
     main_stem = Path(target_path).stem
 
-    other = BookFile.objects.exclude(pk=primary_file.pk)
-    other_primary_stems = {Path(bf.file_path).stem for bf in other if bf.file_path}
-    other_tracked = {bf.cover_path for bf in other if bf.cover_path}
-    other_tracked |= {bf.opf_path for bf in other if bf.opf_path}
+    source_folder = str(Path(primary_file.file_path).parent)
+    _source_folder_path = Path(source_folder).resolve()
+
+    def _is_inside_source_folder(path):
+        try:
+            Path(path).resolve().relative_to(_source_folder_path)
+            return True
+        except ValueError:
+            return False
+
+    # Other books' primary-file stems in the SAME source folder, as plain path
+    # values (no model instances), scoped by a folder-prefix filter.
+    other_primary_stems = {
+        Path(p).stem
+        for p in BookFile.objects.exclude(pk=primary_file.pk)
+        .filter(file_path__startswith=source_folder)
+        .values_list("file_path", flat=True)
+    }
+
+    def _tracked_elsewhere(path):
+        """True when another BookFile in this folder tracks ``path`` (cover/OPF)."""
+        others = BookFile.objects.exclude(pk=primary_file.pk)
+        return (
+            others.filter(cover_path=path).exists()
+            or others.filter(opf_path=path).exists()
+        )
 
     ordered = []  # (source, db_field, extension)
     seen_sources = set()
     shared = []
+    outside = []
 
     def add(source, db_field):
         s = str(source)
@@ -99,18 +135,22 @@ def _discover_companions(primary_file, target_path):
         ordered.append((s, db_field, Path(s).suffix.lower()))
 
     if primary_file.cover_path and Path(primary_file.cover_path).is_file():
-        if str(primary_file.cover_path) in other_tracked:
+        if not _is_inside_source_folder(primary_file.cover_path):
+            outside.append(str(primary_file.cover_path))
+        elif _tracked_elsewhere(str(primary_file.cover_path)):
             shared.append(str(primary_file.cover_path))
         else:
             add(primary_file.cover_path, FileMove.DBField.COVER_PATH)
     if primary_file.opf_path and Path(primary_file.opf_path).is_file():
-        if str(primary_file.opf_path) in other_tracked:
+        if not _is_inside_source_folder(primary_file.opf_path):
+            outside.append(str(primary_file.opf_path))
+        elif _tracked_elsewhere(str(primary_file.opf_path)):
             shared.append(str(primary_file.opf_path))
         else:
             add(primary_file.opf_path, FileMove.DBField.OPF_PATH)
     for cf in finder.find_companion_files(primary_file.file_path):
         s = str(cf)
-        if s in other_tracked or Path(s).stem in other_primary_stems:
+        if _tracked_elsewhere(s) or Path(s).stem in other_primary_stems:
             if s not in shared and s not in seen_sources:
                 shared.append(s)
             continue
@@ -126,7 +166,7 @@ def _discover_companions(primary_file, target_path):
             name = f"{main_stem}{ext}"
         seen_ext[ext] = n + 1
         result.append((source, db_field, str(target_folder / name)))
-    return result, shared
+    return result, shared, outside
 
 
 def _move_companion(book, parent, source, target, db_field, *, scan_folder, scan_label, archive_root):
@@ -325,9 +365,11 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
         return row
 
     # Discover companions while the main source still exists (finalize deletes it).
-    companions, shared = _discover_companions(primary_file, target)
+    companions, shared, outside = _discover_companions(primary_file, target)
     for shared_source in shared:
         _flag_companion_shared(row, shared_source)
+    for outside_source in outside:
+        _flag_companion_outside(row, outside_source)
 
     # (g) Finalize (delete the source only after re-verification), then purge
     # ledger state pending_deletion.
