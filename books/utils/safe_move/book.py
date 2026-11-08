@@ -13,7 +13,7 @@ from django.db import transaction
 
 from books.models import BookFile, FileMove
 from books.utils.batch_renamer import CompanionFileFinder
-from books.utils.epub_fix.fixer import IMAGE_MEDIA_BY_EXT
+from books.utils.epub_fix.fixer import IMAGE_MEDIA_BY_EXT, _validate_cover
 from books.utils.renaming_engine import is_renamable
 from books.utils.safe_move.archive import default_archive_root
 from books.utils.safe_move.recovery import _check_c_passes, _revert_db, resolve_move
@@ -25,12 +25,27 @@ from books.utils.safe_move.routine import (
 )
 
 
+_MAGIC_BY_EXT = {
+    ".jpg": (b"\xff\xd8\xff",),
+    ".jpeg": (b"\xff\xd8\xff",),
+    ".png": (b"\x89PNG\r\n\x1a\n",),
+    ".gif": (b"GIF87a", b"GIF89a"),
+}
+
+
 def _cover_flag(cover_path):
     """Classify a requested cover path; return a review flag or None.
 
     None means no cover change was requested (or the cover is valid). An empty
-    string, a missing file, or an unreadable file maps to "cover-missing"; an
-    existing file that is not a recognised image type maps to "cover-invalid".
+    string, a missing file, a directory, or an unreadable file maps to
+    "cover-missing"; an existing file whose extension is not a recognised image
+    type, or whose leading bytes do not match that type's magic signature, maps
+    to "cover-invalid".
+
+    The path/extension/readability checks are delegated to the fixer's
+    ``_validate_cover`` (reused, not copied). Only the leading magic bytes are
+    read here — never the whole file — so classifying a cover does not load it
+    into memory.
     """
     if cover_path is None:
         return None
@@ -39,12 +54,23 @@ def _cover_flag(cover_path):
     p = Path(cover_path)
     if not p.is_file():
         return "cover-missing"
-    if p.suffix.lower() not in IMAGE_MEDIA_BY_EXT:
-        return "cover-invalid"
     try:
-        p.read_bytes()
-    except OSError:
+        _validate_cover(cover_path)
+    except ValueError:
+        # _validate_cover raises for both a non-image extension and an
+        # unreadable path; distinguish the two so the flag stays precise.
+        if p.suffix.lower() not in IMAGE_MEDIA_BY_EXT:
+            return "cover-invalid"
         return "cover-missing"
+    signatures = _MAGIC_BY_EXT.get(p.suffix.lower())
+    if signatures is not None:
+        try:
+            with p.open("rb") as fh:
+                head = fh.read(8)
+        except OSError:
+            return "cover-missing"
+        if not any(head.startswith(sig) for sig in signatures):
+            return "cover-invalid"
     return None
 
 
