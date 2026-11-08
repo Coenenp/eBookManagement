@@ -2,8 +2,10 @@
 Tests for the management commands related to scanning.
 """
 
+import hashlib
 import os
 import tempfile
+import unittest
 from io import StringIO
 from pathlib import Path
 from unittest.mock import ANY, MagicMock, call, patch
@@ -166,6 +168,17 @@ class ResetDatabaseCommandTest(TestCase):
         "PORT": "3307",
         "OPTIONS": {"charset": "utf8mb4"},
     }
+
+    def setUp(self):
+        # Redirect the command's migration target away from the tracked
+        # books/migrations/ folder. ``_delete_migrations`` resolves
+        # ``settings.BASE_DIR / books / migrations``, so pointing BASE_DIR at a
+        # throwaway directory guarantees these tests can never delete tracked files.
+        self._migrations_tmp = tempfile.TemporaryDirectory()
+        self._base_dir_patcher = patch.object(django_settings, "BASE_DIR", self._migrations_tmp.name)
+        self._base_dir_patcher.start()
+        self.addCleanup(self._base_dir_patcher.stop)
+        self.addCleanup(self._migrations_tmp.cleanup)
 
     def tearDown(self):
         for key in ("DJANGO_SUPERUSER_USERNAME", "DJANGO_SUPERUSER_EMAIL", "DJANGO_SUPERUSER_PASSWORD"):
@@ -368,3 +381,43 @@ class ResetDatabaseCommandTest(TestCase):
         self.assertEqual(mock_run.call_args.kwargs["env"]["MYSQL_PWD"], "secret")
         self.assertIn("mysqldump", mock_run.call_args.args[0][0])
         self.assertIn("--single-transaction", mock_run.call_args.args[0])
+
+
+class ResetDatabaseTestIsolationTest(TestCase):
+    """The reset_database tests must never mutate the tracked books/migrations/ folder.
+
+    The command's ``_delete_migrations`` removes ``*.py`` files under
+    ``settings.BASE_DIR/books/migrations``. Several ``ResetDatabaseCommandTest``
+    cases run the real helper against the real ``settings.BASE_DIR``, so running
+    that test class alone deletes the tracked migration files. This guard runs
+    the whole ``ResetDatabaseCommandTest`` suite and asserts that the name set and
+    SHA-256 digest of every ``books/migrations/*.py`` file is identical before and
+    after, so any such regression surfaces as a hard failure.
+    """
+
+    @staticmethod
+    def _migrations_snapshot():
+        migrations_dir = Path(django_settings.BASE_DIR) / "books" / "migrations"
+        return {
+            p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(migrations_dir.glob("*.py"))
+        }
+
+    def test_reset_database_tests_leave_migrations_untouched(self):
+        before = self._migrations_snapshot()
+
+        suite = unittest.TestLoader().loadTestsFromTestCase(ResetDatabaseCommandTest)
+        stream = StringIO()
+        result = unittest.TextTestRunner(stream=stream, verbosity=0).run(suite)
+
+        after = self._migrations_snapshot()
+
+        self.assertTrue(
+            result.wasSuccessful(),
+            f"reset_database tests themselves failed:\n{stream.getvalue()}",
+        )
+        self.assertEqual(
+            before,
+            after,
+            "reset_database tests mutated books/migrations/ (name/SHA-256 mismatch)",
+        )
