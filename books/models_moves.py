@@ -29,7 +29,22 @@ class FileMove(models.Model):
         FAILED = "failed", "Failed"
         FAILED_VERIFICATION = "failed_verification", "Failed verification"
 
+    class Kind(models.TextChoices):
+        MAIN = "main", "Main"
+        COMPANION = "companion", "Companion"
+
+    class DBField(models.TextChoices):
+        FILE_PATH = "file_path", "file_path"
+        COVER_PATH = "cover_path", "cover_path"
+        OPF_PATH = "opf_path", "opf_path"
+
     book = models.ForeignKey(Book, on_delete=models.SET_NULL, null=True, blank=True, related_name="file_moves")
+
+    parent = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="companion_moves"
+    )
+    kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.MAIN)
+    db_field = models.CharField(max_length=32, choices=DBField.choices, blank=True, default="")
 
     source_path = models.TextField()
     target_path = models.TextField()

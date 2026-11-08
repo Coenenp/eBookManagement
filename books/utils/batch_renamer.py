@@ -83,6 +83,7 @@ class CompanionFileFinder:
         ".nfo",  # Description files
         ".srt",
         ".vtt",  # Subtitle files (for audiobooks)
+        ".xls",  # Spreadsheet sidecars
     }
 
     def __init__(self):

@@ -265,3 +265,332 @@ class SafeMoveBookTests(TestCase):
         self.assertTrue(src.exists())
         self.assertFalse(target.exists())
         self.assertFalse(Path(row.archived_path).exists())
+
+    # -- item 1: safe_move_book failures --------------------------------------
+
+    def test_missing_source_ends_failed(self):
+        book, src = self._make_book("sub/book.txt", data=b"gone soon")
+        src.unlink()
+        target = self.target_dir / "book.txt"
+        with self.assertRaises(FileNotFoundError):
+            safe_move_book(book, str(target))
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.FAILED)
+        self.assertTrue(row.error)
+
+    def test_existing_target_ends_failed(self):
+        book, src = self._make_book("sub/book.txt", data=b"keep me")
+        target = self.target_dir / "book.txt"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"already here")
+        with self.assertRaises(FileExistsError):
+            safe_move_book(book, str(target))
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.FAILED)
+        self.assertTrue(src.exists())
+
+    def test_oserror_at_archive_step_ends_failed_and_cleans_up(self):
+        book, src = self._make_book("sub/book.txt", data=b"keep me")
+        target = self.target_dir / "book.txt"
+        calls = []
+
+        def fake_fsync(path):
+            calls.append(str(path))
+            # Raise only for the archive copy, not the .moving temp file.
+            if "Archive [To Delete]" in str(path):
+                raise OSError("fsync failed")
+
+        with mock.patch("books.utils.safe_move.routine._fsync_file", side_effect=fake_fsync):
+            with self.assertRaises(OSError):
+                safe_move_book(book, str(target))
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.FAILED)
+        self.assertTrue(row.error)
+        self.assertTrue(src.exists())  # source intact
+        self.assertFalse(target.exists())
+        self.assertFalse(Path(str(target) + ".moving").exists())
+        self.assertFalse(Path(row.archived_path).exists())  # archive removed
+
+    # -- item 5: history row + stale saves ------------------------------------
+
+    def test_check_c_failure_marks_history_reverted(self):
+        book, src = self._make_book("sub/book.txt", data=b"verify me")
+        target = self.target_dir / "book.txt"
+        with mock.patch("books.utils.safe_move.book._check_c_passes", return_value=False):
+            row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.ROLLED_BACK)
+        op = FileOperation.objects.get(book=book, operation_type="rename")
+        self.assertEqual(op.status, "reverted")
+
+    def test_mark_as_renamed_preserves_concurrent_language_update(self):
+        book, src = self._make_book("sub/book.txt", data=b"move me")
+        fm = FinalMetadata.objects.get(book=book)
+        fm.language = "en"
+        fm.save(update_fields=["language"])
+
+        # A stale instance of the same FinalMetadata row (loaded before B).
+        stale = FinalMetadata.objects.get(book=book)
+        # Another instance (B) changes the language after A was loaded.
+        fm.language = "nl"
+        fm.save(update_fields=["language"])
+
+        # mark_as_renamed on the stale instance must not clobber B's update.
+        stale.mark_as_renamed(str(self.target_dir / "book.txt"))
+
+        fm.refresh_from_db()
+        self.assertEqual(fm.language, "nl")  # survives the stale mark_as_renamed
+
+    # -- item 6/7/9: companions ----------------------------------------------
+
+    def _make_book_with_companions(self):
+        book, src = self._make_book("sub/book.pdf", data=b"%PDF-1.4 fake pdf")
+        sub = src.parent
+        cover = sub / "cover.jpg"
+        cover.write_bytes(b"\xff\xd8\xff\xd9")
+        opf = sub / "book.opf"
+        opf.write_bytes(b"<package></package>")
+        txt = sub / "book.txt"
+        txt.write_bytes(b"sidecar text")
+        bf = BookFile.objects.get(book=book)
+        bf.cover_path = str(cover)
+        bf.opf_path = str(opf)
+        bf.save(update_fields=["cover_path", "opf_path"])
+        return book, src, cover, opf, txt
+
+    def test_book_with_companions_moves_completely(self):
+        book, src, cover, opf, txt = self._make_book_with_companions()
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        # Main moved, source gone.
+        self.assertFalse(src.exists())
+        self.assertTrue(target.is_file())
+        # Companions recreated under the new stem in the target folder.
+        self.assertTrue((self.target_dir / "book.jpg").is_file())
+        self.assertTrue((self.target_dir / "book.opf").is_file())
+        self.assertTrue((self.target_dir / "book.txt").is_file())
+        # Companion originals gone; archive copies present.
+        self.assertFalse(cover.exists())
+        self.assertFalse(opf.exists())
+        self.assertFalse(txt.exists())
+        children = FileMove.objects.filter(parent=row, kind=FileMove.Kind.COMPANION)
+        self.assertEqual(children.count(), 3)
+        for c in children:
+            self.assertEqual(c.state, FileMove.State.PENDING_DELETION)
+            self.assertTrue(Path(c.archived_path).is_file())
+        # DB fields updated.
+        bf = BookFile.objects.get(book=book)
+        self.assertEqual(bf.file_path, str(target))
+        self.assertEqual(bf.cover_path, str(self.target_dir / "book.jpg"))
+        self.assertEqual(bf.opf_path, str(self.target_dir / "book.opf"))
+
+    def test_failing_companion_leaves_main_done_and_flags_parent(self):
+        book, src, cover, opf, txt = self._make_book_with_companions()
+        target = self.target_dir / "book.pdf"
+        real = safe_move_file
+
+        def fake(source, tgt, **kw):
+            if str(source).endswith("book.txt"):
+                raise NeedsReview(["companion-bad"])
+            return real(source, tgt, **kw)
+
+        with mock.patch("books.utils.safe_move.book.safe_move_file", side_effect=fake):
+            row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)  # main done
+        self.assertFalse(src.exists())
+        self.assertTrue(target.is_file())
+        self.assertTrue((self.target_dir / "book.jpg").is_file())
+        self.assertTrue((self.target_dir / "book.opf").is_file())
+        # Failing companion: original in place, no target, flag on parent.
+        self.assertTrue(txt.exists())
+        self.assertFalse((self.target_dir / "book.txt").exists())
+        row.refresh_from_db()
+        self.assertIn("companion-failed:book.txt", row.review_flags)
+        child = FileMove.objects.get(parent=row, source_path=str(txt))
+        self.assertEqual(child.state, FileMove.State.NEEDS_REVIEW)
+
+    # -- companion isolation --------------------------------------------------
+
+    def test_two_books_one_folder_move_one_leaves_other_alone(self):
+        book1, src1 = self._make_book("sub/book1.pdf", data=b"%PDF-1.4 one")
+        book2, src2 = self._make_book("sub/book2.pdf", data=b"%PDF-1.4 two")
+        sub = src1.parent
+        cover1 = sub / "book1.jpg"
+        cover1.write_bytes(b"c1")
+        sidecar1 = sub / "book1.txt"
+        sidecar1.write_bytes(b"s1")
+        cover2 = sub / "book2.jpg"
+        cover2.write_bytes(b"c2")
+        sidecar2 = sub / "book2.txt"
+        sidecar2.write_bytes(b"s2")
+        bf1 = BookFile.objects.get(book=book1)
+        bf1.cover_path = str(cover1)
+        bf1.save(update_fields=["cover_path"])
+        bf2 = BookFile.objects.get(book=book2)
+        bf2.cover_path = str(cover2)
+        bf2.save(update_fields=["cover_path"])
+
+        target = self.target_dir / "book1.pdf"
+        row = safe_move_book(book1, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertFalse(src1.exists())
+        self.assertTrue(target.is_file())
+        self.assertTrue((self.target_dir / "book1.jpg").is_file())
+        self.assertTrue((self.target_dir / "book1.txt").is_file())
+        self.assertFalse(cover1.exists())
+        self.assertFalse(sidecar1.exists())
+        # book2 is untouched.
+        self.assertTrue(src2.exists())
+        self.assertTrue(cover2.exists())
+        self.assertTrue(sidecar2.exists())
+        self.assertFalse((self.target_dir / "book2.pdf").exists())
+        self.assertFalse((self.target_dir / "book2.jpg").exists())
+        self.assertFalse((self.target_dir / "book2.txt").exists())
+
+    def test_shared_cover_between_two_books_not_moved(self):
+        book1, src1 = self._make_book("sub/book1.pdf", data=b"%PDF-1.4 one")
+        book2, src2 = self._make_book("sub/book2.pdf", data=b"%PDF-1.4 two")
+        sub = src1.parent
+        cover = sub / "cover.jpg"
+        cover.write_bytes(b"\xff\xd8\xff\xd9")
+        bf1 = BookFile.objects.get(book=book1)
+        bf1.cover_path = str(cover)
+        bf1.save(update_fields=["cover_path"])
+        bf2 = BookFile.objects.get(book=book2)
+        bf2.cover_path = str(cover)
+        bf2.save(update_fields=["cover_path"])
+
+        target = self.target_dir / "book1.pdf"
+        row = safe_move_book(book1, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertFalse(src1.exists())
+        self.assertTrue(target.is_file())
+        # Shared cover is not moved or archived.
+        self.assertTrue(cover.exists())
+        self.assertFalse((self.target_dir / "cover.jpg").is_file())
+        row.refresh_from_db()
+        self.assertIn("companion-shared:cover.jpg", row.review_flags)
+
+    def test_sidecar_of_another_book_not_claimed(self):
+        book1, src1 = self._make_book("sub/book1.pdf", data=b"%PDF-1.4 one")
+        book2, src2 = self._make_book("sub/book2.pdf", data=b"%PDF-1.4 two")
+        sub = src1.parent
+        cover = sub / "cover.jpg"
+        cover.write_bytes(b"\xff\xd8\xff\xd9")
+        bf2 = BookFile.objects.get(book=book2)
+        bf2.cover_path = str(cover)
+        bf2.save(update_fields=["cover_path"])
+
+        target = self.target_dir / "book1.pdf"
+        row = safe_move_book(book1, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertFalse(src1.exists())
+        # book2's cover is a sidecar of another book: not claimed, not moved.
+        self.assertTrue(cover.exists())
+        self.assertFalse((self.target_dir / "cover.jpg").is_file())
+        self.assertTrue(src2.exists())
+
+    def test_same_stem_different_folder_moves_normally(self):
+        book1, src1 = self._make_book("sub/book.pdf", data=b"%PDF-1.4 one")
+        book2, src2 = self._make_book("otherdir/book.pdf", data=b"%PDF-1.4 two")
+        sub = src1.parent
+        cover = sub / "cover.jpg"
+        cover.write_bytes(b"c1")
+        sidecar = sub / "book.txt"
+        sidecar.write_bytes(b"s1")
+        bf1 = BookFile.objects.get(book=book1)
+        bf1.cover_path = str(cover)
+        bf1.save(update_fields=["cover_path"])
+
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book1, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertFalse(src1.exists())
+        # A book with the same stem in a different folder is unrelated: the
+        # cover and sidecar move normally.
+        self.assertTrue((self.target_dir / "book.jpg").is_file())
+        self.assertTrue((self.target_dir / "book.txt").is_file())
+        self.assertFalse(cover.exists())
+        self.assertFalse(sidecar.exists())
+        self.assertTrue(src2.exists())
+
+    def test_same_stem_same_folder_sidecar_ambiguous(self):
+        book1, src1 = self._make_book("sub/book.pdf", data=b"%PDF-1.4 one")
+        book2, src2 = self._make_book("sub/book.epub", data=b"epub data")
+        sub = src1.parent
+        sidecar = sub / "book.txt"
+        sidecar.write_bytes(b"s1")
+
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book1, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertFalse(src1.exists())
+        # Same folder, same stem (pdf beside epub): the sidecar is ambiguous.
+        self.assertTrue(sidecar.exists())
+        self.assertFalse((self.target_dir / "book.txt").is_file())
+        row.refresh_from_db()
+        self.assertIn("companion-shared:book.txt", row.review_flags)
+
+    def test_cover_tracked_by_another_bookfile_same_book_shared(self):
+        book1, src1 = self._make_book("sub/book.pdf", data=b"%PDF-1.4 one")
+        sub = src1.parent
+        cover = sub / "cover.jpg"
+        cover.write_bytes(b"\xff\xd8\xff\xd9")
+        # A second BookFile of the same book also tracks the cover.
+        BookFile.objects.create(book=book1, file_path=str(sub / "book.epub"), file_format="epub", cover_path=str(cover))
+        bf1 = BookFile.objects.get(book=book1, file_format="pdf")
+        bf1.cover_path = str(cover)
+        bf1.save(update_fields=["cover_path"])
+
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book1, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertFalse(src1.exists())
+        # Cover tracked by another BookFile of the same book: shared, not moved.
+        self.assertTrue(cover.exists())
+        self.assertFalse((self.target_dir / "cover.jpg").is_file())
+        row.refresh_from_db()
+        self.assertIn("companion-shared:cover.jpg", row.review_flags)
+
+    def test_cover_outside_source_folder_not_moved_flagged(self):
+        book1, src1 = self._make_book("sub/book.pdf", data=b"%PDF-1.4 one")
+        sub = src1.parent
+        # Cover in a sibling directory (outside the main file's source folder).
+        sibling = self.scan_root / "sibling"
+        sibling.mkdir(parents=True, exist_ok=True)
+        cover = sibling / "cover.jpg"
+        cover.write_bytes(b"c1")
+        bf1 = BookFile.objects.get(book=book1)
+        bf1.cover_path = str(cover)
+        bf1.save(update_fields=["cover_path"])
+
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book1, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertFalse(src1.exists())
+        # Cover outside the source folder is neither moved nor archived.
+        self.assertTrue(cover.exists())
+        self.assertFalse((self.target_dir / "cover.jpg").is_file())
+        bf1.refresh_from_db()
+        self.assertEqual(bf1.cover_path, str(cover))  # DB value unchanged
+        row.refresh_from_db()
+        self.assertIn("companion-outside:cover.jpg", row.review_flags)
+
+    def test_cover_in_subfolder_stays_allowed(self):
+        book1, src1 = self._make_book("sub/book.pdf", data=b"%PDF-1.4 one")
+        sub = src1.parent
+        # Cover in a subfolder below the source folder is allowed.
+        subsub = sub / "assets"
+        subsub.mkdir(parents=True, exist_ok=True)
+        cover = subsub / "cover.jpg"
+        cover.write_bytes(b"c1")
+        bf1 = BookFile.objects.get(book=book1)
+        bf1.cover_path = str(cover)
+        bf1.save(update_fields=["cover_path"])
+
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book1, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertFalse(src1.exists())
+        self.assertTrue((self.target_dir / "book.jpg").is_file())
+        self.assertFalse(cover.exists())
