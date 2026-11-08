@@ -13,6 +13,7 @@ from django.db import transaction
 
 from books.models import BookFile, FileMove
 from books.utils.batch_renamer import CompanionFileFinder
+from books.utils.epub_fix.fixer import IMAGE_MEDIA_BY_EXT
 from books.utils.renaming_engine import is_renamable
 from books.utils.safe_move.archive import default_archive_root
 from books.utils.safe_move.recovery import _check_c_passes, _revert_db, resolve_move
@@ -22,6 +23,29 @@ from books.utils.safe_move.routine import (
     rollback_move,
     safe_move_file,
 )
+
+
+def _cover_flag(cover_path):
+    """Classify a requested cover path; return a review flag or None.
+
+    None means no cover change was requested (or the cover is valid). An empty
+    string, a missing file, or an unreadable file maps to "cover-missing"; an
+    existing file that is not a recognised image type maps to "cover-invalid".
+    """
+    if cover_path is None:
+        return None
+    if cover_path == "":
+        return "cover-missing"
+    p = Path(cover_path)
+    if not p.is_file():
+        return "cover-missing"
+    if p.suffix.lower() not in IMAGE_MEDIA_BY_EXT:
+        return "cover-invalid"
+    try:
+        p.read_bytes()
+    except OSError:
+        return "cover-missing"
+    return None
 
 
 def _mark_failed_and_cleanup(row, error):
@@ -278,6 +302,11 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
         raise ValueError("book has no primary file")
 
     source_path = primary_file.file_path
+    # A requested cover that cannot be embedded must not block the move: proceed
+    # without a cover change and record the reason as a review flag instead.
+    is_epub_repack = repack_epub and Path(source_path).suffix.lower() == ".epub"
+    cover_flag = _cover_flag(cover_path) if is_epub_repack else None
+    effective_cover = None if cover_flag is not None else cover_path
     scan_label = f"{scan_folder.name} {scan_folder.id}"
     archive_root = default_archive_root(scan_folder.path)
     final_metadata = book.final_metadata
@@ -301,6 +330,8 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
         state=FileMove.State.PLANNED,
         previous_paths=previous_paths,
     )
+    if cover_flag is not None:
+        FileMove.objects.filter(pk=row.pk).update(review_flags=[cover_flag])
 
     def on_step(name, step_state):
         # The finalize step has no FileMove state; skip it (the caller sets
@@ -325,7 +356,7 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
         result = safe_move_file(
             source_path, target, scan_root=scan_folder.path,
             scan_label=scan_label, archive_root=archive_root,
-            repack_epub=repack_epub, cover_path=cover_path,
+            repack_epub=repack_epub, cover_path=effective_cover,
             fix_encoding=fix_encoding, on_step=on_step,
         )
     except NeedsReview as exc:
