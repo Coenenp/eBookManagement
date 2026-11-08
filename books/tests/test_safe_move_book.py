@@ -594,3 +594,69 @@ class SafeMoveBookTests(TestCase):
         self.assertFalse(src1.exists())
         self.assertTrue((self.target_dir / "book.jpg").is_file())
         self.assertFalse(cover.exists())
+
+    # -- cover is non-fatal ---------------------------------------------------
+
+    def _make_epub_book(self, name="sub/book.epub"):
+        src = self.scan_root / name
+        src.parent.mkdir(parents=True, exist_ok=True)
+        _write_epub(src)
+        book = create_test_book_with_file(
+            file_path=str(src), file_format="epub", scan_folder=self.scan_folder,
+        )
+        FinalMetadata.objects.create(book=book, final_title=Path(name).stem, is_reviewed=True)
+        return book, src
+
+    def _cover(self, name="cover.jpg", data=b"\xff\xd8\xff\xd9"):
+        p = self.scan_root / name
+        p.write_bytes(data)
+        return p
+
+    def test_missing_cover_path_moves_and_flags_cover_missing(self):
+        book, src = self._make_epub_book()
+        target = self.target_dir / "book.epub"
+        row = safe_move_book(book, str(target), cover_path=str(self.scan_root / "missing.jpg"))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        row.refresh_from_db()
+        self.assertIn("cover-missing", row.review_flags)
+        self.assertFalse(src.exists())
+        self.assertTrue(target.is_file())
+
+    def test_empty_cover_path_moves_and_flags_cover_missing(self):
+        book, src = self._make_epub_book()
+        target = self.target_dir / "book.epub"
+        row = safe_move_book(book, str(target), cover_path="")
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        row.refresh_from_db()
+        self.assertIn("cover-missing", row.review_flags)
+
+    def test_invalid_cover_image_moves_and_flags_cover_invalid(self):
+        book, src = self._make_epub_book()
+        bad = self._cover("cover.txt", data=b"not an image")
+        target = self.target_dir / "book.epub"
+        row = safe_move_book(book, str(target), cover_path=str(bad))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        row.refresh_from_db()
+        self.assertIn("cover-invalid", row.review_flags)
+
+    def test_valid_cover_is_embedded_and_no_flag(self):
+        book, src = self._make_epub_book()
+        cover = self._cover()
+        target = self.target_dir / "book.epub"
+        row = safe_move_book(book, str(target), cover_path=str(cover))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        row.refresh_from_db()
+        self.assertNotIn("cover-missing", row.review_flags)
+        self.assertNotIn("cover-invalid", row.review_flags)
+        with zipfile.ZipFile(target) as z:
+            self.assertTrue(any(n.endswith(".jpg") for n in z.namelist()), z.namelist())
+
+    def test_non_epub_with_cover_path_moves_normally(self):
+        book, src = self._make_book("sub/book.pdf", data=b"%PDF-1.4 fake", file_format="pdf")
+        cover = self._cover()
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target), cover_path=str(cover))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        row.refresh_from_db()
+        self.assertNotIn("cover-missing", row.review_flags)
+        self.assertNotIn("cover-invalid", row.review_flags)
