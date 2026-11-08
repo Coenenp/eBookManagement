@@ -219,6 +219,9 @@ def submit_ai_feedback(request, book_id):
             # Mark as reviewed after feedback
             metadata.is_reviewed = True
             metadata.save()
+            from books.scanner.match_verification import mark_resolved
+
+            mark_resolved(book)
 
         # TODO: Implement actual AI feedback recording and model training
         return JsonResponse({"success": True, "message": "AI feedback submitted successfully", "corrections_applied": len(corrections)})

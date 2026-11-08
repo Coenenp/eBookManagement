@@ -144,8 +144,9 @@ def finalize_unresolved_reason(book):
     review queue.
     """
     final_metadata = FinalMetadata.objects.filter(book=book).first()
-    if final_metadata is None or final_metadata.unresolved_reason:
-        # No record to flag, or a more specific reason already set.
+    if final_metadata is None or final_metadata.is_reviewed or final_metadata.unresolved_reason:
+        # No record to flag, the book is already approved, or a more specific
+        # reason already set.
         return
 
     external_sources = DataSource.objects.filter(name__in=EXTERNAL_SOURCE_NAMES)

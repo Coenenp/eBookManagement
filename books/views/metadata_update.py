@@ -153,6 +153,13 @@ class BookMetadataUpdateView(LoginRequiredMixin, View, SimpleNavigationMixin, Me
             final_metadata._manual_update = True
             final_metadata.save()
 
+            # A manual approval resolves the book: clear any verdict reason
+            # (language flags are preserved by mark_resolved).
+            if is_reviewed:
+                from books.scanner.match_verification import mark_resolved
+
+                mark_resolved(book)
+
             if updated_fields:
                 book_title = final_metadata.final_title or f"Book {book.id}"
                 messages.success(request, f"Successfully updated {', '.join(updated_fields)} for '{book_title}'")
