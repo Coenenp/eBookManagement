@@ -6,8 +6,8 @@ migration hygiene. It reads database credentials from Django settings and:
 
 1. Backs up the current database with ``mysqldump`` (unless ``--skip-backup``).
 2. Drops and recreates the database using the utf8mb4 charset.
-3. Removes the ``books`` migrations directory (``makemigrations`` recreates it from models).
-4. Runs ``makemigrations books`` to regenerate migrations from the current models.
+3. Removes generated ``books`` migration files while preserving ``__init__.py``.
+4. Runs ``makemigrations books`` to regenerate the initial migration from models.
 5. Runs ``migrate`` to apply all migrations.
 6. Optionally creates a superuser.
 
@@ -106,7 +106,7 @@ class Command(BaseCommand):
 
         self._drop_and_create_database(name, user, password, host, port, charset)
 
-        self.stdout.write(self.style.NOTICE("Removing existing migrations for the books app..."))
+        self.stdout.write(self.style.NOTICE("Removing generated migrations for the books app..."))
         self._delete_migrations()
 
         self.stdout.write(self.style.NOTICE("Generating migrations for the books app..."))
@@ -121,13 +121,16 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("Database reset complete."))
 
     def _delete_migrations(self):
-        """Remove the books migrations directory; makemigrations recreates it."""
+        """Remove generated migration modules while preserving the package initializer."""
         migrations_dir = Path(settings.BASE_DIR) / "books" / "migrations"
-        if migrations_dir.is_dir():
-            shutil.rmtree(migrations_dir)
-            self.stdout.write(self.style.WARNING("Removed the books migrations directory."))
-        else:
+        if not migrations_dir.is_dir():
             self.stdout.write(self.style.NOTICE("No migrations directory found; nothing to remove."))
+            return
+
+        for migration_file in migrations_dir.glob("*.py"):
+            if migration_file.name != "__init__.py":
+                migration_file.unlink()
+                self.stdout.write(self.style.WARNING(f"Removed '{migration_file.name}'."))
 
     def _confirm_drop(self, name):
         self.stdout.write(self.style.WARNING(f"\nYou are about to DROP database '{name}' and all of its data.\n" "This action cannot be undone.\n"))

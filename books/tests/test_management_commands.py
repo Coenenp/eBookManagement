@@ -5,6 +5,7 @@ Tests for the management commands related to scanning.
 import os
 import tempfile
 from io import StringIO
+from pathlib import Path
 from unittest.mock import ANY, MagicMock, call, patch
 
 from django.conf import settings as django_settings
@@ -12,6 +13,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase
 
+from books.management.commands.reset_database import Command as ResetDatabaseCommand
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
@@ -165,16 +167,6 @@ class ResetDatabaseCommandTest(TestCase):
         "OPTIONS": {"charset": "utf8mb4"},
     }
 
-    def setUp(self):
-        # Several tests below reach Command._delete_migrations(), which calls
-        # shutil.rmtree(books/migrations/) for real. Patch it for the whole
-        # class so the test suite never deletes tracked repository files.
-        self._delete_migrations_patcher = patch(
-            "books.management.commands.reset_database.Command._delete_migrations"
-        )
-        self._delete_migrations_patcher.start()
-        self.addCleanup(self._delete_migrations_patcher.stop)
-
     def tearDown(self):
         for key in ("DJANGO_SUPERUSER_USERNAME", "DJANGO_SUPERUSER_EMAIL", "DJANGO_SUPERUSER_PASSWORD"):
             os.environ.pop(key, None)
@@ -184,9 +176,10 @@ class ResetDatabaseCommandTest(TestCase):
         with self.assertRaises(CommandError):
             call_command("reset_database", "--noinput")
 
+    @patch("books.management.commands.reset_database.Command._delete_migrations")
     @patch("books.management.commands.reset_database.MySQLdb")
     @patch("books.management.commands.reset_database.call_command")
-    def test_mysql_rebuild_flow(self, mock_call_command, mock_mysql):
+    def test_mysql_rebuild_flow(self, mock_call_command, mock_mysql, mock_delete_migrations):
         """Drops and recreates the database, then runs makemigrations and migrate."""
         mock_connection = mock_mysql.connect.return_value
         mock_cursor = mock_connection.cursor.return_value
@@ -209,6 +202,22 @@ class ResetDatabaseCommandTest(TestCase):
 
         mock_call_command.assert_any_call("makemigrations", "books", interactive=False, stdout=ANY, stderr=ANY)
         mock_call_command.assert_any_call("migrate", interactive=False, stdout=ANY, stderr=ANY)
+        mock_delete_migrations.assert_called_once()
+
+    def test_delete_migrations_preserves_package_initializer(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            migrations_dir = Path(temp_dir) / "books" / "migrations"
+            migrations_dir.mkdir(parents=True)
+            initializer = migrations_dir / "__init__.py"
+            migration = migrations_dir / "0001_initial.py"
+            initializer.write_text("", encoding="utf-8")
+            migration.write_text("generated migration", encoding="utf-8")
+
+            with patch("books.management.commands.reset_database.settings.BASE_DIR", temp_dir):
+                ResetDatabaseCommand()._delete_migrations()
+
+            self.assertTrue(initializer.exists())
+            self.assertFalse(migration.exists())
 
     @patch("books.management.commands.reset_database.MySQLdb")
     def test_prompt_declines_abort(self, mock_mysql):
