@@ -343,7 +343,7 @@ function toggleManualEntry(fieldName, show) {
     const selectElement = document.getElementById(fieldName + '_select');
 
     if (manualDiv) {
-        manualDiv.style.display = show ? 'block' : 'none';
+        manualDiv.classList.toggle('d-none', !show);
     }
 
     if (selectElement && show) {

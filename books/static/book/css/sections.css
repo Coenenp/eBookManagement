@@ -17,6 +17,10 @@
     font-size: 0.8em;
 }
 
+.progress-compact {
+    height: 6px;
+}
+
 .expanded .expand-icon {
     transform: rotate(90deg);
     color: var(--bs-primary, #0d6efd);

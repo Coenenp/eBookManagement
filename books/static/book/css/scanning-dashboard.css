@@ -8,6 +8,10 @@
     min-width: 100px;
 }
 
+.progress-tall {
+    height: 20px;
+}
+
 .folder-progress-container .progress-bar {
     transition: width 0.3s ease-in-out;
 }

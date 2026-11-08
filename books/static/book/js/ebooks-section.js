@@ -232,17 +232,13 @@ if (typeof EbooksSectionManager === 'undefined') {
             if (searchInput && clearBtn) {
                 // Show/hide clear button based on input
                 searchInput.addEventListener('input', () => {
-                    if (searchInput.value.trim()) {
-                        clearBtn.style.display = 'block';
-                    } else {
-                        clearBtn.style.display = 'none';
-                    }
+                    clearBtn.classList.toggle('is-visible', Boolean(searchInput.value.trim()));
                 });
 
                 // Clear search on click
                 clearBtn.addEventListener('click', () => {
                     searchInput.value = '';
-                    clearBtn.style.display = 'none';
+                    clearBtn.classList.remove('is-visible');
                     // Trigger filter update
                     if (this.applyFilters) {
                         this.applyFilters();
@@ -413,7 +409,7 @@ if (typeof EbooksSectionManager === 'undefined') {
                     <table class="condensed-table">
                         <thead>
                             <tr>
-                                <th style="width: 30px;"></th>
+                                <th></th>
                                 <th class="col-title" data-sort="title">
                                     Title <i class="fas fa-sort sort-icon"></i>
                                 </th>
@@ -450,32 +446,32 @@ if (typeof EbooksSectionManager === 'undefined') {
                                     (ebook) => `
                                 <tr class="${this.selectedItemId === ebook.id ? 'selected' : ''} ${this.expandedEbooks.has(ebook.id) ? 'expanded' : ''}" 
                                     data-item-id="${ebook.id}">
-                                    <td style="cursor: pointer; text-align: center;" onclick="event.stopPropagation(); window.ebookManager.toggleEbook(${ebook.id})">
-                                        <i class="fas fa-chevron-right expand-icon" style="transition: transform 0.2s; ${this.expandedEbooks.has(ebook.id) ? 'transform: rotate(90deg);' : ''}"></i>
+                                    <td class="expand-toggle-cell" onclick="event.stopPropagation(); window.ebookManager.toggleEbook(${ebook.id})">
+                                        <i class="fas fa-chevron-right expand-icon"></i>
                                     </td>
-                                    <td class="col-title truncate" title="${this.utils.escapeHtml(ebook.title)}" onclick="window.ebookManager.selectItem(${ebook.id})" style="cursor: pointer;">
+                                    <td class="col-title truncate" title="${this.utils.escapeHtml(ebook.title)}" onclick="window.ebookManager.selectItem(${ebook.id})">
                                         <i class="fas fa-book file-icon"></i>
                                         ${this.utils.escapeHtml(ebook.title)}
                                     </td>
-                                    <td class="col-author truncate" title="${this.utils.escapeHtml(ebook.author || '')}" onclick="window.ebookManager.selectItem(${ebook.id})" style="cursor: pointer;">
+                                    <td class="col-author truncate" title="${this.utils.escapeHtml(ebook.author || '')}" onclick="window.ebookManager.selectItem(${ebook.id})">
                                         ${this.utils.escapeHtml(ebook.author || '-')}
                                     </td>
-                                    <td class="col-series truncate" title="${this.utils.escapeHtml(ebook.series || '')}" onclick="window.ebookManager.selectItem(${ebook.id})" style="cursor: pointer;">
+                                    <td class="col-series truncate" title="${this.utils.escapeHtml(ebook.series || '')}" onclick="window.ebookManager.selectItem(${ebook.id})">
                                         ${this.utils.escapeHtml(ebook.series || '-')}
                                     </td>
-                                    <td class="col-publisher truncate" title="${this.utils.escapeHtml(ebook.publisher || '')}" onclick="window.ebookManager.selectItem(${ebook.id})" style="cursor: pointer;">
+                                    <td class="col-publisher truncate" title="${this.utils.escapeHtml(ebook.publisher || '')}" onclick="window.ebookManager.selectItem(${ebook.id})">
                                         ${this.utils.escapeHtml(ebook.publisher || '-')}
                                     </td>
-                                    <td class="col-format" onclick="window.ebookManager.selectItem(${ebook.id})" style="cursor: pointer;">
+                                    <td class="col-format" onclick="window.ebookManager.selectItem(${ebook.id})">
                                         <span class="badge bg-secondary">${(ebook.file_format || '').toUpperCase()}</span>
                                     </td>
-                                    <td class="col-size" onclick="window.ebookManager.selectItem(${ebook.id})" style="cursor: pointer;">${this.utils.formatFileSize(ebook.file_size)}</td>
-                                    <td class="col-year" onclick="window.ebookManager.selectItem(${ebook.id})" style="cursor: pointer;">${ebook.publication_year || '-'}</td>
-                                    <td class="col-language" onclick="window.ebookManager.selectItem(${ebook.id})" style="cursor: pointer;">${(ebook.language || 'en').toUpperCase()}</td>
-                                    <td class="col-path truncate" title="${this.utils.escapeHtml(ebook.file_path || ebook.scan_folder || '')}" onclick="window.ebookManager.selectItem(${ebook.id})" style="cursor: pointer;">
+                                    <td class="col-size" onclick="window.ebookManager.selectItem(${ebook.id})">${this.utils.formatFileSize(ebook.file_size)}</td>
+                                    <td class="col-year" onclick="window.ebookManager.selectItem(${ebook.id})">${ebook.publication_year || '-'}</td>
+                                    <td class="col-language" onclick="window.ebookManager.selectItem(${ebook.id})">${(ebook.language || 'en').toUpperCase()}</td>
+                                    <td class="col-path truncate" title="${this.utils.escapeHtml(ebook.file_path || ebook.scan_folder || '')}" onclick="window.ebookManager.selectItem(${ebook.id})">
                                         ${this.utils.escapeHtml(this.getShortPath(ebook.file_path || ebook.scan_folder || ''))}
                                     </td>
-                                    <td class="col-status" onclick="window.ebookManager.selectItem(${ebook.id})" style="cursor: pointer;">
+                                    <td class="col-status" onclick="window.ebookManager.selectItem(${ebook.id})">
                                         ${
                                             ebook.is_read
                                                 ? '<span class="badge bg-success" title="Read"></span>'
@@ -502,7 +498,7 @@ if (typeof EbooksSectionManager === 'undefined') {
                 return `
                     <tr class="companion-row">
                         <td></td>
-                        <td colspan="10" style="padding-left: 40px; font-size: 0.75rem; color: var(--bs-secondary);">
+                        <td colspan="10" class="companion-detail-cell text-secondary">
                             <i class="fas fa-info-circle me-2"></i>No companion files found
                         </td>
                     </tr>
@@ -512,11 +508,11 @@ if (typeof EbooksSectionManager === 'undefined') {
             return ebook.companion_files
                 .map(
                     (file) => `
-                <tr class="companion-row" style="background-color: var(--bs-secondary-bg);">
+                <tr class="companion-row">
                     <td></td>
-                    <td colspan="10" style="padding-left: 40px; font-size: 0.75rem;">
-                        <i class="fas fa-file me-2" style="color: var(--bs-secondary);"></i>
-                        <span style="font-family: monospace;">${this.utils.escapeHtml(file.name)}</span>
+                    <td colspan="10" class="companion-detail-cell">
+                        <i class="fas fa-file me-2 text-secondary"></i>
+                        <span class="font-monospace">${this.utils.escapeHtml(file.name)}</span>
                         <span class="badge bg-info ms-2">${file.type.toUpperCase()}</span>
                         <span class="text-muted ms-2">${this.utils.formatFileSize(file.size)}</span>
                     </td>
@@ -699,7 +695,7 @@ if (typeof EbooksSectionManager === 'undefined') {
                                 ${
                                     ebook.reading_progress > 0
                                         ? `
-                                    <div class="progress mt-2" style="height: 6px;">
+                                    <div class="progress progress-compact mt-2">
                                         <div class="progress-bar bg-success" style="width: ${ebook.reading_progress}%"></div>
                                     </div>
                                     <small class="text-muted">${ebook.reading_progress}% complete</small>

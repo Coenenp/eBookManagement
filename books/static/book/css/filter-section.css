@@ -129,8 +129,7 @@
     line-height: 1;
 }
 
-/* Show clear button when search has content */
-.filter-section .form-control:not(:placeholder-shown) + .clear-search-btn {
+.clear-search-btn.is-visible {
     display: flex;
 }
 

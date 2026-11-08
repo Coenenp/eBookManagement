@@ -9,6 +9,15 @@
     z-index: 1000;
 }
 
+.mobile-panel-hidden {
+    display: none !important;
+}
+
+body.is-resizing {
+    cursor: col-resize;
+    user-select: none;
+}
+
 /* Brief scale bump used when a counter value updates */
 #item-count {
     display: inline-block;
@@ -355,6 +364,14 @@
     box-shadow: 2px 0 8px rgba(var(--bs-body-color-rgb), 0.2);
 }
 
+.resize-handle.is-visible {
+    opacity: 0.7;
+}
+
+.resize-handle.is-near {
+    opacity: 1;
+}
+
 .resize-handle::before {
     content: '';
     position: absolute;
@@ -652,6 +669,33 @@
 .series-book-row td {
     padding: 0.25rem 0.5rem;
     font-size: 0.7rem;
+}
+
+.condensed-table th:first-child {
+    width: 30px;
+}
+
+.condensed-table td[onclick],
+.condensed-table tr[onclick] td {
+    cursor: pointer;
+}
+
+.expand-toggle-cell {
+    cursor: pointer;
+    text-align: center;
+}
+
+.companion-row {
+    background-color: var(--bs-secondary-bg);
+}
+
+.companion-row .companion-detail-cell,
+.series-book-row .series-book-title-cell {
+    padding-left: 40px;
+}
+
+.companion-row .companion-detail-cell {
+    font-size: 0.75rem;
 }
 
 /* Compact icons */

@@ -951,7 +951,7 @@ class EbookRenamer {
 
     showTooltip(element, message) {
         // Simple tooltip implementation
-        const tooltip = $(`<div class="tooltip bs-tooltip-top show" role="tooltip">
+        const tooltip = $(`<div class="tooltip bs-tooltip-top show renamer-tooltip" role="tooltip">
             <div class="tooltip-inner">${message}</div>
         </div>`);
 
@@ -959,10 +959,8 @@ class EbookRenamer {
 
         const rect = element.getBoundingClientRect();
         tooltip.css({
-            position: 'fixed',
             top: rect.top - tooltip.outerHeight() - 5,
             left: rect.left + rect.width / 2 - tooltip.outerWidth() / 2,
-            zIndex: 1070,
         });
 
         setTimeout(() => {

@@ -21,7 +21,7 @@ class SeriesSectionManager extends BaseSectionManager {
     }
 
     filterItems(searchTerm, sortBy, formatFilter, statusFilter) {
-        const term = (searchTerm || "").toLowerCase();
+        const term = (searchTerm || '').toLowerCase();
         this.filteredData = this.currentData.filter((series) => {
             // Search filter across all fields.
             const matchesSearch = !term || this.matchesSearch(series, term);
@@ -201,7 +201,7 @@ class SeriesSectionManager extends BaseSectionManager {
                 <table class="condensed-table">
                     <thead>
                         <tr>
-                            <th style="width: 30px;"></th>
+                            <th></th>
                             <th class="col-title" data-sort="name">
                                 Series Name <i class="fas fa-sort sort-icon"></i>
                             </th>
@@ -225,20 +225,20 @@ class SeriesSectionManager extends BaseSectionManager {
                                 (series) => `
                             <tr class="${this.expandedSeries.has(series.name) ? 'expanded' : ''}" 
                                 data-series-name="${MediaLibraryUtils.escapeHtml(series.name)}">
-                                <td style="cursor: pointer; text-align: center;" onclick="event.stopPropagation(); window.seriesManager.toggleSeries('${MediaLibraryUtils.escapeHtml(series.name).replace(/'/g, "\\'")}')">                                    <i class="fas fa-chevron-right expand-icon" style="transition: transform 0.2s; ${this.expandedSeries.has(series.name) ? 'transform: rotate(90deg);' : ''}"></i>
+                                <td class="expand-toggle-cell" onclick="event.stopPropagation(); window.seriesManager.toggleSeries('${MediaLibraryUtils.escapeHtml(series.name).replace(/'/g, "\\'")}')">                                    <i class="fas fa-chevron-right expand-icon"></i>
                                 </td>
-                                <td class="col-title truncate" title="${MediaLibraryUtils.escapeHtml(series.name)}" style="cursor: pointer;" onclick="window.seriesManager.toggleSeries('${MediaLibraryUtils.escapeHtml(series.name).replace(/'/g, "\\'")}')">
+                                <td class="col-title truncate" title="${MediaLibraryUtils.escapeHtml(series.name)}" onclick="window.seriesManager.toggleSeries('${MediaLibraryUtils.escapeHtml(series.name).replace(/'/g, "\\'")}')">
                                     <i class="fas fa-layer-group file-icon"></i>
                                     ${MediaLibraryUtils.escapeHtml(series.name)}
                                 </td>
-                                <td class="col-author truncate" title="${series.authors.join(', ')}" style="cursor: pointer;" onclick="window.seriesManager.toggleSeries('${MediaLibraryUtils.escapeHtml(series.name).replace(/'/g, "\\'")}')">
+                                <td class="col-author truncate" title="${series.authors.join(', ')}" onclick="window.seriesManager.toggleSeries('${MediaLibraryUtils.escapeHtml(series.name).replace(/'/g, "\\'")}')">
                                     ${series.authors.map((a) => MediaLibraryUtils.escapeHtml(a)).join(', ')}
                                 </td>
-                                <td class="col-format" style="cursor: pointer;" onclick="window.seriesManager.toggleSeries('${MediaLibraryUtils.escapeHtml(series.name).replace(/'/g, "\\'")}')">
+                                <td class="col-format" onclick="window.seriesManager.toggleSeries('${MediaLibraryUtils.escapeHtml(series.name).replace(/'/g, "\\'")}')">
                                     ${series.formats.map((f) => `<span class="badge bg-secondary me-1">${f.toUpperCase()}</span>`).join('')}
                                 </td>
-                                <td class="col-size" style="cursor: pointer;" onclick="window.seriesManager.toggleSeries('${MediaLibraryUtils.escapeHtml(series.name).replace(/'/g, "\\'")}')">${series.book_count}</td>
-                                <td class="col-size" style="cursor: pointer;" onclick="window.seriesManager.toggleSeries('${MediaLibraryUtils.escapeHtml(series.name).replace(/'/g, "\\'")}')"> ${MediaLibraryUtils.formatFileSize(series.total_size)}</td>
+                                <td class="col-size" onclick="window.seriesManager.toggleSeries('${MediaLibraryUtils.escapeHtml(series.name).replace(/'/g, "\\'")}')">${series.book_count}</td>
+                                <td class="col-size" onclick="window.seriesManager.toggleSeries('${MediaLibraryUtils.escapeHtml(series.name).replace(/'/g, "\\'")}')"> ${MediaLibraryUtils.formatFileSize(series.total_size)}</td>
                             </tr>
                             ${this.expandedSeries.has(series.name) ? this.renderSeriesBooksRows(series) : ''}
                         `
@@ -257,21 +257,20 @@ class SeriesSectionManager extends BaseSectionManager {
             .map(
                 (book) => `
             <tr class="series-book-row ${this.selectedItemId === book.id ? 'selected' : ''}" 
-                style="background-color: var(--bs-secondary-bg);" 
                 data-item-id="${book.id}" 
                 onclick="window.seriesManager.selectItem(${book.id})">
                 <td></td>
-                <td class="col-title truncate" style="padding-left: 40px; cursor: pointer;" title="${MediaLibraryUtils.escapeHtml(book.title)}">
-                    <i class="fas fa-book me-2" style="color: var(--bs-secondary);"></i>
+                <td class="col-title truncate series-book-title-cell" title="${MediaLibraryUtils.escapeHtml(book.title)}">
+                    <i class="fas fa-book me-2 text-secondary"></i>
                     ${book.position ? `[${book.position}] ` : ''}${MediaLibraryUtils.escapeHtml(book.title)}
                 </td>
-                <td class="col-author truncate" style="cursor: pointer;" title="${MediaLibraryUtils.escapeHtml(book.author)}">
+                <td class="col-author truncate" title="${MediaLibraryUtils.escapeHtml(book.author)}">
                     ${MediaLibraryUtils.escapeHtml(book.author)}
                 </td>
-                <td class="col-format" style="cursor: pointer;">
+                <td class="col-format">
                     <span class="badge bg-secondary">${book.file_format.toUpperCase()}</span>
                 </td>
-                <td class="col-size" style="cursor: pointer;">
+                <td class="col-size">
                     ${
                         book.is_read
                             ? '<span class="badge bg-success" title="Read"></span>'
@@ -280,7 +279,7 @@ class SeriesSectionManager extends BaseSectionManager {
                               : '<span class="badge bg-secondary" title="Unread">○</span>'
                     }
                 </td>
-                <td class="col-size" style="cursor: pointer;">${MediaLibraryUtils.formatFileSize(book.file_size)}</td>
+                <td class="col-size">${MediaLibraryUtils.formatFileSize(book.file_size)}</td>
             </tr>
         `
             )
@@ -543,7 +542,7 @@ class SeriesSectionManager extends BaseSectionManager {
                                     <label class="form-label small fw-bold text-muted mb-1">Progress</label>
                                     <div>
                                         ${series.books.filter((b) => b.is_read).length} / ${series.books.length} read
-                                        <div class="progress mt-1" style="height: 6px;">
+                                        <div class="progress progress-compact mt-1">
                                             <div class="progress-bar bg-success" style="width: ${(series.books.filter((b) => b.is_read).length / series.books.length) * 100}%"></div>
                                         </div>
                                     </div>

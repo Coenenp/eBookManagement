@@ -1166,8 +1166,8 @@ class RescanTabManager {
         const progressSection = document.getElementById('rescanProgress');
         const resultsSection = document.getElementById('rescanResults');
 
-        progressSection.classList.remove('d-hidden');
-        resultsSection.classList.add('d-hidden');
+        progressSection.classList.remove('d-none');
+        resultsSection.classList.add('d-none');
 
         this.updateProgress(0, 'Initializing rescan...');
     }
@@ -1192,8 +1192,8 @@ class RescanTabManager {
         const resultsSection = document.getElementById('rescanResults');
         const summaryDiv = document.getElementById('rescanSummary');
 
-        progressSection.classList.add('d-hidden');
-        resultsSection.classList.remove('d-hidden');
+        progressSection.classList.add('d-none');
+        resultsSection.classList.remove('d-none');
 
         // Build summary HTML
         let summaryHtml = '<h6>Rescan Summary:</h6>';
@@ -1229,7 +1229,7 @@ class RescanTabManager {
         const progressSection = document.getElementById('rescanProgress');
         const resultsSection = document.getElementById('rescanResults');
 
-        progressSection.classList.add('d-hidden');
+        progressSection.classList.add('d-none');
 
         // Show error in results section
         const resultsDiv = document.querySelector('#rescanResults .card-header');
@@ -1247,7 +1247,7 @@ class RescanTabManager {
             </button>
         `;
 
-        resultsSection.style.display = 'block';
+        resultsSection.classList.remove('d-none');
     }
 }
 

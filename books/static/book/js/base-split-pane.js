@@ -86,7 +86,7 @@ function initializeSearchClear() {
     if (searchFilter && clearBtn) {
         // Show/hide clear button based on input content
         function updateClearButton() {
-            clearBtn.style.display = searchFilter.value ? 'flex' : 'none';
+            clearBtn.classList.toggle('is-visible', Boolean(searchFilter.value));
         }
 
         // Initialize button visibility
@@ -129,7 +129,7 @@ function clearSearch() {
     }
 
     if (clearBtn) {
-        clearBtn.style.display = 'none';
+        clearBtn.classList.remove('is-visible');
     }
 }
 

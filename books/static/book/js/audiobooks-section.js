@@ -99,7 +99,7 @@ class AudiobooksSectionManager extends BaseSectionManager {
                 <table class="condensed-table">
                     <thead>
                         <tr>
-                            <th style="width: 30px;"></th>
+                            <th></th>
                             <th class="col-title" data-sort="title">
                                 Title <i class="fas fa-sort sort-icon"></i>
                             </th>
@@ -136,32 +136,32 @@ class AudiobooksSectionManager extends BaseSectionManager {
                                 (audiobook) => `
                             <tr class="${this.selectedItemId === audiobook.id ? 'selected' : ''} ${this.expandedAudiobooks.has(audiobook.id) ? 'expanded' : ''}" 
                                 data-item-id="${audiobook.id}">
-                                <td style="cursor: pointer; text-align: center;" onclick="event.stopPropagation(); window.sectionManager.toggleAudiobook(${audiobook.id})">
-                                    <i class="fas fa-chevron-right expand-icon" style="transition: transform 0.2s; ${this.expandedAudiobooks.has(audiobook.id) ? 'transform: rotate(90deg);' : ''}"></i>
+                                <td class="expand-toggle-cell" onclick="event.stopPropagation(); window.sectionManager.toggleAudiobook(${audiobook.id})">
+                                    <i class="fas fa-chevron-right expand-icon"></i>
                                 </td>
-                                <td class="col-title truncate" title="${MediaLibraryUtils.escapeHtml(audiobook.title)}" onclick="window.sectionManager.selectItem(${audiobook.id})" style="cursor: pointer;">
+                                <td class="col-title truncate" title="${MediaLibraryUtils.escapeHtml(audiobook.title)}" onclick="window.sectionManager.selectItem(${audiobook.id})">
                                     <i class="fas fa-headphones file-icon"></i>
                                     ${MediaLibraryUtils.escapeHtml(audiobook.title)}
                                 </td>
-                                <td class="col-author truncate" title="${MediaLibraryUtils.escapeHtml(audiobook.author || '')}" onclick="window.sectionManager.selectItem(${audiobook.id})" style="cursor: pointer;">
+                                <td class="col-author truncate" title="${MediaLibraryUtils.escapeHtml(audiobook.author || '')}" onclick="window.sectionManager.selectItem(${audiobook.id})">
                                     ${MediaLibraryUtils.escapeHtml(audiobook.author || '-')}
                                 </td>
-                                <td class="col-series truncate" title="${MediaLibraryUtils.escapeHtml(audiobook.series_name || '')}" onclick="window.sectionManager.selectItem(${audiobook.id})" style="cursor: pointer;">
+                                <td class="col-series truncate" title="${MediaLibraryUtils.escapeHtml(audiobook.series_name || '')}" onclick="window.sectionManager.selectItem(${audiobook.id})">
                                     ${MediaLibraryUtils.escapeHtml(audiobook.series_name || '-')}
                                 </td>
-                                <td class="col-publisher truncate" title="${MediaLibraryUtils.escapeHtml(audiobook.publisher || '')}" onclick="window.sectionManager.selectItem(${audiobook.id})" style="cursor: pointer;">
+                                <td class="col-publisher truncate" title="${MediaLibraryUtils.escapeHtml(audiobook.publisher || '')}" onclick="window.sectionManager.selectItem(${audiobook.id})">
                                     ${MediaLibraryUtils.escapeHtml(audiobook.publisher || '-')}
                                 </td>
-                                <td class="col-format" onclick="window.sectionManager.selectItem(${audiobook.id})" style="cursor: pointer;">
+                                <td class="col-format" onclick="window.sectionManager.selectItem(${audiobook.id})">
                                     <span class="badge bg-secondary">${(audiobook.file_format || '').toUpperCase()}</span>
                                 </td>
-                                <td class="col-size" onclick="window.sectionManager.selectItem(${audiobook.id})" style="cursor: pointer;">${MediaLibraryUtils.formatFileSize(audiobook.file_size)}</td>
-                                <td class="col-year" onclick="window.sectionManager.selectItem(${audiobook.id})" style="cursor: pointer;">${audiobook.publication_date?.substring(0, 4) || '-'}</td>
-                                <td class="col-language" onclick="window.sectionManager.selectItem(${audiobook.id})" style="cursor: pointer;">${(audiobook.language || 'en').toUpperCase()}</td>
-                                <td class="col-path truncate" title="${MediaLibraryUtils.escapeHtml(audiobook.file_path || audiobook.scan_folder || '')}" onclick="window.sectionManager.selectItem(${audiobook.id})" style="cursor: pointer;">
+                                <td class="col-size" onclick="window.sectionManager.selectItem(${audiobook.id})">${MediaLibraryUtils.formatFileSize(audiobook.file_size)}</td>
+                                <td class="col-year" onclick="window.sectionManager.selectItem(${audiobook.id})">${audiobook.publication_date?.substring(0, 4) || '-'}</td>
+                                <td class="col-language" onclick="window.sectionManager.selectItem(${audiobook.id})">${(audiobook.language || 'en').toUpperCase()}</td>
+                                <td class="col-path truncate" title="${MediaLibraryUtils.escapeHtml(audiobook.file_path || audiobook.scan_folder || '')}" onclick="window.sectionManager.selectItem(${audiobook.id})">
                                     ${this.getShortPath(audiobook.file_path || audiobook.scan_folder || '')}
                                 </td>
-                                <td class="col-status" onclick="window.sectionManager.selectItem(${audiobook.id})" style="cursor: pointer;">
+                                <td class="col-status" onclick="window.sectionManager.selectItem(${audiobook.id})">
                                     ${
                                         audiobook.is_finished
                                             ? '<span class="badge bg-success" title="Finished"></span>'
@@ -188,7 +188,7 @@ class AudiobooksSectionManager extends BaseSectionManager {
             return `
                 <tr class="companion-row">
                     <td></td>
-                    <td colspan="10" style="padding-left: 40px; font-size: 0.75rem; color: var(--bs-secondary);">
+                    <td colspan="10" class="companion-detail-cell text-secondary">
                         <i class="fas fa-info-circle me-2"></i>No audio files found
                     </td>
                 </tr>
@@ -198,11 +198,11 @@ class AudiobooksSectionManager extends BaseSectionManager {
         return audiobook.audio_files
             .map(
                 (file) => `
-            <tr class="companion-row" style="background-color: var(--bs-secondary-bg);">
+            <tr class="companion-row">
                 <td></td>
-                <td colspan="10" style="padding-left: 40px; font-size: 0.75rem;">
-                    <i class="fas fa-file-audio me-2" style="color: var(--bs-secondary);"></i>
-                    <span style="font-family: monospace;">${MediaLibraryUtils.escapeHtml(file.name)}</span>
+                <td colspan="10" class="companion-detail-cell">
+                    <i class="fas fa-file-audio me-2 text-secondary"></i>
+                    <span class="font-monospace">${MediaLibraryUtils.escapeHtml(file.name)}</span>
                     <span class="badge bg-info ms-2">${file.type.toUpperCase()}</span>
                     <span class="text-muted ms-2">${MediaLibraryUtils.formatFileSize(file.size)}</span>
                     ${file.duration ? `<span class="text-muted ms-2"><i class="fas fa-clock me-1"></i>${file.duration}</span>` : ''}

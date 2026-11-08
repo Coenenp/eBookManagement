@@ -66,12 +66,12 @@ function makeResizeHandleVisible() {
 
     // Show handle on panel hover
     leftPanel.addEventListener('mouseenter', () => {
-        handle.style.opacity = '0.7';
+        handle.classList.add('is-visible');
     });
 
     leftPanel.addEventListener('mouseleave', () => {
         if (!isResizing) {
-            handle.style.opacity = '0';
+            handle.classList.remove('is-visible', 'is-near');
         }
     });
 
@@ -81,9 +81,9 @@ function makeResizeHandleVisible() {
         const distanceFromRight = rect.right - e.clientX;
 
         if (distanceFromRight <= 10) {
-            handle.style.opacity = '1';
+            handle.classList.add('is-visible', 'is-near');
         } else if (distanceFromRight > 20 && !isResizing) {
-            handle.style.opacity = '0';
+            handle.classList.remove('is-visible', 'is-near');
         }
     });
 }
@@ -98,8 +98,7 @@ function startResize(e) {
     if (!resizeHandle || !leftPanel) return;
 
     resizeHandle.classList.add('dragging');
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
+    document.body.classList.add('is-resizing');
 
     // Get initial values
     startX = e.clientX || (e.touches && e.touches[0].clientX);
@@ -159,8 +158,7 @@ function stopResize() {
         resizeHandle.classList.remove('dragging');
     }
 
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
+    document.body.classList.remove('is-resizing');
     document.removeEventListener('selectstart', preventSelection);
 
     // Save the panel width to localStorage for persistence
@@ -231,18 +229,18 @@ function handleMobileLayout() {
             const hasSelectedItem = document.querySelector('.list-item.selected');
 
             if (hasSelectedItem) {
-                leftPanel.style.display = 'none';
-                detailPanel.style.display = 'block';
+                leftPanel.classList.add('mobile-panel-hidden');
+                detailPanel.classList.remove('mobile-panel-hidden');
             } else {
-                leftPanel.style.display = 'block';
-                detailPanel.style.display = 'none';
+                leftPanel.classList.remove('mobile-panel-hidden');
+                detailPanel.classList.add('mobile-panel-hidden');
             }
         }
     } else {
         // Desktop layout: show both panels
         if (leftPanel && detailPanel) {
-            leftPanel.style.display = 'block';
-            detailPanel.style.display = 'block';
+            leftPanel.classList.remove('mobile-panel-hidden');
+            detailPanel.classList.remove('mobile-panel-hidden');
         }
     }
 }
@@ -264,8 +262,8 @@ function addMobileBackButton() {
         const detailPanel = document.getElementById('detail-panel');
 
         if (leftPanel && detailPanel) {
-            leftPanel.style.display = 'block';
-            detailPanel.style.display = 'none';
+            leftPanel.classList.remove('mobile-panel-hidden');
+            detailPanel.classList.add('mobile-panel-hidden');
 
             // Clear selection
             document.querySelectorAll('.list-item.selected').forEach((el) => {
@@ -381,8 +379,8 @@ function initializeKeyboardNavigation() {
                     const detailPanel = document.getElementById('detail-panel');
 
                     if (leftPanel && detailPanel) {
-                        leftPanel.style.display = 'block';
-                        detailPanel.style.display = 'none';
+                        leftPanel.classList.remove('mobile-panel-hidden');
+                        detailPanel.classList.add('mobile-panel-hidden');
 
                         document.querySelectorAll('.list-item.selected').forEach((el) => {
                             el.classList.remove('selected');

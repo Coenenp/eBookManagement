@@ -547,7 +547,7 @@ class ScanningDashboard {
                 // Hide "no active scans" message
                 const noScansAlert = activeScanContainer.querySelector('.alert-info');
                 if (noScansAlert) {
-                    noScansAlert.style.display = 'none';
+                    noScansAlert.classList.add('d-none');
                 }
 
                 // Update existing scans and add new ones
@@ -580,7 +580,7 @@ class ScanningDashboard {
                 if (!hasCompletedScans) {
                     const noScansAlert = activeScanContainer.querySelector('.alert-info');
                     if (noScansAlert) {
-                        noScansAlert.style.display = 'block';
+                        noScansAlert.classList.remove('d-none');
                     }
                     // Remove all scan cards
                     activeScanContainer.querySelectorAll('.scan-card').forEach((card) => card.remove());
@@ -755,7 +755,7 @@ class ScanningDashboard {
                         </button>
                     </div>
                     
-                    <div class="progress mb-2" style="height: 20px;">
+                    <div class="progress progress-tall mb-2">
                         <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
                              style="width: ${scan.progress}%">
                             ${scan.progress.toFixed(1)}%
