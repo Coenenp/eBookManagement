@@ -714,3 +714,103 @@ class SafeMoveBookTests(TestCase):
         self.assertNotIn("cover-invalid", row2.review_flags)
         with zipfile.ZipFile(target2) as z:
             self.assertTrue(any(n.endswith(".png") for n in z.namelist()), z.namelist())
+
+
+class EpubMetadataWiringTests(TestCase):
+    """safe_move_book builds the metadata dict and passes it through the fixer."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(self.root), ignore_errors=True)
+        self.scan_root = self.root / "lib"
+        self.scan_root.mkdir()
+        self.scan_folder = ScanFolder.objects.create(
+            path=str(self.scan_root), name="Sample [To Delete]", content_type="ebooks", is_active=True,
+        )
+        self.target_dir = self.root / "Moved"
+
+    def _epub_book(self, name="sub/book.epub", *, reviewed=True):
+        src = self.scan_root / name
+        src.parent.mkdir(parents=True, exist_ok=True)
+        _write_epub(src)
+        book = create_test_book_with_file(
+            file_path=str(src), file_format="epub", scan_folder=self.scan_folder,
+        )
+        if reviewed:
+            FinalMetadata.objects.create(
+                book=book, final_title="Great Book", final_author="Jane Doe",
+                language="en", final_publisher="Acme", publication_year=1999,
+                description="A great read", isbn="9781234567890", is_reviewed=True,
+            )
+        return book, src
+
+    def test_approved_epub_gets_metadata(self):
+        book, src = self._epub_book()
+        target = self.target_dir / "book.epub"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        from lxml import etree
+
+        with zipfile.ZipFile(target) as z:
+            root = etree.fromstring(z.read("OEBPS/content.opf"))
+        NS = {"dc": "http://purl.org/dc/elements/1.1/", "opf": "http://www.idpf.org/2007/opf"}
+        m = root.find("opf:metadata", NS)
+        self.assertEqual(m.find("dc:title", NS).text, "Great Book")
+        self.assertEqual(m.find("dc:creator", NS).text, "Jane Doe")
+        self.assertEqual(m.find("dc:publisher", NS).text, "Acme")
+        self.assertEqual(m.find("dc:date", NS).text, "1999-01-01")
+
+    def test_unapproved_epub_writes_nothing(self):
+        book, src = self._epub_book(reviewed=False)
+        target = self.target_dir / "book.epub"
+        with self.assertRaises(ValueError):
+            safe_move_book(book, str(target))
+        self.assertTrue(src.exists())
+        self.assertFalse(target.exists())
+        self.assertEqual(FileMove.objects.filter(book=book).count(), 0)
+
+    def test_pdf_moves_unchanged(self):
+        src = self.scan_root / "sub/book.pdf"
+        src.parent.mkdir(parents=True, exist_ok=True)
+        data = b"%PDF-1.4 fake pdf bytes"
+        src.write_bytes(data)
+        book = create_test_book_with_file(
+            file_path=str(src), file_format="pdf", scan_folder=self.scan_folder,
+        )
+        FinalMetadata.objects.create(book=book, final_title="Pdf Title", is_reviewed=True)
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertEqual(target.read_bytes(), data)
+
+    def test_repack_off_leaves_epub_unchanged(self):
+        book, src = self._epub_book()
+        with zipfile.ZipFile(src) as z:
+            before = z.read("OEBPS/content.opf")
+        target = self.target_dir / "book.epub"
+        row = safe_move_book(book, str(target), repack_epub=False)
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        with zipfile.ZipFile(target) as z:
+            self.assertEqual(z.read("OEBPS/content.opf"), before)
+
+    def test_metadata_mismatch_needs_review_no_archive(self):
+        from books.utils.epub_fix import fixer as fixer_mod
+
+        book, src = self._epub_book()
+        target = self.target_dir / "book.epub"
+        real_sync = fixer_mod._sync_metadata
+
+        def drop_title(opf_root, metadata):
+            reduced = {k: v for k, v in metadata.items() if k != "title"}
+            return real_sync(opf_root, reduced)
+
+        with mock.patch("books.utils.epub_fix.fixer._sync_metadata", side_effect=drop_title):
+            with self.assertRaises(NeedsReview) as ctx:
+                safe_move_book(book, str(target))
+        self.assertIn("metadata-mismatch:title", ctx.exception.codes)
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.NEEDS_REVIEW)
+        self.assertTrue(src.exists())
+        self.assertFalse(target.exists())
+        self.assertFalse(Path(row.archived_path).exists())
+        self.assertFalse(Path(str(target) + ".moving").exists())

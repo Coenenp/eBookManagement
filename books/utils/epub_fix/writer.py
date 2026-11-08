@@ -7,7 +7,7 @@ from pathlib import Path
 from books.utils.epub_fix.fixer import _compute
 
 
-def write_epub(source_path, output_path, cover_path=None, fix_encoding=False):
+def write_epub(source_path, output_path, cover_path=None, fix_encoding=False, metadata=None):
     """Fix and write an EPUB safely, never opening the source for writing.
 
     Reads the source read-only, applies the lossless fixes and (optionally)
@@ -20,7 +20,7 @@ def write_epub(source_path, output_path, cover_path=None, fix_encoding=False):
     out = Path(output_path)
     if out.resolve() == src.resolve():
         raise ValueError("output path must differ from the input path")
-    _plan, entries, _dropped, _modified = _compute(str(src), cover_path, fix_encoding)
+    _plan, entries, _dropped, _modified = _compute(str(src), cover_path, fix_encoding, metadata)
     _write_entries(str(out), entries)
     return str(out)
 

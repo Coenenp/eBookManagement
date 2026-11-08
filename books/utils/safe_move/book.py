@@ -17,6 +17,7 @@ from books.utils.epub_fix.fixer import IMAGE_MEDIA_BY_EXT, _validate_cover
 from books.utils.renaming_engine import is_renamable
 from books.utils.safe_move.archive import default_archive_root
 from books.utils.safe_move.recovery import _check_c_passes, _revert_db, resolve_move
+from books.utils.safe_move.metadata_sync import build_epub_metadata
 from books.utils.safe_move.routine import (
     NeedsReview,
     finalize_move,
@@ -333,6 +334,7 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
     is_epub_repack = repack_epub and Path(source_path).suffix.lower() == ".epub"
     cover_flag = _cover_flag(cover_path) if is_epub_repack else None
     effective_cover = None if cover_flag is not None else cover_path
+    metadata = build_epub_metadata(book) if is_epub_repack else None
     scan_label = f"{scan_folder.name} {scan_folder.id}"
     archive_root = default_archive_root(scan_folder.path)
     final_metadata = book.final_metadata
@@ -383,7 +385,7 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
             source_path, target, scan_root=scan_folder.path,
             scan_label=scan_label, archive_root=archive_root,
             repack_epub=repack_epub, cover_path=effective_cover,
-            fix_encoding=fix_encoding, on_step=on_step,
+            fix_encoding=fix_encoding, on_step=on_step, metadata=metadata,
         )
     except NeedsReview as exc:
         # (d) Blocking check failed: record needs_review, nothing else changes.
