@@ -17,6 +17,7 @@ class FileMove(models.Model):
 
     class State(models.TextChoices):
         PLANNED = "planned", "Planned"
+        QUEUED = "queued", "Queued"
         TMP_WRITTEN = "tmp_written", "Temp written"
         TMP_VERIFIED = "tmp_verified", "Temp verified"
         ARCHIVED = "archived", "Archived"
@@ -52,6 +53,8 @@ class FileMove(models.Model):
     tmp_path = models.TextField(blank=True)
 
     state = models.CharField(max_length=32, choices=State.choices, default=State.PLANNED)
+    queued_at = models.DateTimeField(null=True, blank=True)
+    batch_id = models.CharField(max_length=36, blank=True, default="", db_index=True)
 
     original_sha256 = models.CharField(max_length=64, blank=True)
     archived_sha256 = models.CharField(max_length=64, blank=True)

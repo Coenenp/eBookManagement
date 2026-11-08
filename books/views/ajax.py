@@ -520,6 +520,9 @@ def ajax_submit_ai_feedback(request, book_id=None):
 
                 final_meta.is_reviewed = True  # Mark as reviewed after feedback
                 final_meta.save()
+                from books.scanner.match_verification import mark_resolved
+
+                mark_resolved(book)
 
             return JsonResponse({"success": True, "message": f"AI feedback submitted for book {book_id}", "feedback_id": feedback.id, "updated_metadata": bool(corrections)})
 

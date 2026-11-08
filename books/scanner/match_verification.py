@@ -312,6 +312,10 @@ def mark_unresolved(book, reason):
     if fm is None:
         fm = FinalMetadata(book=book)
         fm.save(auto_sync=False)
+    if fm.is_reviewed:
+        # A reviewed book is approved; an automated stage never writes a
+        # reason onto it.
+        return
     if fm.unresolved_reason in _LANGUAGE_FLAG_REASONS:
         return
     fm.unresolved_reason = reason
@@ -329,7 +333,7 @@ def flag_unresolved(book, reason):
     from books.models import FinalMetadata
 
     fm = FinalMetadata.objects.filter(book=book).first()
-    if fm is not None and fm.unresolved_reason:
+    if fm is not None and (fm.unresolved_reason or fm.is_reviewed):
         return
     _set_unresolved_reason(book, reason)
 
@@ -341,5 +345,8 @@ def _set_unresolved_reason(book, reason):
     if fm is None:
         fm = FinalMetadata(book=book)
         fm.save(auto_sync=False)
+    if fm.is_reviewed:
+        # Never write a reason onto an approved book.
+        return
     fm.unresolved_reason = reason
     fm.save(update_fields=["unresolved_reason"])
