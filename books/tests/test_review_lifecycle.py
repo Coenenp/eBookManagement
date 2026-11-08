@@ -225,3 +225,73 @@ class ApprovalPreservesUnrelatedFieldsTests(TestCase):
         fm = FinalMetadata.objects.get(book=book)
         self.assertEqual(fm.publication_year, 1999)
         self.assertEqual(fm.unresolved_reason, "")
+
+
+class ApprovalPreservesLanguageFlagTests(TestCase):
+    """Approval keeps a language flag: the language reclassification flow, not
+    approval, resolves language_undetermined / language_disagreement."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.temp_dir, ignore_errors=True)
+        self.scan_folder = create_test_scan_folder(temp_dir=self.temp_dir)
+        self.user = get_user_model().objects.create_user(username="lang", password="x")
+        self.client.force_login(self.user)
+
+    def _book_with_language_flag(self, reason):
+        path = Path(self.temp_dir) / "b.epub"
+        path.touch()
+        book = create_test_book_with_file(
+            file_path=str(path), file_format="epub", scan_folder=self.scan_folder
+        )
+        FinalMetadata.objects.create(
+            book=book,
+            final_title="T",
+            final_author="Author",
+            is_reviewed=False,
+            unresolved_reason=reason,
+        )
+        return book
+
+    def _assert_kept(self, book, reason):
+        fm = FinalMetadata.objects.get(book=book)
+        self.assertTrue(fm.is_reviewed)
+        self.assertEqual(fm.unresolved_reason, reason)
+
+    def test_metadata_update_approval_keeps_language_flag(self):
+        for reason in (UnresolvedReason.LANGUAGE_DISAGREEMENT, UnresolvedReason.LANGUAGE_UNDETERMINED):
+            with self.subTest(reason=reason):
+                book = self._book_with_language_flag(reason)
+                resp = self.client.post(
+                    reverse("books:book_metadata_update", kwargs={"pk": book.id}),
+                    {"final_title": "T", "is_reviewed": "on"},
+                )
+                self.assertEqual(resp.status_code, 302)
+                self._assert_kept(book, reason)
+
+    def test_ajax_approval_keeps_language_flag(self):
+        for reason in (UnresolvedReason.LANGUAGE_DISAGREEMENT, UnresolvedReason.LANGUAGE_UNDETERMINED):
+            with self.subTest(reason=reason):
+                book = self._book_with_language_flag(reason)
+                url = reverse("books:ajax_submit_ai_feedback", kwargs={"book_id": book.id})
+                resp = self.client.post(
+                    url,
+                    data=json.dumps({"corrections": {"title": "T"}, "rating": 4}),
+                    content_type="application/json",
+                )
+                self.assertEqual(resp.status_code, 200)
+                self._assert_kept(book, reason)
+
+    def test_ai_feedback_function_approval_keeps_language_flag(self):
+        from books.views.ai_feedback import submit_ai_feedback
+
+        raw = getattr(submit_ai_feedback, "__wrapped__", submit_ai_feedback)
+        for reason in (UnresolvedReason.LANGUAGE_DISAGREEMENT, UnresolvedReason.LANGUAGE_UNDETERMINED):
+            with self.subTest(reason=reason):
+                book = self._book_with_language_flag(reason)
+                request = RequestFactory().post("/", content_type="application/json")
+                request._body = json.dumps({"corrections": {"title": "T"}}).encode()
+                request.user = self.user
+                resp = raw(request, book.id)
+                self.assertTrue(json.loads(resp.content.decode())["success"])
+                self._assert_kept(book, reason)
