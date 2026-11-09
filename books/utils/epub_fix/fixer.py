@@ -667,6 +667,11 @@ def _compute(input_path, cover=None, fix_encoding=False, metadata=None):
                         )
                         if resolved in entries and entries[resolved] == cdata:
                             already_embedded = True
+                            # The cover is already at a cover-image item: point
+                            # ``cover_arc`` at that item so the cover-page block
+                            # still runs (and rewrites a page that references a
+                            # different image), but embed no new entry/item.
+                            cover_arc = resolved
                             break
 
                 if not already_embedded:
