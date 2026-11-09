@@ -6,6 +6,7 @@ functions (``find_cover_page``, ``classify_cover_page``, ``rewrite_cover_page``,
 is exercised with real EPUBs and a cover image on disk.
 """
 
+import hashlib
 import posixpath
 import shutil
 import tempfile
@@ -17,6 +18,7 @@ from lxml import etree as ET
 
 from books.utils.epub_fix import cover_page as cp
 from books.utils.epub_fix.fixer import _compute
+from books.utils.epub_fix.writer import write_epub
 
 MIMETYPE = b"application/epub+zip"
 
@@ -361,3 +363,59 @@ class CoverPageComputeTests(SimpleTestCase):
         fixes, entries, _dropped, _modified = self._compute(src, cover)
         self.assertIn("COVER-PAGE-SKIP", self._codes(fixes))
         self.assertNotIn("COVER-PAGE", self._codes(fixes))
+
+    # (m) a pure page whose image path also occurs in an alt attribute is
+    # ambiguous: the rewrite is skipped and check_cover_page reports "not-pure".
+    def test_ambiguous_pure_page_not_pure(self):
+        page = (
+            b'<html xmlns="http://www.w3.org/1999/xhtml"><body><div>'
+            b'<img src="images/cover.jpg" alt="images/cover.jpg"/></div></body></html>'
+        )
+        src = self._epub(page)
+        cover_path = self._cover_file(data=b"\xff\xd8\xffNEWCOVER")
+        fixes, entries, _dropped, _modified = self._compute(src, cover_path)
+        self.assertIn("COVER-PAGE-SKIP", self._codes(fixes))
+        self.assertNotIn("COVER-PAGE", self._codes(fixes))
+        self.assertEqual(entries["OEBPS/cover.xhtml"], page)
+        out = self.tmp / "out.epub"
+        write_epub(str(src), str(out), cover_path=cover_path)
+        result = cp.check_cover_page(str(out), hashlib.sha256(b"\xff\xd8\xffNEWCOVER").hexdigest())
+        self.assertEqual(result, "not-pure")
+
+    # (n) the old cover already sits at the path the new cover would take by
+    # default ("cover.jpg"); the new cover lands at "cover-2.jpg" and the old
+    # entry is kept.
+    def test_common_layout_old_cover_at_new_path(self):
+        page = _pure_img_page("cover.jpg")
+        src = self._epub(page, image_arc="OEBPS/cover.jpg")
+        cover_path = self._cover_file(data=b"\xff\xd8\xffNEWCOVER")
+        fixes, entries, _dropped, _modified = self._compute(src, cover_path)
+        self.assertIn("COVER-EMBED", self._codes(fixes))
+        # the new cover takes a fresh name, never the occupied "cover.jpg"
+        self.assertIn("OEBPS/cover-2.jpg", entries)
+        self.assertIn("OEBPS/cover.jpg", entries)  # old cover kept
+        page_out = entries["OEBPS/cover.xhtml"]
+        self.assertIn(b'src="cover-2.jpg"', page_out)
+        self.assertNotIn(b'src="cover.jpg"', page_out)
+        out = self.tmp / "out.epub"
+        write_epub(str(src), str(out), cover_path=cover_path)
+        result = cp.check_cover_page(str(out), hashlib.sha256(b"\xff\xd8\xffNEWCOVER").hexdigest())
+        self.assertEqual(result, "ok")
+
+    # (o) a second pass with the same cover is a no-op: same entry names, same
+    # manifest, identical cover page, and no cover-1.jpg / extra manifest item.
+    def test_two_pass_idempotent(self):
+        page = _pure_img_page("cover.jpg")
+        src = self._epub(page, image_arc="OEBPS/cover.jpg")
+        cover_path = self._cover_file(data=b"\xff\xd8\xffNEWCOVER")
+        out1 = self.tmp / "out1.epub"
+        write_epub(str(src), str(out1), cover_path=cover_path)
+        out2 = self.tmp / "out2.epub"
+        write_epub(str(out1), str(out2), cover_path=cover_path)
+        with zipfile.ZipFile(out1) as z1, zipfile.ZipFile(out2) as z2:
+            n1, n2 = set(z1.namelist()), set(z2.namelist())
+            self.assertEqual(n2, n1)
+            self.assertEqual(z2.read("OEBPS/cover.xhtml"), z1.read("OEBPS/cover.xhtml"))
+            self.assertEqual(z2.read("OEBPS/content.opf"), z1.read("OEBPS/content.opf"))
+        self.assertNotIn("OEBPS/cover-1.jpg", n2)
+        self.assertNotIn("OEBPS/cover-3.jpg", n2)

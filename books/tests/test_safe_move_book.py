@@ -848,6 +848,16 @@ def _text_cover_page():
     ).encode("utf-8")
 
 
+def _ambiguous_cover_page():
+    # a pure page whose image path also occurs in the alt attribute: the
+    # reference is ambiguous, so the rewrite is skipped (page not updated).
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>c</title></head>'
+        '<body><div><img src="images/cover.jpg" alt="images/cover.jpg"/></div></body></html>'
+    ).encode("utf-8")
+
+
 def _write_cover_epub(path, page_bytes):
     files = {
         "mimetype": MIMETYPE,
@@ -916,6 +926,17 @@ class CoverPageMoveTests(TestCase):
         self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
         row.refresh_from_db()
         self.assertIn("cover-page-not-updated", row.review_flags)
+        self.assertTrue(target.is_file())
+
+    def test_ambiguous_pure_page_moves_and_flags_not_updated(self):
+        book, src = self._make_cover_epub_book(_ambiguous_cover_page())
+        cover = self._cover(data=b"\xff\xd8\xffNEWCOVER")
+        target = self.target_dir / "book.epub"
+        row = safe_move_book(book, str(target), cover_path=str(cover))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        row.refresh_from_db()
+        self.assertIn("cover-page-not-updated", row.review_flags)
+        self.assertNotIn("cover-page-mismatch", row.review_flags)
         self.assertTrue(target.is_file())
 
     def test_cover_page_mismatch_needs_review(self):
