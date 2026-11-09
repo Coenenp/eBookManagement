@@ -100,29 +100,21 @@ def _number_str(value):
     return str(f)
 
 
-def verify_epub_metadata(epub_path, metadata):
-    """Read the EPUB's OPF back and return the list of synced fields whose value
-    does not match ``metadata`` (empty list means every field verified)."""
-    from books.utils.epub_check.reader import EpubReader
+def verify_opf_root(opf_root, metadata):
+    """Compare a parsed OPF root against ``metadata``; return the changed fields.
 
+    ``metadata`` is the same plain dict ``build_epub_metadata`` produces. An
+    empty result means every present field verified; each mismatching field name
+    is appended once.
+    """
     OPF_NS = "http://www.idpf.org/2007/opf"
     DC_NS = "http://purl.org/dc/elements/1.1/"
     mismatches = []
 
-    reader = EpubReader(str(epub_path))
-    try:
-        root = reader.opf_root
-    except Exception:
-        root = None
-    finally:
-        reader.close()
-
     def _norm(v):
         return (v or "").strip()
 
-    if root is None:
-        return list(metadata.keys()) or ["title"]
-    metadata_el = root.find("opf:metadata", {"opf": OPF_NS})
+    metadata_el = opf_root.find("opf:metadata", {"opf": OPF_NS})
     if metadata_el is None:
         return list(metadata.keys()) or ["title"]
 
@@ -188,3 +180,21 @@ def verify_epub_metadata(epub_path, metadata):
         if want is not None and _norm(got) != _norm(want):
             mismatches.append("series_index")
     return mismatches
+
+
+def verify_epub_metadata(epub_path, metadata):
+    """Read the EPUB's OPF back and return the list of synced fields whose value
+    does not match ``metadata`` (empty list means every field verified)."""
+    from books.utils.epub_check.reader import EpubReader
+
+    reader = EpubReader(str(epub_path))
+    try:
+        root = reader.opf_root
+    except Exception:
+        root = None
+    finally:
+        reader.close()
+
+    if root is None:
+        return list(metadata.keys()) or ["title"]
+    return verify_opf_root(root, metadata)

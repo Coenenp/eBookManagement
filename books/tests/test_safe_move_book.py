@@ -965,3 +965,195 @@ class CoverPageMoveTests(TestCase):
         with zipfile.ZipFile(target) as z:
             page = z.read("OEBPS/cover.xhtml")
         self.assertIn(b"images/cover.jpg", page)  # page untouched
+
+
+class SidecarOpfTests(TestCase):
+    """Item: the sidecar OPF companion is regenerated from curated metadata."""
+
+    OLD_OPF = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="uid" '
+        'xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">'
+        '<metadata>'
+        '<dc:identifier id="uid" opf:scheme="UUID">urn:uuid:old-sidecar-id</dc:identifier>'
+        '<dc:title>Old Sidecar Title</dc:title><dc:language>en</dc:language>'
+        '<dc:publisher>Old Publisher</dc:publisher>'
+        '<dc:subject>Old Subject</dc:subject>'
+        '<meta name="calibre:series" content="Old Series"/>'
+        '<meta name="calibre:series_index" content="9"/>'
+        '</metadata></package>'
+    ).encode("utf-8")
+
+    OPF_NS = "http://www.idpf.org/2007/opf"
+    DC_NS = "http://purl.org/dc/elements/1.1/"
+    NS = {"dc": DC_NS, "opf": OPF_NS}
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(self.root), ignore_errors=True)
+        self.scan_root = self.root / "lib"
+        self.scan_root.mkdir()
+        self.scan_folder = ScanFolder.objects.create(
+            path=str(self.scan_root), name="Sample [To Delete]", content_type="ebooks", is_active=True,
+        )
+        self.target_dir = self.root / "Moved"
+
+    def _sidecar_book(self):
+        src = self.scan_root / "sub/book.epub"
+        src.parent.mkdir(parents=True, exist_ok=True)
+        _write_epub(src)
+        book = create_test_book_with_file(
+            file_path=str(src), file_format="epub", scan_folder=self.scan_folder,
+        )
+        FinalMetadata.objects.create(
+            book=book, final_title="Great Book", final_author="Jane Doe",
+            language="en", final_publisher="Acme", publication_year=1999,
+            description="A great read", isbn="9781234567890",
+            final_series="The Series", final_series_number="2", is_reviewed=True,
+        )
+        sidecar = src.parent / "book.opf"
+        sidecar.write_bytes(self.OLD_OPF)
+        cover = src.parent / "cover.jpg"
+        cover.write_bytes(b"\xff\xd8\xff\xd9")
+        bf = BookFile.objects.get(book=book)
+        bf.opf_path = str(sidecar)
+        bf.cover_path = str(cover)
+        bf.save(update_fields=["opf_path", "cover_path"])
+        return book, src, sidecar, cover
+
+    def test_target_opf_holds_final_metadata_and_cover_reference(self):
+        from lxml import etree as ET
+
+        book, src, sidecar, cover = self._sidecar_book()
+        target = self.target_dir / "book.epub"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        target_opf = self.target_dir / "book.opf"
+        self.assertTrue(target_opf.is_file())
+        root = ET.fromstring(target_opf.read_bytes())
+        m = root.find("opf:metadata", self.NS)
+        self.assertEqual(m.find("dc:title", self.NS).text, "Great Book")
+        self.assertEqual(m.find("dc:creator", self.NS).text, "Jane Doe")
+        self.assertEqual(m.find("dc:publisher", self.NS).text, "Acme")
+        self.assertEqual(m.find("dc:date", self.NS).text, "1999")
+        series = [mm for mm in m.findall("opf:meta", self.NS) if mm.get("name") == "calibre:series"]
+        self.assertEqual(series[0].get("content"), "The Series")
+        # Stale values from the old sidecar are gone.
+        raw = target_opf.read_bytes()
+        self.assertNotIn(b"Old Sidecar Title", raw)
+        self.assertNotIn(b"Old Publisher", raw)
+        self.assertNotIn(b"Old Series", raw)
+        # Cover reference to the moved cover file.
+        cover_meta = [mm for mm in m.findall("opf:meta", self.NS) if mm.get("name") == "cover"]
+        self.assertEqual(cover_meta[0].get("content"), "cover-image")
+        item = root.find("opf:manifest/opf:item", self.NS)
+        self.assertEqual(item.get("href"), "book.jpg")
+        ref = root.find("opf:guide/opf:reference", self.NS)
+        self.assertEqual(ref.get("type"), "cover")
+        self.assertEqual(ref.get("href"), "book.jpg")
+        self.assertTrue((self.target_dir / "book.jpg").is_file())
+
+    def test_archive_holds_original_and_source_gone(self):
+        book, src, sidecar, cover = self._sidecar_book()
+        target = self.target_dir / "book.epub"
+        row = safe_move_book(book, str(target))
+        child = FileMove.objects.get(parent=row, db_field=FileMove.DBField.OPF_PATH)
+        self.assertEqual(Path(child.archived_path).read_bytes(), self.OLD_OPF)
+        self.assertFalse(sidecar.exists())
+
+    def test_book_without_opf_path_creates_no_opf(self):
+        src = self.scan_root / "sub/book.epub"
+        src.parent.mkdir(parents=True, exist_ok=True)
+        _write_epub(src)
+        book = create_test_book_with_file(
+            file_path=str(src), file_format="epub", scan_folder=self.scan_folder,
+        )
+        FinalMetadata.objects.create(book=book, final_title="Great Book", is_reviewed=True)
+        cover = src.parent / "cover.jpg"
+        cover.write_bytes(b"\xff\xd8\xff\xd9")
+        bf = BookFile.objects.get(book=book)
+        bf.cover_path = str(cover)
+        bf.save(update_fields=["cover_path"])
+        target = self.target_dir / "book.epub"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertFalse((self.target_dir / "book.opf").exists())
+        self.assertFalse(FileMove.objects.filter(parent=row, db_field=FileMove.DBField.OPF_PATH).exists())
+
+    def test_failing_opf_verify_leaves_original_and_flags_parent(self):
+        book, src, sidecar, cover = self._sidecar_book()
+        target = self.target_dir / "book.epub"
+        with mock.patch("books.utils.safe_move.book.verify_opf_root", return_value=["title"]):
+            row = safe_move_book(book, str(target))
+        # Main move intact.
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertFalse(src.exists())
+        self.assertTrue(target.is_file())
+        # OPF companion failed: original in place, no target, no archive copy.
+        self.assertTrue(sidecar.exists())
+        self.assertFalse((self.target_dir / "book.opf").exists())
+        child = FileMove.objects.get(parent=row, db_field=FileMove.DBField.OPF_PATH)
+        self.assertEqual(child.state, FileMove.State.NEEDS_REVIEW)
+        self.assertEqual(child.review_flags, ["opf-mismatch:title"])
+        self.assertFalse(Path(child.archived_path).exists())
+        row.refresh_from_db()
+        self.assertIn("companion-failed:book.opf", row.review_flags)
+
+    def test_resolve_move_generated_content_child_every_state(self):
+        from books.utils.safe_move import resolve_move
+        from books.utils.safe_move.metadata_sync import build_epub_metadata
+        from books.utils.safe_move.sidecar_opf import build_sidecar_opf
+
+        book, src, sidecar, cover = self._sidecar_book()
+        metadata = build_epub_metadata(book)
+        generated = build_sidecar_opf(metadata, cover_name="book.jpg", old_opf_bytes=sidecar.read_bytes())
+        original = sidecar.read_bytes()
+        target = self.target_dir / "book.opf"
+        archive = self.root / "archive" / "book.opf"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        orig_hash = hashlib.sha256(original).hexdigest()
+        new_hash = hashlib.sha256(generated).hexdigest()
+        bf = BookFile.objects.get(book=book)
+
+        cases = [
+            (FileMove.State.PLANNED, "rolled_back"),
+            (FileMove.State.TMP_WRITTEN, "rolled_back"),
+            (FileMove.State.TMP_VERIFIED, "rolled_back"),
+            (FileMove.State.ARCHIVED, "rolled_back"),
+            (FileMove.State.COMMITTED, "rolled_back"),
+            (FileMove.State.DB_UPDATED, "finalized"),
+            (FileMove.State.PENDING_DELETION, "noop"),
+        ]
+        for state, expected in cases:
+            with self.subTest(state=state):
+                for p in (target, archive, sidecar):
+                    if p.exists():
+                        p.unlink()
+                sidecar.write_bytes(original)
+                if state in (FileMove.State.ARCHIVED, FileMove.State.COMMITTED,
+                             FileMove.State.DB_UPDATED, FileMove.State.PENDING_DELETION):
+                    archive.write_bytes(original)
+                if state in (FileMove.State.COMMITTED, FileMove.State.DB_UPDATED,
+                             FileMove.State.PENDING_DELETION):
+                    target.write_bytes(generated)
+                if state == FileMove.State.PENDING_DELETION:
+                    sidecar.unlink()
+                bf.opf_path = str(target) if state == FileMove.State.DB_UPDATED else str(sidecar)
+                bf.save(update_fields=["opf_path"])
+                row = FileMove.objects.create(
+                    book=book, kind=FileMove.Kind.COMPANION, db_field=FileMove.DBField.OPF_PATH,
+                    source_path=str(sidecar), target_path=str(target), archived_path=str(archive),
+                    state=state, original_sha256=orig_hash, archived_sha256=orig_hash, new_sha256=new_hash,
+                )
+                action = resolve_move(row, apply=True)
+                self.assertEqual(action, expected)
+                row.refresh_from_db()
+                if expected == "rolled_back":
+                    self.assertTrue(sidecar.exists())
+                    self.assertFalse(target.exists())
+                elif expected == "finalized":
+                    self.assertFalse(sidecar.exists())
+                    self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+                elif expected == "noop":
+                    self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
