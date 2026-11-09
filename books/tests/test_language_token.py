@@ -22,6 +22,7 @@ from django.test import SimpleTestCase, TestCase
 from books.models import LANGUAGE_CHOICES
 from books.models_metadata import FinalMetadata
 from books.models import Book
+from books.utils.language_names import LANGUAGE_NAMES
 from books.utils.renaming_engine import RenamingEngine
 
 
@@ -60,6 +61,31 @@ class LanguageNameTokenTests(SimpleTestCase):
     def test_language_name_full_pattern(self):
         result = self.engine.process_template("${language_name}/${author.sortname}/${title}", _book("en"))
         self.assertEqual(result, "English/Doe, Jane/Great Book")
+
+    def test_language_name_resolves_every_langid_code(self):
+        for code, name in LANGUAGE_NAMES.items():
+            with self.subTest(code=code):
+                result = self.engine.process_template("${language_name}", _book(code))
+                self.assertEqual(result, name)
+
+    def test_language_names_match_scanfolder_choices(self):
+        for code, name in LANGUAGE_CHOICES:
+            if code in ("", "und"):
+                continue
+            with self.subTest(code=code):
+                self.assertEqual(LANGUAGE_NAMES.get(code), name)
+
+    def test_language_names_survive_path_sanitiser(self):
+        for code, name in LANGUAGE_NAMES.items():
+            with self.subTest(code=code):
+                self.assertEqual(self.engine._normalize_path(name), name)
+
+    def test_language_names_unique_and_nonempty(self):
+        self.assertGreater(len(LANGUAGE_NAMES), 0)
+        names = list(LANGUAGE_NAMES.values())
+        self.assertEqual(len(names), len(set(names)))
+        for name in names:
+            self.assertTrue(name and name.strip())
 
 
 class LanguageNameTokenDatabaseTests(TestCase):

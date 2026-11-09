@@ -384,6 +384,22 @@ class SafeMoveBookTests(TestCase):
         self.assertEqual(bf.cover_path, str(self.target_dir / "book.jpg"))
         self.assertEqual(bf.opf_path, str(self.target_dir / "book.opf"))
 
+    def test_discover_companions_cover_before_opf(self):
+        from books.utils.safe_move.book import _discover_companions
+
+        book, src, cover, opf, txt = self._make_book_with_companions()
+        primary_file = BookFile.objects.get(book=book)
+        result, shared, outside = _discover_companions(
+            primary_file, str(self.target_dir / "book.pdf")
+        )
+        db_fields = [db_field for _source, db_field, _target in result]
+        self.assertIn(FileMove.DBField.COVER_PATH, db_fields)
+        self.assertIn(FileMove.DBField.OPF_PATH, db_fields)
+        self.assertLess(
+            db_fields.index(FileMove.DBField.COVER_PATH),
+            db_fields.index(FileMove.DBField.OPF_PATH),
+        )
+
     def test_failing_companion_leaves_main_done_and_flags_parent(self):
         book, src, cover, opf, txt = self._make_book_with_companions()
         target = self.target_dir / "book.pdf"
