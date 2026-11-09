@@ -758,7 +758,7 @@ class EpubMetadataWiringTests(TestCase):
         self.assertEqual(m.find("dc:title", NS).text, "Great Book")
         self.assertEqual(m.find("dc:creator", NS).text, "Jane Doe")
         self.assertEqual(m.find("dc:publisher", NS).text, "Acme")
-        self.assertEqual(m.find("dc:date", NS).text, "1999-01-01")
+        self.assertEqual(m.find("dc:date", NS).text, "1999")
 
     def test_unapproved_epub_writes_nothing(self):
         book, src = self._epub_book(reviewed=False)

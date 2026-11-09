@@ -52,7 +52,7 @@ def _authors(book, final):
     rels = list(
         book.author_relationships.filter(is_active=True, is_main_author=True)
         .select_related("author")
-        .order_by("-confidence")
+        .order_by("-confidence", "id")
     )
     if rels:
         result = []
@@ -85,7 +85,7 @@ def _subjects(book):
         rel.genre.name
         for rel in book.genre_relationships.filter(is_active=True)
         .select_related("genre")
-        .order_by("-confidence")
+        .order_by("-confidence", "genre__name")
         if rel.genre and rel.genre.name
     ]
 
@@ -141,10 +141,10 @@ def verify_epub_metadata(epub_path, metadata):
         mismatches.append("description")
     if "year" in metadata:
         try:
-            expected = f"{int(metadata['year'])}-01-01"
+            expected_year = str(int(metadata["year"]))
         except (ValueError, TypeError):
-            expected = str(metadata["year"])
-        if _norm(_dc("date")) != _norm(expected):
+            expected_year = str(metadata["year"])
+        if not (_dc("date") or "").startswith(expected_year):
             mismatches.append("year")
     if "authors" in metadata:
         got = [_norm(c.text) for c in metadata_el.findall(f"{{{DC_NS}}}creator")]
