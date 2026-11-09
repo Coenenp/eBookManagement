@@ -18,6 +18,9 @@ from books.utils.epub_check.reader import EpubReader
 from books.utils.epub_check.rules import MEDIA_TYPE_BY_EXT, XHTML_MEDIA_TYPES
 
 OPF_NS = "http://www.idpf.org/2007/opf"
+DC_NS = "http://purl.org/dc/elements/1.1/"
+DCTERMS_NS = "http://purl.org/dc/terms/"
+CALIBRE_NS = "http://calibre.kovidgoyal.net/2009/metadata"
 
 # lxml preserves comments and namespace prefixes natively on round-trip, so the
 # OPF is edited with lxml and no global namespace registration is needed.
@@ -160,7 +163,248 @@ def _add_encoding_decl(raw: bytes) -> bytes:
 # --------------------------------------------------------------------------- #
 
 
-def _compute(input_path, cover=None, fix_encoding=False):
+def _set_or_create_text(parent, ns, local, value):
+    """Set the text of the first {ns}local child of ``parent``, or append one.
+
+    Returns True when the element was created or its text changed.
+    """
+    tag = f"{{{ns}}}{local}"
+    elem = parent.find(tag)
+    if elem is None:
+        elem = ET.SubElement(parent, tag)
+        elem.text = value
+        return True
+    if elem.text != value:
+        elem.text = value
+        return True
+    return False
+
+
+def _replace_children(parent, ns, local, new_elems):
+    """Replace every {ns}local child with ``new_elems`` at the first's spot."""
+    tag = f"{{{ns}}}{local}"
+    existing = parent.findall(tag)
+
+    def _sig(el):
+        return (el.tag, el.text or "", tuple(sorted(el.attrib.items())))
+
+    if [_sig(e) for e in existing] == [_sig(e) for e in new_elems]:
+        return False
+    index = list(parent).index(existing[0]) if existing else len(list(parent))
+    for e in existing:
+        parent.remove(e)
+    for i, el in enumerate(new_elems):
+        parent.insert(index + i, el)
+    return True
+
+
+def _set_meta_name_content(metadata_el, name, content):
+    for meta in metadata_el.findall(f"{{{OPF_NS}}}meta"):
+        if meta.get("name") == name:
+            if meta.get("content") != content:
+                meta.set("content", content)
+                return True
+            return False
+    el = ET.SubElement(metadata_el, f"{{{OPF_NS}}}meta")
+    el.set("name", name)
+    el.set("content", content)
+    return True
+
+
+def _number_str(value):
+    try:
+        f = float(value)
+    except (ValueError, TypeError):
+        return None
+    if f == int(f):
+        return str(int(f))
+    return str(f)
+
+
+def _year_to_date(year):
+    try:
+        return f"{int(year)}-01-01"
+    except (ValueError, TypeError):
+        return None
+
+
+def _set_creators(metadata_el, authors):
+    new_elems = []
+    for author in authors:
+        name = author.get("name")
+        if not name:
+            continue
+        el = ET.Element(f"{{{DC_NS}}}creator")
+        el.text = str(name)
+        el.set(f"{{{OPF_NS}}}role", "aut")
+        file_as = author.get("file_as")
+        if file_as:
+            el.set(f"{{{OPF_NS}}}file-as", str(file_as))
+        new_elems.append(el)
+    return _replace_children(metadata_el, DC_NS, "creator", new_elems)
+
+
+def _set_subjects(metadata_el, subjects):
+    new_elems = []
+    for s in subjects:
+        if not s:
+            continue
+        el = ET.Element(f"{{{DC_NS}}}subject")
+        el.text = str(s)
+        new_elems.append(el)
+    return _replace_children(metadata_el, DC_NS, "subject", new_elems)
+
+
+def _set_isbn(metadata_el, isbn, is_epub3):
+    scheme = f"{{{OPF_NS}}}scheme"
+    target = None
+    for ident in metadata_el.findall(f"{{{DC_NS}}}identifier"):
+        if ident.get(scheme) == "ISBN":
+            target = ident
+            break
+        if is_epub3 and (ident.text or "").startswith("urn:isbn:"):
+            target = ident
+            break
+    new_text = f"urn:isbn:{isbn}" if is_epub3 else str(isbn)
+    if target is not None:
+        changed = target.text != new_text
+        if changed:
+            target.text = new_text
+        if not is_epub3 and target.get(scheme) != "ISBN":
+            target.set(scheme, "ISBN")
+            changed = True
+        return changed
+    el = ET.SubElement(metadata_el, f"{{{DC_NS}}}identifier")
+    el.text = new_text
+    if not is_epub3:
+        el.set(scheme, "ISBN")
+    return True
+
+
+def _set_series(metadata_el, series, series_index, is_epub3):
+    changed = _set_meta_name_content(metadata_el, "calibre:series", str(series))
+    if series_index:
+        idx = _number_str(series_index)
+        if idx is not None:
+            changed = _set_meta_name_content(metadata_el, "calibre:series_index", idx) or changed
+    if is_epub3:
+        changed = _set_collection(metadata_el, str(series), series_index) or changed
+    return changed
+
+
+def _set_collection(metadata_el, series, series_index):
+    changed = False
+    coll = None
+    for meta in metadata_el.findall(f"{{{OPF_NS}}}meta"):
+        if meta.get("property") == "belongs-to-collection":
+            coll = meta
+            break
+    if coll is None:
+        coll = ET.SubElement(metadata_el, f"{{{OPF_NS}}}meta")
+        coll.set("property", "belongs-to-collection")
+        coll.set("id", "series-1")
+        coll.text = series
+        changed = True
+    elif coll.text != series:
+        coll.text = series
+        changed = True
+    cid = coll.get("id") or "series-1"
+    ref = f"#{cid}"
+    ct = gp = None
+    for meta in metadata_el.findall(f"{{{OPF_NS}}}meta"):
+        if meta.get("refines") == ref:
+            prop = meta.get("property")
+            if prop == "collection-type":
+                ct = meta
+            elif prop == "group-position":
+                gp = meta
+    if ct is None:
+        ct = ET.SubElement(metadata_el, f"{{{OPF_NS}}}meta")
+        ct.set("refines", ref)
+        ct.set("property", "collection-type")
+        ct.text = "series"
+        changed = True
+    elif ct.text != "series":
+        ct.text = "series"
+        changed = True
+    idx = _number_str(series_index)
+    if idx is not None:
+        if gp is None:
+            gp = ET.SubElement(metadata_el, f"{{{OPF_NS}}}meta")
+            gp.set("refines", ref)
+            gp.set("property", "group-position")
+            gp.text = idx
+            changed = True
+        elif gp.text != idx:
+            gp.text = idx
+            changed = True
+    return changed
+
+
+def _set_modified(metadata_el):
+    from datetime import datetime
+
+    value = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    for meta in metadata_el.findall(f"{{{OPF_NS}}}meta"):
+        if meta.get("property") == "dcterms:modified":
+            meta.text = value
+            return True
+    el = ET.SubElement(metadata_el, f"{{{OPF_NS}}}meta")
+    el.set("property", "dcterms:modified")
+    el.text = value
+    return True
+
+
+def _sync_metadata(opf_root, metadata):
+    """Write curated metadata into the OPF ``metadata`` element in place.
+
+    Returns True when the OPF changed. Empty/missing values are skipped so an
+    existing element is never clobbered.
+    """
+    if not metadata:
+        return False
+    NS = {"opf": OPF_NS}
+    metadata_el = opf_root.find("opf:metadata", NS)
+    if metadata_el is None:
+        return False
+    is_epub3 = (opf_root.get("version") or "").startswith("3")
+    changed = False
+
+    for key, local in (("title", "title"), ("language", "language"),
+                       ("publisher", "publisher"), ("description", "description")):
+        value = metadata.get(key)
+        if value:
+            changed = _set_or_create_text(metadata_el, DC_NS, local, str(value)) or changed
+
+    year = metadata.get("year")
+    if year:
+        date_str = _year_to_date(year)
+        if date_str:
+            changed = _set_or_create_text(metadata_el, DC_NS, "date", date_str) or changed
+
+    authors = metadata.get("authors")
+    if authors:
+        changed = _set_creators(metadata_el, authors) or changed
+
+    subjects = metadata.get("subjects")
+    if subjects:
+        changed = _set_subjects(metadata_el, subjects) or changed
+
+    isbn = metadata.get("isbn")
+    if isbn:
+        changed = _set_isbn(metadata_el, isbn, is_epub3) or changed
+
+    series = metadata.get("series")
+    if series:
+        changed = _set_series(metadata_el, series, metadata.get("series_index"), is_epub3) or changed
+
+    if is_epub3:
+        changed = _set_modified(metadata_el) or changed
+
+    return changed
+
+
+def _compute(input_path, cover=None, fix_encoding=False, metadata=None):
     """Analyze the EPUB and return (plan, entries, dropped, modified).
 
     ``entries`` is an ordered arcname -> bytes map of the final package (the
@@ -308,6 +552,9 @@ def _compute(input_path, cover=None, fix_encoding=False):
                     meta.set("name", "cover")
                     meta.set("content", new_cover_id)
                 fixes.append(Fix("COVER-EMBED", f"embed cover image as '{cover_href}' (manifest id '{new_cover_id}')"))
+
+            if metadata:
+                changed = _sync_metadata(opf_root, metadata) or changed
 
             if changed:
                 entries[opf_path] = ET.tostring(opf_root.getroottree(), encoding="utf-8", xml_declaration=True)

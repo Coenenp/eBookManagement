@@ -17,6 +17,7 @@ from typing import Callable, List, Optional
 from books.utils.epub_check import check_epub
 from books.utils.epub_fix.writer import write_epub
 from books.utils.safe_move.archive import archive_destination
+from books.utils.safe_move.metadata_sync import verify_epub_metadata
 
 # Structural errors the fixer cannot repair: these block the move. Every other
 # finding (including HTM-001 malformed XHTML) is flagged, not fatal.
@@ -91,7 +92,7 @@ def _notify(on_step, name, state):
 
 def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
                    repack_epub=True, cover_path=None, fix_encoding=False,
-                   on_step=None):
+                   on_step=None, metadata=None):
     """Move ``source`` to ``target``, archiving the original. Returns MoveResult."""
     src = Path(source).resolve()
     tgt = Path(target)
@@ -124,12 +125,18 @@ def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
     repacked = False
     if repack_epub and src.suffix.lower() in _EPUB_SUFFIXES:
         try:
-            write_epub(str(src), str(tmp), cover_path=cover_path, fix_encoding=fix_encoding)
+            write_epub(str(src), str(tmp), cover_path=cover_path, fix_encoding=fix_encoding, metadata=metadata)
         except Exception as exc:  # BadZipFile, ValueError, KeyError, lxml errors
             _remove(tmp)
             _remove(str(tmp) + ".part")
             raise NeedsReview([f"repack-failed:{type(exc).__name__}"]) from exc
         repacked = True
+        if metadata:
+            mismatches = verify_epub_metadata(str(tmp), metadata)
+            if mismatches:
+                _remove(tmp)
+                _remove(str(tmp) + ".part")
+                raise NeedsReview([f"metadata-mismatch:{f}" for f in mismatches])
     else:
         shutil.copy2(str(src), str(tmp))
         _fsync_file(tmp)
