@@ -66,6 +66,7 @@ class RenamingEngine:
                 "author.sortname": self._get_author_sortname,
                 "author_sort": self._get_author_sortname,  # Common alias
                 "language": self._get_language,
+                "language_name": self._get_language_name,
                 "format": self._get_format,
                 "category": self._get_category,
                 "genre": self._get_genre,
@@ -453,6 +454,25 @@ class RenamingEngine:
             return self.current_book.finalmetadata.language
         # Fallback to direct field
         return getattr(self.current_book, "language", None)
+
+    def _get_language_name(self) -> str:
+        """Get the English display name for the book's language code.
+
+        Resolves the stored language code to its English name via the
+        ``ScanFolder.language`` choices, case-insensitively and ignoring a
+        region subtag (``en-US`` -> ``English``). An empty value, ``und``, or
+        any unmapped code resolves to ``Unknown Language``.
+        """
+        from books.models import LANGUAGE_CHOICES
+
+        code = self._get_language()
+        if not code:
+            return "Unknown Language"
+        base = code.strip().lower().split("-")[0].split("_")[0]
+        if not base or base == "und":
+            return "Unknown Language"
+        names = {lang_code: lang_name for lang_code, lang_name in LANGUAGE_CHOICES}
+        return names.get(base, "Unknown Language")
 
     def _get_format(self) -> Optional[str]:
         """Get file format."""
