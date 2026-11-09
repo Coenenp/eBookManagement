@@ -419,3 +419,80 @@ class CoverPageComputeTests(SimpleTestCase):
             self.assertEqual(z2.read("OEBPS/content.opf"), z1.read("OEBPS/content.opf"))
         self.assertNotIn("OEBPS/cover-1.jpg", n2)
         self.assertNotIn("OEBPS/cover-3.jpg", n2)
+
+    def _epub_already_embedded(self, page_bytes, cover_bytes=b"\xff\xd8\xffNEWCOVER",
+                               old_image_bytes=b"OLDIMAGE"):
+        """An EPUB whose ``cover-image`` manifest item already holds the selected
+        cover bytes, while the pure cover page points at a different image."""
+        opf = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="uid">'
+            '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            '<dc:identifier id="uid">urn:uuid:test</dc:identifier>'
+            '<dc:title>T</dc:title><dc:language>en</dc:language>'
+            '<meta name="cover" content="coverimg"/>'
+            '</metadata>'
+            '<manifest>'
+            '<item id="coverpage" href="cover.xhtml" media-type="application/xhtml+xml"/>'
+            '<item id="oldimg" href="old.jpg" media-type="image/jpeg"/>'
+            '<item id="coverimg" href="cover.jpg" media-type="image/jpeg" properties="cover-image"/>'
+            '</manifest>'
+            '<spine><itemref idref="coverpage"/></spine>'
+            '</package>'
+        ).encode("utf-8")
+        files = {
+            "META-INF/container.xml": _container("OEBPS/content.opf"),
+            "OEBPS/content.opf": opf,
+            "OEBPS/cover.xhtml": page_bytes,
+            "OEBPS/old.jpg": old_image_bytes,
+            "OEBPS/cover.jpg": cover_bytes,
+        }
+        path = self.tmp / "already_embedded.epub"
+        _write_zip(path, files)
+        return str(path)
+
+    # (p) the cover-image item already holds the selected bytes while the pure
+    # page points at a different image: after the repack the page resolves to
+    # the cover item and check_cover_page reports "ok".
+    def test_already_embedded_cover_item_page_rewritten(self):
+        cover_bytes = b"\xff\xd8\xffNEWCOVER"
+        page = _pure_img_page("old.jpg")
+        src = self._epub_already_embedded(page, cover_bytes=cover_bytes)
+        cover = self._cover_file("sel.jpg", data=cover_bytes)
+        fixes, entries, _dropped, _modified = self._compute(src, cover)
+        self.assertIn("COVER-PAGE", self._codes(fixes))
+        self.assertNotIn("COVER-EMBED", self._codes(fixes))
+        self.assertIn(b'src="cover.jpg"', entries["OEBPS/cover.xhtml"])
+        self.assertNotIn(b"old.jpg", entries["OEBPS/cover.xhtml"])
+        out = self.tmp / "out.epub"
+        write_epub(str(src), str(out), cover_path=cover)
+        result = cp.check_cover_page(str(out), hashlib.sha256(cover_bytes).hexdigest())
+        self.assertEqual(result, "ok")
+
+    # (q) a second pass over the already-embedded EPUB is stable.
+    def test_already_embedded_two_pass_stable(self):
+        cover_bytes = b"\xff\xd8\xffNEWCOVER"
+        page = _pure_img_page("old.jpg")
+        src = self._epub_already_embedded(page, cover_bytes=cover_bytes)
+        cover = self._cover_file("sel.jpg", data=cover_bytes)
+        out1 = self.tmp / "out1.epub"
+        write_epub(str(src), str(out1), cover_path=cover)
+        out2 = self.tmp / "out2.epub"
+        write_epub(str(out1), str(out2), cover_path=cover)
+        with zipfile.ZipFile(out1) as z1, zipfile.ZipFile(out2) as z2:
+            self.assertEqual(set(z2.namelist()), set(z1.namelist()))
+            self.assertEqual(z2.read("OEBPS/cover.xhtml"), z1.read("OEBPS/cover.xhtml"))
+            self.assertEqual(z2.read("OEBPS/content.opf"), z1.read("OEBPS/content.opf"))
+
+    # (r) the cover item already holds the bytes and the page already points at
+    # it: nothing changes (guard).
+    def test_already_embedded_page_already_pointing_no_change(self):
+        cover_bytes = b"\xff\xd8\xffNEWCOVER"
+        page = _pure_img_page("cover.jpg")
+        src = self._epub_already_embedded(page, cover_bytes=cover_bytes)
+        cover = self._cover_file("sel.jpg", data=cover_bytes)
+        fixes, entries, _dropped, modified = self._compute(src, cover)
+        self.assertNotIn("COVER-PAGE", self._codes(fixes))
+        self.assertNotIn("COVER-EMBED", self._codes(fixes))
+        self.assertNotIn("OEBPS/cover.xhtml", modified)
+        self.assertEqual(entries["OEBPS/cover.xhtml"], page)
