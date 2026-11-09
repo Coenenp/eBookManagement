@@ -81,6 +81,7 @@ class TemplateManagementView(LoginRequiredMixin, TemplateView):
                 {"token": "${author.sortname}", "description": "Author (Last, First)", "example": "Harari, Yuval Noah"},
                 {"token": "${author.fullname}", "description": "Author full name", "example": "Yuval Noah Harari"},
                 {"token": "${language}", "description": "Book language", "example": "English"},
+                {"token": "${language_name}", "description": "Book language (English name)", "example": "English"},
                 {"token": "${category}", "description": "Book category", "example": "Non-Fiction"},
                 {"token": "${ext}", "description": "File extension", "example": "epub"},
             ],

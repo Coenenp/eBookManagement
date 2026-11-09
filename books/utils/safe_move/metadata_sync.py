@@ -147,7 +147,13 @@ def verify_epub_metadata(epub_path, metadata):
         if not (_dc("date") or "").startswith(expected_year):
             mismatches.append("year")
     if "authors" in metadata:
-        got = [_norm(c.text) for c in metadata_el.findall(f"{{{DC_NS}}}creator")]
+        from books.utils.epub_fix.fixer import _creator_role
+
+        author_creators = [
+            c for c in metadata_el.findall(f"{{{DC_NS}}}creator")
+            if _creator_role(metadata_el, c) in (None, "aut")
+        ]
+        got = [_norm(c.text) for c in author_creators]
         want = [_norm(a.get("name")) for a in metadata["authors"] if a.get("name")]
         if got != want:
             mismatches.append("authors")

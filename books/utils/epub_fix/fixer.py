@@ -250,6 +250,41 @@ def _creator_role(metadata_el, creator):
     return None
 
 
+def _epub3_authors_match(metadata_el, author_creators, authors):
+    """True when the author-role creators already mirror ``authors``.
+
+    Each entry's name matches a creator's text, its role refines meta is
+    ``aut``, and its file-as refines meta equals the entry's file-as (both
+    absent, or both present and equal), all in document order.
+    """
+    named = [a for a in authors if a.get("name")]
+    if len(author_creators) != len(named):
+        return False
+    for creator, author in zip(author_creators, named):
+        if (creator.text or "").strip() != str(author["name"]):
+            return False
+        cid = creator.get("id")
+        role = None
+        file_as = None
+        if cid:
+            for meta in metadata_el.findall(f"{{{OPF_NS}}}meta"):
+                if meta.get("refines") == f"#{cid}":
+                    prop = meta.get("property")
+                    if prop == "role":
+                        role = (meta.text or "").strip()
+                    elif prop == "file-as":
+                        file_as = (meta.text or "").strip()
+        if role != "aut":
+            return False
+        want_file_as = author.get("file_as")
+        if want_file_as:
+            if file_as != str(want_file_as):
+                return False
+        elif file_as is not None:
+            return False
+    return True
+
+
 def _set_creators(metadata_el, authors, is_epub3, existing_ids):
     """Replace author-role dc:creator elements with the dict authors.
 
@@ -266,6 +301,12 @@ def _set_creators(metadata_el, authors, is_epub3, existing_ids):
         c for c in metadata_el.findall(f"{{{DC_NS}}}creator")
         if _creator_role(metadata_el, c) in (None, "aut")
     ]
+
+    # Idempotency: when the author creators already mirror the dict (text,
+    # role aut, file-as through refines) leave them and their refines metas
+    # untouched so repeated syncs are byte-stable apart from dcterms:modified.
+    if is_epub3 and _epub3_authors_match(metadata_el, author_creators, authors):
+        return False
 
     new_elems = []
     for author in authors:
@@ -437,9 +478,9 @@ def _set_collection(metadata_el, series, series_index):
 
 
 def _set_modified(metadata_el):
-    from datetime import datetime
+    from datetime import datetime, timezone
 
-    value = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    value = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     for meta in metadata_el.findall(f"{{{OPF_NS}}}meta"):
         if meta.get("property") == "dcterms:modified":
             meta.text = value

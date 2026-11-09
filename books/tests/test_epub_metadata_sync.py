@@ -582,6 +582,172 @@ class OpfMetadataSyncTests(SimpleTestCase):
                 self.assertEqual(verify_epub_metadata(str(mutated), meta), [field])
 
 
+    # -- (r) verify: only author-role creators are compared --------------------
+
+    def _write_synced(self, meta, *, version="2.0", extra=""):
+        src = self.root / "in.epub"
+        _write_epub(src, _opf(version=version, extra=extra))
+        out = self.root / "out.epub"
+        write_epub(str(src), str(out), metadata=meta)
+        return out
+
+    def test_verify_ignores_translator_and_contributor_epub2(self):
+        from books.utils.safe_move.metadata_sync import verify_epub_metadata
+
+        extra = (
+            '<dc:creator opf:role="aut" opf:file-as="Old, Author">Old Author</dc:creator>'
+            '<dc:creator id="trl1" opf:role="trl">Jane Translator</dc:creator>'
+            '<dc:contributor opf:role="edt">Ed Editor</dc:contributor>'
+        )
+        meta = {"authors": [{"name": "New Author", "file_as": "Author, New"}]}
+        out = self._write_synced(meta, version="2.0", extra=extra)
+        self.assertEqual(verify_epub_metadata(str(out), meta), [])
+
+    def test_verify_ignores_illustrator_epub3(self):
+        from books.utils.safe_move.metadata_sync import verify_epub_metadata
+
+        extra = (
+            '<dc:creator id="aut1">Old Author</dc:creator>'
+            '<meta refines="#aut1" property="role" scheme="marc:relators">aut</meta>'
+            '<dc:creator id="ill1">Ill Illustrator</dc:creator>'
+            '<meta refines="#ill1" property="role" scheme="marc:relators">ill</meta>'
+        )
+        meta = {"authors": [{"name": "New Author"}]}
+        out = self._write_synced(meta, version="3.0", extra=extra)
+        self.assertEqual(verify_epub_metadata(str(out), meta), [])
+
+    def test_verify_changed_author_creator_reports_authors(self):
+        from books.utils.safe_move.metadata_sync import verify_epub_metadata
+
+        meta = {"authors": [{"name": "New Author", "file_as": "Author, New"}]}
+        out = self._write_synced(meta, version="2.0")
+        NS = {"opf": self._OPF_NS, "dc": self._DC_NS}
+
+        def _mutate_author(root):
+            root.findall("opf:metadata/dc:creator", NS)[0].text = "MUTATED"
+
+        mutated = self.root / "mut.epub"
+        shutil.copy(str(out), str(mutated))
+        _mutate_opf_epub(str(mutated), _mutate_author)
+        self.assertEqual(verify_epub_metadata(str(mutated), meta), ["authors"])
+
+    def test_verify_changed_non_author_creator_reports_nothing(self):
+        from books.utils.safe_move.metadata_sync import verify_epub_metadata
+
+        extra = (
+            '<dc:creator opf:role="aut" opf:file-as="Old, Author">Old Author</dc:creator>'
+            '<dc:creator id="trl1" opf:role="trl">Jane Translator</dc:creator>'
+        )
+        meta = {"authors": [{"name": "New Author", "file_as": "Author, New"}]}
+        out = self._write_synced(meta, version="2.0", extra=extra)
+        OPF = self._OPF_NS
+        NS = {"opf": OPF, "dc": self._DC_NS}
+
+        def _mutate_translator(root):
+            for c in root.findall("opf:metadata/dc:creator", NS):
+                if c.get(f"{{{OPF}}}role") == "trl":
+                    c.text = "MUTATED TRANSLATOR"
+
+        mutated = self.root / "mut.epub"
+        shutil.copy(str(out), str(mutated))
+        _mutate_opf_epub(str(mutated), _mutate_translator)
+        self.assertEqual(verify_epub_metadata(str(mutated), meta), [])
+
+    # -- (s) EPUB 3 idempotency -------------------------------------------------
+
+    def _triple_sync(self, meta, *, version="3.0", extra=""):
+        src = self.root / "in.epub"
+        _write_epub(src, _opf(version=version, extra=extra))
+        outs = []
+        prev = src
+        for i in range(3):
+            out = self.root / f"sync{i}.epub"
+            write_epub(str(prev), str(out), metadata=meta)
+            outs.append(out)
+            prev = out
+        return outs
+
+    def _creator_ids(self, out):
+        root = _read_opf(out)
+        NS = {"opf": self._OPF_NS, "dc": self._DC_NS}
+        return [c.get("id") for c in root.findall("opf:metadata/dc:creator", NS)]
+
+    def _canon_except_modified(self, out):
+        from lxml import etree
+
+        root = _read_opf(out)
+        NS = {"opf": self._OPF_NS}
+        for mm in root.findall("opf:metadata/opf:meta", NS):
+            if mm.get("property") == "dcterms:modified":
+                mm.text = "X"
+        return etree.tostring(root)
+
+    def _assert_epub3_idempotent(self, meta, *, extra=""):
+        outs = self._triple_sync(meta, extra=extra)
+        ids = [self._creator_ids(o) for o in outs]
+        self.assertEqual(ids[0], ids[1])
+        self.assertEqual(ids[1], ids[2])
+        canon = [self._canon_except_modified(o) for o in outs]
+        self.assertEqual(canon[0], canon[1])
+        self.assertEqual(canon[1], canon[2])
+
+    def test_epub3_idempotent_creators_stable(self):
+        meta = {
+            "authors": [
+                {"name": "Jane Doe", "file_as": "Doe, Jane"},
+                {"name": "John Smith", "file_as": "Smith, John"},
+            ]
+        }
+        self._assert_epub3_idempotent(meta)
+
+    def test_epub3_idempotent_with_illustrator(self):
+        meta = {"authors": [{"name": "New Author"}]}
+        extra = (
+            '<dc:creator id="aut1">Old Author</dc:creator>'
+            '<meta refines="#aut1" property="role" scheme="marc:relators">aut</meta>'
+            '<dc:creator id="ill1">Ill Illustrator</dc:creator>'
+            '<meta refines="#ill1" property="role" scheme="marc:relators">ill</meta>'
+        )
+        self._assert_epub3_idempotent(meta, extra=extra)
+
+    def test_epub3_idempotent_with_series(self):
+        meta = {
+            "authors": [{"name": "Jane Doe", "file_as": "Doe, Jane"}],
+            "series": "S",
+            "series_index": "2",
+        }
+        self._assert_epub3_idempotent(meta)
+
+    def test_epub3_idempotent_with_illustrator_and_series(self):
+        meta = {"authors": [{"name": "New Author"}], "series": "S", "series_index": "2"}
+        extra = (
+            '<dc:creator id="aut1">Old Author</dc:creator>'
+            '<meta refines="#aut1" property="role" scheme="marc:relators">aut</meta>'
+            '<dc:creator id="ill1">Ill Illustrator</dc:creator>'
+            '<meta refines="#ill1" property="role" scheme="marc:relators">ill</meta>'
+        )
+        self._assert_epub3_idempotent(meta, extra=extra)
+
+    # -- (t) modified timestamp is UTC -----------------------------------------
+
+    def test_modified_timestamp_is_utc(self):
+        from datetime import datetime, timezone
+
+        root = self._sync({"title": "T"}, version="3.0")
+        NS = {"opf": self._OPF_NS}
+        mods = [
+            mm
+            for mm in root.findall("opf:metadata/opf:meta", NS)
+            if mm.get("property") == "dcterms:modified"
+        ]
+        self.assertEqual(len(mods), 1)
+        value = mods[0].text
+        self.assertRegex(value, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+        now = datetime.now(timezone.utc)
+        parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        self.assertLessEqual(abs((now - parsed).total_seconds()), 5)
+
+
 class BuildEpubMetadataTests(TestCase):
     def setUp(self):
         self.scan_folder = ScanFolder.objects.create(
