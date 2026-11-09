@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Callable, List, Optional
 
 from books.utils.epub_check import check_epub
+from books.utils.epub_fix.cover_page import check_cover_page
 from books.utils.epub_fix.writer import write_epub
 from books.utils.safe_move.archive import archive_destination
 from books.utils.safe_move.metadata_sync import verify_epub_metadata
@@ -172,6 +173,19 @@ def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
         if verified_hash != src_hash:
             _remove(tmp)
             raise NeedsReview(["hash-mismatch"])
+
+    # Check B (cover page): when a cover was embedded, the cover page (if any)
+    # must resolve to the new cover bytes. A pure page whose image does not
+    # resolve to the cover is fatal; a non-pure page is flagged, not fatal.
+    if cover_path is not None and repacked:
+        cp = check_cover_page(str(tmp), _sha256(cover_path))
+        if cp == "mismatch":
+            _remove(tmp)
+            _remove(str(tmp) + ".part")
+            raise NeedsReview(["cover-page-mismatch"])
+        if cp == "not-pure":
+            review_flags.append("cover-page-not-updated")
+            review_flags = sorted(set(review_flags))
 
     state["review_flags"] = review_flags
     state["new_sha256"] = verified_hash if verified_hash is not None else _sha256(tmp)

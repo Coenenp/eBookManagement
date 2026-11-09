@@ -16,6 +16,7 @@ from lxml import etree as ET
 
 from books.utils.epub_check.reader import EpubReader
 from books.utils.epub_check.rules import MEDIA_TYPE_BY_EXT, XHTML_MEDIA_TYPES
+from books.utils.epub_fix import cover_page as _cover_page
 
 OPF_NS = "http://www.idpf.org/2007/opf"
 DC_NS = "http://purl.org/dc/elements/1.1/"
@@ -691,6 +692,31 @@ def _compute(input_path, cover=None, fix_encoding=False, metadata=None):
                     meta.set("name", "cover")
                     meta.set("content", new_cover_id)
                 fixes.append(Fix("COVER-EMBED", f"embed cover image as '{cover_href}' (manifest id '{new_cover_id}')"))
+
+            # --- COVER-PAGE rewrite ----------------------------------------- #
+            if cover_info is not None and opf_root is not None and cover_arc is not None:
+                page = _cover_page.find_cover_page(opf_root, opf_path, entries)
+                if page is None:
+                    fixes.append(Fix("COVER-PAGE-SKIP", "no cover page found in the archive"))
+                else:
+                    kind, image_ref = _cover_page.classify_cover_page(entries[page])
+                    if kind != "pure":
+                        fixes.append(Fix("COVER-PAGE-SKIP", f"cover page '{page}' is not a pure image page"))
+                    else:
+                        resolved = posixpath.normpath(
+                            posixpath.join(posixpath.dirname(page), image_ref)
+                        ) if posixpath.dirname(page) else posixpath.normpath(image_ref)
+                        if resolved == cover_arc:
+                            pass  # already points at the new cover; nothing to change
+                        else:
+                            new_ref = _cover_page.relative_href(page, cover_arc)
+                            rewritten = _cover_page.rewrite_cover_page(entries[page], image_ref, new_ref)
+                            if rewritten is None:
+                                fixes.append(Fix("COVER-PAGE-SKIP", f"cover page '{page}' image reference is not unique"))
+                            else:
+                                entries[page] = rewritten
+                                modified.append(page)
+                                fixes.append(Fix("COVER-PAGE", f"rewrite cover page '{page}' image to '{new_ref}'"))
 
             if metadata:
                 changed = _sync_metadata(opf_root, metadata) or changed
