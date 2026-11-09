@@ -221,27 +221,111 @@ def _number_str(value):
     return str(f)
 
 
-def _year_to_date(year):
+def _year_str(year):
     try:
-        return f"{int(year)}-01-01"
+        return str(int(year))
     except (ValueError, TypeError):
-        return None
+        return str(year)
 
 
-def _set_creators(metadata_el, authors):
+def _unique_id(existing_ids, prefix):
+    n = 1
+    while f"{prefix}-{n}" in existing_ids:
+        n += 1
+    return f"{prefix}-{n}"
+
+
+def _creator_role(metadata_el, creator):
+    """Return a dc:creator's role: opf:role attr, a refines role meta, or None."""
+    role = (creator.get(f"{{{OPF_NS}}}role") or "").strip()
+    if role:
+        return role
+    cid = creator.get("id")
+    if cid:
+        for meta in metadata_el.findall(f"{{{OPF_NS}}}meta"):
+            if meta.get("refines") == f"#{cid}" and meta.get("property") == "role":
+                text = (meta.text or "").strip()
+                if text:
+                    return text
+    return None
+
+
+def _set_creators(metadata_el, authors, is_epub3, existing_ids):
+    """Replace author-role dc:creator elements with the dict authors.
+
+    A creator is an author when it carries opf:role ``aut``, a refines role
+    meta of ``aut``, or no role at all. Non-author creators and dc:contributor
+    elements are left untouched; refines metas targeting a removed creator are
+    removed. New authors are inserted at the position of the first replaced
+    creator. EPUB 3 authors carry a unique id plus refines metas for role and
+    file-as; EPUB 2 authors carry opf:role/opf:file-as attributes.
+    """
+    role_attr = f"{{{OPF_NS}}}role"
+    fileas_attr = f"{{{OPF_NS}}}file-as"
+    author_creators = [
+        c for c in metadata_el.findall(f"{{{DC_NS}}}creator")
+        if _creator_role(metadata_el, c) in (None, "aut")
+    ]
+
     new_elems = []
     for author in authors:
         name = author.get("name")
         if not name:
             continue
-        el = ET.Element(f"{{{DC_NS}}}creator")
+        el = ET.Element(f"{{{DC_NS}}}creator", nsmap={"opf": OPF_NS})
         el.text = str(name)
-        el.set(f"{{{OPF_NS}}}role", "aut")
-        file_as = author.get("file_as")
-        if file_as:
-            el.set(f"{{{OPF_NS}}}file-as", str(file_as))
-        new_elems.append(el)
-    return _replace_children(metadata_el, DC_NS, "creator", new_elems)
+        if is_epub3:
+            cid = _unique_id(existing_ids, "creator")
+            el.set("id", cid)
+            existing_ids.add(cid)
+            new_elems.append(el)
+            role_meta = ET.Element(f"{{{OPF_NS}}}meta")
+            role_meta.set("refines", f"#{cid}")
+            role_meta.set("property", "role")
+            role_meta.set("scheme", "marc:relators")
+            role_meta.text = "aut"
+            new_elems.append(role_meta)
+            file_as = author.get("file_as")
+            if file_as:
+                fa = ET.Element(f"{{{OPF_NS}}}meta")
+                fa.set("refines", f"#{cid}")
+                fa.set("property", "file-as")
+                fa.text = str(file_as)
+                new_elems.append(fa)
+        else:
+            el.set(role_attr, "aut")
+            file_as = author.get("file_as")
+            if file_as:
+                el.set(fileas_attr, str(file_as))
+            new_elems.append(el)
+
+    removed_ids = [c.get("id") for c in author_creators if c.get("id")]
+
+    def _sig(el):
+        return (el.tag, el.text or "", tuple(sorted(el.attrib.items())))
+
+    # Idempotency: unchanged EPUB 2 authors (no ids/metas to reconcile) return
+    # without touching the tree.
+    if not removed_ids and [_sig(c) for c in author_creators] == [_sig(e) for e in new_elems]:
+        return False
+
+    insert_index = list(metadata_el).index(author_creators[0]) if author_creators else len(list(metadata_el))
+
+    changed = False
+    for c in author_creators:
+        metadata_el.remove(c)
+        changed = True
+    for meta in list(metadata_el.findall(f"{{{OPF_NS}}}meta")):
+        ref = meta.get("refines")
+        if ref and ref.startswith("#") and ref[1:] in removed_ids:
+            metadata_el.remove(meta)
+            changed = True
+    for i, el in enumerate(new_elems):
+        metadata_el.insert(insert_index + i, el)
+    if new_elems:
+        changed = True
+
+    return changed
 
 
 def _set_subjects(metadata_el, subjects):
@@ -255,17 +339,19 @@ def _set_subjects(metadata_el, subjects):
     return _replace_children(metadata_el, DC_NS, "subject", new_elems)
 
 
-def _set_isbn(metadata_el, isbn, is_epub3):
+def _set_isbn(metadata_el, isbn, is_epub3, unique_id):
     scheme = f"{{{OPF_NS}}}scheme"
+    new_text = f"urn:isbn:{isbn}" if is_epub3 else str(isbn)
     target = None
     for ident in metadata_el.findall(f"{{{DC_NS}}}identifier"):
+        if unique_id is not None and ident.get("id") == unique_id:
+            continue  # never modify the package unique identifier
         if ident.get(scheme) == "ISBN":
             target = ident
             break
         if is_epub3 and (ident.text or "").startswith("urn:isbn:"):
             target = ident
             break
-    new_text = f"urn:isbn:{isbn}" if is_epub3 else str(isbn)
     if target is not None:
         changed = target.text != new_text
         if changed:
@@ -274,7 +360,16 @@ def _set_isbn(metadata_el, isbn, is_epub3):
             target.set(scheme, "ISBN")
             changed = True
         return changed
-    el = ET.SubElement(metadata_el, f"{{{DC_NS}}}identifier")
+    # No other ISBN exists: if the unique identifier already carries this exact
+    # ISBN value, nothing to add.
+    for ident in metadata_el.findall(f"{{{DC_NS}}}identifier"):
+        if unique_id is not None and ident.get("id") == unique_id:
+            text = ident.text or ""
+            if is_epub3 and text == new_text:
+                return False
+            if not is_epub3 and ident.get(scheme) == "ISBN" and text == new_text:
+                return False
+    el = ET.SubElement(metadata_el, f"{{{DC_NS}}}identifier", nsmap={"opf": OPF_NS})
     el.text = new_text
     if not is_epub3:
         el.set(scheme, "ISBN")
@@ -368,6 +463,8 @@ def _sync_metadata(opf_root, metadata):
     if metadata_el is None:
         return False
     is_epub3 = (opf_root.get("version") or "").startswith("3")
+    existing_ids = {el.get("id") for el in opf_root.iter() if el.get("id")}
+    unique_id = opf_root.get("unique-identifier")
     changed = False
 
     for key, local in (("title", "title"), ("language", "language"),
@@ -378,13 +475,14 @@ def _sync_metadata(opf_root, metadata):
 
     year = metadata.get("year")
     if year:
-        date_str = _year_to_date(year)
-        if date_str:
-            changed = _set_or_create_text(metadata_el, DC_NS, "date", date_str) or changed
+        year_str = _year_str(year)
+        date_el = metadata_el.find(f"{{{DC_NS}}}date")
+        if date_el is None or not (date_el.text or "").startswith(year_str):
+            changed = _set_or_create_text(metadata_el, DC_NS, "date", year_str) or changed
 
     authors = metadata.get("authors")
     if authors:
-        changed = _set_creators(metadata_el, authors) or changed
+        changed = _set_creators(metadata_el, authors, is_epub3, existing_ids) or changed
 
     subjects = metadata.get("subjects")
     if subjects:
@@ -392,7 +490,7 @@ def _sync_metadata(opf_root, metadata):
 
     isbn = metadata.get("isbn")
     if isbn:
-        changed = _set_isbn(metadata_el, isbn, is_epub3) or changed
+        changed = _set_isbn(metadata_el, isbn, is_epub3, unique_id) or changed
 
     series = metadata.get("series")
     if series:
