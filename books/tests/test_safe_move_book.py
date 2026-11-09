@@ -1053,6 +1053,40 @@ class SidecarOpfTests(TestCase):
         self.assertEqual(ref.get("href"), "book.jpg")
         self.assertTrue((self.target_dir / "book.jpg").is_file())
 
+    def test_failing_cover_leaves_opf_without_cover_reference(self):
+        from lxml import etree as ET
+
+        book, src, sidecar, cover = self._sidecar_book()
+        target = self.target_dir / "book.epub"
+        real = safe_move_file
+
+        def fake(source, tgt, **kw):
+            if Path(source) == Path(cover):
+                raise NeedsReview(["cover-bad"])
+            return real(source, tgt, **kw)
+
+        with mock.patch("books.utils.safe_move.book.safe_move_file", side_effect=fake):
+            row = safe_move_book(book, str(target))
+
+        # Main move intact.
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertFalse(src.exists())
+        self.assertTrue(target.is_file())
+        # Cover companion failed: original in place, no target cover, parent flagged.
+        self.assertTrue(cover.exists())
+        self.assertFalse((self.target_dir / "book.jpg").exists())
+        row.refresh_from_db()
+        self.assertIn("companion-failed:cover.jpg", row.review_flags)
+        # OPF still moves, but references no cover.
+        target_opf = self.target_dir / "book.opf"
+        self.assertTrue(target_opf.is_file())
+        root = ET.fromstring(target_opf.read_bytes())
+        m = root.find("opf:metadata", self.NS)
+        cover_meta = [mm for mm in m.findall("opf:meta", self.NS) if mm.get("name") == "cover"]
+        self.assertEqual(cover_meta, [])
+        self.assertIsNone(root.find("opf:manifest/opf:item", self.NS))
+        self.assertIsNone(root.find("opf:guide/opf:reference", self.NS))
+
     def test_archive_holds_original_and_source_gone(self):
         book, src, sidecar, cover = self._sidecar_book()
         target = self.target_dir / "book.epub"

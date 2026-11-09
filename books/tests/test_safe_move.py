@@ -257,6 +257,62 @@ class SafeMoveRoutineTests(SimpleTestCase):
         with self.assertRaises(FileExistsError):
             self._move(src, tgt)
 
+    # -- content / verify hooks ----------------------------------------------
+
+    def test_content_bytes_land_verbatim_and_archive_original(self):
+        src = self._src("book.opf", data=b"ORIGINAL")
+        tgt = self._target("book.opf")
+        content = b"GENERATED OPF BYTES"
+        result = self._move(src, tgt, content=content)
+        self.assertEqual(tgt.read_bytes(), content)
+        self.assertEqual(result.new_sha256, _sha256(tgt))
+        self.assertTrue(src.exists())  # original still present until finalize
+        archived = Path(result.archived_path)
+        self.assertTrue(archived.is_file())
+        self.assertEqual(archived.read_bytes(), b"ORIGINAL")
+        self.assertEqual(result.archived_sha256, _sha256(src))
+
+    def test_verify_needs_review_leaves_source_no_target_no_archive(self):
+        src = self._src("book.opf", data=b"ORIGINAL")
+        tgt = self._target("book.opf")
+
+        def bad_verify(tmp):
+            raise NeedsReview(["bad"])
+
+        with self.assertRaises(NeedsReview):
+            self._move(src, tgt, content=b"GENERATED", verify=bad_verify)
+        self.assertTrue(src.exists())
+        self.assertFalse(tgt.exists())
+        self.assertFalse(Path(str(tgt) + ".moving").exists())
+        self.assertFalse(Path(str(tgt) + ".part").exists())
+        archive_files = (
+            list(Path(self.archive_root).rglob("book.opf"))
+            if Path(self.archive_root).exists()
+            else []
+        )
+        self.assertEqual(archive_files, [])
+
+    def test_verify_valueerror_removes_tmp_and_reraise(self):
+        src = self._src("book.opf", data=b"ORIGINAL")
+        tgt = self._target("book.opf")
+
+        def boom(tmp):
+            raise ValueError("boom")
+
+        with self.assertRaises(ValueError):
+            self._move(src, tgt, content=b"GENERATED", verify=boom)
+        self.assertFalse(Path(str(tgt) + ".moving").exists())
+        self.assertFalse(Path(str(tgt) + ".part").exists())
+        self.assertTrue(src.exists())
+
+    def test_existing_target_refused_with_content(self):
+        src = self._src("book.opf", data=b"ORIGINAL")
+        tgt = self._target("book.opf")
+        tgt.parent.mkdir(parents=True)
+        tgt.write_bytes(b"already here")
+        with self.assertRaises(FileExistsError):
+            self._move(src, tgt, content=b"GENERATED")
+
     # -- check A: empty temp -------------------------------------------------
 
     def test_check_a_empty_temp_needs_review(self):

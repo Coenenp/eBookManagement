@@ -17,7 +17,6 @@ two ways:
 
 from types import SimpleNamespace
 
-from django.db import IntegrityError
 from django.test import SimpleTestCase, TestCase
 
 from books.models import LANGUAGE_CHOICES
@@ -86,10 +85,12 @@ class LanguageNameTokenDatabaseTests(TestCase):
                 _book_row, stored = self._save(raw)
                 self.assertEqual(stored, want)
 
-    def test_language_unmapped_code_raises(self):
-        """An unmapped code (``xx``) normalises to None and hits the NOT NULL column."""
-        with self.assertRaises(IntegrityError):
-            self._save("xx")
+    def test_language_unmapped_code_stores_und(self):
+        """An unmapped code (``xx``) normalises to None and stores ``und``."""
+        book, stored = self._save("xx")
+        self.assertEqual(stored, "und")
+        engine = RenamingEngine()
+        self.assertEqual(engine.process_template("${language_name}", book), "Unknown Language")
 
     def test_language_name_via_saved_finalmetadata(self):
         engine = RenamingEngine()

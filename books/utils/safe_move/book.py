@@ -476,14 +476,18 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
     row.refresh_from_db()
 
     # (h) Move companions under their own child rows. A companion failure never
-    # rolls back the main move.
-    cover_comp = next((t for _, f, t in companions if f == FileMove.DBField.COVER_PATH), None)
-    cover_name = Path(cover_comp).name if cover_comp else None
+    # rolls back the main move. The cover companion is first in the list by
+    # construction; its target name is passed to the OPF sidecar only when the
+    # cover actually moved (its child row reached pending_deletion), so a
+    # failed cover leaves the OPF without a cover reference.
+    cover_name = None
     for source, db_field, comp_target in companions:
-        _move_companion(
+        child = _move_companion(
             book, row, source, comp_target, db_field,
             scan_folder=scan_folder, scan_label=scan_label, archive_root=archive_root,
             cover_name=cover_name,
         )
+        if db_field == FileMove.DBField.COVER_PATH and child.state == FileMove.State.PENDING_DELETION:
+            cover_name = Path(child.target_path).name
 
     return row

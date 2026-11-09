@@ -199,12 +199,14 @@ def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
             review_flags.append("cover-page-not-updated")
             review_flags = sorted(set(review_flags))
 
-    # Verify callback (generated content): run before the archive step. A
-    # NeedsReview failure leaves the original untouched and nothing archived.
+    # Verify callback (generated content): run before the archive step. Any
+    # failure (NeedsReview or an unexpected exception) leaves the original
+    # untouched, nothing archived, and the temporary file removed before the
+    # exception is re-raised.
     if verify is not None:
         try:
             verify(str(tmp))
-        except NeedsReview:
+        except Exception:
             _remove(tmp)
             _remove(str(tmp) + ".part")
             raise
