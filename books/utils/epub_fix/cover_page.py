@@ -193,6 +193,14 @@ def check_cover_page(epub_path, cover_sha256):
     if kind != "pure":
         return "not-pure"
 
+    # A pure page whose image reference is ambiguous (the path occurs more than
+    # once in the page bytes, e.g. once in src and again in an alt attribute)
+    # was deliberately left untouched by the fixer: report "not-pure" (page not
+    # updated) rather than "mismatch". A unique reference that still resolves
+    # to the wrong bytes is a genuine failure and remains "mismatch".
+    if image_ref and entries[page].count(image_ref.encode("utf-8")) != 1:
+        return "not-pure"
+
     resolved = _resolve(page, image_ref)
     data = entries.get(resolved)
     if data is None:

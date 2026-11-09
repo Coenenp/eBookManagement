@@ -79,10 +79,12 @@ class LanguageNameTokenDatabaseTests(TestCase):
         return book, stored
 
     def test_language_normalisation_stored_values(self):
-        """Quote what FinalMetadata.save stores for each raw language input."""
-        for raw in ("en", "en-US", "und", ""):
-            _book_row, stored = self._save(raw)
-            print(f"RAW={raw!r} STORED={stored!r}")
+        """Assert what FinalMetadata.save stores for each raw language input."""
+        expected = {"en": "en", "en-US": "en", "und": "und", "": ""}
+        for raw, want in expected.items():
+            with self.subTest(raw=raw):
+                _book_row, stored = self._save(raw)
+                self.assertEqual(stored, want)
 
     def test_language_unmapped_code_raises(self):
         """An unmapped code (``xx``) normalises to None and hits the NOT NULL column."""

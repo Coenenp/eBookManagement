@@ -650,48 +650,67 @@ def _compute(input_path, cover=None, fix_encoding=False, metadata=None):
                 if manifest_el is None or metadata_el is None:
                     raise ValueError("package has no manifest or metadata element; cannot embed cover")
                 cdata, cext, cmt = cover_info
-                # Choose a unique manifest id when "cover-image" is already taken.
-                new_cover_id = "cover-image"
-                if new_cover_id in manifest_ids:
-                    n = 2
-                    while f"cover-image-{n}" in manifest_ids:
-                        n += 1
-                    new_cover_id = f"cover-image-{n}"
                 opf_dir = posixpath.dirname(opf_path) if opf_path else ""
-                # Replace the existing cover. A page-referenced old image keeps
-                # its manifest item (declared) but loses the cover-image
-                # property; an unreferenced old image is dropped entirely.
+
+                # Idempotency: when the incoming cover bytes already sit at an
+                # existing cover-image entry, the cover is already embedded; a
+                # second pass with the same cover must change nothing (no new
+                # entry, no new manifest item, no page rewrite).
+                already_embedded = False
                 for item in list(manifest_el.findall("opf:item", NS)):
-                    props = (item.get("properties") or "").split()
-                    if "cover-image" in props:
+                    if "cover-image" in (item.get("properties") or "").split():
                         href = item.get("href", "")
-                        if _cover_referenced(href, source, names):
-                            remaining = [p for p in props if p != "cover-image"]
-                            if remaining:
-                                item.set("properties", " ".join(remaining))
+                        resolved = (
+                            posixpath.normpath(posixpath.join(opf_dir, href))
+                            if opf_dir
+                            else posixpath.normpath(href)
+                        )
+                        if resolved in entries and entries[resolved] == cdata:
+                            already_embedded = True
+                            break
+
+                if not already_embedded:
+                    # Choose a unique manifest id when "cover-image" is already taken.
+                    new_cover_id = "cover-image"
+                    if new_cover_id in manifest_ids:
+                        n = 2
+                        while f"cover-image-{n}" in manifest_ids:
+                            n += 1
+                        new_cover_id = f"cover-image-{n}"
+                    # Replace the existing cover. A page-referenced old image keeps
+                    # its manifest item (declared) but loses the cover-image
+                    # property; an unreferenced old image is dropped entirely.
+                    for item in list(manifest_el.findall("opf:item", NS)):
+                        props = (item.get("properties") or "").split()
+                        if "cover-image" in props:
+                            href = item.get("href", "")
+                            if _cover_referenced(href, source, names):
+                                remaining = [p for p in props if p != "cover-image"]
+                                if remaining:
+                                    item.set("properties", " ".join(remaining))
+                                else:
+                                    item.attrib.pop("properties", None)
+                                changed = True
                             else:
-                                item.attrib.pop("properties", None)
-                            changed = True
-                        else:
-                            removed_cover_files.append(href)
-                            manifest_el.remove(item)
-                            changed = True
-                cover_href, cover_arc = _choose_cover_href(cext, manifest_hrefs, names, opf_dir)
-                item = ET.SubElement(manifest_el, f"{{{OPF_NS}}}item")
-                item.set("id", new_cover_id)
-                item.set("href", cover_href)
-                item.set("media-type", cmt)
-                item.set("properties", "cover-image")
-                changed = True
-                for meta in list(metadata_el.findall("opf:meta", NS)):
-                    if meta.get("name") == "cover":
+                                removed_cover_files.append(href)
+                                manifest_el.remove(item)
+                                changed = True
+                    cover_href, cover_arc = _choose_cover_href(cext, manifest_hrefs, names, opf_dir)
+                    item = ET.SubElement(manifest_el, f"{{{OPF_NS}}}item")
+                    item.set("id", new_cover_id)
+                    item.set("href", cover_href)
+                    item.set("media-type", cmt)
+                    item.set("properties", "cover-image")
+                    changed = True
+                    for meta in list(metadata_el.findall("opf:meta", NS)):
+                        if meta.get("name") == "cover":
+                            meta.set("content", new_cover_id)
+                            break
+                    else:
+                        meta = ET.SubElement(metadata_el, f"{{{OPF_NS}}}meta")
+                        meta.set("name", "cover")
                         meta.set("content", new_cover_id)
-                        break
-                else:
-                    meta = ET.SubElement(metadata_el, f"{{{OPF_NS}}}meta")
-                    meta.set("name", "cover")
-                    meta.set("content", new_cover_id)
-                fixes.append(Fix("COVER-EMBED", f"embed cover image as '{cover_href}' (manifest id '{new_cover_id}')"))
+                    fixes.append(Fix("COVER-EMBED", f"embed cover image as '{cover_href}' (manifest id '{new_cover_id}')"))
 
             # --- COVER-PAGE rewrite ----------------------------------------- #
             if cover_info is not None and opf_root is not None and cover_arc is not None:
