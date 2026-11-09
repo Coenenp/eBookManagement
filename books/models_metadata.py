@@ -7,6 +7,7 @@ from django.db import models
 from django.utils import timezone
 
 from books.utils.language import normalize_language
+from books.utils.language_names import LANGUAGE_NAMES
 
 logger = logging.getLogger("books.scanner")
 
@@ -458,12 +459,17 @@ class FinalMetadata(models.Model):
             self.sync_from_sources(save_after=False)
 
         # Always normalize data. A non-empty language value that normalizes to
-        # None (an unmapped code such as "xx", or a langid code outside the
-        # map) is stored as "und" instead of hitting the NOT NULL column; an
-        # explicit None is stored as the empty string.
+        # None (an unmapped code) is kept as its lowercase code when that code
+        # is a known langid code (a key of LANGUAGE_NAMES), otherwise stored as
+        # "und" instead of hitting the NOT NULL column; an explicit None is
+        # stored as the empty string.
         if self.language:
             normalized = normalize_language(self.language)
-            self.language = normalized if normalized is not None else "und"
+            if normalized is not None:
+                self.language = normalized
+            else:
+                lower = self.language.strip().lower()
+                self.language = lower if lower in LANGUAGE_NAMES else "und"
         elif self.language is None:
             self.language = ""
 

@@ -1,4 +1,9 @@
-"""Tests for FinalMetadata.save language normalisation (unmapped -> 'und')."""
+"""Tests for FinalMetadata.save language normalisation.
+
+A non-empty language value that ``normalize_language`` cannot map is kept as
+its lowercase code when that code is a known langid code (a key of
+``LANGUAGE_NAMES``), and stored as ``und`` otherwise.
+"""
 
 from django.db import IntegrityError
 from django.test import TestCase
@@ -33,8 +38,13 @@ class LanguageSaveTests(TestCase):
             self.fail(f"saving language={language!r} raised IntegrityError: {exc}")
         return FinalMetadata.objects.get(book=book).language
 
-    def test_unmapped_codes_store_und(self):
-        for code in UNMAPPED_CODES + ["xx", "zxx"]:
+    def test_langid_codes_keep_lowercase_code(self):
+        for code in UNMAPPED_CODES:
+            with self.subTest(code=code):
+                self.assertEqual(self._save(code), code)
+
+    def test_unknown_codes_store_und(self):
+        for code in ["xx", "zxx"]:
             with self.subTest(code=code):
                 self.assertEqual(self._save(code), "und")
 

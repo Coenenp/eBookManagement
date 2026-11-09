@@ -459,11 +459,11 @@ class RenamingEngine:
         """Get the English display name for the book's language code.
 
         Resolves the stored language code to its English name via the
-        ``ScanFolder.language`` choices, case-insensitively and ignoring a
-        region subtag (``en-US`` -> ``English``). An empty value, ``und``, or
-        any unmapped code resolves to ``Unknown Language``.
+        ``LANGUAGE_NAMES`` table, case-insensitively and ignoring a region
+        subtag (``en-US`` -> ``English``). An empty value, ``und``, or any
+        unmapped code resolves to ``Unknown Language``.
         """
-        from books.models import LANGUAGE_CHOICES
+        from books.utils.language_names import LANGUAGE_NAMES
 
         code = self._get_language()
         if not code:
@@ -471,8 +471,7 @@ class RenamingEngine:
         base = code.strip().lower().split("-")[0].split("_")[0]
         if not base or base == "und":
             return "Unknown Language"
-        names = {lang_code: lang_name for lang_code, lang_name in LANGUAGE_CHOICES}
-        return names.get(base, "Unknown Language")
+        return LANGUAGE_NAMES.get(base, "Unknown Language")
 
     def _get_format(self) -> Optional[str]:
         """Get file format."""
