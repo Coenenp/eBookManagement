@@ -402,6 +402,16 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
     row.new_sha256 = result.new_sha256
     row.save(update_fields=["new_sha256", "updated_at"])
 
+    # Merge the routine's review flags (e.g. cover-page-not-updated) onto the
+    # row, the same way the pre-flight cover flags are stored.
+    if result.review_flags:
+        row.refresh_from_db()
+        flags = list(row.review_flags or [])
+        for f in result.review_flags:
+            if f not in flags:
+                flags.append(f)
+        FileMove.objects.filter(pk=row.pk).update(review_flags=flags)
+
     # (e) Update the DB paths in one transaction, then mark db_updated.
     try:
         with transaction.atomic():

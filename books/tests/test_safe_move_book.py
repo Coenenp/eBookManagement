@@ -814,3 +814,133 @@ class EpubMetadataWiringTests(TestCase):
         self.assertFalse(target.exists())
         self.assertFalse(Path(row.archived_path).exists())
         self.assertFalse(Path(str(target) + ".moving").exists())
+
+
+def _cover_opf():
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="uid">'
+        '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+        '<dc:identifier id="uid">urn:uuid:test</dc:identifier>'
+        '<dc:title>Test</dc:title><dc:language>en</dc:language>'
+        '<meta name="cover" content="coverimg"/></metadata>'
+        '<manifest>'
+        '<item id="coverpage" href="cover.xhtml" media-type="application/xhtml+xml"/>'
+        '<item id="coverimg" href="images/cover.jpg" media-type="image/jpeg"/>'
+        '</manifest>'
+        '<spine><itemref idref="coverpage"/></spine></package>'
+    ).encode("utf-8")
+
+
+def _pure_cover_page():
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>c</title></head>'
+        '<body><div><img src="images/cover.jpg" alt="cover"/></div></body></html>'
+    ).encode("utf-8")
+
+
+def _text_cover_page():
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>c</title></head>'
+        '<body><div><img src="images/cover.jpg" alt="cover"/></div><p>Chapter One</p></body></html>'
+    ).encode("utf-8")
+
+
+def _write_cover_epub(path, page_bytes):
+    files = {
+        "mimetype": MIMETYPE,
+        "META-INF/container.xml": _container(),
+        "OEBPS/content.opf": _cover_opf(),
+        "OEBPS/cover.xhtml": page_bytes,
+        "OEBPS/images/cover.jpg": b"OLDIMAGEBYTES",
+    }
+    with zipfile.ZipFile(path, "w") as z:
+        names = ["mimetype"] + [n for n in files if n != "mimetype"]
+        for n in names:
+            z.writestr(n, files[n], compress_type=zipfile.ZIP_STORED if n == "mimetype" else zipfile.ZIP_DEFLATED)
+
+
+class CoverPageMoveTests(TestCase):
+    """safe_move_book cover-page verification (Check B)."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(self.root), ignore_errors=True)
+        self.scan_root = self.root / "lib"
+        self.scan_root.mkdir()
+        self.scan_folder = ScanFolder.objects.create(
+            path=str(self.scan_root), name="Sample [To Delete]", content_type="ebooks", is_active=True,
+        )
+        self.target_dir = self.root / "Moved"
+
+    def _make_cover_epub_book(self, page_bytes):
+        src = self.scan_root / "sub/book.epub"
+        src.parent.mkdir(parents=True, exist_ok=True)
+        _write_cover_epub(src, page_bytes)
+        book = create_test_book_with_file(
+            file_path=str(src), file_format="epub", scan_folder=self.scan_folder,
+        )
+        FinalMetadata.objects.create(book=book, final_title="Cover Book", is_reviewed=True)
+        return book, src
+
+    def _cover(self, data=b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\xff\xd9"):
+        p = self.scan_root / "new.jpg"
+        p.write_bytes(data)
+        return p
+
+    def test_pure_page_rewritten_and_no_flag(self):
+        book, src = self._make_cover_epub_book(_pure_cover_page())
+        cover = self._cover(data=b"\xff\xd8\xffNEWCOVER")
+        target = self.target_dir / "book.epub"
+        row = safe_move_book(book, str(target), cover_path=str(cover))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        row.refresh_from_db()
+        self.assertNotIn("cover-page-not-updated", row.review_flags)
+        self.assertNotIn("cover-page-mismatch", row.review_flags)
+        with zipfile.ZipFile(target) as z:
+            page = z.read("OEBPS/cover.xhtml")
+            names = z.namelist()
+        self.assertNotIn(b"images/cover.jpg", page)
+        self.assertIn(b'src="cover.jpg"', page)
+        self.assertIn("OEBPS/cover.jpg", names)
+        with zipfile.ZipFile(target) as z:
+            self.assertEqual(z.read("OEBPS/cover.jpg"), b"\xff\xd8\xffNEWCOVER")
+
+    def test_text_page_moves_and_flags_cover_page_not_updated(self):
+        book, src = self._make_cover_epub_book(_text_cover_page())
+        cover = self._cover()
+        target = self.target_dir / "book.epub"
+        row = safe_move_book(book, str(target), cover_path=str(cover))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        row.refresh_from_db()
+        self.assertIn("cover-page-not-updated", row.review_flags)
+        self.assertTrue(target.is_file())
+
+    def test_cover_page_mismatch_needs_review(self):
+        book, src = self._make_cover_epub_book(_pure_cover_page())
+        cover = self._cover(data=b"\xff\xd8\xffNEWCOVER")
+        target = self.target_dir / "book.epub"
+        with mock.patch("books.utils.epub_fix.cover_page.rewrite_cover_page", return_value=None):
+            with self.assertRaises(NeedsReview) as ctx:
+                safe_move_book(book, str(target), cover_path=str(cover))
+        self.assertEqual(ctx.exception.codes, ["cover-page-mismatch"])
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.NEEDS_REVIEW)
+        self.assertEqual(row.review_flags, ["cover-page-mismatch"])
+        self.assertTrue(src.exists())  # source untouched
+        self.assertFalse(target.exists())  # no target
+        self.assertFalse(Path(row.archived_path).exists())  # no archive copy
+        self.assertFalse(Path(str(target) + ".moving").exists())  # no temp file
+
+    def test_missing_cover_leaves_page_and_flags_cover_missing(self):
+        book, src = self._make_cover_epub_book(_pure_cover_page())
+        target = self.target_dir / "book.epub"
+        row = safe_move_book(book, str(target), cover_path=str(self.scan_root / "missing.jpg"))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        row.refresh_from_db()
+        self.assertIn("cover-missing", row.review_flags)
+        with zipfile.ZipFile(target) as z:
+            page = z.read("OEBPS/cover.xhtml")
+        self.assertIn(b"images/cover.jpg", page)  # page untouched
