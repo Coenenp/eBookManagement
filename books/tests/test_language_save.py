@@ -57,3 +57,8 @@ class LanguageSaveTests(TestCase):
     def test_empty_and_none_store_empty(self):
         self.assertEqual(self._save(""), "")
         self.assertEqual(self._save(None), "")
+
+    def test_region_suffix_takes_base_code(self):
+        for raw, want in [("sv-SE", "sv"), ("sv_SE", "sv"), ("SV", "sv"), ("pt-BR", "pt")]:
+            with self.subTest(raw=raw):
+                self.assertEqual(self._save(raw), want)

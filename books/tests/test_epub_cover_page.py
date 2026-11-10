@@ -382,6 +382,24 @@ class CoverPageComputeTests(SimpleTestCase):
         result = cp.check_cover_page(str(out), hashlib.sha256(b"\xff\xd8\xffNEWCOVER").hexdigest())
         self.assertEqual(result, "not-pure")
 
+    # (m2) a page whose alt attribute equals the NEW href: the fixer rewrites
+    # src -> "cover.jpg" correctly, but check_cover_page's raw-substring count
+    # sees "cover.jpg" in both src and alt and falsely reports "not-pure".
+    def test_rewritten_page_with_alt_matching_new_href_is_ok(self):
+        page = (
+            b'<html xmlns="http://www.w3.org/1999/xhtml"><body><div>'
+            b'<img src="images/cover.jpg" alt="cover.jpg"/></div></body></html>'
+        )
+        src = self._epub(page)
+        cover_path = self._cover_file(data=b"\xff\xd8\xffNEWCOVER")
+        fixes, entries, _dropped, _modified = self._compute(src, cover_path)
+        self.assertIn("COVER-PAGE", self._codes(fixes))
+        self.assertIn(b'src="cover.jpg"', entries["OEBPS/cover.xhtml"])
+        out = self.tmp / "out.epub"
+        write_epub(str(src), str(out), cover_path=cover_path)
+        result = cp.check_cover_page(str(out), hashlib.sha256(b"\xff\xd8\xffNEWCOVER").hexdigest())
+        self.assertEqual(result, "ok")
+
     # (n) the old cover already sits at the path the new cover would take by
     # default ("cover.jpg"); the new cover lands at "cover-2.jpg" and the old
     # entry is kept.
