@@ -225,6 +225,17 @@ class BookRenamerExecuteView(LoginRequiredMixin, TemplateView):
                 book = Book.objects.get(id=book_id)
                 result = self._rename_book_files(book, request.user, file_actions, folder_pattern, filename_pattern)
 
+                if result.get("status") == "skipped":
+                    results.append(
+                        {
+                            "book_id": book_id,
+                            "status": "skipped",
+                            "reason": result.get("reason", "not approved"),
+                            "unresolved_reason": result.get("unresolved_reason", ""),
+                        }
+                    )
+                    continue
+
                 # Create FileOperation for tracking
                 FileOperation = get_model("FileOperation")
                 FileOperation.objects.create(
@@ -261,7 +272,22 @@ class BookRenamerExecuteView(LoginRequiredMixin, TemplateView):
 
     def _rename_book_files(self, book, user, file_actions, folder_pattern="", filename_pattern=""):
         """Rename book files based on final metadata using BatchRenamer."""
+        from books.models import FinalMetadata
         from books.utils.batch_renamer import BatchRenamer
+        from books.utils.renaming_engine import is_renamable
+
+        # Only approved books may be renamed; an unapproved book is skipped and
+        # reported with its unresolved reason, mirroring rename_book.
+        if not is_renamable(book):
+            fm = FinalMetadata.objects.filter(book=book).first()
+            return {
+                "new_path": book.file_path,
+                "additional_files": [],
+                "old_path": book.file_path,
+                "status": "skipped",
+                "reason": "not approved",
+                "unresolved_reason": fm.unresolved_reason if fm else "",
+            }
 
         renamer = BatchRenamer(dry_run=False)
         renamer.add_book(book, folder_pattern, filename_pattern, embed_metadata=True)
@@ -269,7 +295,7 @@ class BookRenamerExecuteView(LoginRequiredMixin, TemplateView):
         if not renamer.operations:
             return {"new_path": book.file_path, "additional_files": [], "old_path": book.file_path, "status": "no_operations"}
 
-        result = renamer.execute()
+        result = renamer.execute_operations()
 
         new_path = getattr(book, "file_path", "")
         if result.successful > 0:
@@ -723,11 +749,31 @@ def execute_batch_rename(request):
             Book = get_model("Book")
             books = Book.objects.filter(id__in=book_ids)
 
+            # Gate: only approved books may be renamed; the rest are skipped and
+            # reported, mirroring rename_book and the preview view.
+            from books.models import FinalMetadata
+            from books.utils.renaming_engine import is_renamable
+
+            approved_books = []
+            skipped = []
+            for book in books:
+                if is_renamable(book):
+                    approved_books.append(book)
+                else:
+                    fm = FinalMetadata.objects.filter(book=book).first()
+                    skipped.append(
+                        {
+                            "book_id": book.id,
+                            "reason": "not approved",
+                            "unresolved_reason": fm.unresolved_reason if fm else "",
+                        }
+                    )
+
             # Create batch renamer with optional image cleanup
             renamer = BatchRenamer(dry_run=dry_run, remove_unused_images=remove_unused_images)
 
             # Add books to the batch
-            renamer.add_books(books, folder_pattern, filename_pattern, embed_metadata)
+            renamer.add_books(approved_books, folder_pattern, filename_pattern, embed_metadata)
 
             # Get preview/summary
             operation_summary = renamer.get_operation_summary()
@@ -735,12 +781,12 @@ def execute_batch_rename(request):
             if dry_run:
                 # Return preview without executing
                 previews = renamer.preview_operations()
-                return JsonResponse({"success": True, "dry_run": True, "summary": operation_summary, "operations": previews[:20]})  # Limit for UI display
+                return JsonResponse({"success": True, "dry_run": True, "summary": operation_summary, "operations": previews[:20], "skipped": skipped})  # Limit for UI display
             else:
                 # Execute the operations
                 successful, failed, errors = renamer.execute_operations()
 
-                return JsonResponse({"success": True, "dry_run": False, "summary": operation_summary, "results": {"successful": successful, "failed": failed, "errors": errors}})
+                return JsonResponse({"success": True, "dry_run": False, "summary": operation_summary, "results": {"successful": successful, "failed": failed, "errors": errors}, "skipped": skipped})
 
         except Exception as e:
             return JsonResponse({"success": False, "error": str(e)})
