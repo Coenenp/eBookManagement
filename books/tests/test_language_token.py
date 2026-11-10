@@ -83,9 +83,18 @@ class LanguageNameTokenTests(SimpleTestCase):
     def test_language_names_unique_and_nonempty(self):
         self.assertGreater(len(LANGUAGE_NAMES), 0)
         names = list(LANGUAGE_NAMES.values())
-        self.assertEqual(len(names), len(set(names)))
+        # nb and nn deliberately alias "no" (one name "Norwegian" for the three
+        # written standards of Norwegian); every other code keeps a unique name.
+        unique = {k: v for k, v in LANGUAGE_NAMES.items() if k not in ("nb", "nn")}
+        self.assertEqual(len(unique), len(set(unique.values())))
         for name in names:
             self.assertTrue(name and name.strip())
+
+    def test_norwegian_variants_resolve_to_one_name(self):
+        for code in ("no", "nb", "nn"):
+            with self.subTest(code=code):
+                result = self.engine.process_template("${language_name}", _book(code))
+                self.assertEqual(result, "Norwegian")
 
 
 class LanguageNameTokenDatabaseTests(TestCase):
@@ -131,3 +140,23 @@ class LanguageNameTokenDatabaseTests(TestCase):
             with self.subTest(raw=raw, stored=stored):
                 result = engine.process_template("${language_name}", book)
                 self.assertEqual(result, expected)
+
+
+class BookListLanguageFilterTests(TestCase):
+    """The book-list language filter includes stored langid codes."""
+
+    def _languages(self):
+        from books.mixins.metadata import BookListContextMixin
+
+        return dict(BookListContextMixin().get_list_statistics_context()["languages"])
+
+    def test_langid_codes_included_in_language_filter(self):
+        for code in ("en", "sv", "nb"):
+            book = Book.objects.create(content_type="ebook")
+            FinalMetadata.objects.create(
+                book=book, final_title="Great Book", final_author="Jane Doe", language=code,
+            )
+        languages = self._languages()
+        self.assertEqual(languages.get("en"), "English")
+        self.assertEqual(languages.get("sv"), "Swedish")
+        self.assertEqual(languages.get("nb"), "Norwegian")

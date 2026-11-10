@@ -458,18 +458,20 @@ class FinalMetadata(models.Model):
             # Sync but don't save again (we're in the middle of saving)
             self.sync_from_sources(save_after=False)
 
-        # Always normalize data. A non-empty language value that normalizes to
-        # None (an unmapped code) is kept as its lowercase code when that code
-        # is a known langid code (a key of LANGUAGE_NAMES), otherwise stored as
-        # "und" instead of hitting the NOT NULL column; an explicit None is
-        # stored as the empty string.
+        # Always normalize data. A non-empty language value is reduced to its
+        # base code first (lowercased, with any region/script suffix after a
+        # "-" or "_" dropped) so "sv-SE" / "sv_SE" / "SV" all resolve to "sv".
+        # A base code that normalize_language cannot map is kept when it is a
+        # known langid code (a key of LANGUAGE_NAMES), otherwise stored as "und"
+        # instead of hitting the NOT NULL column; an explicit None is stored as
+        # the empty string.
         if self.language:
-            normalized = normalize_language(self.language)
+            base = self.language.strip().lower().split("-")[0].split("_")[0]
+            normalized = normalize_language(base)
             if normalized is not None:
                 self.language = normalized
             else:
-                lower = self.language.strip().lower()
-                self.language = lower if lower in LANGUAGE_NAMES else "und"
+                self.language = base if base in LANGUAGE_NAMES else "und"
         elif self.language is None:
             self.language = ""
 

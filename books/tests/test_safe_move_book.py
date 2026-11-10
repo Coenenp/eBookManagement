@@ -384,6 +384,28 @@ class SafeMoveBookTests(TestCase):
         self.assertEqual(bf.cover_path, str(self.target_dir / "book.jpg"))
         self.assertEqual(bf.opf_path, str(self.target_dir / "book.opf"))
 
+    def test_cover_companion_is_copy_of_final_cover_path(self):
+        book, src, cover, opf, txt = self._make_book_with_companions()
+        curated = self.scan_root / "curated.jpg"
+        curated.write_bytes(b"\xff\xd8\xff\xe0CURATED")
+        fm = book.finalmetadata
+        fm.final_cover_path = str(curated)
+        fm.save(update_fields=["final_cover_path"])
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        # The cover beside the book is a copy of final_cover_path, not the old cover.
+        new_cover = self.target_dir / "book.jpg"
+        self.assertTrue(new_cover.is_file())
+        self.assertEqual(new_cover.read_bytes(), b"\xff\xd8\xff\xe0CURATED")
+        # The old companion cover is archived (gone from the source folder).
+        self.assertFalse(cover.exists())
+        # BookFile.cover_path points at the new cover in the same move.
+        bf = BookFile.objects.get(book=book)
+        self.assertEqual(bf.cover_path, str(new_cover))
+        # Only one cover file beside the book.
+        self.assertEqual(sorted(p.name for p in self.target_dir.glob("*.jpg")), ["book.jpg"])
+
     def test_discover_companions_cover_before_opf(self):
         from books.utils.safe_move.book import _discover_companions
 
