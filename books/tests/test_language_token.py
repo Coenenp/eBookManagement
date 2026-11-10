@@ -160,3 +160,19 @@ class BookListLanguageFilterTests(TestCase):
         self.assertEqual(languages.get("en"), "English")
         self.assertEqual(languages.get("sv"), "Swedish")
         self.assertEqual(languages.get("nb"), "Norwegian")
+
+    def test_und_and_empty_labels(self):
+        for code in ("und", ""):
+            book = Book.objects.create(content_type="ebook")
+            FinalMetadata.objects.create(book=book, final_title="T", final_author="A", language=code)
+        languages = self._languages()
+        self.assertEqual(languages.get("und"), "Unknown Language")
+        self.assertEqual(languages.get(""), "Not defined")
+
+    def test_no_and_nb_both_norwegian(self):
+        for code in ("no", "nb"):
+            book = Book.objects.create(content_type="ebook")
+            FinalMetadata.objects.create(book=book, final_title="T", final_author="A", language=code)
+        languages = self._languages()
+        self.assertEqual(languages.get("no"), "Norwegian")
+        self.assertEqual(languages.get("nb"), "Norwegian")

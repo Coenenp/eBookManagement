@@ -22,6 +22,7 @@ from books.mixins import BookListContextMixin, BookNavigationMixin, MetadataCont
 from books.models import Book, BookFile, FinalMetadata, ScanFolder
 from books.queries.book_queries import build_book_queryset, get_review_counts
 from books.services.common import CoverService, DashboardService
+from books.utils.language_manager import LanguageManager
 from books.views.wizard import WizardRequiredMixin
 
 logger = logging.getLogger("books.scanner")
@@ -348,7 +349,7 @@ class BookListView(LoginRequiredMixin, ListView, BookListContextMixin):
 
         context.update(
             {
-                "languages": [(lang, lang.title()) for lang in language_codes if lang],  # (code, display name)
+                "languages": [(lang, LanguageManager.get_language_name(lang)) for lang in language_codes if lang],  # (code, display name)
                 "formats": sorted([fmt.upper() for fmt in format_list if fmt]),
                 "scan_folders": list(ScanFolder.objects.filter(id__in=scan_folder_ids)),
                 "datasources": [],  # Skip datasources for now - complex query
