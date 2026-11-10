@@ -406,6 +406,100 @@ class SafeMoveBookTests(TestCase):
         # Only one cover file beside the book.
         self.assertEqual(sorted(p.name for p in self.target_dir.glob("*.jpg")), ["book.jpg"])
 
+    # -- A2: curated-cover flags ---------------------------------------------
+
+    def _set_curated(self, book, name="curated.jpg", data=b"\xff\xd8\xff\xe0CURATED"):
+        p = self.scan_root / name
+        p.write_bytes(data)
+        fm = book.finalmetadata
+        fm.final_cover_path = str(p)
+        fm.save(update_fields=["final_cover_path"])
+        return p
+
+    def test_curated_cover_valid_has_no_flag(self):
+        book, src, cover, opf, txt = self._make_book_with_companions()
+        curated = self._set_curated(book)
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        row.refresh_from_db()
+        flags = row.review_flags or []
+        self.assertNotIn("cover-missing", flags)
+        self.assertNotIn("cover-invalid", flags)
+        new_cover = self.target_dir / "book.jpg"
+        self.assertEqual(new_cover.read_bytes(), curated.read_bytes())
+
+    def test_curated_cover_empty_flags_cover_missing_once(self):
+        book, src, cover, opf, txt = self._make_book_with_companions()
+        # final_cover_path is "" by default.
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target))
+        row.refresh_from_db()
+        flags = row.review_flags or []
+        self.assertEqual(flags.count("cover-missing"), 1)
+        self.assertNotIn("cover-invalid", flags)
+
+    def test_curated_cover_invalid_flags_cover_invalid_once(self):
+        book, src, cover, opf, txt = self._make_book_with_companions()
+        bad = self.scan_root / "bad.jpg"
+        bad.write_bytes(b"this is not really a jpeg image")
+        fm = book.finalmetadata
+        fm.final_cover_path = str(bad)
+        fm.save(update_fields=["final_cover_path"])
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target))
+        row.refresh_from_db()
+        flags = row.review_flags or []
+        self.assertEqual(flags.count("cover-invalid"), 1)
+        self.assertNotIn("cover-missing", flags)
+
+    def test_valid_curated_copy_clears_stale_flag(self):
+        # An invalid old companion must not leave a cover-invalid flag when a
+        # valid curated cover is copied over it.
+        book, src, cover, opf, txt = self._make_book_with_companions()
+        cover.write_bytes(b"stale garbage bytes")
+        curated = self._set_curated(book)
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target))
+        row.refresh_from_db()
+        flags = row.review_flags or []
+        self.assertNotIn("cover-invalid", flags)
+        self.assertNotIn("cover-missing", flags)
+        self.assertEqual((self.target_dir / "book.jpg").read_bytes(), curated.read_bytes())
+
+    # -- A3: curated png over jpg companion ----------------------------------
+
+    def test_curated_png_over_jpg_companion(self):
+        from lxml import etree as ET
+
+        book, src, cover, opf, txt = self._make_book_with_companions()
+        png = self.scan_root / "curated.png"
+        png.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 8)
+        fm = book.finalmetadata
+        fm.final_cover_path = str(png)
+        fm.save(update_fields=["final_cover_path"])
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        # cover beside the book is <stem>.png, a copy of the curated png
+        new_cover = self.target_dir / "book.png"
+        self.assertTrue(new_cover.is_file())
+        self.assertEqual(new_cover.read_bytes(), png.read_bytes())
+        # BookFile.cover_path points at it
+        bf = BookFile.objects.get(book=book)
+        self.assertEqual(bf.cover_path, str(new_cover))
+        # old jpg archived (gone from the source folder)
+        self.assertFalse(cover.exists())
+        # sidecar OPF references <stem>.png
+        target_opf = self.target_dir / "book.opf"
+        self.assertTrue(target_opf.is_file())
+        root = ET.fromstring(target_opf.read_bytes())
+        NS = {"opf": "http://www.idpf.org/2007/opf"}
+        item = root.find("opf:manifest/opf:item", NS)
+        self.assertEqual(item.get("href"), "book.png")
+        ref = root.find("opf:guide/opf:reference", NS)
+        self.assertEqual(ref.get("href"), "book.png")
+
     def test_discover_companions_cover_before_opf(self):
         from books.utils.safe_move.book import _discover_companions
 

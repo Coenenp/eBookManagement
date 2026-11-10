@@ -407,7 +407,10 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
         state=FileMove.State.PLANNED,
         previous_paths=previous_paths,
     )
-    initial_flags = [f for f in (cover_flag, final_cover_flag) if f is not None]
+    initial_flags = []
+    for flag in (cover_flag, final_cover_flag):
+        if flag is not None and flag not in initial_flags:
+            initial_flags.append(flag)
     if initial_flags:
         FileMove.objects.filter(pk=row.pk).update(review_flags=initial_flags)
 

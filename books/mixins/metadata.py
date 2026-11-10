@@ -143,7 +143,7 @@ class BookListContextMixin:
 
         all_languages = apps.get_model("books", "FinalMetadata").objects.values_list("language", flat=True).distinct()
         name_map = dict(LANGUAGE_NAMES)
-        name_map["und"] = "Undetermined"
+        name_map["und"] = "Unknown Language"
         name_map[""] = "Not defined"
         used_languages = [lang for lang in all_languages if lang in name_map]
 
