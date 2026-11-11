@@ -13,7 +13,7 @@ a ``planned N, skipped M`` summary, but writes and moves nothing. With
 
 import os
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from django.core.management.base import BaseCommand
 from django.db.models import Case, IntegerField, Max, Value, When
@@ -62,35 +62,44 @@ def fit_path(target, limit=240):
     Deterministic and lossless below the limit: at or under ``limit`` the path
     is returned unchanged. Above it, the filename stem (the title part) is
     shortened first — never below 20 characters plus the extension — and then
-    the folder components are shortened from the deepest up.
+    the folder components are shortened from the deepest up. A backslash or a
+    drive letter marks a Windows path (``PureWindowsPath``); otherwise the path
+    is treated as POSIX. The drive or UNC root is always preserved, and after
+    shortening no component ends in a trailing space or dot.
     """
     s = str(target)
     if len(s) <= limit:
         return s
-    parts = s.split("/")
-    leaf = parts[-1]
-    stem, ext = os.path.splitext(leaf)
-    dirs = parts[:-1]
+    windows = "\\" in s or (len(s) >= 2 and s[0].isalpha() and s[1] == ":")
+    cls = PureWindowsPath if windows else PurePosixPath
+    p = cls(s)
+    anchor = p.anchor
+    stem = p.stem
+    ext = p.suffix
+    dirs = list(p.parts[1:-1])
 
     def _joined():
-        return "/".join(dirs + [stem + ext])
+        return str(cls(anchor).joinpath(*dirs, stem + ext))
 
-    # 1. Shorten the stem (title part), keeping at least 20 characters + ext.
+    # 1. Shorten the filename stem, keeping at least 20 characters + ext.
     while len(_joined()) > limit and len(stem) > 20:
         stem = stem[:-1]
 
-    # 2. Shorten folder components from the deepest up. Index 0 is the empty
-    #    root segment and is left alone.
+    # 2. Shorten folder components from the deepest up.
     while len(_joined()) > limit:
         shortened = False
-        for i in range(len(dirs) - 1, 0, -1):
+        for i in range(len(dirs) - 1, -1, -1):
             if len(dirs[i]) > 1:
                 dirs[i] = dirs[i][:-1]
                 shortened = True
                 break
         if not shortened:
             break
-    return _joined()
+
+    # 3. Strip trailing spaces and dots from every component.
+    stem = stem.rstrip(" .")
+    dirs = [d.rstrip(" .") for d in dirs]
+    return str(cls(anchor).joinpath(*dirs, stem + ext))
 
 
 class Command(BaseCommand):
@@ -224,6 +233,11 @@ class Command(BaseCommand):
     def _resolve_patterns(self, book, folder_pattern, filename_pattern):
         if folder_pattern is None and filename_pattern is None:
             return self._patterns_for(book)
+        default_folder, default_filename = self._patterns_for(book)
+        if folder_pattern is None:
+            folder_pattern = default_folder
+        if filename_pattern is None:
+            filename_pattern = default_filename
         return folder_pattern, filename_pattern
 
     def _compute_target(self, book, folder_pattern, filename_pattern):
@@ -235,5 +249,5 @@ class Command(BaseCommand):
         folder = engine.process_template(folder_pattern, book) if folder_pattern else ""
         filename = engine.process_template(filename_pattern, book)
         target = base_dir / folder / filename if folder else base_dir / filename
-        target = fit_path(str(target))
+        target = fit_path(str(target), limit=232)
         return str(resolve_collision(str(target)))
