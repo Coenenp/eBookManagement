@@ -453,6 +453,22 @@ class SafeMoveBookTests(TestCase):
         self.assertEqual(flags.count("cover-invalid"), 1)
         self.assertNotIn("cover-missing", flags)
 
+    def test_epub_empty_curated_cover_flags_cover_missing_once(self):
+        # EPUB with an empty curated cover: the embed cover flag and the final
+        # cover flag both map to cover-missing, and the dedup keeps it once.
+        book, src = self._make_epub_book()
+        sub = src.parent
+        cover = sub / "cover.jpg"
+        cover.write_bytes(b"\xff\xd8\xff\xd9")
+        bf = BookFile.objects.get(book=book)
+        bf.cover_path = str(cover)
+        bf.save(update_fields=["cover_path"])
+        target = self.target_dir / "book.epub"
+        row = safe_move_book(book, str(target), cover_path="")
+        row.refresh_from_db()
+        flags = row.review_flags or []
+        self.assertEqual(flags.count("cover-missing"), 1)
+
     def test_valid_curated_copy_clears_stale_flag(self):
         # An invalid old companion must not leave a cover-invalid flag when a
         # valid curated cover is copied over it.

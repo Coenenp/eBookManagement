@@ -230,6 +230,94 @@ class RenameGateTests(TransactionTestCase):
         self.assertEqual(results[0]["status"], "success")
         mock_rename.assert_called_once()
 
+    # --- execute_batch_rename view is gated ---
+
+    def test_execute_batch_rename_unapproved_not_moved(self):
+        book, path = self._make_book("ebr.epub", is_reviewed=False)
+        user = get_user_model().objects.create_user(username="ebr", password="***")
+        self.client.force_login(user)
+        resp = self.client.post(
+            reverse("books:renamer_execute_batch"),
+            {
+                "folder_pattern": "Approved",
+                "filename_pattern": "${title}.${ext}",
+                "book_ids": [str(book.id)],
+                "dry_run": "false",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        data = resp.json()
+        self.assertTrue(path.exists())
+        # The unapproved book is reported as skipped, not silently moved.
+        self.assertIn("skipped", data)
+        self.assertEqual(data["skipped"][0]["reason"], "not approved")
+
+    def test_execute_batch_rename_approved_moves(self):
+        book, path = self._make_book("ebra.epub", is_reviewed=True)
+        user = get_user_model().objects.create_user(username="ebra", password="***")
+        self.client.force_login(user)
+        resp = self.client.post(
+            reverse("books:renamer_execute_batch"),
+            {
+                "folder_pattern": "Approved",
+                "filename_pattern": "${title}.${ext}",
+                "book_ids": [str(book.id)],
+                "dry_run": "false",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        data = resp.json()
+        self.assertTrue(data["success"])
+        self.assertFalse(path.exists())
+        self.assertTrue((Path(self.temp_dir) / "Approved" / "ebra.epub").exists())
+
+    # --- BookRenamerExecuteView is gated ---
+
+    def test_book_renamer_execute_unapproved_not_moved(self):
+        book, path = self._make_book("bre.epub", is_reviewed=False)
+        user = get_user_model().objects.create_user(username="bre", password="***")
+        self.client.force_login(user)
+        resp = self.client.post(
+            reverse("books:book_renamer_execute"),
+            {
+                "selected_books": [str(book.id)],
+                "folder_pattern": "Approved",
+                "filename_pattern": "${title}.${ext}",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        data = resp.json()
+        self.assertTrue(path.exists())
+        results = data["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["status"], "skipped")
+        self.assertIn("not approved", results[0]["reason"])
+
+    def test_book_renamer_execute_approved_moves(self):
+        book, path = self._make_book("brea.epub", is_reviewed=True)
+        user = get_user_model().objects.create_user(username="brea", password="***")
+        self.client.force_login(user)
+        resp = self.client.post(
+            reverse("books:book_renamer_execute"),
+            {
+                "selected_books": [str(book.id)],
+                "folder_pattern": "Approved",
+                "filename_pattern": "${title}.${ext}",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        data = resp.json()
+        self.assertFalse(path.exists())
+        new_path = Path(self.temp_dir) / "Approved" / "brea.epub"
+        self.assertTrue(new_path.exists())
+        # The book's result reports a successful rename with no errors.
+        result = data["results"][0]["result"]
+        self.assertEqual(result["status"], "renamed")
+        self.assertEqual(result["errors"], [])
+        # The book's file_path now points at the new path.
+        book.refresh_from_db()
+        self.assertEqual(book.file_path, str(new_path))
+
     # --- metadata_update file operations are gated ---
 
     def _make_book_with_scan_folder(self, name, is_reviewed):

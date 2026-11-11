@@ -19,7 +19,7 @@ class GetLanguageNameTests(TestCase):
         self.assertEqual(LanguageManager.get_language_name("af"), "Afrikaans")
 
     def test_get_language_name_und_and_empty(self):
-        self.assertEqual(LanguageManager.get_language_name("und"), "Undetermined")
+        self.assertEqual(LanguageManager.get_language_name("und"), "Unknown Language")
         self.assertEqual(LanguageManager.get_language_name(""), "Not defined")
 
 

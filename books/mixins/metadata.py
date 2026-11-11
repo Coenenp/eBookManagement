@@ -136,19 +136,13 @@ class BookListContextMixin:
             avg_completeness=Avg("completeness_score"),
         )
 
-        # Get all language values from database. A stored code is valid when it
-        # is a known langid code (a key of LANGUAGE_NAMES) or the und/empty
-        # marker; the display name comes from the same table.
-        from books.utils.language_names import LANGUAGE_NAMES
-
+        # One source for language names: resolve each stored code through
+        # LanguageManager.get_language_name (langid codes, ``und`` and the empty
+        # marker), instead of a local name map.
         all_languages = apps.get_model("books", "FinalMetadata").objects.values_list("language", flat=True).distinct()
-        name_map = dict(LANGUAGE_NAMES)
-        name_map["und"] = "Unknown Language"
-        name_map[""] = "Not defined"
-        used_languages = [lang for lang in all_languages if lang in name_map]
 
         # Create language choices for template
-        languages = [(code, name_map[code]) for code in used_languages]
+        languages = [(code, LanguageManager.get_language_name(code)) for code in all_languages if code is not None]
 
         # Get all datasources that have been used for metadata
         used_datasources = (
