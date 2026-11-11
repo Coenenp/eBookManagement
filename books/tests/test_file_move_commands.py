@@ -405,6 +405,26 @@ class ResolverTests(TestCase):
         self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
         self.assertFalse(src.exists())
 
+    def test_resolve_synthesized_cover_db_updated_keeps_curated_source(self):
+        # A synthesized cover row (archived_path empty, keep_source) tracks a
+        # copy of the read-only curated cover. Recovery at DB_UPDATED must not
+        # delete the curated source and must not raise; it ends in a terminal
+        # state.
+        curated = self.root / "curated.jpg"
+        curated.write_bytes(b"\xff\xd8\xff\xe0CURATED")
+        target = self.root / "Moved" / "book.jpg"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"\xff\xd8\xff\xe0CURATED")
+        h = _sha256(curated)
+        row = self._child_row(FileMove.State.DB_UPDATED, curated, target,
+                              archive=None, original=h, new=h, cover_path=str(target))
+        self.assertEqual(row.archived_path, "")
+        self.assertEqual(resolve_move(row), "finalized")
+        row.refresh_from_db()
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertTrue(curated.exists())  # curated source never deleted
+        self.assertTrue(target.exists())
+
     def test_resolve_child_committed_rolls_back_when_cover_not_pointing(self):
         src = self.scan_root / "cover.jpg"
         src.write_bytes(b"img")
@@ -709,6 +729,31 @@ class PurgeCommandTests(TestCase):
         child.refresh_from_db()
         self.assertEqual(child.state, FileMove.State.PURGED)
         self.assertIsNotNone(child.purged_at)
+
+    def test_purge_ignores_synthesized_cover_row(self):
+        # A synthesized cover row (archived_path empty) has no archive to
+        # delete: it is not listed as FAIL and is not counted in the eligible
+        # (confirmation) count.
+        normal, target, archive = self._pending_row()
+        synth_target = self.target_dir / "book.jpg"
+        synth_target.write_bytes(b"\xff\xd8\xff\xe0CURATED")
+        book = _book_with_file(self.scan_folder, str(self.target_dir / "book.pdf"))
+        bf = BookFile.objects.get(book=book)
+        bf.cover_path = str(synth_target)
+        bf.save(update_fields=["cover_path"])
+        h = hashlib.sha256(b"\xff\xd8\xff\xe0CURATED").hexdigest()
+        FileMove.objects.create(
+            book=book, kind=FileMove.Kind.COMPANION, db_field=FileMove.DBField.COVER_PATH,
+            source_path=str(self.scan_root / "curated.jpg"),
+            target_path=str(synth_target), archived_path="", tmp_path="",
+            state=FileMove.State.PENDING_DELETION,
+            original_sha256=h, archived_sha256="", new_sha256=h,
+        )
+        out = io.StringIO()
+        call_command("purge_pending_deletions", stdout=out)
+        text = out.getvalue()
+        self.assertNotIn("FAIL", text)
+        self.assertIn("1 eligible row(s)", text)
 
 
 class ArchiveGuardTests(TestCase):

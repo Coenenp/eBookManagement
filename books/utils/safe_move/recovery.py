@@ -80,6 +80,10 @@ def _result_from_row(row):
         review_flags=list(row.review_flags or []),
         created_target=True,
         tmp_path=row.tmp_path,
+        # A keep_source move (synthesized cover) writes no archive copy, so its
+        # archived_path is empty; finalize_move must skip the archive check and
+        # must not delete the read-only source.
+        keep_source=not row.archived_path,
     )
 
 
@@ -267,7 +271,7 @@ def resolve_move(row, apply=True):
         # Source already gone (crash after finalize, before pending_deletion).
         tgt = Path(row.target_path)
         target_ok = tgt.is_file() and bool(row.new_sha256) and _sha256(tgt) == row.new_sha256
-        if _archive_matches(row) and target_ok:
+        if target_ok and (not row.archived_path or _archive_matches(row)):
             if apply:
                 _set_state(row, S.PENDING_DELETION)
             return "finalized"
