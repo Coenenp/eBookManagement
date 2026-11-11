@@ -11,7 +11,6 @@ a ``planned N, skipped M`` summary, but writes and moves nothing. With
 ``batch_id``, and prints ``moved / needs_review / failed / skipped`` counts.
 """
 
-import os
 import uuid
 from pathlib import Path, PurePosixPath, PureWindowsPath
 

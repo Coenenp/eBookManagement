@@ -251,6 +251,9 @@ class FitPathTests(TestCase):
         self.assertTrue(r.startswith("Z:\\Books\\"))
         self.assertTrue(r.endswith("\\title.pdf"))
         self.assertEqual(fit_path(p), r)  # deterministic
+        for comp in r.split("\\"):
+            if comp:
+                self.assertFalse(comp.endswith((" ", ".")), comp)
 
     def test_unc_path_shortens_folders_keeps_root_and_title(self):
         folder = "F" * 300
@@ -260,6 +263,9 @@ class FitPathTests(TestCase):
         self.assertTrue(r.startswith("\\\\nas\\share\\"))
         self.assertTrue(r.endswith("\\title.pdf"))
         self.assertEqual(fit_path(p), r)
+        for comp in r.split("\\"):
+            if comp:
+                self.assertFalse(comp.endswith((" ", ".")), comp)
 
     def test_no_component_ends_in_space_or_dot(self):
         title = "T" * 240
@@ -267,6 +273,7 @@ class FitPathTests(TestCase):
         r = fit_path(p)
         self.assertLessEqual(len(r), 240)
         self.assertTrue(r.startswith("/"))
+        self.assertEqual(fit_path(p), r)  # deterministic
         for comp in r.split("/"):
             if comp:
                 self.assertFalse(comp.endswith((" ", ".")), comp)
