@@ -139,3 +139,38 @@ class MoveApprovedCommandTests(TestCase):
         self.assertTrue((Path(self.temp_dir) / "Approved" / "a-good.pdf").exists())
         self.assertIn("moved 1", out)
         self.assertIn("failed 1", out)
+
+    def test_queryset_filters_unreviewed(self):
+        unapproved, _ = self._make_book("u.pdf", is_reviewed=False)
+        with mock.patch("books.management.commands.move_approved.is_renamable", return_value=True):
+            out = self._run(folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        self.assertNotIn(f"{unapproved.id} |", out)
+        self.assertIn("planned 0", out)
+
+    def test_execute_prints_failed_and_needs_review_lines(self):
+        bad, bad_path = self._make_book("a-bad.pdf")
+        bad_path.unlink()  # missing source -> failed
+        epub_path = Path(self.temp_dir) / "garbage.epub"
+        epub_path.write_bytes(b"this is not a zip at all")
+        epub_book = create_test_book_with_file(
+            file_path=str(epub_path), file_format="epub", scan_folder=self.scan_folder,
+        )
+        FinalMetadata.objects.create(book=epub_book, final_title="garbage", is_reviewed=True, language="en")
+        out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        self.assertIn(f"failed {bad.id} |", out)
+        self.assertIn(f"needs_review {epub_book.id} |", out)
+
+    def test_batch_id_tagged_on_failed_and_needs_review_rows(self):
+        bad, bad_path = self._make_book("a-bad.pdf")
+        bad_path.unlink()
+        epub_path = Path(self.temp_dir) / "garbage.epub"
+        epub_path.write_bytes(b"this is not a zip at all")
+        epub_book = create_test_book_with_file(
+            file_path=str(epub_path), file_format="epub", scan_folder=self.scan_folder,
+        )
+        FinalMetadata.objects.create(book=epub_book, final_title="garbage", is_reviewed=True, language="en")
+        out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        for book in (bad, epub_book):
+            rows = FileMove.objects.filter(book=book)
+            self.assertTrue(rows.exists())
+            self.assertTrue(all(r.batch_id for r in rows))
