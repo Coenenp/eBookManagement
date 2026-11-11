@@ -24,6 +24,7 @@ from django.utils import timezone
 
 from books.models import FileMove
 from books.utils.safe_move.archive import default_archive_root
+from books.utils.safe_move.recovery import _is_synthesized_cover
 from books.utils.safe_move.routine import _sha256
 
 
@@ -101,9 +102,11 @@ class Command(BaseCommand):
         rows = list(qs)
         # A keep_source row (synthesized cover) has an empty archived_path: it
         # has no archive file to delete, so it is neither a FAIL nor part of the
-        # eligible/confirmation count.
-        keep_source = [r for r in rows if not r.archived_path]
-        rest = [r for r in rows if r.archived_path]
+        # eligible/confirmation count. Only a COMPANION row tracking COVER_PATH
+        # qualifies; every other empty-archived_path row is a normal row whose
+        # archive is missing and is reported as archive-missing.
+        keep_source = [r for r in rows if _is_synthesized_cover(r)]
+        rest = [r for r in rows if not _is_synthesized_cover(r)]
         categorized = [(r, _row_reason(r)) for r in rest]
         eligible = [r for r, reason in categorized if reason is None]
         failed = [(r, reason) for r, reason in categorized if reason is not None]

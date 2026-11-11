@@ -258,6 +258,24 @@ class ResolverTests(TestCase):
         self.assertEqual(row.error, "archive-missing-after-source-removed")
         self.assertTrue(target.exists())  # nothing deleted
 
+    def test_resolve_main_db_updated_source_gone_empty_archive_fails(self):
+        # A MAIN row with an empty archived_path and the source already gone
+        # must fail (archive missing after source removed), not be mistaken for
+        # a keep_source synthesized cover.
+        src = self.scan_root / "book.txt"  # never written -> already gone
+        target = self.root / "Moved" / "book.txt"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b"data")
+        h = _sha256(target)
+        row = self._row(FileMove.State.DB_UPDATED, src, target, archive=None,
+                        original=h, new=h, book_file_path=str(target))
+        self.assertEqual(row.archived_path, "")
+        self.assertEqual(resolve_move(row), "failed")
+        row.refresh_from_db()
+        self.assertEqual(row.state, FileMove.State.FAILED)
+        self.assertEqual(row.error, "archive-missing-after-source-removed")
+        self.assertTrue(target.exists())  # nothing deleted
+
     # -- negative deletion paths: a hash disagreeing with the journal must -----
     # -- keep every file and end the row failed, never delete. ------------------
 
@@ -754,6 +772,61 @@ class PurgeCommandTests(TestCase):
         text = out.getvalue()
         self.assertNotIn("FAIL", text)
         self.assertIn("1 eligible row(s)", text)
+
+
+    def _synthesized_row(self):
+        target = self.target_dir / "book.jpg"
+        target.write_bytes(b"\xff\xd8\xff\xe0CURATED")
+        book = _book_with_file(self.scan_folder, str(self.target_dir / "book.pdf"))
+        bf = BookFile.objects.get(book=book)
+        bf.cover_path = str(target)
+        bf.save(update_fields=["cover_path"])
+        h = hashlib.sha256(b"\xff\xd8\xff\xe0CURATED").hexdigest()
+        return FileMove.objects.create(
+            book=book, kind=FileMove.Kind.COMPANION, db_field=FileMove.DBField.COVER_PATH,
+            source_path=str(self.scan_root / "curated.jpg"),
+            target_path=str(target), archived_path="", tmp_path="",
+            state=FileMove.State.PENDING_DELETION,
+            original_sha256=h, archived_sha256="", new_sha256=h,
+        )
+
+    def test_main_row_empty_archive_prints_fail(self):
+        target = self.target_dir / "book.txt"
+        target.write_bytes(b"data")
+        book = _book_with_file(self.scan_folder, str(target))
+        row = FileMove.objects.create(
+            book=book, kind=FileMove.Kind.MAIN, db_field=FileMove.DBField.FILE_PATH,
+            source_path=str(self.scan_root / "old" / "book.txt"),
+            target_path=str(target), archived_path="", tmp_path="",
+            state=FileMove.State.PENDING_DELETION,
+            original_sha256=hashlib.sha256(b"data").hexdigest(),
+            new_sha256=hashlib.sha256(b"data").hexdigest(),
+        )
+        out = io.StringIO()
+        call_command("purge_pending_deletions", stdout=out)
+        text = out.getvalue()
+        self.assertIn("FAIL", text)
+        self.assertIn("archive-missing", text)
+        row.refresh_from_db()
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+
+    def test_synthesized_row_dry_run_stays_pending(self):
+        row = self._synthesized_row()
+        out = io.StringIO()
+        call_command("purge_pending_deletions", stdout=out)
+        text = out.getvalue()
+        self.assertNotIn("FAIL", text)
+        row.refresh_from_db()
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertIsNone(row.purged_at)
+
+    def test_synthesized_row_confirmed_completes(self):
+        row = self._synthesized_row()
+        out = io.StringIO()
+        call_command("purge_pending_deletions", confirm=0, stdout=out)
+        row.refresh_from_db()
+        self.assertEqual(row.state, FileMove.State.PURGED)
+        self.assertIsNotNone(row.purged_at)
 
 
 class ArchiveGuardTests(TestCase):

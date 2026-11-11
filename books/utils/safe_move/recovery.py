@@ -68,6 +68,21 @@ def _remove_archive_if_match(row):
         _remove(row.archived_path)
 
 
+def _is_synthesized_cover(row):
+    """True for the synthesized-cover companion row.
+
+    A keep_source cover move writes no archive copy, so its ``archived_path``
+    is empty. Only a COMPANION row tracking COVER_PATH qualifies; every other
+    row with an empty ``archived_path`` is a normal move whose archive is
+    simply missing.
+    """
+    return (
+        row.kind == FileMove.Kind.COMPANION
+        and row.db_field == FileMove.DBField.COVER_PATH
+        and not row.archived_path
+    )
+
+
 def _result_from_row(row):
     return MoveResult(
         source=row.source_path,
@@ -83,7 +98,7 @@ def _result_from_row(row):
         # A keep_source move (synthesized cover) writes no archive copy, so its
         # archived_path is empty; finalize_move must skip the archive check and
         # must not delete the read-only source.
-        keep_source=not row.archived_path,
+        keep_source=_is_synthesized_cover(row),
     )
 
 
@@ -271,7 +286,15 @@ def resolve_move(row, apply=True):
         # Source already gone (crash after finalize, before pending_deletion).
         tgt = Path(row.target_path)
         target_ok = tgt.is_file() and bool(row.new_sha256) and _sha256(tgt) == row.new_sha256
-        if target_ok and (not row.archived_path or _archive_matches(row)):
+        # A synthesized-cover row writes no archive copy, so an empty
+        # archived_path is expected and the target alone must verify. Every
+        # other row needs a matching archive before the source is gone.
+        if _is_synthesized_cover(row):
+            if target_ok:
+                if apply:
+                    _set_state(row, S.PENDING_DELETION)
+                return "finalized"
+        elif target_ok and _archive_matches(row):
             if apply:
                 _set_state(row, S.PENDING_DELETION)
             return "finalized"
