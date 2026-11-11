@@ -99,7 +99,12 @@ class Command(BaseCommand):
             qs = qs[:limit]
 
         rows = list(qs)
-        categorized = [(r, _row_reason(r)) for r in rows]
+        # A keep_source row (synthesized cover) has an empty archived_path: it
+        # has no archive file to delete, so it is neither a FAIL nor part of the
+        # eligible/confirmation count.
+        keep_source = [r for r in rows if not r.archived_path]
+        rest = [r for r in rows if r.archived_path]
+        categorized = [(r, _row_reason(r)) for r in rest]
         eligible = [r for r, reason in categorized if reason is None]
         failed = [(r, reason) for r, reason in categorized if reason is not None]
 
@@ -148,6 +153,12 @@ class Command(BaseCommand):
         self.stdout.write(f"Purged {purged} archive file(s)")
         if failed_unlink:
             self.stdout.write(f"{failed_unlink} unlink failure(s)")
+
+        # keep_source rows have no archive to delete: complete them directly.
+        for r in keep_source:
+            r.state = FileMove.State.PURGED
+            r.purged_at = timezone.now()
+            r.save(update_fields=["state", "purged_at", "updated_at"])
 
     def _archive_root_for(self, row):
         book = row.book

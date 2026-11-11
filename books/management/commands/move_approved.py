@@ -15,7 +15,7 @@ import uuid
 from pathlib import Path
 
 from django.core.management.base import BaseCommand
-from django.db.models import Case, IntegerField, Value, When
+from django.db.models import Case, IntegerField, Max, Value, When
 
 from books.models import FileMove
 from books.utils.file_collision import resolve_collision
@@ -98,18 +98,23 @@ class Command(BaseCommand):
             if not is_renamable(book):
                 extra_skipped.append((book, "not approved"))
                 continue
+            max_pk_before = FileMove.objects.aggregate(mx=Max("pk"))["mx"] or 0
             try:
                 target = self._compute_target(book, folder_pattern, filename_pattern)
                 cover_path = book.finalmetadata.final_cover_path if book.finalmetadata else None
-                row = safe_move_book(book, target, cover_path=cover_path)
-                # Tag every journal row of this run with one batch id.
-                FileMove.objects.filter(pk=row.pk).update(batch_id=batch_id)
-                FileMove.objects.filter(parent_id=row.pk).update(batch_id=batch_id)
+                safe_move_book(book, target, cover_path=cover_path)
                 moved += 1
-            except NeedsReview:
+            except NeedsReview as exc:
                 needs_review += 1
-            except Exception:
+                self.stdout.write(f"needs_review {book.id} | {', '.join(exc.codes)}")
+            except Exception as exc:
                 failed += 1
+                self.stdout.write(f"failed {book.id} | {exc}")
+            finally:
+                # Tag every journal row created during this book's call (the
+                # main move plus its companions) with the run's batch id,
+                # including rows of books that end needs_review or failed.
+                FileMove.objects.filter(pk__gt=max_pk_before).update(batch_id=batch_id)
 
         for book, reason in skipped + extra_skipped:
             self.stdout.write(f"skipped {book.id} | {reason}")
@@ -120,6 +125,7 @@ class Command(BaseCommand):
         from books.models import Book
 
         qs = Book.objects.select_related("finalmetadata", "scan_folder")
+        qs = qs.filter(finalmetadata__is_reviewed=True)
         if options.get("scan_folder"):
             qs = qs.filter(scan_folder__path=options["scan_folder"])
         if options.get("language"):
@@ -151,7 +157,7 @@ class Command(BaseCommand):
 
     def _compute_target(self, book, folder_pattern, filename_pattern):
         engine = RenamingEngine()
-        base_dir = Path(book.file_path).parent
+        base_dir = Path(book.scan_folder.path)
         folder = engine.process_template(folder_pattern, book) if folder_pattern else ""
         filename = engine.process_template(filename_pattern, book)
         target = base_dir / folder / filename if folder else base_dir / filename
