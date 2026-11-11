@@ -11,6 +11,7 @@ a ``planned N, skipped M`` summary, but writes and moves nothing. With
 ``batch_id``, and prints ``moved / needs_review / failed / skipped`` counts.
 """
 
+import os
 import uuid
 from pathlib import Path
 
@@ -43,8 +44,53 @@ LANGUAGE_ORDER = Case(
     output_field=IntegerField(),
 )
 
-DEFAULT_FOLDER_PATTERN = "${category}/${author.sortname}/${bookseries.title}"
-DEFAULT_FILENAME_PATTERN = "${author.sortname} - ${bookseries.title} #${bookseries.number} - ${title}.${ext}"
+# Per-content-type approved layout (used when neither --folder-pattern nor
+# --filename-pattern is supplied).
+EBOOK_SERIES_FOLDER = "${language_name}/Books/${author.sortname}/${bookseries.title}"
+EBOOK_SERIES_FILENAME = "${author.sortname} - ${bookseries.title} #${bookseries.number} - ${title}.${ext}"
+EBOOK_STANDALONE_FOLDER = "${language_name}/Books/${author.sortname}"
+EBOOK_STANDALONE_FILENAME = "${author.sortname} - ${title}.${ext}"
+COMIC_SERIES_FOLDER = "${language_name}/Comics/${bookseries.title}"
+COMIC_SERIES_FILENAME = "${bookseries.title} #${bookseries.number} - ${title}.${ext}"
+COMIC_STANDALONE_FOLDER = "${language_name}/Comics/${title}"
+COMIC_STANDALONE_FILENAME = "${title}.${ext}"
+
+
+def fit_path(target, limit=240):
+    """Shorten an over-long ``target`` path to at most ``limit`` characters.
+
+    Deterministic and lossless below the limit: at or under ``limit`` the path
+    is returned unchanged. Above it, the filename stem (the title part) is
+    shortened first — never below 20 characters plus the extension — and then
+    the folder components are shortened from the deepest up.
+    """
+    s = str(target)
+    if len(s) <= limit:
+        return s
+    parts = s.split("/")
+    leaf = parts[-1]
+    stem, ext = os.path.splitext(leaf)
+    dirs = parts[:-1]
+
+    def _joined():
+        return "/".join(dirs + [stem + ext])
+
+    # 1. Shorten the stem (title part), keeping at least 20 characters + ext.
+    while len(_joined()) > limit and len(stem) > 20:
+        stem = stem[:-1]
+
+    # 2. Shorten folder components from the deepest up. Index 0 is the empty
+    #    root segment and is left alone.
+    while len(_joined()) > limit:
+        shortened = False
+        for i in range(len(dirs) - 1, 0, -1):
+            if len(dirs[i]) > 1:
+                dirs[i] = dirs[i][:-1]
+                shortened = True
+                break
+        if not shortened:
+            break
+    return _joined()
 
 
 class Command(BaseCommand):
@@ -55,8 +101,8 @@ class Command(BaseCommand):
         parser.add_argument("--scan-folder")
         parser.add_argument("--language")
         parser.add_argument("--content-type")
-        parser.add_argument("--folder-pattern", default=DEFAULT_FOLDER_PATTERN)
-        parser.add_argument("--filename-pattern", default=DEFAULT_FILENAME_PATTERN)
+        parser.add_argument("--folder-pattern", default=None)
+        parser.add_argument("--filename-pattern", default=None)
         parser.add_argument("--execute", action="store_true")
 
     def handle(self, *args, **options):
@@ -66,6 +112,7 @@ class Command(BaseCommand):
         execute = options["execute"]
 
         qs = self._build_queryset(options)
+        override = folder_pattern is not None or filename_pattern is not None
 
         planned = []
         skipped = []
@@ -75,6 +122,10 @@ class Command(BaseCommand):
             if not is_renamable(book):
                 continue
             reason = self._skip_reason(book)
+            if reason is None and not override:
+                fp, _fn = self._patterns_for(book)
+                if fp is None:
+                    reason = "no pattern yet"
             if reason:
                 skipped.append((book, reason))
             else:
@@ -111,9 +162,8 @@ class Command(BaseCommand):
                 failed += 1
                 self.stdout.write(f"failed {book.id} | {exc}")
             finally:
-                # Tag every journal row created during this book's call (the
-                # main move plus its companions) with the run's batch id,
-                # including rows of books that end needs_review or failed.
+                # Tag only this book's journal rows created during the call
+                # (the main move plus its companions) with the run's batch id.
                 FileMove.objects.filter(book=book, pk__gt=max_pk_before).update(batch_id=batch_id)
 
         for book, reason in skipped + extra_skipped:
@@ -157,10 +207,33 @@ class Command(BaseCommand):
             return "completed"
         return None  # rolled_back -> eligible
 
+    def _patterns_for(self, book):
+        """Return (folder_pattern, filename_pattern) for a book, or (None, None)."""
+        fm = book.finalmetadata
+        series = (fm.final_series if fm else None) or ""
+        if book.content_type == "ebook":
+            if series:
+                return EBOOK_SERIES_FOLDER, EBOOK_SERIES_FILENAME
+            return EBOOK_STANDALONE_FOLDER, EBOOK_STANDALONE_FILENAME
+        if book.content_type == "comic":
+            if series:
+                return COMIC_SERIES_FOLDER, COMIC_SERIES_FILENAME
+            return COMIC_STANDALONE_FOLDER, COMIC_STANDALONE_FILENAME
+        return None, None
+
+    def _resolve_patterns(self, book, folder_pattern, filename_pattern):
+        if folder_pattern is None and filename_pattern is None:
+            return self._patterns_for(book)
+        return folder_pattern, filename_pattern
+
     def _compute_target(self, book, folder_pattern, filename_pattern):
+        folder_pattern, filename_pattern = self._resolve_patterns(
+            book, folder_pattern, filename_pattern
+        )
         engine = RenamingEngine()
         base_dir = Path(book.scan_folder.path)
         folder = engine.process_template(folder_pattern, book) if folder_pattern else ""
         filename = engine.process_template(filename_pattern, book)
         target = base_dir / folder / filename if folder else base_dir / filename
+        target = fit_path(str(target))
         return str(resolve_collision(str(target)))

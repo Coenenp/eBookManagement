@@ -1,5 +1,6 @@
 """Tests for the move_approved management command."""
 
+import os
 import shutil
 import tempfile
 from io import StringIO
@@ -9,6 +10,7 @@ from unittest import mock
 from django.core.management import call_command
 from django.test import TestCase
 
+from books.management.commands.move_approved import fit_path
 from books.models import BookFile, FileMove, FinalMetadata
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 from books.utils.safe_move import safe_move_book
@@ -20,7 +22,7 @@ class MoveApprovedCommandTests(TestCase):
         self.addCleanup(lambda: shutil.rmtree(self.temp_dir, ignore_errors=True))
         self.scan_folder = create_test_scan_folder(temp_dir=self.temp_dir)
 
-    def _make_book(self, name, language="en", is_reviewed=True, series="", series_number=None, content_type="ebook"):
+    def _make_book(self, name, language="en", is_reviewed=True, series="", series_number=None, content_type="ebook", author=""):
         path = Path(self.temp_dir) / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"%PDF-1.4 fake pdf")
@@ -37,6 +39,7 @@ class MoveApprovedCommandTests(TestCase):
             language=language,
             final_series=series,
             final_series_number=series_number,
+            final_author=author,
         )
         return book, path
 
@@ -208,3 +211,89 @@ class MoveApprovedCommandTests(TestCase):
         self.assertIn("planned 0, skipped 1", out)
         out2 = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
         self.assertIn(f"skipped {book.id} | no scan folder", out2)
+
+
+class FitPathTests(TestCase):
+    def test_short_path_unchanged(self):
+        p = "/tmp/lib/English/Books/Smith, John/Title.pdf"
+        self.assertEqual(fit_path(p), p)
+
+    def test_long_title_shortened(self):
+        stem = "T" * 300
+        p = f"/tmp/lib/English/Books/Author/{stem}.pdf"
+        r = fit_path(p)
+        self.assertLessEqual(len(r), 240)
+        self.assertTrue(r.endswith(".pdf"))
+        kept = os.path.splitext(os.path.basename(r))[0]
+        self.assertGreaterEqual(len(kept), 20)
+        self.assertLess(len(kept), 300)
+
+    def test_long_author_folder_shortened(self):
+        author = "A" * 300
+        p = f"/tmp/lib/English/Books/{author}/Title.pdf"
+        r = fit_path(p)
+        self.assertLessEqual(len(r), 240)
+        self.assertTrue(r.endswith("Title.pdf"))
+
+    def test_long_title_and_author(self):
+        author = "A" * 200
+        stem = "T" * 200
+        p = f"/tmp/lib/English/Books/{author}/{stem}.pdf"
+        r = fit_path(p)
+        self.assertLessEqual(len(r), 240)
+        self.assertEqual(fit_path(p), r)  # deterministic
+
+
+class ApprovedLayoutTests(TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(self.temp_dir, ignore_errors=True))
+        self.scan_folder = create_test_scan_folder(temp_dir=self.temp_dir)
+
+    def _make_book(self, name, language="en", series="", series_number=None, content_type="ebook", author=""):
+        path = Path(self.temp_dir) / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"%PDF-1.4 fake pdf")
+        book = create_test_book_with_file(
+            file_path=str(path), file_format="pdf", scan_folder=self.scan_folder, content_type=content_type,
+        )
+        FinalMetadata.objects.create(
+            book=book, final_title=Path(name).stem, is_reviewed=True, language=language,
+            final_series=series, final_series_number=series_number, final_author=author,
+        )
+        return book
+
+    def _target(self, book):
+        out = StringIO()
+        call_command("move_approved", stdout=out)
+        for line in out.getvalue().splitlines():
+            if line.startswith(f"{book.id} |"):
+                return line.split(" -> ", 1)[1]
+        return None
+
+    def test_ebook_series_target(self):
+        book = self._make_book("My Book.pdf", series="The Series", series_number="7", author="John Smith", content_type="ebook")
+        expected = str(Path(self.temp_dir) / "English" / "Books" / "Smith, John" / "The Series"
+                       / "Smith, John - The Series #07 - My Book.pdf")
+        self.assertEqual(self._target(book), expected)
+
+    def test_ebook_standalone_target(self):
+        book = self._make_book("Standalone.pdf", author="John Smith", content_type="ebook")
+        expected = str(Path(self.temp_dir) / "English" / "Books" / "Smith, John" / "Smith, John - Standalone.pdf")
+        self.assertEqual(self._target(book), expected)
+
+    def test_comic_series_target(self):
+        book = self._make_book("Issue One.pdf", series="Batman", series_number="3", content_type="comic")
+        expected = str(Path(self.temp_dir) / "English" / "Comics" / "Batman" / "Batman #03 - Issue One.pdf")
+        self.assertEqual(self._target(book), expected)
+
+    def test_comic_standalone_target(self):
+        book = self._make_book("Solo.pdf", content_type="comic")
+        expected = str(Path(self.temp_dir) / "English" / "Comics" / "Solo" / "Solo.pdf")
+        self.assertEqual(self._target(book), expected)
+
+    def test_other_content_type_skipped_no_pattern(self):
+        book = self._make_book("Audiobook.pdf", content_type="audiobook")
+        out = StringIO()
+        call_command("move_approved", stdout=out)
+        self.assertIn(f"skipped {book.id} | no pattern yet", out.getvalue())
