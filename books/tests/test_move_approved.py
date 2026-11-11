@@ -11,6 +11,7 @@ from django.test import TestCase
 
 from books.models import BookFile, FileMove, FinalMetadata
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
+from books.utils.safe_move import safe_move_book
 
 
 class MoveApprovedCommandTests(TestCase):
@@ -174,3 +175,36 @@ class MoveApprovedCommandTests(TestCase):
             rows = FileMove.objects.filter(book=book)
             self.assertTrue(rows.exists())
             self.assertTrue(all(r.batch_id for r in rows))
+
+    def test_batch_id_tagged_only_on_own_book(self):
+        book, path = self._make_book("own.pdf")
+        other, _ = self._make_book("other.pdf", is_reviewed=False)
+        real = safe_move_book
+
+        def _inject(b, target, cover_path=None):
+            FileMove.objects.create(
+                book=other, kind=FileMove.Kind.MAIN, db_field=FileMove.DBField.FILE_PATH,
+                source_path=str(path), target_path=target, state=FileMove.State.PLANNED,
+            )
+            return real(b, target, cover_path=cover_path)
+
+        with mock.patch("books.management.commands.move_approved.safe_move_book", side_effect=_inject):
+            out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        injected = FileMove.objects.get(book=other)
+        self.assertEqual(injected.batch_id, "")
+        own_rows = FileMove.objects.filter(book=book)
+        self.assertTrue(all(r.batch_id for r in own_rows))
+
+    def test_skip_book_without_scan_folder(self):
+        path = Path(self.temp_dir) / "orphan.pdf"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"%PDF-1.4 fake pdf")
+        book = create_test_book_with_file(
+            file_path=str(path), file_format="pdf", scan_folder=None, content_type="ebook",
+        )
+        FinalMetadata.objects.create(book=book, final_title="orphan", is_reviewed=True, language="en")
+        out = self._run()
+        self.assertIn(f"skipped {book.id} | no scan folder", out)
+        self.assertIn("planned 0, skipped 1", out)
+        out2 = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        self.assertIn(f"skipped {book.id} | no scan folder", out2)

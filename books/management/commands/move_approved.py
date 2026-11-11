@@ -114,7 +114,7 @@ class Command(BaseCommand):
                 # Tag every journal row created during this book's call (the
                 # main move plus its companions) with the run's batch id,
                 # including rows of books that end needs_review or failed.
-                FileMove.objects.filter(pk__gt=max_pk_before).update(batch_id=batch_id)
+                FileMove.objects.filter(book=book, pk__gt=max_pk_before).update(batch_id=batch_id)
 
         for book, reason in skipped + extra_skipped:
             self.stdout.write(f"skipped {book.id} | {reason}")
@@ -142,6 +142,8 @@ class Command(BaseCommand):
         return qs
 
     def _skip_reason(self, book):
+        if book.scan_folder is None:
+            return "no scan folder"
         row = FileMove.objects.filter(book=book).order_by("-pk").first()
         if row is None:
             return None
