@@ -107,7 +107,7 @@ def _is_transient_error(exc):
     return False
 
 
-def _retry_io(fn, attempts=3, delays=(1, 4, 16)):
+def _retry_io(fn, attempts=3, delays=(1, 4, 16), before_retry=None):
     """Call ``fn``, retrying transient I/O errors (SMB/NFS hiccups).
 
     Retries only transient failures: ``ConnectionError``, ``TimeoutError``, and
@@ -117,9 +117,15 @@ def _retry_io(fn, attempts=3, delays=(1, 4, 16)):
     mismatch (``NeedsReview``), ``PermissionError`` and ``FileNotFoundError`` —
     is re-raised immediately. After the last attempt the original error is
     re-raised.
+
+    ``before_retry`` (optional) runs before every attempt so a partial output
+    left by a failed attempt can be removed before the step restarts from
+    scratch.
     """
     delay_list = list(delays)
     for attempt in range(attempts):
+        if before_retry is not None:
+            before_retry()
         try:
             return fn()
         except Exception as exc:
@@ -178,8 +184,15 @@ def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
         tmp.write_bytes(content)
         _fsync_file(tmp)
     elif repack_epub and src.suffix.lower() in _EPUB_SUFFIXES:
-        try:
+        def _cleanup_partial():
+            _remove(tmp)
+            _remove(str(tmp) + ".part")
+
+        def _repack():
             write_epub(str(src), str(tmp), cover_path=cover_path, fix_encoding=fix_encoding, metadata=metadata)
+
+        try:
+            _retry_io(_repack, before_retry=_cleanup_partial)
         except Exception as exc:  # BadZipFile, ValueError, KeyError, lxml errors
             _remove(tmp)
             _remove(str(tmp) + ".part")
