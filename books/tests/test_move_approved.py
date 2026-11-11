@@ -60,6 +60,15 @@ class MoveApprovedCommandTests(TestCase):
         row = FileMove.objects.get(book=book, kind=FileMove.Kind.MAIN)
         self.assertTrue(row.batch_id)
 
+    def test_target_anchored_at_scan_folder_root(self):
+        book, path = self._make_book("sub/s.pdf")
+        expected = str(Path(self.temp_dir) / "English" / "Books" / "s.pdf")
+        out = self._run(folder_pattern="English/Books", filename_pattern="${title}.${ext}")
+        self.assertIn(f"-> {expected}", out)
+        out2 = self._run(execute=True, folder_pattern="English/Books", filename_pattern="${title}.${ext}")
+        self.assertTrue(Path(expected).exists())
+        self.assertFalse(path.exists())
+
     def test_unapproved_not_listed_nor_moved(self):
         book, path = self._make_book("u.pdf", is_reviewed=False)
         out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")

@@ -151,7 +151,7 @@ class Command(BaseCommand):
 
     def _compute_target(self, book, folder_pattern, filename_pattern):
         engine = RenamingEngine()
-        base_dir = Path(book.file_path).parent
+        base_dir = Path(book.scan_folder.path)
         folder = engine.process_template(folder_pattern, book) if folder_pattern else ""
         filename = engine.process_template(filename_pattern, book)
         target = base_dir / folder / filename if folder else base_dir / filename
