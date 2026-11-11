@@ -59,16 +59,24 @@ class LanguageManager:
         """Get the display name for a language code.
 
         A langid code (a key of ``LANGUAGE_NAMES``) maps to its English name,
-        ``und`` to ``Undetermined`` and the empty value to ``Not defined`` (the
-        ScanFolder ``LANGUAGE_CHOICES`` labels); anything else falls back to the
-        raw code.
+        ``und`` to ``Unknown Language`` and the empty value to ``Not defined``.
+        A code that is not a langid code but appears in ``LANGUAGE_CHOICES``
+        falls back to that choice's label; anything else falls back to the raw
+        code.
         """
         from books.utils.language_names import LANGUAGE_NAMES
 
-        name_map = dict(LANGUAGE_NAMES)
-        name_map["und"] = "Undetermined"
-        name_map[""] = "Not defined"
-        return name_map.get(code, code)
+        name = LANGUAGE_NAMES.get(code)
+        if name is not None:
+            return name
+        if code == "und":
+            return "Unknown Language"
+        if code == "":
+            return "Not defined"
+        name = cls.get_language_dict().get(code)
+        if name is not None:
+            return name
+        return code
 
     @classmethod
     def get_valid_codes(cls):
