@@ -516,6 +516,69 @@ class SafeMoveBookTests(TestCase):
         ref = root.find("opf:guide/opf:reference", NS)
         self.assertEqual(ref.get("href"), "book.png")
 
+    # -- Part C: synthesize a cover beside every book -------------------------
+
+    def _make_book_with_opf_no_cover(self, cover_path=None):
+        """Book with an OPF sidecar but no on-disk companion cover."""
+        book, src = self._make_book("sub/book.pdf", data=b"%PDF-1.4 fake pdf")
+        opf = src.parent / "book.opf"
+        opf.write_bytes(b"<package></package>")
+        bf = BookFile.objects.get(book=book)
+        bf.opf_path = str(opf)
+        if cover_path is not None:
+            bf.cover_path = cover_path
+        bf.save(update_fields=["opf_path", "cover_path"])
+        return book, src, opf
+
+    def test_no_companion_cover_synthesizes_curated_cover(self):
+        from lxml import etree as ET
+
+        book, src, opf = self._make_book_with_opf_no_cover()
+        curated = self._set_curated(book)
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        # A cover is created beside the book, a copy of the curated cover.
+        new_cover = self.target_dir / "book.jpg"
+        self.assertTrue(new_cover.is_file())
+        self.assertEqual(new_cover.read_bytes(), curated.read_bytes())
+        # BookFile.cover_path points at it in the same move.
+        bf = BookFile.objects.get(book=book)
+        self.assertEqual(bf.cover_path, str(new_cover))
+        # The curated original is untouched.
+        self.assertTrue(curated.is_file())
+        self.assertEqual(curated.read_bytes(), b"\xff\xd8\xff\xe0CURATED")
+        # The sidecar OPF references the cover.
+        target_opf = self.target_dir / "book.opf"
+        self.assertTrue(target_opf.is_file())
+        root = ET.fromstring(target_opf.read_bytes())
+        NS = {"opf": "http://www.idpf.org/2007/opf"}
+        self.assertEqual(root.find("opf:manifest/opf:item", NS).get("href"), "book.jpg")
+        self.assertEqual(root.find("opf:guide/opf:reference", NS).get("href"), "book.jpg")
+
+    def test_missing_companion_cover_file_synthesizes_curated_cover(self):
+        from lxml import etree as ET
+
+        missing = str(self.scan_root / "gone.jpg")
+        book, src, opf = self._make_book_with_opf_no_cover(cover_path=missing)
+        curated = self._set_curated(book)
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        new_cover = self.target_dir / "book.jpg"
+        self.assertTrue(new_cover.is_file())
+        self.assertEqual(new_cover.read_bytes(), curated.read_bytes())
+        bf = BookFile.objects.get(book=book)
+        self.assertEqual(bf.cover_path, str(new_cover))
+        self.assertTrue(curated.is_file())
+        self.assertEqual(curated.read_bytes(), b"\xff\xd8\xff\xe0CURATED")
+        target_opf = self.target_dir / "book.opf"
+        self.assertTrue(target_opf.is_file())
+        root = ET.fromstring(target_opf.read_bytes())
+        NS = {"opf": "http://www.idpf.org/2007/opf"}
+        self.assertEqual(root.find("opf:manifest/opf:item", NS).get("href"), "book.jpg")
+        self.assertEqual(root.find("opf:guide/opf:reference", NS).get("href"), "book.jpg")
+
     def test_discover_companions_cover_before_opf(self):
         from books.utils.safe_move.book import _discover_companions
 

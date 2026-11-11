@@ -51,6 +51,7 @@ class MoveResult:
     created_target: bool = False
     tmp_path: str = ""
     on_step: Optional[Callable] = None
+    keep_source: bool = False
 
 
 def _sha256(path) -> str:
@@ -93,7 +94,8 @@ def _notify(on_step, name, state):
 
 def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
                    repack_epub=True, cover_path=None, fix_encoding=False,
-                   on_step=None, metadata=None, content=None, verify=None):
+                   on_step=None, metadata=None, content=None, verify=None,
+                   keep_source=False):
     """Move ``source`` to ``target``, archiving the original. Returns MoveResult."""
     src = Path(source).resolve()
     tgt = Path(target)
@@ -106,7 +108,10 @@ def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
         raise FileExistsError(f"target already exists: {target}")
 
     src_hash = _sha256(src)
-    archived_path = archive_destination(str(src), scan_root, scan_label, archive_root)
+    archived_path = (
+        "" if keep_source
+        else archive_destination(str(src), scan_root, scan_label, archive_root)
+    )
     tmp = Path(str(tgt) + ".moving")
 
     state = {
@@ -216,14 +221,19 @@ def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
     _notify(on_step, "tmp_verified", state)
 
     # Archive the original (copy2), then verify the copy matches (check D).
-    Path(archived_path).parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(str(src), archived_path)
-    _fsync_file(archived_path)
-    archived_hash = _sha256(archived_path)
-    if archived_hash != src_hash:
-        _remove(tmp)
-        _remove(archived_path)
-        raise NeedsReview(["archive-hash"])
+    # A keep_source move (generated content copied from a read-only template)
+    # writes no archive copy.
+    if keep_source:
+        archived_hash = ""
+    else:
+        Path(archived_path).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(str(src), archived_path)
+        _fsync_file(archived_path)
+        archived_hash = _sha256(archived_path)
+        if archived_hash != src_hash:
+            _remove(tmp)
+            _remove(archived_path)
+            raise NeedsReview(["archive-hash"])
     state["archived_sha256"] = archived_hash
     _notify(on_step, "archived", state)
 
@@ -253,6 +263,7 @@ def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
         created_target=True,
         tmp_path=str(tmp),
         on_step=on_step,
+        keep_source=keep_source,
     )
     return result
 
@@ -268,17 +279,19 @@ def finalize_move(result):
         "archived_path": result.archived_path,
         "original_sha256": result.original_sha256,
     }
-    if not Path(result.archived_path).is_file():
-        raise NeedsReview(["archive-missing"])
-    if _sha256(result.archived_path) != result.original_sha256:
-        raise NeedsReview(["archive-hash"])
+    if not result.keep_source:
+        if not Path(result.archived_path).is_file():
+            raise NeedsReview(["archive-missing"])
+        if _sha256(result.archived_path) != result.original_sha256:
+            raise NeedsReview(["archive-hash"])
     if not Path(result.target).is_file():
         raise NeedsReview(["target-missing"])
     if _sha256(result.target) != result.new_sha256:
         raise NeedsReview(["target-hash"])
 
     _notify(result.on_step, "finalized", state)
-    os.unlink(result.source)
+    if not result.keep_source:
+        os.unlink(result.source)
 
 
 def rollback_move(result):

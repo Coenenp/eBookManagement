@@ -221,7 +221,7 @@ def _discover_companions(primary_file, target_path):
     return result, shared, outside
 
 
-def _move_companion(book, parent, source, target, db_field, *, scan_folder, scan_label, archive_root, cover_name=None):
+def _move_companion(book, parent, source, target, db_field, *, scan_folder, scan_label, archive_root, cover_name=None, keep_source=False):
     """Move one companion under its own child :class:`FileMove` row.
 
     Mirrors the main move (archive, journal, Check C, finalize) but with
@@ -301,7 +301,7 @@ def _move_companion(book, parent, source, target, db_field, *, scan_folder, scan
         result = safe_move_file(
             source, target, scan_root=scan_folder.path, scan_label=scan_label,
             archive_root=archive_root, repack_epub=False, on_step=on_step,
-            content=content, verify=verify,
+            content=content, verify=verify, keep_source=keep_source,
         )
     except NeedsReview as exc:
         FileMove.objects.filter(pk=child.pk).update(
@@ -488,6 +488,19 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
 
     # Discover companions while the main source still exists (finalize deletes it).
     companions, shared, outside = _discover_companions(primary_file, target)
+    # Part C: when the curated cover is valid but no companion cover exists on
+    # disk, synthesize one beside the book. The curated file is a read-only
+    # template: it is never moved, archived or deleted.
+    synthetic_cover_source = None
+    if final_cover_path and _cover_flag(final_cover_path) is None:
+        if not primary_file.cover_path or not Path(primary_file.cover_path).is_file():
+            curated = Path(final_cover_path)
+            synthetic_cover_source = str(curated)
+            companions.insert(0, (
+                synthetic_cover_source,
+                FileMove.DBField.COVER_PATH,
+                str(Path(target).with_suffix(curated.suffix)),
+            ))
     for shared_source in shared:
         _flag_companion_shared(row, shared_source)
     for outside_source in outside:
@@ -514,6 +527,7 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
             book, row, source, comp_target, db_field,
             scan_folder=scan_folder, scan_label=scan_label, archive_root=archive_root,
             cover_name=cover_name,
+            keep_source=(source == synthetic_cover_source),
         )
         if db_field == FileMove.DBField.COVER_PATH and child.state == FileMove.State.PENDING_DELETION:
             cover_name = Path(child.target_path).name
