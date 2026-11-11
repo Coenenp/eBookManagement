@@ -24,6 +24,7 @@ from books.utils.safe_move import (
 )
 from books.utils.safe_move.archive import archive_destination, default_archive_root
 from books.utils.safe_move.routine import _retry_io
+from books.utils.epub_fix.writer import write_epub
 
 MIMETYPE = b"application/epub+zip"
 
@@ -471,6 +472,79 @@ class SafeMoveRoutineTests(SimpleTestCase):
                 self._move(src, tgt)
         self.assertIn("archive-hash", ctx.exception.codes)
         self.assertFalse(tgt.exists())
+
+    # -- SMB retry coverage ---------------------------------------------------
+
+    def test_move_plain_file_retries_copy2_then_succeeds(self):
+        src = self._src("sub/book.txt", data=b"plain data bytes")
+        tgt = self._target("book.txt")
+        src_hash = _sha256(src)
+        real_copy2 = shutil.copy2
+        tmp_calls = []
+
+        def fake_copy2(s, d, **kw):
+            if str(d).endswith(".moving"):
+                tmp_calls.append(1)
+                if len(tmp_calls) <= 2:
+                    raise ConnectionResetError("reset")
+            return real_copy2(s, d, **kw)
+
+        with mock.patch("books.utils.safe_move.routine.time.sleep") as slp, \
+                mock.patch("books.utils.safe_move.routine.shutil.copy2", side_effect=fake_copy2):
+            result = self._move(src, tgt)
+
+        self.assertTrue(tgt.exists())
+        self.assertTrue(src.exists())
+        self.assertEqual(_sha256(src), src_hash)
+        self.assertEqual(result.original_sha256, src_hash)
+        self.assertEqual(result.archived_sha256, src_hash)
+        self.assertTrue(Path(result.archived_path).is_file())
+        self.assertEqual(slp.call_args_list, [mock.call(1), mock.call(4)])
+
+    def test_move_plain_file_copy2_three_failures_aborts_clean(self):
+        src = self._src("sub/book.txt", data=b"plain data bytes")
+        tgt = self._target("book.txt")
+        src_hash = _sha256(src)
+
+        def fake_copy2(s, d, **kw):
+            raise ConnectionResetError("reset")
+
+        with mock.patch("books.utils.safe_move.routine.time.sleep") as slp, \
+                mock.patch("books.utils.safe_move.routine.shutil.copy2", side_effect=fake_copy2):
+            with self.assertRaises(ConnectionResetError):
+                self._move(src, tgt)
+
+        self.assertTrue(src.exists())
+        self.assertEqual(_sha256(src), src_hash)
+        self.assertFalse(tgt.exists())
+        self.assertFalse(Path(str(tgt) + ".moving").exists())
+        self.assertFalse(Path(str(tgt) + ".part").exists())
+        self.assertEqual(slp.call_args_list, [mock.call(1), mock.call(4)])
+
+    def test_move_epub_repack_retries_transient_once(self):
+        src = self.scan_root / "book.epub"
+        src.parent.mkdir(parents=True, exist_ok=True)
+        _make_epub(src)
+        tgt = self._target("book.epub")
+        src_hash = _sha256(src)
+        real_write_epub = write_epub
+        calls = []
+
+        def fake_write_epub(s, d, **kw):
+            calls.append(1)
+            if len(calls) == 1:
+                raise ConnectionResetError("reset")
+            return real_write_epub(s, d, **kw)
+
+        with mock.patch("books.utils.safe_move.routine.time.sleep") as slp, \
+                mock.patch("books.utils.safe_move.routine.write_epub", side_effect=fake_write_epub):
+            result = self._move(src, tgt)
+
+        self.assertTrue(result.repacked)
+        self.assertTrue(tgt.exists())
+        self.assertTrue(src.exists())
+        self.assertEqual(_sha256(src), src_hash)
+        self.assertEqual(slp.call_args_list, [mock.call(1)])
 
     # -- rollback -------------------------------------------------------------
 
