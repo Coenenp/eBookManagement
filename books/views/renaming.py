@@ -295,10 +295,10 @@ class BookRenamerExecuteView(LoginRequiredMixin, TemplateView):
         if not renamer.operations:
             return {"new_path": book.file_path, "additional_files": [], "old_path": book.file_path, "status": "no_operations"}
 
-        result = renamer.execute_operations()
+        successful, failed, errors = renamer.execute_operations()
 
         new_path = getattr(book, "file_path", "")
-        if result.successful > 0:
+        if successful > 0:
             # Refresh book to get updated file path after rename
             book.refresh_from_db()
             new_path = book.file_path
@@ -307,8 +307,8 @@ class BookRenamerExecuteView(LoginRequiredMixin, TemplateView):
             "new_path": new_path,
             "additional_files": [],
             "old_path": getattr(book, "file_path", ""),
-            "status": "renamed" if result.successful > 0 else "failed",
-            "errors": result.errors,
+            "status": "renamed" if successful > 0 else "failed",
+            "errors": errors,
         }
 
     def _get_file_action(self, file_index, file_actions):

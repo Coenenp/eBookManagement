@@ -308,7 +308,15 @@ class RenameGateTests(TransactionTestCase):
         )
         data = resp.json()
         self.assertFalse(path.exists())
-        self.assertTrue((Path(self.temp_dir) / "Approved" / "brea.epub").exists())
+        new_path = Path(self.temp_dir) / "Approved" / "brea.epub"
+        self.assertTrue(new_path.exists())
+        # The book's result reports a successful rename with no errors.
+        result = data["results"][0]["result"]
+        self.assertEqual(result["status"], "renamed")
+        self.assertEqual(result["errors"], [])
+        # The book's file_path now points at the new path.
+        book.refresh_from_db()
+        self.assertEqual(book.file_path, str(new_path))
 
     # --- metadata_update file operations are gated ---
 
