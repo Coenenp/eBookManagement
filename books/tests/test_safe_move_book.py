@@ -311,6 +311,30 @@ class SafeMoveBookTests(TestCase):
         self.assertFalse(Path(str(target) + ".moving").exists())
         self.assertFalse(Path(row.archived_path).exists())  # archive removed
 
+    def test_approval_revoked_at_archive_step_ends_needs_review(self):
+        book, src = self._make_book("sub/book.txt", data=b"keep me")
+        target = self.target_dir / "book.txt"
+
+        def fake_sha256(path):
+            result = _sha256(path)
+            # A concurrent DB update revokes approval at the archived step.
+            if "Archive [To Delete]" in str(path):
+                FinalMetadata.objects.filter(book=book).update(is_reviewed=False)
+            return result
+
+        with mock.patch("books.utils.safe_move.routine._sha256", side_effect=fake_sha256):
+            with self.assertRaises(NeedsReview) as ctx:
+                safe_move_book(book, str(target))
+
+        self.assertEqual(ctx.exception.codes, ["approval-revoked"])
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.NEEDS_REVIEW)
+        self.assertEqual(row.review_flags, ["approval-revoked"])
+        self.assertTrue(src.exists())
+        self.assertFalse(target.exists())
+        self.assertFalse(Path(str(target) + ".moving").exists())
+        self.assertFalse(Path(row.archived_path).exists())
+
     # -- item 5: history row + stale saves ------------------------------------
 
     def test_check_c_failure_marks_history_reverted(self):

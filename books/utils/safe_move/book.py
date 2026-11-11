@@ -11,7 +11,7 @@ from pathlib import Path
 
 from django.db import transaction
 
-from books.models import BookFile, FileMove
+from books.models import BookFile, FileMove, FinalMetadata
 from books.utils.batch_renamer import CompanionFileFinder
 from books.utils.epub_fix.fixer import IMAGE_MEDIA_BY_EXT, _validate_cover
 from books.utils.renaming_engine import is_renamable
@@ -433,12 +433,19 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
     # exception other than NeedsReview fails the move (partial files removed by
     # the resolver) and is re-raised; a pre-flight refusal (missing source,
     # existing target) also ends in failed, never planned.
+    def _recheck_approval():
+        # Re-read approval from the database (a fresh query, not the cached
+        # object) immediately before the commit rename, for the main move only.
+        if not FinalMetadata.objects.filter(book=book, is_reviewed=True).exists():
+            raise NeedsReview(["approval-revoked"])
+
     try:
         result = safe_move_file(
             source_path, target, scan_root=scan_folder.path,
             scan_label=scan_label, archive_root=archive_root,
             repack_epub=repack_epub, cover_path=effective_cover,
             fix_encoding=fix_encoding, on_step=on_step, metadata=metadata,
+            before_commit=_recheck_approval,
         )
     except NeedsReview as exc:
         # (d) Blocking check failed: record needs_review, nothing else changes.

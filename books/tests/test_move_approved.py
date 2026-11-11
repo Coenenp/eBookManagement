@@ -243,6 +243,41 @@ class FitPathTests(TestCase):
         self.assertLessEqual(len(r), 240)
         self.assertEqual(fit_path(p), r)  # deterministic
 
+    def test_drive_path_shortens_folders_keeps_root_and_title(self):
+        folder = "F" * 300
+        p = "Z:\\Books\\" + folder + "\\title.pdf"
+        r = fit_path(p)
+        self.assertLessEqual(len(r), 240)
+        self.assertTrue(r.startswith("Z:\\Books\\"))
+        self.assertTrue(r.endswith("\\title.pdf"))
+        self.assertEqual(fit_path(p), r)  # deterministic
+        for comp in r.split("\\"):
+            if comp:
+                self.assertFalse(comp.endswith((" ", ".")), comp)
+
+    def test_unc_path_shortens_folders_keeps_root_and_title(self):
+        folder = "F" * 300
+        p = "\\\\nas\\share\\" + folder + "\\title.pdf"
+        r = fit_path(p)
+        self.assertLessEqual(len(r), 240)
+        self.assertTrue(r.startswith("\\\\nas\\share\\"))
+        self.assertTrue(r.endswith("\\title.pdf"))
+        self.assertEqual(fit_path(p), r)
+        for comp in r.split("\\"):
+            if comp:
+                self.assertFalse(comp.endswith((" ", ".")), comp)
+
+    def test_no_component_ends_in_space_or_dot(self):
+        title = "T" * 240
+        p = f"/tmp/lib/Author ./{title}.pdf"
+        r = fit_path(p)
+        self.assertLessEqual(len(r), 240)
+        self.assertTrue(r.startswith("/"))
+        self.assertEqual(fit_path(p), r)  # deterministic
+        for comp in r.split("/"):
+            if comp:
+                self.assertFalse(comp.endswith((" ", ".")), comp)
+
 
 class ApprovedLayoutTests(TestCase):
     def setUp(self):
@@ -297,3 +332,21 @@ class ApprovedLayoutTests(TestCase):
         out = StringIO()
         call_command("move_approved", stdout=out)
         self.assertIn(f"skipped {book.id} | no pattern yet", out.getvalue())
+
+    def test_folder_pattern_only_uses_default_filename(self):
+        book = self._make_book("My Book.pdf", author="John Smith", content_type="ebook")
+        out = StringIO()
+        call_command("move_approved", stdout=out, folder_pattern="Custom")
+        line = next(l for l in out.getvalue().splitlines() if l.startswith(f"{book.id} |"))
+        target = line.split(" -> ", 1)[1]
+        expected = str(Path(self.temp_dir) / "Custom" / "Smith, John - My Book.pdf")
+        self.assertEqual(target, expected)
+
+    def test_filename_pattern_only_uses_default_folder(self):
+        book = self._make_book("My Book.pdf", author="John Smith", content_type="ebook")
+        out = StringIO()
+        call_command("move_approved", stdout=out, filename_pattern="${title}.${ext}")
+        line = next(l for l in out.getvalue().splitlines() if l.startswith(f"{book.id} |"))
+        target = line.split(" -> ", 1)[1]
+        expected = str(Path(self.temp_dir) / "English" / "Books" / "Smith, John" / "My Book.pdf")
+        self.assertEqual(target, expected)

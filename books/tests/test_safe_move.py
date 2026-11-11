@@ -23,6 +23,7 @@ from books.utils.safe_move import (
     safe_move_file,
 )
 from books.utils.safe_move.archive import archive_destination, default_archive_root
+from books.utils.safe_move.routine import _retry_io
 
 MIMETYPE = b"application/epub+zip"
 
@@ -162,6 +163,62 @@ class ArchiveHelperTests(SimpleTestCase):
         with mock.patch("books.utils.safe_move.archive.datetime", FakeDT):
             dest = archive_destination(str(src), str(self.scan_root), "label", str(archive_root))
         self.assertEqual(Path(dest), base.with_name("book(archived 20261106T120000)-3.epub"))
+
+
+class RetryIOTests(SimpleTestCase):
+    def test_retry_two_connection_reset_then_success(self):
+        calls = []
+
+        def fn():
+            calls.append(1)
+            if len(calls) < 3:
+                raise ConnectionResetError("reset")
+            return "ok"
+
+        with mock.patch("books.utils.safe_move.routine.time.sleep") as slp:
+            result = _retry_io(fn)
+        self.assertEqual(result, "ok")
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(slp.call_args_list, [mock.call(1), mock.call(4)])
+
+    def test_retry_three_failures_raise(self):
+        calls = []
+
+        def fn():
+            calls.append(1)
+            raise ConnectionResetError("reset")
+
+        with mock.patch("books.utils.safe_move.routine.time.sleep") as slp:
+            with self.assertRaises(ConnectionResetError):
+                _retry_io(fn)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(slp.call_args_list, [mock.call(1), mock.call(4)])
+
+    def test_permission_error_not_retried(self):
+        calls = []
+
+        def fn():
+            calls.append(1)
+            raise PermissionError("denied")
+
+        with mock.patch("books.utils.safe_move.routine.time.sleep") as slp:
+            with self.assertRaises(PermissionError):
+                _retry_io(fn)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(slp.call_args_list, [])
+
+    def test_hash_mismatch_not_retried(self):
+        calls = []
+
+        def fn():
+            calls.append(1)
+            raise NeedsReview(["hash-mismatch"])
+
+        with mock.patch("books.utils.safe_move.routine.time.sleep") as slp:
+            with self.assertRaises(NeedsReview):
+                _retry_io(fn)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(slp.call_args_list, [])
 
 
 class SafeMoveRoutineTests(SimpleTestCase):
@@ -312,6 +369,36 @@ class SafeMoveRoutineTests(SimpleTestCase):
         tgt.write_bytes(b"already here")
         with self.assertRaises(FileExistsError):
             self._move(src, tgt, content=b"GENERATED")
+
+    # -- before_commit hook ---------------------------------------------------
+
+    def test_before_commit_needs_review_aborts_and_cleans_up(self):
+        src = self._src("sub/book.txt", data=b"keep me")
+        tgt = self._target("book.txt")
+
+        def revoked():
+            raise NeedsReview(["approval-revoked"])
+
+        with self.assertRaises(NeedsReview) as ctx:
+            self._move(src, tgt, before_commit=revoked)
+        self.assertEqual(ctx.exception.codes, ["approval-revoked"])
+        self.assertTrue(src.exists())
+        self.assertFalse(tgt.exists())
+        self.assertFalse(Path(str(tgt) + ".moving").exists())
+        archive_files = (
+            list(Path(self.archive_root).rglob("book.txt"))
+            if Path(self.archive_root).exists()
+            else []
+        )
+        self.assertEqual(archive_files, [])
+
+    def test_before_commit_noop_moves_normally(self):
+        src = self._src("sub/book.txt", data=b"hello")
+        tgt = self._target("book.txt")
+        result = self._move(src, tgt, before_commit=lambda: None)
+        self.assertTrue(tgt.exists())
+        self.assertTrue(src.exists())
+        self.assertTrue(Path(result.archived_path).is_file())
 
     # -- check A: empty temp -------------------------------------------------
 
