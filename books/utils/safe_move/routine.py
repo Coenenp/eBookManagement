@@ -95,7 +95,7 @@ def _notify(on_step, name, state):
 def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
                    repack_epub=True, cover_path=None, fix_encoding=False,
                    on_step=None, metadata=None, content=None, verify=None,
-                   keep_source=False):
+                   keep_source=False, before_commit=None):
     """Move ``source`` to ``target``, archiving the original. Returns MoveResult."""
     src = Path(source).resolve()
     tgt = Path(target)
@@ -244,6 +244,19 @@ def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
         _remove(str(tmp) + ".part")
         _remove(archived_path)
         raise FileExistsError(f"target already exists: {target}")
+
+    # Pre-commit guard (e.g. approval re-check): runs after the temporary copy
+    # and the archive copy are verified, immediately before the commit step. A
+    # NeedsReview here aborts the move: the temporary file and the archive copy
+    # are removed, and the original is left untouched.
+    if before_commit is not None:
+        try:
+            before_commit()
+        except Exception:
+            _remove(tmp)
+            _remove(str(tmp) + ".part")
+            _remove(archived_path)
+            raise
 
     # Commit: atomically replace the target with the verified temporary file.
     os.replace(str(tmp), str(tgt))

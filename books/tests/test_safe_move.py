@@ -313,6 +313,36 @@ class SafeMoveRoutineTests(SimpleTestCase):
         with self.assertRaises(FileExistsError):
             self._move(src, tgt, content=b"GENERATED")
 
+    # -- before_commit hook ---------------------------------------------------
+
+    def test_before_commit_needs_review_aborts_and_cleans_up(self):
+        src = self._src("sub/book.txt", data=b"keep me")
+        tgt = self._target("book.txt")
+
+        def revoked():
+            raise NeedsReview(["approval-revoked"])
+
+        with self.assertRaises(NeedsReview) as ctx:
+            self._move(src, tgt, before_commit=revoked)
+        self.assertEqual(ctx.exception.codes, ["approval-revoked"])
+        self.assertTrue(src.exists())
+        self.assertFalse(tgt.exists())
+        self.assertFalse(Path(str(tgt) + ".moving").exists())
+        archive_files = (
+            list(Path(self.archive_root).rglob("book.txt"))
+            if Path(self.archive_root).exists()
+            else []
+        )
+        self.assertEqual(archive_files, [])
+
+    def test_before_commit_noop_moves_normally(self):
+        src = self._src("sub/book.txt", data=b"hello")
+        tgt = self._target("book.txt")
+        result = self._move(src, tgt, before_commit=lambda: None)
+        self.assertTrue(tgt.exists())
+        self.assertTrue(src.exists())
+        self.assertTrue(Path(result.archived_path).is_file())
+
     # -- check A: empty temp -------------------------------------------------
 
     def test_check_a_empty_temp_needs_review(self):
