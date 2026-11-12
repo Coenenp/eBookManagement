@@ -8,6 +8,7 @@ from io import StringIO
 from pathlib import Path
 
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.test import TestCase
 
 from books.management.commands.approve_batch import (
@@ -151,11 +152,21 @@ class ApproveBatchCommandTests(TestCase):
             ("title_stoplist", {"title": "untitled"}),
             ("title_equals_author", {"title": "Jane Doe", "author": "Jane Doe"}),
         ]
-        for name, kwargs in cases:
-            book = self._make_book(name=name, **kwargs)
+        for idx, (name, kwargs) in enumerate(cases):
+            title = kwargs.get("title", f"Case {name} Title")
+            author = kwargs.get("author", f"Author {name}")
+            extra = {k: v for k, v in kwargs.items() if k not in ("title", "author")}
+            case_book = self._make_book(name=f"case_{name}", title=title, author=author, **extra)
+            letter = chr(ord("a") + idx)
+            control = self._make_book(
+                name=f"ctrl_{name}",
+                title=f"Control Book {letter}",
+                author=f"Control Author {letter}",
+            )
             _, mpath = self._prepare()
             manifest = self._manifest(mpath)
-            self.assertNotIn(book.id, manifest["ids"], f"criterion {name} must exclude")
+            self.assertNotIn(case_book.id, manifest["ids"], f"criterion {name} must exclude")
+            self.assertIn(control.id, manifest["ids"], f"control for {name} must be eligible")
 
     def test_duplicate_title_and_author_excludes(self):
         b1 = self._make_book("dup1", title="The Same Story", author="A. N. Author")
@@ -191,11 +202,21 @@ class ApproveBatchCommandTests(TestCase):
             ("title_copy_of", {"title": "Copy of War and Peace"}),
             ("title_scan", {"title": "War and Peace scan"}),
         ]
-        for name, kwargs in cases:
-            book = self._make_book(name=name, **kwargs)
+        for idx, (name, kwargs) in enumerate(cases):
+            title = kwargs.get("title", f"Case {name} Title")
+            author = kwargs.get("author", f"Author {name}")
+            extra = {k: v for k, v in kwargs.items() if k not in ("title", "author")}
+            case_book = self._make_book(name=f"case_{name}", title=title, author=author, **extra)
+            letter = chr(ord("a") + idx)
+            control = self._make_book(
+                name=f"ctrl_{name}",
+                title=f"Control Book {letter}",
+                author=f"Control Author {letter}",
+            )
             _, mpath = self._prepare()
             manifest = self._manifest(mpath)
-            self.assertNotIn(book.id, manifest["ids"], f"suspicious {name} must exclude")
+            self.assertNotIn(case_book.id, manifest["ids"], f"suspicious {name} must exclude")
+            self.assertIn(control.id, manifest["ids"], f"control for {name} must be eligible")
 
     def test_suspicious_patterns_is_a_single_constant_list(self):
         self.assertIsInstance(SUSPICIOUS_PATTERNS, (list, tuple))
@@ -238,18 +259,19 @@ class ApproveBatchCommandTests(TestCase):
         self.assertEqual(self._manifest(m1)["sample_ids"], self._manifest(m2)["sample_ids"])
 
     def test_rejection_reason_stored(self):
-        self._make_book("rej")
+        book = self._make_book("rej")
         _, mpath = self._prepare()
         call_command(
             "approve_batch",
             manifest=str(mpath),
-            reject_id=1,
+            reject_id=book.id,
             reason="title looks wrong",
             stdout=StringIO(),
         )
         manifest = self._manifest(mpath)
         self.assertEqual(manifest["status"], "blocked")
         self.assertEqual(manifest["rejection_reason"], "title looks wrong")
+        self.assertEqual(manifest["rejected_id"], book.id)
 
     # ------------------------------------------------------------------ #
     # Apply
@@ -260,13 +282,14 @@ class ApproveBatchCommandTests(TestCase):
         _, mpath = self._prepare()
         manifest = self._manifest(mpath)
         n = len(manifest["ids"])
-        call_command(
-            "approve_batch",
-            manifest=str(mpath),
-            apply=True,
-            confirm=n + 1,
-            stdout=StringIO(),
-        )
+        with self.assertRaises(CommandError):
+            call_command(
+                "approve_batch",
+                manifest=str(mpath),
+                apply=True,
+                confirm=n + 1,
+                stdout=StringIO(),
+            )
         book.refresh_from_db()
         self.assertFalse(book.finalmetadata.is_reviewed)
 
@@ -276,18 +299,19 @@ class ApproveBatchCommandTests(TestCase):
         call_command(
             "approve_batch",
             manifest=str(mpath),
-            reject_id=1,
+            reject_id=book.id,
             reason="hold",
             stdout=StringIO(),
         )
         manifest = self._manifest(mpath)
-        call_command(
-            "approve_batch",
-            manifest=str(mpath),
-            apply=True,
-            confirm=len(manifest["ids"]),
-            stdout=StringIO(),
-        )
+        with self.assertRaises(CommandError):
+            call_command(
+                "approve_batch",
+                manifest=str(mpath),
+                apply=True,
+                confirm=len(manifest["ids"]),
+                stdout=StringIO(),
+            )
         book.refresh_from_db()
         self.assertFalse(book.finalmetadata.is_reviewed)
 

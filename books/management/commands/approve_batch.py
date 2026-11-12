@@ -24,7 +24,7 @@ import uuid
 from collections import Counter
 from pathlib import Path
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 CRITERIA_VERSION = "v1"
@@ -353,14 +353,12 @@ class Command(BaseCommand):
         manifest_path = Path(options["manifest"])
         data = json.loads(manifest_path.read_text())
         if data.get("status") == "blocked":
-            self.stdout.write("refusing: manifest is blocked")
-            return
+            raise CommandError("refusing: manifest is blocked")
 
         ids = data.get("ids", [])
         confirm = options["confirm"]
         if confirm != len(ids):
-            self.stdout.write(f"refusing: confirm {confirm} != id count {len(ids)}")
-            return
+            raise CommandError(f"refusing: confirm {confirm} != id count {len(ids)}")
 
         ctx = self._build_context()
         approved = []
