@@ -14,7 +14,9 @@ from django.test import TestCase
 from books.management.commands.approve_batch import (
     CRITERIA_VERSION,
     DEFAULT_MANIFEST_DIR,
+    MAX_SAMPLE,
     SUSPICIOUS_PATTERNS,
+    Command,
 )
 from books.models import FileMove
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
@@ -257,6 +259,27 @@ class ApproveBatchCommandTests(TestCase):
         _, m1 = self._prepare(seed=42)
         _, m2 = self._prepare(seed=42)
         self.assertEqual(self._manifest(m1)["sample_ids"], self._manifest(m2)["sample_ids"])
+
+    def test_planned_target_called_only_for_sample(self):
+        import itertools
+        import string
+        from unittest.mock import patch
+
+        suffixes = ["".join(p) for p in itertools.product(string.ascii_lowercase, repeat=2)]
+        for i in range(30):
+            self._make_book(
+                f"s{i:02d}",
+                title=f"Scale Title {suffixes[i]}",
+                author=f"Scale Author {suffixes[i]}",
+            )
+        with patch.object(Command, "_planned_target") as mock_target:
+            call_command(
+                "approve_batch",
+                manifest_dir=str(self.manifest_dir),
+                prepare=True,
+                stdout=StringIO(),
+            )
+        self.assertLessEqual(mock_target.call_count, MAX_SAMPLE)
 
     def test_rejection_reason_stored(self):
         book = self._make_book("rej")

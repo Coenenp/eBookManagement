@@ -229,8 +229,8 @@ class Command(BaseCommand):
             mv = MoveApprovedCommand()
             folder_pattern, filename_pattern = mv._patterns_for(book)
             return mv._compute_target(book, folder_pattern, filename_pattern)
-        except Exception:
-            return ""
+        except Exception as exc:
+            return f"planner error: {type(exc).__name__}: {exc}"
 
     # ------------------------------------------------------------------ #
     # Modes
@@ -242,29 +242,17 @@ class Command(BaseCommand):
         size = min(options["size"], MAX_SIZE)
         ctx = self._build_context()
 
-        eligible = []
+        eligible = []  # minimal tuples: (corroborated, book_id)
         for book in (
             Book.objects.select_related("finalmetadata", "scan_folder").order_by("id").iterator()
         ):
             fm = _get_fm(book)
             if self._exclusion(book, fm, ctx):
                 continue
-            source, fmt = ctx["primary_file"].get(book.id, ("", ""))
-            eligible.append(
-                {
-                    "id": book.id,
-                    "title": fm.final_title or "",
-                    "author": fm.final_author or "",
-                    "language": fm.language or "",
-                    "format": fmt,
-                    "tier": "corroborated" if _conf(fm.final_title_confidence) >= CORROBORATED_THRESHOLD else "standard",
-                    "source": source,
-                    "target": self._planned_target(book),
-                    "corroborated": _conf(fm.final_title_confidence) >= CORROBORATED_THRESHOLD,
-                }
-            )
+            corroborated = _conf(fm.final_title_confidence) >= CORROBORATED_THRESHOLD
+            eligible.append((corroborated, book.id))
 
-        eligible.sort(key=lambda e: (-e["corroborated"], e["id"]))
+        eligible.sort(key=lambda e: (-e[0], e[1]))
         selected = eligible[:size]
 
         batch_id = str(uuid.uuid4())
@@ -278,8 +266,8 @@ class Command(BaseCommand):
         manifest = {
             "batch_id": batch_id,
             "criteria_version": CRITERIA_VERSION,
-            "ids": [e["id"] for e in selected],
-            "sample_ids": [e["id"] for e in sample_entries],
+            "ids": [bid for _corr, bid in selected],
+            "sample_ids": [bid for _corr, bid in sample_entries],
             "status": "prepared",
         }
 
@@ -290,11 +278,22 @@ class Command(BaseCommand):
 
         self.stdout.write(f"batch_id: {batch_id}")
         self.stdout.write(f"manifest: {manifest_path}")
-        for e in sample_entries:
-            self.stdout.write(
-                f"{e['id']} | {e['title']} | {e['author']} | {e['language']} | "
-                f"{e['format']} | {e['tier']} | {e['source']} | {e['target']}"
-            )
+        for corroborated, bid in sample_entries:
+            self.stdout.write(self._sample_line(bid, corroborated, ctx))
+
+    def _sample_line(self, bid, corroborated, ctx):
+        """Full detail line for one sampled entry; the planner runs only here."""
+        from books.models import Book
+
+        book = Book.objects.select_related("finalmetadata", "scan_folder").filter(id=bid).first()
+        fm = _get_fm(book)
+        source, fmt = ctx["primary_file"].get(bid, ("", ""))
+        tier = "corroborated" if corroborated else "standard"
+        target = self._planned_target(book)
+        return (
+            f"{bid} | {fm.final_title or ''} | {fm.final_author or ''} | "
+            f"{fm.language or ''} | {fmt} | {tier} | {source} | {target}"
+        )
 
     def _report(self, options):
         from books.models import Book
