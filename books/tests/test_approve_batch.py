@@ -363,6 +363,32 @@ class ApproveBatchCommandTests(TestCase):
         self.assertIn(b1.id, applied["applied_ids"])
         self.assertNotIn(b2.id, applied["applied_ids"])
 
+    def test_apply_preserves_language_flag(self):
+        # A language flag present at apply time survives: the apply-time exclusion
+        # re-check skips the flagged book, so its flag is never cleared. A clean
+        # sibling is approved and its unresolved_reason stays empty.
+        flagged = self._make_book("langflag", title="Flagged Title", author="Flag Author")
+        clean = self._make_book("cleanctl", title="Clean Title", author="Clean Author")
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        ffm = flagged.finalmetadata
+        ffm.unresolved_reason = "language_undetermined"
+        ffm.save(update_fields=["unresolved_reason"])
+        out = StringIO()
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            apply=True,
+            confirm=len(manifest["ids"]),
+            stdout=out,
+        )
+        ffm.refresh_from_db()
+        clean.refresh_from_db()
+        self.assertEqual(ffm.unresolved_reason, "language_undetermined")  # survives
+        self.assertFalse(ffm.is_reviewed)
+        self.assertTrue(clean.finalmetadata.is_reviewed)
+        self.assertEqual(clean.finalmetadata.unresolved_reason, "")  # stays empty
+
     def test_no_file_moves_and_no_filemove_rows(self):
         book = self._make_book("nomove")
         src = Path(book.file_path)
