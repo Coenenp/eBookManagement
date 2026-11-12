@@ -68,6 +68,7 @@ SUSPICIOUS_PATTERNS = [
 # returns the first (and only the first) reason that applies, so the report can
 # attribute each excluded book to exactly one criterion.
 CRITERIA_LABELS = [
+    "no final metadata",
     "already reviewed",
     "unresolved reason",
     "language",
@@ -98,6 +99,21 @@ def _norm_text(value):
 def _norm_author(value):
     """Normalize an author and reduce it to a sorted token form."""
     return " ".join(sorted(_norm_text(value).split()))
+
+
+def _conf(value):
+    """Treat a None confidence as 0.0 (fields are non-null, but be safe)."""
+    return value if value is not None else 0.0
+
+
+def _get_fm(book):
+    """Return the book's FinalMetadata, or None when it has no row."""
+    from books.models import FinalMetadata
+
+    try:
+        return book.finalmetadata
+    except FinalMetadata.DoesNotExist:
+        return None
 
 
 class Command(BaseCommand):
@@ -167,6 +183,8 @@ class Command(BaseCommand):
 
     def _exclusion(self, book, fm, ctx):
         """Return the first failing criterion label, or None if eligible."""
+        if fm is None:
+            return "no final metadata"
         if fm.is_reviewed:
             return "already reviewed"
         if fm.unresolved_reason:
@@ -174,11 +192,11 @@ class Command(BaseCommand):
         lang = (fm.language or "").strip()
         if not lang or lang == "und":
             return "language"
-        if fm.final_title_confidence < CONFIDENCE_THRESHOLD:
+        if _conf(fm.final_title_confidence) < CONFIDENCE_THRESHOLD:
             return "title confidence"
-        if fm.final_author_confidence < CONFIDENCE_THRESHOLD:
+        if _conf(fm.final_author_confidence) < CONFIDENCE_THRESHOLD:
             return "author confidence"
-        if fm.final_cover_confidence < CONFIDENCE_THRESHOLD:
+        if _conf(fm.final_cover_confidence) < CONFIDENCE_THRESHOLD:
             return "cover confidence"
         if not fm.final_cover_path or not os.path.exists(fm.final_cover_path):
             return "cover file"
@@ -228,7 +246,7 @@ class Command(BaseCommand):
         for book in (
             Book.objects.select_related("finalmetadata", "scan_folder").order_by("id").iterator()
         ):
-            fm = book.finalmetadata
+            fm = _get_fm(book)
             if self._exclusion(book, fm, ctx):
                 continue
             source, fmt = ctx["primary_file"].get(book.id, ("", ""))
@@ -239,10 +257,10 @@ class Command(BaseCommand):
                     "author": fm.final_author or "",
                     "language": fm.language or "",
                     "format": fmt,
-                    "tier": "corroborated" if fm.final_title_confidence >= CORROBORATED_THRESHOLD else "standard",
+                    "tier": "corroborated" if _conf(fm.final_title_confidence) >= CORROBORATED_THRESHOLD else "standard",
                     "source": source,
                     "target": self._planned_target(book),
-                    "corroborated": fm.final_title_confidence >= CORROBORATED_THRESHOLD,
+                    "corroborated": _conf(fm.final_title_confidence) >= CORROBORATED_THRESHOLD,
                 }
             )
 
@@ -293,7 +311,7 @@ class Command(BaseCommand):
         for book in (
             Book.objects.select_related("finalmetadata", "scan_folder").order_by("id").iterator()
         ):
-            fm = book.finalmetadata
+            fm = _get_fm(book)
             reason = self._exclusion(book, fm, ctx)
             if reason:
                 excluded[reason] += 1
@@ -301,7 +319,7 @@ class Command(BaseCommand):
             eligible_count += 1
             by_format[ctx["primary_file"].get(book.id, ("", ""))[1]] += 1
             by_language[fm.language or ""] += 1
-            tier = "corroborated" if fm.final_title_confidence >= CORROBORATED_THRESHOLD else "standard"
+            tier = "corroborated" if _conf(fm.final_title_confidence) >= CORROBORATED_THRESHOLD else "standard"
             by_tier[tier] += 1
 
         self.stdout.write(f"total books: {total}")
@@ -349,11 +367,15 @@ class Command(BaseCommand):
         skipped = 0
         for bid in ids:
             book = Book.objects.select_related("finalmetadata").filter(id=bid).first()
-            if book is None or book.finalmetadata is None:
+            if book is None:
                 skipped += 1
                 self.stdout.write(f"skipped {bid}: missing")
                 continue
-            fm = book.finalmetadata
+            fm = _get_fm(book)
+            if fm is None:
+                skipped += 1
+                self.stdout.write(f"skipped {bid}: no final metadata")
+                continue
             reason = self._exclusion(book, fm, ctx)
             if reason:
                 skipped += 1

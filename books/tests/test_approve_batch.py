@@ -94,6 +94,45 @@ class ApproveBatchCommandTests(TestCase):
         self.assertFalse(str(DEFAULT_MANIFEST_DIR.resolve()).startswith(str(repo)))
 
     # ------------------------------------------------------------------ #
+    # Books without FinalMetadata
+    # ------------------------------------------------------------------ #
+
+    def test_book_without_final_metadata_does_not_raise(self):
+        # A book with no FinalMetadata row must not crash report/prepare/apply;
+        # report counts it under the first exclusion label, apply skips it.
+        bare = create_test_book_with_file(
+            file_path=str(Path(self.temp_dir) / "bare.epub"),
+            file_format="epub",
+            scan_folder=self.scan_folder,
+            content_type="ebook",
+        )
+        # report
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("no final metadata: 1", out.getvalue())
+        # prepare
+        call_command(
+            "approve_batch",
+            manifest_dir=str(self.manifest_dir),
+            prepare=True,
+            stdout=StringIO(),
+        )
+        # apply with that id in a manifest
+        mpath = self.manifest_dir / "bare.json"
+        mpath.write_text(
+            json.dumps({"batch_id": "bare", "ids": [bare.id], "status": "prepared"})
+        )
+        out_apply = StringIO()
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            apply=True,
+            confirm=1,
+            stdout=out_apply,
+        )
+        self.assertIn(f"skipped {bare.id}", out_apply.getvalue())
+
+    # ------------------------------------------------------------------ #
     # Each criterion excludes a book
     # ------------------------------------------------------------------ #
 
