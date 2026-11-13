@@ -473,7 +473,7 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False, 
     _extract_filename_metadata(book, ai_recognizer=ai_recognizer)
 
     try:
-        _extract_internal_metadata(book)
+        _extract_internal_metadata(book, enable_external_apis=enable_external_apis)
     except Exception as e:
         logger.warning(f"Internal metadata extraction failed: {str(e)}")
         book.is_corrupted = True
@@ -617,7 +617,7 @@ def _extract_filename_metadata(book, ai_recognizer=None):
             obj.save()
 
 
-def _extract_internal_metadata(book):
+def _extract_internal_metadata(book, enable_external_apis=True):
     fmt = book.primary_file.file_format.lower() if book.primary_file else ""
     extractor = None
 
@@ -636,12 +636,12 @@ def _extract_internal_metadata(book):
         elif fmt == "cbr":
             if not rarfile.is_rarfile(book.primary_file.file_path):
                 raise ValueError("CBR file is not a valid RAR archive.")
-            extractor = comic.extract_cbr
+            extractor = lambda b: comic.extract_cbr(b, enable_external_apis=enable_external_apis)
 
         elif fmt == "cbz":
             if not zipfile.is_zipfile(book.primary_file.file_path):
                 raise ValueError("CBZ file is not a valid ZIP archive.")
-            extractor = comic.extract_cbz
+            extractor = lambda b: comic.extract_cbz(b, enable_external_apis=enable_external_apis)
 
         elif fmt in ["cb7", "cbt"]:
             # CB7 (7-Zip) and CBT (TAR) comic formats are not yet supported
