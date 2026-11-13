@@ -1,6 +1,7 @@
 """Tests for the fetch_covers management command."""
 
 import csv
+import hashlib
 import io
 import shutil
 import tempfile
@@ -250,3 +251,129 @@ class FetchCoversCommandTests(TestCase):
         self.assertIn("short-side-below-200: 1", out.getvalue())
         self.assertIn("smallest-short-side: 150", out.getvalue())
         self.assertIn("largest-short-side: 150", out.getvalue())
+
+    def test_google_content_first_candidate_is_zoom3_without_edge(self):
+        url = (
+            "https://books.google.com/books/content?id=abc&printsec=frontcover"
+            "&img=1&zoom=1&edge=curl&source=gbs_api"
+        )
+        self._make_url_book(url)
+        calls = []
+
+        def _get(u, *a, **kw):
+            calls.append(u)
+            return FakeResponse(_jpeg_bytes())
+
+        with mock.patch(
+            "books.management.commands.fetch_covers.requests.get", side_effect=_get
+        ):
+            call_command("fetch_covers", stdout=io.StringIO())
+        self.assertEqual(len(calls), 1)
+        self.assertIn("zoom=3", calls[0])
+        self.assertNotIn("edge=", calls[0])
+
+    def test_too_small_zoom3_falls_back_to_zoom2(self):
+        url = "https://books.google.com/books/content?id=abc&img=1&zoom=1&edge=curl"
+        book = self._make_url_book(url)
+
+        def _get(u, *a, **kw):
+            if "zoom=3" in u:
+                return FakeResponse(_jpeg_bytes(width=50, height=50))
+            return FakeResponse(_jpeg_bytes())
+
+        with mock.patch(
+            "books.management.commands.fetch_covers.requests.get", side_effect=_get
+        ) as get, mock.patch("books.management.commands.fetch_covers._sleep"):
+            call_command("fetch_covers", stdout=io.StringIO())
+        urls = [c.args[0] for c in get.call_args_list]
+        self.assertIn("zoom=3", urls[0])
+        self.assertIn("zoom=2", urls[1])
+        fm = FinalMetadata.objects.get(book=book)
+        self.assertTrue(fm.final_cover_path.startswith("cover_cache/"))
+
+    def test_all_candidates_fail_logs_one_failed_row(self):
+        url = "https://books.google.com/books/content?id=abc&img=1&zoom=1&edge=curl"
+        self._make_url_book(url)
+        with mock.patch(
+            "books.management.commands.fetch_covers.requests.get",
+            side_effect=RuntimeError("boom"),
+        ) as get, mock.patch("books.management.commands.fetch_covers._sleep"):
+            call_command("fetch_covers", stdout=io.StringIO())
+        self.assertEqual(get.call_count, 3)
+        with open(self.temp_dir / "log.csv", newline="") as fh:
+            rows = list(csv.DictReader(fh))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["outcome"], "failed")
+
+    def test_openlibrary_url_makes_exactly_one_request(self):
+        url = "https://covers.openlibrary.org/b/id/12345-L.jpg"
+        self._make_url_book(url)
+        with mock.patch(
+            "books.management.commands.fetch_covers.requests.get",
+            return_value=FakeResponse(_jpeg_bytes()),
+        ) as get:
+            call_command("fetch_covers", stdout=io.StringIO())
+        self.assertEqual(get.call_count, 1)
+        self.assertEqual(get.call_args[0][0], url)
+
+    def test_fetched_url_column_holds_used_url(self):
+        url = "https://books.google.com/books/content?id=abc&img=1&zoom=1&edge=curl"
+        self._make_url_book(url)
+
+        def _get(u, *a, **kw):
+            if "zoom=3" in u:
+                return FakeResponse(_jpeg_bytes(width=50, height=50))
+            return FakeResponse(_jpeg_bytes())
+
+        with mock.patch(
+            "books.management.commands.fetch_covers.requests.get", side_effect=_get
+        ), mock.patch("books.management.commands.fetch_covers._sleep"):
+            call_command("fetch_covers", stdout=io.StringIO())
+        with open(self.temp_dir / "log.csv", newline="") as fh:
+            rows = list(csv.DictReader(fh))
+        self.assertEqual(rows[0]["outcome"], "downloaded")
+        self.assertIn("zoom=2", rows[0]["fetched_url"])
+
+    def test_http_429_stops_loop_after_current_row(self):
+        self._make_url_book("https://example.com/a.jpg")
+        self._make_url_book("https://example.com/b.jpg")
+        calls = []
+
+        def _get(u, *a, **kw):
+            calls.append(u)
+            return FakeResponse(b"", status_code=429)
+
+        out = io.StringIO()
+        with mock.patch(
+            "books.management.commands.fetch_covers.requests.get", side_effect=_get
+        ):
+            call_command("fetch_covers", stdout=out)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("HTTP 429", out.getvalue())
+        self.assertIn("example.com", out.getvalue())
+
+    def test_dry_run_writes_no_log_for_any_outcome(self):
+        self._make_url_book("https://example.com/fail.jpg")
+        self._make_url_book("https://example.com/tiny.jpg")
+        self._make_url_book("https://example.com/exists.jpg")
+        # Pre-create the destination for the "already exists" (skipped) case.
+        content = _jpeg_bytes()
+        name = hashlib.sha256(content).hexdigest() + ".jpg"
+        dest = Path(settings.MEDIA_ROOT) / "cover_cache" / name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(content)
+
+        def _get(url, *a, **kw):
+            if url.endswith("fail.jpg"):
+                raise RuntimeError("boom")
+            if url.endswith("tiny.jpg"):
+                return FakeResponse(_jpeg_bytes(width=50, height=50))
+            return FakeResponse(content)
+
+        with mock.patch(
+            "books.management.commands.fetch_covers.requests.get", side_effect=_get
+        ):
+            call_command("fetch_covers", stdout=io.StringIO(), dry_run=True)
+
+        log = self.temp_dir / "log.csv"
+        self.assertFalse(log.exists())

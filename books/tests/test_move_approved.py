@@ -301,6 +301,42 @@ class MoveApprovedCommandTests(TestCase):
         self.assertTrue(beside.is_file())
         self.assertEqual(beside.read_bytes(), media.read_bytes())
 
+    def test_dry_run_reports_cover_missing_skip(self):
+        book, path = self._make_book("nocover.pdf")
+        book.finalmetadata.final_cover_path = ""
+        book.finalmetadata.save(update_fields=["final_cover_path"])
+        out = self._run()
+        self.assertIn(f"skipped {book.id} | cover-missing", out)
+        self.assertTrue(path.exists())  # nothing moved
+        self.assertFalse(FileMove.objects.filter(book=book).exists())
+
+    def test_dry_run_reports_target_exists_skip(self):
+        book, path = self._make_book("exists.pdf")
+        target = Path(self.temp_dir) / "Approved" / "exists.pdf"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"existing")
+        out = self._run(folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        self.assertIn(f"skipped {book.id} | target-exists", out)
+        self.assertTrue(path.exists())  # nothing moved
+        self.assertFalse(FileMove.objects.filter(book=book).exists())
+
+    def test_execute_prints_same_skip_reasons_as_dry_run(self):
+        b1, p1 = self._make_book("nocover.pdf")
+        b1.finalmetadata.final_cover_path = ""
+        b1.finalmetadata.save(update_fields=["final_cover_path"])
+        b2, p2 = self._make_book("exists.pdf")
+        target = Path(self.temp_dir) / "Approved" / "exists.pdf"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"existing")
+        dry = self._run(folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        exec_out = self._run(
+            execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}"
+        )
+        self.assertIn(f"skipped {b1.id} | cover-missing", dry)
+        self.assertIn(f"skipped {b2.id} | target-exists", dry)
+        self.assertIn(f"needs_review {b1.id} | cover-missing", exec_out)
+        self.assertIn(f"skipped {b2.id} | target-exists", exec_out)
+
 
 class FitPathTests(TestCase):
     def test_short_path_unchanged(self):
@@ -381,9 +417,13 @@ class ApprovedLayoutTests(TestCase):
         book = create_test_book_with_file(
             file_path=str(path), file_format="pdf", scan_folder=self.scan_folder, content_type=content_type,
         )
+        cover = Path(self.temp_dir) / "_default_cover.jpg"
+        if not cover.exists():
+            cover.write_bytes(b"\xff\xd8\xff\xd9")
         FinalMetadata.objects.create(
             book=book, final_title=Path(name).stem, is_reviewed=True, language=language,
             final_series=series, final_series_number=series_number, final_author=author,
+            final_cover_path=str(cover),
         )
         return book
 
