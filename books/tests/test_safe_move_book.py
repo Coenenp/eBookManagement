@@ -874,7 +874,7 @@ class SafeMoveBookTests(TestCase):
         src = self.scan_root / name
         src.parent.mkdir(parents=True, exist_ok=True)
         # Distinct per-name content so two books never share a source hash.
-        _write_epub(src, opf=_opf().replace(b"<dc:title>Test</dc:title>", name.encode()))
+        _write_epub(src, opf=_opf().replace(b"<dc:title>Test</dc:title>", b"<dc:title>" + name.encode() + b"</dc:title>"))
         book = create_test_book_with_file(
             file_path=str(src), file_format="epub", scan_folder=self.scan_folder,
         )

@@ -131,7 +131,8 @@ def _flag_companion_outside(parent, source):
 def _duplicate_content_flag(book, hash_value):
     """Return ``duplicate-content:<book id>`` when another book's FileMove journal
     already records ``hash_value`` as ``original_sha256`` or ``new_sha256``, else
-    None. One indexed query per hash; never loads all hashes into memory."""
+    None. One query per hash (indexed only if ``original_sha256`` and
+    ``new_sha256`` carry a ``db_index``); never loads all hashes into memory."""
     if not hash_value:
         return None
     other_book_id = (
