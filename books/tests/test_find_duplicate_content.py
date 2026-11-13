@@ -34,6 +34,36 @@ class FindDuplicateContentTests(TestCase):
             original_sha256=original, new_sha256=new,
         )
 
+    def _companion_move(self, book, original="", new=""):
+        return FileMove.objects.create(
+            book=book, kind=FileMove.Kind.COMPANION, db_field=FileMove.DBField.COVER_PATH,
+            source_path=str(self.scan_root / "cover.jpg"), target_path=str(self.scan_root / "c.jpg"),
+            state=FileMove.State.PENDING_DELETION,
+            original_sha256=original, new_sha256=new,
+        )
+
+    def test_hash_fields_are_indexed(self):
+        self.assertTrue(FileMove._meta.get_field("original_sha256").db_index)
+        self.assertTrue(FileMove._meta.get_field("new_sha256").db_index)
+
+    def test_companion_hashes_not_duplicates(self):
+        # Two books sharing a cover (companion) hash are not content duplicates.
+        b1 = self._book()
+        b2 = self._book()
+        self._companion_move(b1, original="coverhash", new="coverhash")
+        self._companion_move(b2, original="coverhash", new="coverhash")
+        out = StringIO()
+        call_command("find_duplicate_content", stdout=out)
+        self.assertIn("0 duplicate group(s)", out.getvalue())
+
+    def test_duplicate_content_flag_ignores_companion(self):
+        from books.utils.safe_move.book import _duplicate_content_flag
+
+        b1 = self._book()
+        b2 = self._book()
+        self._companion_move(b1, original="coverhash")
+        self.assertIsNone(_duplicate_content_flag(b2, "coverhash"))
+
     def test_lists_groups_sharing_a_hash(self):
         b1 = self._book()
         b2 = self._book()

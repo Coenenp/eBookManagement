@@ -56,9 +56,9 @@ class FileMove(models.Model):
     queued_at = models.DateTimeField(null=True, blank=True)
     batch_id = models.CharField(max_length=36, blank=True, default="", db_index=True)
 
-    original_sha256 = models.CharField(max_length=64, blank=True)
+    original_sha256 = models.CharField(max_length=64, blank=True, db_index=True)
     archived_sha256 = models.CharField(max_length=64, blank=True)
-    new_sha256 = models.CharField(max_length=64, blank=True)
+    new_sha256 = models.CharField(max_length=64, blank=True, db_index=True)
 
     review_flags = models.JSONField(default=list, blank=True)
     error = models.TextField(blank=True)

@@ -19,20 +19,22 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         table = FileMove._meta.db_table
+        kind = FileMove.Kind.MAIN
         cursor = connection.cursor()
         cursor.execute(
             f"""
             SELECT h, COUNT(DISTINCT book_id) AS n
             FROM (
-                SELECT original_sha256 AS h, book_id FROM {table}
+                SELECT original_sha256 AS h, book_id FROM {table} WHERE kind = %s
                 UNION ALL
-                SELECT new_sha256 AS h, book_id FROM {table}
+                SELECT new_sha256 AS h, book_id FROM {table} WHERE kind = %s
             ) AS hashes
             WHERE h <> '' AND book_id IS NOT NULL
             GROUP BY h
             HAVING COUNT(DISTINCT book_id) > 1
             ORDER BY h
-            """
+            """,
+            [kind, kind],
         )
 
         groups = []
@@ -43,7 +45,7 @@ class Command(BaseCommand):
             for h, _n in rows:
                 book_ids = sorted(
                     FileMove.objects
-                    .filter(Q(original_sha256=h) | Q(new_sha256=h))
+                    .filter(Q(original_sha256=h) | Q(new_sha256=h), kind=FileMove.Kind.MAIN)
                     .exclude(book__isnull=True)
                     .values_list("book_id", flat=True)
                     .distinct()
