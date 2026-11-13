@@ -185,6 +185,18 @@ class ApproveBatchCommandTests(TestCase):
         self.assertNotIn(b1.id, manifest["ids"])
         self.assertNotIn(b2.id, manifest["ids"])
 
+    def test_duplicate_with_url_cover_counted_as_duplicate(self):
+        # A book that is both a duplicate and has a URL cover is attributed to
+        # the duplicate criterion (cheap criteria run before the cover checks).
+        self._make_book("dupurl1", title="Same Again", author="Dup Author",
+                        cover_path="https://books.google.com/x")
+        self._make_book("dupurl2", title="Same Again", author="Dup Author")
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        text = out.getvalue()
+        self.assertIn("duplicate: 2", text)
+        self.assertIn("cover url (needs download): 0", text)
+
     # ------------------------------------------------------------------ #
     # Cover path resolution
     # ------------------------------------------------------------------ #
@@ -230,6 +242,13 @@ class ApproveBatchCommandTests(TestCase):
                 _, mpath = self._prepare()
             manifest = self._manifest(mpath)
             self.assertNotIn(book.id, manifest["ids"], f"cover sub-reason {name} must exclude")
+
+        # Clean control: a valid local cover must not be excluded by the cover checks.
+        control = self._make_book("cov_clean", title="Clean Cover Title", author="Clean Author")
+        with override_settings(MEDIA_ROOT=str(media)):
+            _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertIn(control.id, manifest["ids"], "clean cover control must pass")
 
     def test_valid_local_cover_passes_regardless_of_confidence(self):
         book = self._make_book(
