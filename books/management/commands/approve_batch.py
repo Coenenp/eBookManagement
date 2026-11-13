@@ -24,10 +24,11 @@ import uuid
 from collections import Counter
 from pathlib import Path
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-CRITERIA_VERSION = "v1"
+CRITERIA_VERSION = "v2"
 
 # Default manifest directory lives outside the repository / working tree.
 DEFAULT_MANIFEST_DIR = Path("/workspace/state/approve_batch_manifests")
@@ -74,8 +75,10 @@ CRITERIA_LABELS = [
     "language",
     "title confidence",
     "author confidence",
-    "cover confidence",
-    "cover file",
+    "cover empty",
+    "cover url (needs download)",
+    "cover missing file",
+    "cover invalid image",
     "format",
     "title stoplist",
     "title equals author",
@@ -114,6 +117,41 @@ def _get_fm(book):
         return book.finalmetadata
     except FinalMetadata.DoesNotExist:
         return None
+
+
+def _resolve_cover_path(cover_path):
+    """Resolve a cover path to a filesystem path.
+
+    A relative path is resolved against ``settings.MEDIA_ROOT`` (the same key
+    the move flow uses for ``cover_cache/...`` paths); an absolute path and an
+    empty value are returned unchanged.
+    """
+    if not cover_path:
+        return ""
+    if os.path.isabs(cover_path):
+        return cover_path
+    return os.path.join(settings.MEDIA_ROOT, cover_path)
+
+
+def _cover_reason(cover_path):
+    """Return the cover sub-reason, or None when the cover qualifies.
+
+    Reuses the move flow's ``_cover_flag`` validator (magic-byte check) and
+    ``_resolve_cover_path`` (media-relative resolution). A URL cover does not
+    qualify yet (downloads land in a later PR).
+    """
+    from books.utils.safe_move.book import _cover_flag
+
+    if not cover_path:
+        return "cover empty"
+    if cover_path.startswith(("http://", "https://")):
+        return "cover url (needs download)"
+    flag = _cover_flag(_resolve_cover_path(cover_path))
+    if flag == "cover-missing":
+        return "cover missing file"
+    if flag == "cover-invalid":
+        return "cover invalid image"
+    return None
 
 
 class Command(BaseCommand):
@@ -196,10 +234,9 @@ class Command(BaseCommand):
             return "title confidence"
         if _conf(fm.final_author_confidence) < CONFIDENCE_THRESHOLD:
             return "author confidence"
-        if _conf(fm.final_cover_confidence) < CONFIDENCE_THRESHOLD:
-            return "cover confidence"
-        if not fm.final_cover_path or not os.path.exists(fm.final_cover_path):
-            return "cover file"
+        cover_reason = _cover_reason(fm.final_cover_path)
+        if cover_reason:
+            return cover_reason
         if ctx["primary_file"].get(book.id, ("", ""))[1] not in APPROVABLE_FORMATS:
             return "format"
         title = fm.final_title or ""
@@ -290,9 +327,10 @@ class Command(BaseCommand):
         source, fmt = ctx["primary_file"].get(bid, ("", ""))
         tier = "corroborated" if corroborated else "standard"
         target = self._planned_target(book)
+        cover = _resolve_cover_path(fm.final_cover_path or "")
         return (
             f"{bid} | {fm.final_title or ''} | {fm.final_author or ''} | "
-            f"{fm.language or ''} | {fmt} | {tier} | {source} | {target}"
+            f"{fm.language or ''} | {fmt} | {tier} | {source} | {target} | {cover}"
         )
 
     def _report(self, options):
