@@ -171,6 +171,30 @@ class RoutineHardeningTests(SimpleTestCase):
         self.assertFalse(Path(str(tgt) + ".moving").exists())
         self.assertFalse(Path(captured["archived_path"]).exists())
 
+    def test_repack_identical_bytes_flags_duplicate(self):
+        src_a = self._src("a.epub", data=b"source A")
+        src_b = self._src("b.epub", data=b"source B")
+        seen = set()
+
+        def check_duplicate(h):
+            if h in seen:
+                return "duplicate-content:999"
+            seen.add(h)
+            return None
+
+        with mock.patch(
+            "books.utils.safe_move.routine.write_epub",
+            side_effect=lambda s, t, **kw: Path(t).write_bytes(b"IDENTICAL REPACK"),
+        ), mock.patch(
+            "books.utils.safe_move.routine.check_epub",
+            return_value=mock.Mock(findings=[]),
+        ):
+            self._move(src_a, self.root / "Moved" / "a.epub", check_duplicate=check_duplicate)
+            with self.assertRaises(NeedsReview) as ctx:
+                self._move(src_b, self.root / "Moved" / "b.epub", check_duplicate=check_duplicate)
+
+        self.assertEqual(ctx.exception.codes, ["duplicate-content:999"])
+
 
 class SafeMoveBookTests(TestCase):
     """Item 3: ``safe_move_book`` end to end."""
@@ -288,6 +312,20 @@ class SafeMoveBookTests(TestCase):
         row = FileMove.objects.get(book=book)
         self.assertEqual(row.state, FileMove.State.FAILED)
         self.assertTrue(src.exists())
+
+    def test_duplicate_content_source_hash_needs_review(self):
+        book_a, src_a = self._make_book("a/book.txt", data=b"same bytes")
+        safe_move_book(book_a, str(self.target_dir / "a.txt"))
+        book_b, src_b = self._make_book("b/book.txt", data=b"same bytes")
+        target_b = self.target_dir / "b.txt"
+        with self.assertRaises(NeedsReview) as ctx:
+            safe_move_book(book_b, str(target_b))
+        self.assertEqual(ctx.exception.codes, [f"duplicate-content:{book_a.id}"])
+        row_b = FileMove.objects.get(book=book_b)
+        self.assertEqual(row_b.state, FileMove.State.NEEDS_REVIEW)
+        self.assertEqual(row_b.review_flags, [f"duplicate-content:{book_a.id}"])
+        self.assertTrue(src_b.exists())
+        self.assertFalse(target_b.exists())
 
     def test_oserror_at_archive_step_ends_failed_and_cleans_up(self):
         book, src = self._make_book("sub/book.txt", data=b"keep me")
@@ -835,7 +873,8 @@ class SafeMoveBookTests(TestCase):
     def _make_epub_book(self, name="sub/book.epub"):
         src = self.scan_root / name
         src.parent.mkdir(parents=True, exist_ok=True)
-        _write_epub(src)
+        # Distinct per-name content so two books never share a source hash.
+        _write_epub(src, opf=_opf().replace(b"<dc:title>Test</dc:title>", name.encode()))
         book = create_test_book_with_file(
             file_path=str(src), file_format="epub", scan_folder=self.scan_folder,
         )

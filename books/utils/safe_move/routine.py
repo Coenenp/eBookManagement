@@ -144,7 +144,7 @@ def _notify(on_step, name, state):
 def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
                    repack_epub=True, cover_path=None, fix_encoding=False,
                    on_step=None, metadata=None, content=None, verify=None,
-                   keep_source=False, before_commit=None):
+                   keep_source=False, before_commit=None, check_duplicate=None):
     """Move ``source`` to ``target``, archiving the original. Returns MoveResult."""
     src = Path(source).resolve()
     tgt = Path(target)
@@ -175,6 +175,13 @@ def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
         "created_target": False,
     }
     _notify(on_step, "planned", state)
+
+    # Duplicate-content guard: refuse before any copy when the source bytes
+    # already appear in another book's move journal.
+    if check_duplicate is not None:
+        flag = check_duplicate(src_hash)
+        if flag:
+            raise NeedsReview([flag])
 
     tgt.parent.mkdir(parents=True, exist_ok=True)
     repacked = False
@@ -313,6 +320,16 @@ def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
             _remove(str(tmp) + ".part")
             _remove(archived_path)
             raise
+
+    # Duplicate-content guard: refuse again before the commit step when the
+    # repacked/copied bytes already appear in another book's move journal.
+    if check_duplicate is not None:
+        flag = check_duplicate(state["new_sha256"])
+        if flag:
+            _remove(tmp)
+            _remove(str(tmp) + ".part")
+            _remove(archived_path)
+            raise NeedsReview([flag])
 
     # Commit: atomically replace the target with the verified temporary file.
     os.replace(str(tmp), str(tgt))
