@@ -65,3 +65,12 @@ class FindDuplicateContentTests(TestCase):
         call_command("find_duplicate_content", stdout=out)
         text = out.getvalue()
         self.assertNotIn("aaa", text)
+
+    def test_empty_hash_not_listed(self):
+        b1 = self._book()
+        b2 = self._book()
+        self._move(b1, original="", new="")
+        self._move(b2, original="", new="")
+        out = StringIO()
+        call_command("find_duplicate_content", stdout=out)
+        self.assertIn("0 duplicate group(s)", out.getvalue())
