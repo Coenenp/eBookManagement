@@ -144,6 +144,26 @@ class MoveApprovedCommandTests(TestCase):
         self.assertIn("moved 1", out)
         self.assertIn("failed 1", out)
 
+    def test_compute_target_failure_marks_failed_and_continues(self):
+        from books.management.commands.move_approved import Command
+
+        good, good_path = self._make_book("a-good.pdf")
+        bad, bad_path = self._make_book("a-bad.pdf")
+        real = Command._compute_target
+
+        def _raise_for_bad(self, book, folder_pattern, filename_pattern):
+            if book.finalmetadata.final_title == "a-bad":
+                raise RuntimeError("boom")
+            return real(self, book, folder_pattern, filename_pattern)
+
+        with mock.patch.object(Command, "_compute_target", _raise_for_bad):
+            out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        self.assertFalse(good_path.exists())
+        self.assertTrue((Path(self.temp_dir) / "Approved" / "a-good.pdf").exists())
+        self.assertIn("moved 1", out)
+        self.assertIn(f"failed {bad.id} |", out)
+        self.assertIn("failed 1", out)
+
     def test_queryset_filters_unreviewed(self):
         unapproved, _ = self._make_book("u.pdf", is_reviewed=False)
         with mock.patch("books.management.commands.move_approved.is_renamable", return_value=True):

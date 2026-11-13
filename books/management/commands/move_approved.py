@@ -157,11 +157,11 @@ class Command(BaseCommand):
                 extra_skipped.append((book, "not approved"))
                 continue
             max_pk_before = FileMove.objects.aggregate(mx=Max("pk"))["mx"] or 0
-            target = self._compute_target(book, folder_pattern, filename_pattern)
-            if Path(target).exists():
-                extra_skipped.append((book, "target-exists"))
-                continue
             try:
+                target = self._compute_target(book, folder_pattern, filename_pattern)
+                if Path(target).exists():
+                    extra_skipped.append((book, "target-exists"))
+                    continue
                 cover_path = book.finalmetadata.final_cover_path if book.finalmetadata else None
                 safe_move_book(book, target, cover_path=cover_path)
                 moved += 1
