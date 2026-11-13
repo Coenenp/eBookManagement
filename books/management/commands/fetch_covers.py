@@ -9,12 +9,14 @@ outside the repository.
 
 Usage::
 
-    python manage.py fetch_covers [--limit N] [--dry-run]
+    python manage.py fetch_covers [--limit N] [--dry-run] [--retry-failed]
+                                  [--log-path PATH]
 """
 
 import csv
 import hashlib
 import io
+import os
 import time
 from collections import Counter
 from pathlib import Path
@@ -40,6 +42,7 @@ LOG_PATH = Path("/workspace/state/fetch_covers_log.csv")
 MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 MIN_BYTES = 2 * 1024  # 2 KB
 MIN_SHORT_SIDE = 100  # pixels
+BELOW_SHORT_SIDE = 200  # pixels; reported in the summary
 TIMEOUT = 20
 USER_AGENT = "eBookManagement/1.0 (+https://github.com/Coenenp/eBookManagement)"
 
@@ -68,19 +71,23 @@ def _sleep(seconds):
 
 
 def _download(url):
-    """Download ``url``, streaming up to MAX_BYTES; raise on any failure."""
-    resp = requests.get(
+    """Download ``url``, streaming up to MAX_BYTES; raise on any failure.
+
+    The response is held in a ``with`` block so it is always closed, releasing
+    the underlying connection even when ``ValueError`` is raised mid-stream.
+    """
+    with requests.get(
         url, timeout=TIMEOUT, headers={"User-Agent": USER_AGENT}, stream=True
-    )
-    resp.raise_for_status()
-    chunks = []
-    size = 0
-    for chunk in resp.iter_content(8192):
-        size += len(chunk)
-        if size > MAX_BYTES:
-            raise ValueError("image exceeds 10 MB")
-        chunks.append(chunk)
-    return b"".join(chunks)
+    ) as resp:
+        resp.raise_for_status()
+        chunks = []
+        size = 0
+        for chunk in resp.iter_content(8192):
+            size += len(chunk)
+            if size > MAX_BYTES:
+                raise ValueError("image exceeds 10 MB")
+            chunks.append(chunk)
+        return b"".join(chunks)
 
 
 def _classify(content):
@@ -106,10 +113,20 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--limit", type=int, default=100)
         parser.add_argument("--dry-run", action="store_true")
+        parser.add_argument("--retry-failed", action="store_true")
+        parser.add_argument("--log-path", default=None)
 
     def handle(self, *args, **options):
         limit = options["limit"]
         dry_run = options["dry_run"]
+        retry_failed = options["retry_failed"]
+        self.log_path = (
+            Path(options["log_path"]) if options["log_path"] else Path(LOG_PATH)
+        )
+        # Read the book ids already attempted (failed / too-small) once, before
+        # this run writes any row, so prior failures are skipped unless
+        # --retry-failed is given.
+        self.attempted = set() if retry_failed else self._read_attempted()
 
         qs = (
             FinalMetadata.objects.filter(
@@ -127,15 +144,19 @@ class Command(BaseCommand):
         failed_by_host = Counter()
         processed = 0
         last_request = {}
+        short_sides = []
 
         for fm in qs.iterator():
-            if processed >= limit:
-                break
-            processed += 1
             url = fm.final_cover_path
             if not url.startswith(("http://", "https://")):
                 skipped += 1
                 continue
+            if fm.book_id in self.attempted:
+                skipped += 1
+                continue
+            if processed >= limit:
+                break
+            processed += 1
 
             host = _host_for(url)
             _throttle(host, last_request)
@@ -175,20 +196,24 @@ class Command(BaseCommand):
 
             if not dry_run:
                 dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_bytes(content)
-
-            # validate the written file through the move-flow helper
-            if _cover_flag(rel) is not None:
-                failed_by_host[host] += 1
-                self._log(fm, url, "", len(content), width, height, "failed")
-                continue
-
-            if not dry_run:
+                try:
+                    self._write_atomic(dest, content)
+                except Exception:
+                    failed_by_host[host] += 1
+                    self._log(fm, url, "", len(content), width, height, "failed")
+                    continue
+                # validate the written file through the move-flow helper
+                if _cover_flag(rel) is not None:
+                    failed_by_host[host] += 1
+                    self._log(fm, url, "", len(content), width, height, "failed")
+                    continue
                 fm.final_cover_path = rel
                 fm.save(update_fields=["final_cover_path"])
 
             downloaded += 1
-            self._log(fm, url, rel, len(content), width, height, "downloaded")
+            short_sides.append(min(width, height))
+            if not dry_run:
+                self._log(fm, url, rel, len(content), width, height, "downloaded")
 
             if processed % 25 == 0:
                 self.stdout.write(
@@ -199,13 +224,62 @@ class Command(BaseCommand):
         self.stdout.write(f"downloaded: {downloaded}")
         self.stdout.write(f"too-small: {too_small}")
         self.stdout.write(f"skipped: {skipped}")
+        self.stdout.write(f"failed: {sum(failed_by_host.values())}")
+        self.stdout.write(
+            f"short-side-below-{BELOW_SHORT_SIDE}: "
+            f"{sum(1 for s in short_sides if s < BELOW_SHORT_SIDE)}"
+        )
+        self.stdout.write(
+            f"smallest-short-side: {min(short_sides) if short_sides else 0}"
+        )
+        self.stdout.write(
+            f"largest-short-side: {max(short_sides) if short_sides else 0}"
+        )
         for host in sorted(failed_by_host):
             self.stdout.write(f"failed {host}: {failed_by_host[host]}")
 
+    def _write_atomic(self, dest, content):
+        """Write ``content`` to a temp file in ``dest``'s folder, then os.replace.
+
+        The final name only ever appears after a complete write, so a failed
+        write never leaves a partial file (and the temp is removed on failure).
+        """
+        tmp = dest.with_name(dest.name + ".tmp")
+        try:
+            with open(tmp, "wb") as fh:
+                fh.write(content)
+            os.replace(tmp, dest)
+        except Exception:
+            if tmp.exists():
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
+            raise
+
+    def _read_attempted(self):
+        """Stream the log once into a set of ints (book ids) to skip.
+
+        Only ``failed`` and ``too-small`` outcomes are remembered: a book whose
+        cover could not be fetched should not be retried on every run unless
+        ``--retry-failed`` is given.
+        """
+        attempted = set()
+        if not self.log_path.exists():
+            return attempted
+        with open(self.log_path, newline="") as fh:
+            for row in csv.DictReader(fh):
+                if row.get("outcome") in ("failed", "too-small"):
+                    try:
+                        attempted.add(int(row["book_id"]))
+                    except (ValueError, KeyError):
+                        continue
+        return attempted
+
     def _log(self, fm, url, local_path, size, width, height, outcome):
-        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        new = not LOG_PATH.exists()
-        with open(LOG_PATH, "a", newline="") as fh:
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        new = not self.log_path.exists()
+        with open(self.log_path, "a", newline="") as fh:
             writer = csv.writer(fh)
             if new:
                 writer.writerow(

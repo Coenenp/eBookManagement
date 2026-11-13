@@ -47,6 +47,12 @@ class FakeResponse:
     def iter_content(self, chunk_size):
         yield self._content
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
 
 class FetchCoversCommandTests(TestCase):
     def setUp(self):
@@ -162,3 +168,85 @@ class FetchCoversCommandTests(TestCase):
         self.assertTrue(sleeper.called)
         waits = [c.args[0] for c in sleeper.call_args_list]
         self.assertTrue(any(w > 0 for w in waits))
+
+    def test_dry_run_reports_would_download_and_writes_nothing(self):
+        book = self._make_url_book("https://example.com/dry2.jpg")
+        out = io.StringIO()
+        with mock.patch(
+            "books.management.commands.fetch_covers.requests.get",
+            return_value=FakeResponse(_jpeg_bytes()),
+        ):
+            call_command("fetch_covers", stdout=out, dry_run=True)
+        self.assertIn("downloaded: 1", out.getvalue())
+        self.assertIn("failed: 0", out.getvalue())
+        fm = FinalMetadata.objects.get(book=book)
+        self.assertEqual(fm.final_cover_path, "https://example.com/dry2.jpg")
+        self.assertEqual(list(Path(settings.MEDIA_ROOT).rglob("*")), [])
+        # No log row is written in dry run.
+        log = self.temp_dir / "log.csv"
+        if log.exists():
+            with open(log, newline="") as fh:
+                rows = list(csv.DictReader(fh))
+            self.assertEqual(rows, [])
+
+    def test_resumable_skips_failed_and_retry_reaches_them(self):
+        b1 = self._make_url_book("https://example.com/fail1.jpg")
+        b2 = self._make_url_book("https://example.com/ok2.jpg")
+        # First run: only b1 is attempted (limit 1) and it fails.
+        with mock.patch(
+            "books.management.commands.fetch_covers.requests.get",
+            side_effect=RuntimeError("boom"),
+        ):
+            call_command("fetch_covers", stdout=io.StringIO(), limit=1)
+        fm1 = FinalMetadata.objects.get(book=b1)
+        self.assertEqual(fm1.final_cover_path, "https://example.com/fail1.jpg")
+        # Second run: b1 is skipped (already failed), b2 is reached.
+        with mock.patch(
+            "books.management.commands.fetch_covers.requests.get",
+            return_value=FakeResponse(_jpeg_bytes()),
+        ):
+            call_command("fetch_covers", stdout=io.StringIO(), limit=1)
+        fm2 = FinalMetadata.objects.get(book=b2)
+        self.assertTrue(fm2.final_cover_path.startswith("cover_cache/"))
+        # With --retry-failed the first row is tried again.
+        with mock.patch(
+            "books.management.commands.fetch_covers.requests.get",
+            return_value=FakeResponse(_jpeg_bytes()),
+        ):
+            call_command("fetch_covers", stdout=io.StringIO(), limit=1, retry_failed=True)
+        fm1.refresh_from_db()
+        self.assertTrue(fm1.final_cover_path.startswith("cover_cache/"))
+
+    def test_atomic_write_no_final_file_on_replace_failure(self):
+        book = self._make_url_book("https://example.com/atomic.jpg")
+        with mock.patch(
+            "books.management.commands.fetch_covers.os.replace",
+            side_effect=OSError("boom"),
+        ):
+            call_command("fetch_covers", stdout=io.StringIO())
+        fm = FinalMetadata.objects.get(book=book)
+        self.assertEqual(fm.final_cover_path, "https://example.com/atomic.jpg")
+        files = [p for p in Path(settings.MEDIA_ROOT).rglob("*") if p.is_file()]
+        self.assertEqual(files, [])
+
+    def test_log_path_option_writes_to_custom_path(self):
+        self._make_url_book("https://example.com/logpath.jpg")
+        custom = self.temp_dir / "custom_log.csv"
+        self._run(log_path=str(custom))
+        self.assertTrue(custom.exists())
+        with open(custom, newline="") as fh:
+            rows = list(csv.DictReader(fh))
+        self.assertTrue(rows)
+        self.assertEqual(rows[0]["outcome"], "downloaded")
+
+    def test_summary_reports_short_side_stats(self):
+        self._make_url_book("https://example.com/short.jpg")
+        out = io.StringIO()
+        with mock.patch(
+            "books.management.commands.fetch_covers.requests.get",
+            return_value=FakeResponse(_jpeg_bytes(width=150, height=300)),
+        ):
+            call_command("fetch_covers", stdout=out)
+        self.assertIn("short-side-below-200: 1", out.getvalue())
+        self.assertIn("smallest-short-side: 150", out.getvalue())
+        self.assertIn("largest-short-side: 150", out.getvalue())
