@@ -51,7 +51,7 @@ class ApproveBatchCommandTests(TestCase):
         path.write_bytes(b"fake")
         if cover_path is None:
             cover_path = str(Path(self.temp_dir) / f"{name}_cover.jpg")
-            Path(cover_path).write_bytes(b"cover")
+            Path(cover_path).write_bytes(b"\xff\xd8\xff" + b"\x00" * 16)
         book = create_test_book_with_file(
             file_path=str(path),
             file_format=fmt,
@@ -89,8 +89,8 @@ class ApproveBatchCommandTests(TestCase):
     # Constants / plumbing
     # ------------------------------------------------------------------ #
 
-    def test_criteria_version_is_v1(self):
-        self.assertEqual(CRITERIA_VERSION, "v1")
+    def test_criteria_version_is_v2(self):
+        self.assertEqual(CRITERIA_VERSION, "v2")
 
     def test_default_manifest_dir_outside_repository(self):
         repo = Path("/workspace/eBookManagement").resolve()
@@ -147,7 +147,6 @@ class ApproveBatchCommandTests(TestCase):
             ("und_language", {"language": "und"}),
             ("title_low", {"title_conf": 0.79}),
             ("author_low", {"author_conf": 0.79}),
-            ("cover_low", {"cover_conf": 0.79}),
             ("cover_empty", {"cover_path": ""}),
             ("cover_missing", {"cover_path": str(Path(self.temp_dir) / "gone.jpg")}),
             ("bad_format", {"fmt": "pdf"}),
@@ -206,6 +205,103 @@ class ApproveBatchCommandTests(TestCase):
         manifest = self._manifest(mpath)
         self.assertIn(ok_book.id, manifest["ids"], "relative cover under media dir must pass")
         self.assertNotIn(missing_book.id, manifest["ids"], "missing relative cover must be excluded")
+
+    def test_cover_sub_reasons_exclude(self):
+        from django.test import override_settings
+
+        media = Path(self.temp_dir) / "media"
+        media.mkdir()
+        bad = Path(self.temp_dir) / "bad.jpg"
+        bad.write_bytes(b"not an image")
+        cases = [
+            ("empty", ""),
+            ("url", "https://books.google.com/books/content?id=abc123"),
+            ("missing", "cover_cache/gone.jpg"),
+            ("invalid", str(bad)),
+        ]
+        for name, cover_path in cases:
+            book = self._make_book(
+                f"cov_{name}",
+                title=f"Cover {name} Title",
+                author=f"Cover {name} Author",
+                cover_path=cover_path,
+            )
+            with override_settings(MEDIA_ROOT=str(media)):
+                _, mpath = self._prepare()
+            manifest = self._manifest(mpath)
+            self.assertNotIn(book.id, manifest["ids"], f"cover sub-reason {name} must exclude")
+
+    def test_valid_local_cover_passes_regardless_of_confidence(self):
+        book = self._make_book(
+            "lowconf", title="Low Conf Book", author="Low Author", cover_conf=0.0
+        )
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertIn(book.id, manifest["ids"], "valid local cover must pass whatever its confidence")
+
+    def test_report_counts_cover_sub_reasons(self):
+        self._make_book("okr", title="Report OK", author="Rep Author")
+        self._make_book("empt", title="Empty Cover", author="Emp Author", cover_path="")
+        self._make_book("urlc", title="URL Cover", author="Url Author",
+                        cover_path="https://books.google.com/x")
+        self._make_book("miss", title="Missing Cover", author="Mis Author",
+                        cover_path=str(Path(self.temp_dir) / "gone.jpg"))
+        bad = Path(self.temp_dir) / "badcov.jpg"
+        bad.write_bytes(b"nope")
+        self._make_book("inv", title="Invalid Cover", author="Inv Author", cover_path=str(bad))
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        text = out.getvalue()
+        self.assertIn("cover empty: 1", text)
+        self.assertIn("cover url (needs download): 1", text)
+        self.assertIn("cover missing file: 1", text)
+        self.assertIn("cover invalid image: 1", text)
+
+    def test_sample_line_ends_with_resolved_cover_path(self):
+        from django.test import override_settings
+
+        media = Path(self.temp_dir) / "media"
+        media.mkdir()
+        book = self._make_book(
+            "samp", title="Sample Book", author="Sample Author", cover_path="cover_cache/s.jpg"
+        )
+        (media / "cover_cache").mkdir(parents=True)
+        (media / "cover_cache" / "s.jpg").write_bytes(b"\xff\xd8\xff" + b"\x00" * 8)
+        with override_settings(MEDIA_ROOT=str(media)):
+            text, _ = self._prepare(seed=1)
+        expected = str(media / "cover_cache" / "s.jpg")
+        lines = [ln for ln in text.splitlines() if ln.startswith(f"{book.id} |")]
+        self.assertTrue(lines, "sample line for the book must be printed")
+        self.assertTrue(lines[0].rstrip().endswith(expected),
+                        f"sample line must end with resolved cover path, got: {lines[0]!r}")
+
+    def test_apply_skips_disappeared_cover(self):
+        from django.test import override_settings
+
+        media = Path(self.temp_dir) / "media"
+        media.mkdir()
+        book = self._make_book(
+            "vanish", title="Vanish Cover", author="Van Author", cover_path="cover_cache/v.jpg"
+        )
+        (media / "cover_cache").mkdir(parents=True)
+        cover_file = media / "cover_cache" / "v.jpg"
+        cover_file.write_bytes(b"\xff\xd8\xff" + b"\x00" * 8)
+        with override_settings(MEDIA_ROOT=str(media)):
+            _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        cover_file.unlink()
+        out = StringIO()
+        with override_settings(MEDIA_ROOT=str(media)):
+            call_command(
+                "approve_batch",
+                manifest=str(mpath),
+                apply=True,
+                confirm=len(manifest["ids"]),
+                stdout=out,
+            )
+        book.refresh_from_db()
+        self.assertFalse(book.finalmetadata.is_reviewed)
+        self.assertIn(str(book.id), out.getvalue())
 
     # ------------------------------------------------------------------ #
     # Suspicious patterns
@@ -271,7 +367,7 @@ class ApproveBatchCommandTests(TestCase):
         repo = Path("/workspace/eBookManagement").resolve()
         self.assertFalse(str(mpath.resolve()).startswith(str(repo)))
         manifest = self._manifest(mpath)
-        self.assertEqual(manifest["criteria_version"], "v1")
+        self.assertEqual(manifest["criteria_version"], "v2")
         self.assertEqual(manifest["status"], "prepared")
 
     def test_sample_deterministic_for_seed(self):
