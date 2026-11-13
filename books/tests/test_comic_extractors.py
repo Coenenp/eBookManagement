@@ -119,6 +119,23 @@ class ComicExtractorTests(TestCase):
         _enrich_with_comicvine(book, {"series": "Batman", "series_number": "1"}, enable_external_apis=False)
         mock_api.assert_not_called()
 
+    @override_settings(COMICVINE_API_KEY="test_key")
+    @patch("books.scanner.extractors.comicvine.ComicVineAPI")
+    def test_internal_metadata_wiring_gates_comicvine(self, mock_api):
+        import zipfile
+
+        from books.scanner.folder import _extract_internal_metadata
+
+        cbz_path = f"{self.test_dir}/comic.cbz"
+        with zipfile.ZipFile(cbz_path, "w") as z:
+            z.writestr("page001.jpg", b"fake image data")
+
+        book = Book.objects.create(scan_folder=self.scan_folder, content_type="comic")
+        BookFile.objects.create(book=book, file_path=cbz_path, file_format="cbz")
+
+        _extract_internal_metadata(book, enable_external_apis=False)
+        mock_api.assert_not_called()
+
     def test_get_comic_series_list_basic(self):
         """Test getting comic series list"""
         # Create some test books with metadata
