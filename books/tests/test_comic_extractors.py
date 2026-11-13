@@ -4,12 +4,13 @@ import shutil
 import tempfile
 from unittest.mock import MagicMock, patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from books.models import Book, BookFile, BookMetadata, DataSource, ScanFolder
 from books.scanner.extractors.comic import (
     _clean_comic_title,
     _detect_issue_type,
+    _enrich_with_comicvine,
     _extract_comic_info_xml,
     _parse_filename_metadata,
     extract_cbr,
@@ -109,6 +110,31 @@ class ComicExtractorTests(TestCase):
                 result = extract_cbz(book)
                 # The function returns True on success
                 self.assertIsNotNone(result)
+
+    @override_settings(COMICVINE_API_KEY="test_key")
+    @patch("books.scanner.extractors.comicvine.ComicVineAPI")
+    def test_comicvine_gated_by_external_apis_flag(self, mock_api):
+        book = Book.objects.create(scan_folder=self.scan_folder, content_type="comic")
+        BookFile.objects.create(book=book, file_path=f"{self.test_dir}/comic.cbz", file_format="cbz")
+        _enrich_with_comicvine(book, {"series": "Batman", "series_number": "1"}, enable_external_apis=False)
+        mock_api.assert_not_called()
+
+    @override_settings(COMICVINE_API_KEY="test_key")
+    @patch("books.scanner.extractors.comicvine.ComicVineAPI")
+    def test_internal_metadata_wiring_gates_comicvine(self, mock_api):
+        import zipfile
+
+        from books.scanner.folder import _extract_internal_metadata
+
+        cbz_path = f"{self.test_dir}/comic.cbz"
+        with zipfile.ZipFile(cbz_path, "w") as z:
+            z.writestr("page001.jpg", b"fake image data")
+
+        book = Book.objects.create(scan_folder=self.scan_folder, content_type="comic")
+        BookFile.objects.create(book=book, file_path=cbz_path, file_format="cbz")
+
+        _extract_internal_metadata(book, enable_external_apis=False)
+        mock_api.assert_not_called()
 
     def test_get_comic_series_list_basic(self):
         """Test getting comic series list"""

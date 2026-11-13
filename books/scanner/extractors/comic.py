@@ -41,7 +41,7 @@ def _get_content_scan_source():
     return source
 
 
-def extract_cbr(book):
+def extract_cbr(book, enable_external_apis=True):
     """Extract metadata from CBR (Comic Book RAR) files"""
     try:
         source = _get_content_scan_source()
@@ -83,7 +83,7 @@ def extract_cbr(book):
         _save_comic_metadata(book, extracted_data, filename_metadata, source)
 
         # Try to enrich metadata with Comic Vine if available
-        _enrich_with_comicvine(book, extracted_data)
+        _enrich_with_comicvine(book, extracted_data, enable_external_apis=enable_external_apis)
 
         logger.info(f"CBR metadata extracted: {title or 'Unknown'}")
         return extracted_data
@@ -93,7 +93,7 @@ def extract_cbr(book):
         return None
 
 
-def extract_cbz(book):
+def extract_cbz(book, enable_external_apis=True):
     """Extract metadata from CBZ (Comic Book ZIP) files"""
     try:
         source = _get_content_scan_source()
@@ -135,7 +135,7 @@ def extract_cbz(book):
         _save_comic_metadata(book, extracted_data, filename_metadata, source)
 
         # Try to enrich metadata with Comic Vine if available
-        _enrich_with_comicvine(book, extracted_data)
+        _enrich_with_comicvine(book, extracted_data, enable_external_apis=enable_external_apis)
 
         logger.info(f"CBZ metadata extracted: {title or 'Unknown'}")
         return extracted_data
@@ -816,10 +816,15 @@ def get_comic_series_list():
     return series_list
 
 
-def _enrich_with_comicvine(book, extracted_data):
+def _enrich_with_comicvine(book, extracted_data, enable_external_apis=True):
     """Enrich comic metadata using Comic Vine API"""
     try:
         from django.conf import settings
+
+        # Honor the external-API gate before any Comic Vine call.
+        if not enable_external_apis:
+            logger.debug("External APIs disabled, skipping Comic Vine enrichment")
+            return
 
         # Check if Comic Vine API key is configured
         if not hasattr(settings, "COMICVINE_API_KEY") or not settings.COMICVINE_API_KEY:

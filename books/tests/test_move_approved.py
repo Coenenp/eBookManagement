@@ -144,6 +144,26 @@ class MoveApprovedCommandTests(TestCase):
         self.assertIn("moved 1", out)
         self.assertIn("failed 1", out)
 
+    def test_compute_target_failure_marks_failed_and_continues(self):
+        from books.management.commands.move_approved import Command
+
+        good, good_path = self._make_book("a-good.pdf")
+        bad, bad_path = self._make_book("a-bad.pdf")
+        real = Command._compute_target
+
+        def _raise_for_bad(self, book, folder_pattern, filename_pattern):
+            if book.finalmetadata.final_title == "a-bad":
+                raise RuntimeError("boom")
+            return real(self, book, folder_pattern, filename_pattern)
+
+        with mock.patch.object(Command, "_compute_target", _raise_for_bad):
+            out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        self.assertFalse(good_path.exists())
+        self.assertTrue((Path(self.temp_dir) / "Approved" / "a-good.pdf").exists())
+        self.assertIn("moved 1", out)
+        self.assertIn(f"failed {bad.id} |", out)
+        self.assertIn("failed 1", out)
+
     def test_queryset_filters_unreviewed(self):
         unapproved, _ = self._make_book("u.pdf", is_reviewed=False)
         with mock.patch("books.management.commands.move_approved.is_renamable", return_value=True):
@@ -211,6 +231,27 @@ class MoveApprovedCommandTests(TestCase):
         self.assertIn("planned 0, skipped 1", out)
         out2 = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
         self.assertIn(f"skipped {book.id} | no scan folder", out2)
+
+    def test_execute_skips_when_target_exists(self):
+        book, path = self._make_book("c.pdf")
+        target = Path(self.temp_dir) / "Approved" / "c.pdf"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"existing")
+        out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        self.assertIn(f"skipped {book.id} | target-exists", out)
+        self.assertTrue(path.exists())
+        self.assertEqual(target.read_bytes(), b"existing")
+        self.assertIn("moved 0", out)
+
+    def test_different_file_same_name_collision_skips_second(self):
+        b1, p1 = self._make_book("one/same.pdf")
+        b2, p2 = self._make_book("two/same.pdf")
+        out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        target = Path(self.temp_dir) / "Approved" / "same.pdf"
+        self.assertTrue(target.exists())
+        self.assertIn("moved 1", out)
+        self.assertIn("target-exists", out)
+        self.assertEqual([p.exists() for p in (p1, p2)].count(True), 1)
 
 
 class FitPathTests(TestCase):

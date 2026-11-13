@@ -10,6 +10,7 @@ are moved under their own child :class:`FileMove` rows.
 from pathlib import Path
 
 from django.db import transaction
+from django.db.models import Q
 
 from books.models import BookFile, FileMove, FinalMetadata
 from books.utils.batch_renamer import CompanionFileFinder
@@ -125,6 +126,25 @@ def _flag_companion_outside(parent, source):
     if flag not in flags:
         flags.append(flag)
     FileMove.objects.filter(pk=parent.pk).update(review_flags=flags)
+
+
+def _duplicate_content_flag(book, hash_value):
+    """Return ``duplicate-content:<book id>`` when another book's FileMove journal
+    already records ``hash_value`` as ``original_sha256`` or ``new_sha256``, else
+    None. One query per hash (indexed only if ``original_sha256`` and
+    ``new_sha256`` carry a ``db_index``); never loads all hashes into memory."""
+    if not hash_value:
+        return None
+    other_book_id = (
+        FileMove.objects
+        .filter(Q(original_sha256=hash_value) | Q(new_sha256=hash_value))
+        .exclude(book=book)
+        .values_list("book_id", flat=True)
+        .first()
+    )
+    if other_book_id is not None:
+        return f"duplicate-content:{other_book_id}"
+    return None
 
 
 def _discover_companions(primary_file, target_path):
@@ -446,6 +466,7 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
             repack_epub=repack_epub, cover_path=effective_cover,
             fix_encoding=fix_encoding, on_step=on_step, metadata=metadata,
             before_commit=_recheck_approval,
+            check_duplicate=lambda h: _duplicate_content_flag(book, h),
         )
     except NeedsReview as exc:
         # (d) Blocking check failed: record needs_review, nothing else changes.
