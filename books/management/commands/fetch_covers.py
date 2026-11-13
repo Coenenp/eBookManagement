@@ -20,7 +20,7 @@ import os
 import time
 from collections import Counter
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
 
@@ -79,6 +79,8 @@ def _download(url):
     with requests.get(
         url, timeout=TIMEOUT, headers={"User-Agent": USER_AGENT}, stream=True
     ) as resp:
+        if resp.status_code == 429:
+            raise _RateLimited()
         resp.raise_for_status()
         chunks = []
         size = 0
@@ -107,6 +109,54 @@ def _classify(content):
     return ext, width, height
 
 
+class _RateLimited(Exception):
+    """Raised when a host answers HTTP 429; stops the whole run immediately."""
+
+
+def _drop_edge(url):
+    """Return ``url`` without the ``edge`` query parameter."""
+    parts = urlparse(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k != "edge"]
+    return urlunparse(parts._replace(query=urlencode(query)))
+
+
+def _set_zoom(url, zoom):
+    """Return ``url`` with the ``zoom`` query parameter set (added if absent)."""
+    parts = urlparse(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k != "zoom"]
+    query.append(("zoom", zoom))
+    return urlunparse(parts._replace(query=urlencode(query)))
+
+
+def _candidates(url):
+    """Return the ordered list of candidate URLs to try for ``url``.
+
+    A Google Books content URL (host ``books.google.com``, path under
+    ``/books/content``) is tried three ways: zoom=3, zoom=2, then unchanged,
+    with ``edge`` stripped everywhere (it must never be requested). Every other
+    URL has a single candidate: the stored URL unchanged.
+    """
+    parts = urlparse(url)
+    host = (parts.hostname or "").lower()
+    if host == "books.google.com" and parts.path.startswith("/books/content"):
+        return [
+            _drop_edge(_set_zoom(url, "3")),
+            _drop_edge(_set_zoom(url, "2")),
+            _drop_edge(url),
+        ]
+    return [url]
+
+
+def _variant_label(url):
+    """Return the zoom variant label (``3``, ``2``, ``1`` or ``other``) for a URL."""
+    parts = urlparse(url)
+    zoom = None
+    for k, v in parse_qsl(parts.query, keep_blank_values=True):
+        if k == "zoom":
+            zoom = v
+    return zoom if zoom in ("1", "2", "3") else "other"
+
+
 class Command(BaseCommand):
     help = "Fetch external cover images for unreviewed books with a URL cover"
 
@@ -120,6 +170,7 @@ class Command(BaseCommand):
         limit = options["limit"]
         dry_run = options["dry_run"]
         retry_failed = options["retry_failed"]
+        self.dry_run = dry_run
         self.log_path = (
             Path(options["log_path"]) if options["log_path"] else Path(LOG_PATH)
         )
@@ -145,6 +196,7 @@ class Command(BaseCommand):
         processed = 0
         last_request = {}
         short_sides = []
+        variant_counts = Counter()
 
         for fm in qs.iterator():
             url = fm.final_cover_path
@@ -158,27 +210,46 @@ class Command(BaseCommand):
                 break
             processed += 1
 
-            host = _host_for(url)
-            _throttle(host, last_request)
+            content = None
+            info = None
+            ext = width = height = 0
+            fetched_url = ""
+            saw_image = False
+            last_size = 0
+            last_width = last_height = 0
 
-            try:
-                content = _download(url)
+            for cand in _candidates(url):
+                host = _host_for(cand)
+                _throttle(host, last_request)
+                try:
+                    content = _download(cand)
+                except _RateLimited:
+                    self.stdout.write(
+                        f"HTTP 429 from {host}; stopped after {processed} rows"
+                    )
+                    return
+                except Exception:
+                    continue
                 info = _classify(content)
-            except Exception:
-                failed_by_host[host] += 1
-                self._log(fm, url, "", 0, 0, 0, "failed")
-                continue
+                if info is None:
+                    # non-image (or unreadable) content is rejected
+                    continue
+                ext, width, height = info
+                last_size = len(content)
+                last_width, last_height = width, height
+                saw_image = True
+                if len(content) < MIN_BYTES or min(width, height) < MIN_SHORT_SIDE:
+                    continue
+                fetched_url = cand
+                break
 
-            if info is None:
-                # non-image (or unreadable) content is rejected
-                failed_by_host[host] += 1
-                self._log(fm, url, "", len(content), 0, 0, "failed")
-                continue
-
-            ext, width, height = info
-            if len(content) < MIN_BYTES or min(width, height) < MIN_SHORT_SIDE:
-                too_small += 1
-                self._log(fm, url, "", len(content), width, height, "too-small")
+            if fetched_url == "":
+                if saw_image:
+                    too_small += 1
+                    self._log(fm, url, "", last_size, last_width, last_height, "too-small")
+                else:
+                    failed_by_host[_host_for(url)] += 1
+                    self._log(fm, url, "", 0, 0, 0, "failed")
                 continue
 
             name = hashlib.sha256(content).hexdigest() + ext
@@ -199,12 +270,12 @@ class Command(BaseCommand):
                 try:
                     self._write_atomic(dest, content)
                 except Exception:
-                    failed_by_host[host] += 1
+                    failed_by_host[_host_for(url)] += 1
                     self._log(fm, url, "", len(content), width, height, "failed")
                     continue
                 # validate the written file through the move-flow helper
                 if _cover_flag(rel) is not None:
-                    failed_by_host[host] += 1
+                    failed_by_host[_host_for(url)] += 1
                     self._log(fm, url, "", len(content), width, height, "failed")
                     continue
                 fm.final_cover_path = rel
@@ -212,8 +283,9 @@ class Command(BaseCommand):
 
             downloaded += 1
             short_sides.append(min(width, height))
+            variant_counts[_variant_label(fetched_url)] += 1
             if not dry_run:
-                self._log(fm, url, rel, len(content), width, height, "downloaded")
+                self._log(fm, url, rel, len(content), width, height, "downloaded", fetched_url=fetched_url)
 
             if processed % 25 == 0:
                 self.stdout.write(
@@ -234,6 +306,10 @@ class Command(BaseCommand):
         )
         self.stdout.write(
             f"largest-short-side: {max(short_sides) if short_sides else 0}"
+        )
+        self.stdout.write(
+            f"variant-used: 3={variant_counts['3']}, 2={variant_counts['2']}, "
+            f"1={variant_counts['1']}, other={variant_counts['other']}"
         )
         for host in sorted(failed_by_host):
             self.stdout.write(f"failed {host}: {failed_by_host[host]}")
@@ -276,16 +352,18 @@ class Command(BaseCommand):
                         continue
         return attempted
 
-    def _log(self, fm, url, local_path, size, width, height, outcome):
+    def _log(self, fm, url, local_path, size, width, height, outcome, fetched_url=""):
+        if self.dry_run:
+            return
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         new = not self.log_path.exists()
         with open(self.log_path, "a", newline="") as fh:
             writer = csv.writer(fh)
             if new:
                 writer.writerow(
-                    ["book_id", "original_url", "local_path", "bytes", "width", "height", "outcome"]
+                    ["book_id", "original_url", "local_path", "bytes", "width", "height", "outcome", "fetched_url"]
                 )
-            writer.writerow([fm.book_id, url, local_path, size, width, height, outcome])
+            writer.writerow([fm.book_id, url, local_path, size, width, height, outcome, fetched_url])
 
 
 def _throttle(host, last_request):
