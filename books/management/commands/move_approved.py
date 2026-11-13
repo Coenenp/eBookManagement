@@ -18,7 +18,6 @@ from django.core.management.base import BaseCommand
 from django.db.models import Case, IntegerField, Max, Value, When
 
 from books.models import FileMove
-from books.utils.file_collision import resolve_collision
 from books.utils.renaming_engine import RenamingEngine, is_renamable
 from books.utils.safe_move import NeedsReview, safe_move_book
 
@@ -158,8 +157,11 @@ class Command(BaseCommand):
                 extra_skipped.append((book, "not approved"))
                 continue
             max_pk_before = FileMove.objects.aggregate(mx=Max("pk"))["mx"] or 0
+            target = self._compute_target(book, folder_pattern, filename_pattern)
+            if Path(target).exists():
+                extra_skipped.append((book, "target-exists"))
+                continue
             try:
-                target = self._compute_target(book, folder_pattern, filename_pattern)
                 cover_path = book.finalmetadata.final_cover_path if book.finalmetadata else None
                 safe_move_book(book, target, cover_path=cover_path)
                 moved += 1
@@ -248,5 +250,4 @@ class Command(BaseCommand):
         folder = engine.process_template(folder_pattern, book) if folder_pattern else ""
         filename = engine.process_template(filename_pattern, book)
         target = base_dir / folder / filename if folder else base_dir / filename
-        target = fit_path(str(target), limit=232)
-        return str(resolve_collision(str(target)))
+        return fit_path(str(target), limit=232)

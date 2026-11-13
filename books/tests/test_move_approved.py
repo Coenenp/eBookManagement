@@ -212,6 +212,27 @@ class MoveApprovedCommandTests(TestCase):
         out2 = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
         self.assertIn(f"skipped {book.id} | no scan folder", out2)
 
+    def test_execute_skips_when_target_exists(self):
+        book, path = self._make_book("c.pdf")
+        target = Path(self.temp_dir) / "Approved" / "c.pdf"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"existing")
+        out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        self.assertIn(f"skipped {book.id} | target-exists", out)
+        self.assertTrue(path.exists())
+        self.assertEqual(target.read_bytes(), b"existing")
+        self.assertIn("moved 0", out)
+
+    def test_different_file_same_name_collision_skips_second(self):
+        b1, p1 = self._make_book("one/same.pdf")
+        b2, p2 = self._make_book("two/same.pdf")
+        out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        target = Path(self.temp_dir) / "Approved" / "same.pdf"
+        self.assertTrue(target.exists())
+        self.assertIn("moved 1", out)
+        self.assertIn("target-exists", out)
+        self.assertEqual([p.exists() for p in (p1, p2)].count(True), 1)
+
 
 class FitPathTests(TestCase):
     def test_short_path_unchanged(self):
