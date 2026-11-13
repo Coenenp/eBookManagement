@@ -1,6 +1,7 @@
 """Tests for the fetch_covers management command."""
 
 import csv
+import hashlib
 import io
 import shutil
 import tempfile
@@ -350,3 +351,29 @@ class FetchCoversCommandTests(TestCase):
         self.assertEqual(len(calls), 1)
         self.assertIn("HTTP 429", out.getvalue())
         self.assertIn("example.com", out.getvalue())
+
+    def test_dry_run_writes_no_log_for_any_outcome(self):
+        self._make_url_book("https://example.com/fail.jpg")
+        self._make_url_book("https://example.com/tiny.jpg")
+        self._make_url_book("https://example.com/exists.jpg")
+        # Pre-create the destination for the "already exists" (skipped) case.
+        content = _jpeg_bytes()
+        name = hashlib.sha256(content).hexdigest() + ".jpg"
+        dest = Path(settings.MEDIA_ROOT) / "cover_cache" / name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(content)
+
+        def _get(url, *a, **kw):
+            if url.endswith("fail.jpg"):
+                raise RuntimeError("boom")
+            if url.endswith("tiny.jpg"):
+                return FakeResponse(_jpeg_bytes(width=50, height=50))
+            return FakeResponse(content)
+
+        with mock.patch(
+            "books.management.commands.fetch_covers.requests.get", side_effect=_get
+        ):
+            call_command("fetch_covers", stdout=io.StringIO(), dry_run=True)
+
+        log = self.temp_dir / "log.csv"
+        self.assertFalse(log.exists())
