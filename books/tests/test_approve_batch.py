@@ -187,6 +187,27 @@ class ApproveBatchCommandTests(TestCase):
         self.assertNotIn(b2.id, manifest["ids"])
 
     # ------------------------------------------------------------------ #
+    # Cover path resolution
+    # ------------------------------------------------------------------ #
+
+    def test_relative_cover_path_resolves_against_media_root(self):
+        from django.test import override_settings
+
+        media = Path(self.temp_dir) / "media"
+        media.mkdir()
+        rel_ok = "cover_cache/abc.jpg"
+        abs_ok = media / rel_ok
+        abs_ok.parent.mkdir(parents=True)
+        abs_ok.write_bytes(b"\xff\xd8\xff" + b"\x00" * 16)
+        ok_book = self._make_book("relok", title="Relative Cover Book", author="Rel Author", cover_path=rel_ok)
+        missing_book = self._make_book("relmissing", title="Missing Cover Book", author="Miss Author", cover_path="cover_cache/gone.jpg")
+        with override_settings(MEDIA_ROOT=str(media)):
+            _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertIn(ok_book.id, manifest["ids"], "relative cover under media dir must pass")
+        self.assertNotIn(missing_book.id, manifest["ids"], "missing relative cover must be excluded")
+
+    # ------------------------------------------------------------------ #
     # Suspicious patterns
     # ------------------------------------------------------------------ #
 

@@ -24,6 +24,7 @@ import uuid
 from collections import Counter
 from pathlib import Path
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
@@ -116,6 +117,20 @@ def _get_fm(book):
         return None
 
 
+def _resolve_cover_path(cover_path):
+    """Resolve a cover path to a filesystem path.
+
+    A relative path is resolved against ``settings.MEDIA_ROOT`` (the same key
+    the move flow uses for ``cover_cache/...`` paths); an absolute path and an
+    empty value are returned unchanged.
+    """
+    if not cover_path:
+        return ""
+    if os.path.isabs(cover_path):
+        return cover_path
+    return os.path.join(settings.MEDIA_ROOT, cover_path)
+
+
 class Command(BaseCommand):
     help = "Approve a batch of eligible books (prepare/report/apply/reject)."
 
@@ -198,7 +213,7 @@ class Command(BaseCommand):
             return "author confidence"
         if _conf(fm.final_cover_confidence) < CONFIDENCE_THRESHOLD:
             return "cover confidence"
-        if not fm.final_cover_path or not os.path.exists(fm.final_cover_path):
+        if not fm.final_cover_path or not os.path.exists(_resolve_cover_path(fm.final_cover_path)):
             return "cover file"
         if ctx["primary_file"].get(book.id, ("", ""))[1] not in APPROVABLE_FORMATS:
             return "format"
