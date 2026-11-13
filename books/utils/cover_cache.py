@@ -164,6 +164,22 @@ class CoverCache:
         return default_storage.exists(str(relative_path).replace("\\", "/").lstrip("/"))
 
     @classmethod
+    def resolve_path(cls, cover_path: Optional[str]) -> str:
+        """Resolve a cover path to a filesystem path via the media storage.
+
+        A relative path is resolved against the media root (the same
+        ``default_storage`` that ``media_exists`` checks); an absolute path and
+        an empty value are returned unchanged. This is the single cover-path
+        resolver shared by the move flow and the approval commands.
+        """
+        if not cover_path:
+            return ""
+        p = str(cover_path).replace("\\", "/")
+        if os.path.isabs(cover_path):
+            return cover_path
+        return default_storage.path(p.lstrip("/"))
+
+    @classmethod
     def placeholder_url(cls) -> str:
         """Return the static URL for the placeholder cover image."""
         from django.conf import settings

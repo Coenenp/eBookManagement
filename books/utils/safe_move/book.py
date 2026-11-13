@@ -14,6 +14,7 @@ from django.db.models import Q
 
 from books.models import BookFile, FileMove, FinalMetadata
 from books.utils.batch_renamer import CompanionFileFinder
+from books.utils.cover_cache import CoverCache
 from books.utils.epub_fix.fixer import IMAGE_MEDIA_BY_EXT, _validate_cover
 from books.utils.renaming_engine import is_renamable
 from books.utils.safe_move.archive import default_archive_root
@@ -54,11 +55,11 @@ def _cover_flag(cover_path):
         return None
     if cover_path == "":
         return "cover-missing"
-    p = Path(cover_path)
+    p = Path(CoverCache.resolve_path(cover_path))
     if not p.is_file():
         return "cover-missing"
     try:
-        _validate_cover(cover_path)
+        _validate_cover(str(p))
     except ValueError:
         # _validate_cover raises for both a non-image extension and an
         # unreadable path; distinguish the two so the flag stays precise.
@@ -263,8 +264,9 @@ def _move_companion(book, parent, source, target, db_field, *, scan_folder, scan
         fm = book.final_metadata
         curated = fm.final_cover_path if fm else ""
         if curated and _cover_flag(curated) is None:
-            cover_content = Path(curated).read_bytes()
-            target = str(Path(target).with_suffix(Path(curated).suffix))
+            resolved = CoverCache.resolve_path(curated)
+            cover_content = Path(resolved).read_bytes()
+            target = str(Path(target).with_suffix(Path(resolved).suffix))
 
     previous_paths = {db_field: getattr(primary_file, db_field)} if db_field else {}
     child = FileMove.objects.create(
@@ -400,9 +402,11 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
     archive_root = default_archive_root(scan_folder.path)
     final_metadata = book.final_metadata
 
-    # Part C: the cover companion becomes a copy of the curated cover. When the
-    # curated cover is empty or invalid the companion moves unchanged and the
-    # move is flagged cover-missing / cover-invalid.
+    # A missing or invalid final cover blocks the move before anything is
+    # copied, archived or deleted: the row ends needs_review with the
+    # cover-missing / cover-invalid flag. The path is resolved against the
+    # media root via the single CoverCache resolver, so a media-relative path
+    # (e.g. ``cover_cache/abc.jpg``) is checked against MEDIA_ROOT.
     final_cover_path = final_metadata.final_cover_path if final_metadata else ""
     final_cover_flag = None
     if primary_file.cover_path:
@@ -427,8 +431,18 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
         state=FileMove.State.PLANNED,
         previous_paths=previous_paths,
     )
+
+    # Blocking cover check: a missing/invalid final cover ends the move in
+    # needs_review before anything is copied, archived or deleted.
+    if final_cover_flag is not None:
+        FileMove.objects.filter(pk=row.pk).update(
+            state=FileMove.State.NEEDS_REVIEW,
+            review_flags=[final_cover_flag],
+        )
+        raise NeedsReview([final_cover_flag])
+
     initial_flags = []
-    for flag in (cover_flag, final_cover_flag):
+    for flag in (cover_flag,):
         if flag is not None and flag not in initial_flags:
             initial_flags.append(flag)
     if initial_flags:
@@ -522,7 +536,7 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
     synthetic_cover_source = None
     if final_cover_path and _cover_flag(final_cover_path) is None:
         if not primary_file.cover_path or not Path(primary_file.cover_path).is_file():
-            curated = Path(final_cover_path)
+            curated = Path(CoverCache.resolve_path(final_cover_path))
             synthetic_cover_source = str(curated)
             companions.insert(0, (
                 synthetic_cover_source,
