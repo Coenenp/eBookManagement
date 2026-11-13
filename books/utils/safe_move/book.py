@@ -398,7 +398,12 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
     # without a cover change and record the reason as a review flag instead.
     is_epub_repack = repack_epub and Path(source_path).suffix.lower() == ".epub"
     cover_flag = _cover_flag(cover_path) if is_epub_repack else None
-    effective_cover = None if cover_flag is not None else cover_path
+    # Resolve the cover once here so the repack and the cover embed receive the
+    # resolved filesystem path (a media-relative path like ``cover_cache/abc.jpg``
+    # resolves against MEDIA_ROOT), never the raw relative path.
+    effective_cover = None
+    if cover_flag is None and cover_path:
+        effective_cover = CoverCache.resolve_path(cover_path)
     metadata = build_epub_metadata(book) if is_epub_repack else None
     scan_label = f"{scan_folder.name} {scan_folder.id}"
     archive_root = default_archive_root(scan_folder.path)
