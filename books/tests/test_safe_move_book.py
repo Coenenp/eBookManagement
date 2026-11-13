@@ -79,6 +79,14 @@ def _write_epub(path, opf=None):
             z.writestr(n, files[n], compress_type=zipfile.ZIP_STORED if n == "mimetype" else zipfile.ZIP_DEFLATED)
 
 
+def _write_default_cover(scan_root):
+    """Write (once) a valid JPEG used as final_cover_path for helper books."""
+    p = Path(scan_root) / "_default_cover.jpg"
+    if not p.exists():
+        p.write_bytes(b"\xff\xd8\xff\xd9")
+    return str(p)
+
+
 class RoutineHardeningTests(SimpleTestCase):
     """Item 1: repack exceptions, finalize target hash, target re-check."""
 
@@ -217,7 +225,7 @@ class SafeMoveBookTests(TestCase):
             file_path=str(src), file_format=file_format, scan_folder=self.scan_folder,
         )
         if reviewed:
-            FinalMetadata.objects.create(book=book, final_title=Path(name).stem, is_reviewed=True)
+            FinalMetadata.objects.create(book=book, final_title=Path(name).stem, is_reviewed=True, final_cover_path=_write_default_cover(self.scan_root))
         return book, src
 
     def test_success_path(self):
@@ -417,6 +425,9 @@ class SafeMoveBookTests(TestCase):
         bf.cover_path = str(cover)
         bf.opf_path = str(opf)
         bf.save(update_fields=["cover_path", "opf_path"])
+        fm = book.finalmetadata
+        fm.final_cover_path = str(cover)
+        fm.save(update_fields=["final_cover_path"])
         return book, src, cover, opf, txt
 
     def test_book_with_companions_moves_completely(self):
@@ -491,17 +502,24 @@ class SafeMoveBookTests(TestCase):
         new_cover = self.target_dir / "book.jpg"
         self.assertEqual(new_cover.read_bytes(), curated.read_bytes())
 
-    def test_curated_cover_empty_flags_cover_missing_once(self):
+    def test_curated_cover_empty_blocks_cover_missing(self):
         book, src, cover, opf, txt = self._make_book_with_companions()
-        # final_cover_path is "" by default.
+        # final_cover_path is "" by default; the helper sets it to the
+        # companion cover, so clear it back to exercise the empty case.
+        fm = book.finalmetadata
+        fm.final_cover_path = ""
+        fm.save(update_fields=["final_cover_path"])
         target = self.target_dir / "book.pdf"
-        row = safe_move_book(book, str(target))
-        row.refresh_from_db()
-        flags = row.review_flags or []
-        self.assertEqual(flags.count("cover-missing"), 1)
-        self.assertNotIn("cover-invalid", flags)
+        with self.assertRaises(NeedsReview) as ctx:
+            safe_move_book(book, str(target))
+        self.assertEqual(ctx.exception.codes, ["cover-missing"])
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.NEEDS_REVIEW)
+        self.assertEqual(row.review_flags, ["cover-missing"])
+        self.assertTrue(src.exists())
+        self.assertFalse(target.exists())
 
-    def test_curated_cover_invalid_flags_cover_invalid_once(self):
+    def test_curated_cover_invalid_blocks_cover_invalid(self):
         book, src, cover, opf, txt = self._make_book_with_companions()
         bad = self.scan_root / "bad.jpg"
         bad.write_bytes(b"this is not really a jpeg image")
@@ -509,15 +527,18 @@ class SafeMoveBookTests(TestCase):
         fm.final_cover_path = str(bad)
         fm.save(update_fields=["final_cover_path"])
         target = self.target_dir / "book.pdf"
-        row = safe_move_book(book, str(target))
-        row.refresh_from_db()
-        flags = row.review_flags or []
-        self.assertEqual(flags.count("cover-invalid"), 1)
-        self.assertNotIn("cover-missing", flags)
+        with self.assertRaises(NeedsReview) as ctx:
+            safe_move_book(book, str(target))
+        self.assertEqual(ctx.exception.codes, ["cover-invalid"])
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.NEEDS_REVIEW)
+        self.assertEqual(row.review_flags, ["cover-invalid"])
+        self.assertTrue(src.exists())
+        self.assertFalse(target.exists())
 
-    def test_epub_empty_curated_cover_flags_cover_missing_once(self):
+    def test_epub_empty_curated_cover_blocks_cover_missing(self):
         # EPUB with an empty curated cover: the embed cover flag and the final
-        # cover flag both map to cover-missing, and the dedup keeps it once.
+        # cover check both map to cover-missing, and the move is blocked.
         book, src = self._make_epub_book()
         sub = src.parent
         cover = sub / "cover.jpg"
@@ -525,11 +546,16 @@ class SafeMoveBookTests(TestCase):
         bf = BookFile.objects.get(book=book)
         bf.cover_path = str(cover)
         bf.save(update_fields=["cover_path"])
+        fm = book.finalmetadata
+        fm.final_cover_path = ""
+        fm.save(update_fields=["final_cover_path"])
         target = self.target_dir / "book.epub"
-        row = safe_move_book(book, str(target), cover_path="")
-        row.refresh_from_db()
-        flags = row.review_flags or []
-        self.assertEqual(flags.count("cover-missing"), 1)
+        with self.assertRaises(NeedsReview) as ctx:
+            safe_move_book(book, str(target), cover_path="")
+        self.assertEqual(ctx.exception.codes, ["cover-missing"])
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.NEEDS_REVIEW)
+        self.assertEqual(row.review_flags, ["cover-missing"])
 
     def test_valid_curated_copy_clears_stale_flag(self):
         # An invalid old companion must not leave a cover-invalid flag when a
@@ -544,6 +570,161 @@ class SafeMoveBookTests(TestCase):
         self.assertNotIn("cover-invalid", flags)
         self.assertNotIn("cover-missing", flags)
         self.assertEqual((self.target_dir / "book.jpg").read_bytes(), curated.read_bytes())
+
+    # -- B: missing/invalid final cover blocks the move ----------------------
+
+    def _set_media_cover(self, book, rel="cover_cache/abc.jpg", data=b"\xff\xd8\xff\xe0CURATED"):
+        """Write a cover under MEDIA_ROOT and point final_cover_path at its media-relative path."""
+        from django.conf import settings
+
+        p = Path(settings.MEDIA_ROOT) / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(data)
+        fm = book.finalmetadata
+        fm.final_cover_path = rel
+        fm.save(update_fields=["final_cover_path"])
+        return p
+
+    def test_relative_final_cover_resolves_and_moves_without_flag(self):
+        book, src, cover, opf, txt = self._make_book_with_companions()
+        self._set_media_cover(book)
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        row.refresh_from_db()
+        flags = row.review_flags or []
+        self.assertNotIn("cover-missing", flags)
+        self.assertNotIn("cover-invalid", flags)
+
+    def test_missing_final_cover_blocks_needs_review(self):
+        book, src, cover, opf, txt = self._make_book_with_companions()
+        fm = book.finalmetadata
+        fm.final_cover_path = "cover_cache/gone.jpg"
+        fm.save(update_fields=["final_cover_path"])
+        target = self.target_dir / "book.pdf"
+        with self.assertRaises(NeedsReview) as ctx:
+            safe_move_book(book, str(target))
+        self.assertEqual(ctx.exception.codes, ["cover-missing"])
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.NEEDS_REVIEW)
+        self.assertEqual(row.review_flags, ["cover-missing"])
+        self.assertTrue(src.exists())
+        self.assertFalse(target.exists())
+        self.assertEqual(row.archived_path, "")
+        self.assertFalse(FileMove.objects.filter(parent=row).exists())
+
+    def test_invalid_final_cover_blocks_needs_review(self):
+        book, src, cover, opf, txt = self._make_book_with_companions()
+        self._set_media_cover(book, rel="cover_cache/bad.jpg", data=b"not a real jpeg image")
+        target = self.target_dir / "book.pdf"
+        with self.assertRaises(NeedsReview) as ctx:
+            safe_move_book(book, str(target))
+        self.assertEqual(ctx.exception.codes, ["cover-invalid"])
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.NEEDS_REVIEW)
+        self.assertEqual(row.review_flags, ["cover-invalid"])
+        self.assertTrue(src.exists())
+        self.assertFalse(target.exists())
+        self.assertFalse(FileMove.objects.filter(parent=row).exists())
+
+    def test_empty_final_cover_blocks_needs_review(self):
+        book, src, cover, opf, txt = self._make_book_with_companions()
+        # final_cover_path is "" (clear what the helper set) — no cover path.
+        fm = book.finalmetadata
+        fm.final_cover_path = ""
+        fm.save(update_fields=["final_cover_path"])
+        target = self.target_dir / "book.pdf"
+        with self.assertRaises(NeedsReview) as ctx:
+            safe_move_book(book, str(target))
+        self.assertEqual(ctx.exception.codes, ["cover-missing"])
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.NEEDS_REVIEW)
+        self.assertEqual(row.review_flags, ["cover-missing"])
+        self.assertTrue(src.exists())
+        self.assertFalse(target.exists())
+        self.assertFalse(FileMove.objects.filter(parent=row).exists())
+
+    # -- Part A: EPUB with a media-relative cover ----------------------------
+
+    def test_epub_media_relative_cover_embeds_and_lands_beside_book(self):
+        book, src = self._make_epub_book()
+        media = self._set_media_cover(book)  # MEDIA_ROOT/cover_cache/abc.jpg
+        target = self.target_dir / "book.epub"
+        row = safe_move_book(
+            book, str(target), cover_path=book.finalmetadata.final_cover_path
+        )
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        row.refresh_from_db()
+        self.assertNotIn("cover-missing", row.review_flags or [])
+        self.assertNotIn("cover-invalid", row.review_flags or [])
+        # The new EPUB embeds the cover image bytes.
+        with zipfile.ZipFile(target) as z:
+            names = z.namelist()
+            cover_name = next(
+                n for n in names if n.lower().endswith((".jpg", ".jpeg", ".png"))
+            )
+            self.assertEqual(z.read(cover_name), media.read_bytes())
+        # The cover file beside the book equals the media cover.
+        beside = self.target_dir / "book.jpg"
+        self.assertTrue(beside.is_file())
+        self.assertEqual(beside.read_bytes(), media.read_bytes())
+
+    # -- Part B: blocking rule without a companion cover ---------------------
+
+    def test_no_companion_empty_final_cover_blocks(self):
+        book, src = self._make_book("sub/book.pdf", data=b"%PDF-1.4 fake pdf")
+        fm = book.finalmetadata
+        fm.final_cover_path = ""
+        fm.save(update_fields=["final_cover_path"])
+        target = self.target_dir / "book.pdf"
+        with self.assertRaises(NeedsReview) as ctx:
+            safe_move_book(book, str(target))
+        self.assertEqual(ctx.exception.codes, ["cover-missing"])
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.NEEDS_REVIEW)
+        self.assertEqual(row.review_flags, ["cover-missing"])
+        self.assertTrue(src.exists())
+        self.assertFalse(target.exists())
+        self.assertEqual(row.archived_path, "")
+        self.assertFalse(FileMove.objects.filter(parent=row).exists())
+
+    def test_no_companion_missing_final_cover_blocks(self):
+        book, src = self._make_book("sub/book.pdf", data=b"%PDF-1.4 fake pdf")
+        fm = book.finalmetadata
+        fm.final_cover_path = "cover_cache/gone.jpg"
+        fm.save(update_fields=["final_cover_path"])
+        target = self.target_dir / "book.pdf"
+        with self.assertRaises(NeedsReview) as ctx:
+            safe_move_book(book, str(target))
+        self.assertEqual(ctx.exception.codes, ["cover-missing"])
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.NEEDS_REVIEW)
+        self.assertTrue(src.exists())
+        self.assertFalse(target.exists())
+
+    def test_no_companion_invalid_final_cover_blocks(self):
+        book, src = self._make_book("sub/book.pdf", data=b"%PDF-1.4 fake pdf")
+        self._set_media_cover(book, rel="cover_cache/bad.jpg", data=b"not a real jpeg")
+        target = self.target_dir / "book.pdf"
+        with self.assertRaises(NeedsReview) as ctx:
+            safe_move_book(book, str(target))
+        self.assertEqual(ctx.exception.codes, ["cover-invalid"])
+        row = FileMove.objects.get(book=book)
+        self.assertEqual(row.state, FileMove.State.NEEDS_REVIEW)
+        self.assertTrue(src.exists())
+        self.assertFalse(target.exists())
+
+    def test_no_companion_valid_media_cover_moves_and_lands_beside(self):
+        book, src = self._make_book("sub/book.pdf", data=b"%PDF-1.4 fake pdf")
+        media = self._set_media_cover(book)
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        row.refresh_from_db()
+        self.assertEqual(row.review_flags or [], [])
+        beside = self.target_dir / "book.jpg"
+        self.assertTrue(beside.is_file())
+        self.assertEqual(beside.read_bytes(), media.read_bytes())
 
     # -- A3: curated png over jpg companion ----------------------------------
 
@@ -702,6 +883,7 @@ class SafeMoveBookTests(TestCase):
         bf2 = BookFile.objects.get(book=book2)
         bf2.cover_path = str(cover2)
         bf2.save(update_fields=["cover_path"])
+        self._set_curated(book1)
 
         target = self.target_dir / "book1.pdf"
         row = safe_move_book(book1, str(target))
@@ -732,6 +914,7 @@ class SafeMoveBookTests(TestCase):
         bf2 = BookFile.objects.get(book=book2)
         bf2.cover_path = str(cover)
         bf2.save(update_fields=["cover_path"])
+        self._set_curated(book1)
 
         target = self.target_dir / "book1.pdf"
         row = safe_move_book(book1, str(target))
@@ -774,6 +957,7 @@ class SafeMoveBookTests(TestCase):
         bf1 = BookFile.objects.get(book=book1)
         bf1.cover_path = str(cover)
         bf1.save(update_fields=["cover_path"])
+        self._set_curated(book1)
 
         target = self.target_dir / "book.pdf"
         row = safe_move_book(book1, str(target))
@@ -814,6 +998,7 @@ class SafeMoveBookTests(TestCase):
         bf1 = BookFile.objects.get(book=book1, file_format="pdf")
         bf1.cover_path = str(cover)
         bf1.save(update_fields=["cover_path"])
+        self._set_curated(book1)
 
         target = self.target_dir / "book.pdf"
         row = safe_move_book(book1, str(target))
@@ -836,6 +1021,7 @@ class SafeMoveBookTests(TestCase):
         bf1 = BookFile.objects.get(book=book1)
         bf1.cover_path = str(cover)
         bf1.save(update_fields=["cover_path"])
+        self._set_curated(book1)
 
         target = self.target_dir / "book.pdf"
         row = safe_move_book(book1, str(target))
@@ -860,6 +1046,7 @@ class SafeMoveBookTests(TestCase):
         bf1 = BookFile.objects.get(book=book1)
         bf1.cover_path = str(cover)
         bf1.save(update_fields=["cover_path"])
+        self._set_curated(book1)
 
         target = self.target_dir / "book.pdf"
         row = safe_move_book(book1, str(target))
@@ -878,7 +1065,7 @@ class SafeMoveBookTests(TestCase):
         book = create_test_book_with_file(
             file_path=str(src), file_format="epub", scan_folder=self.scan_folder,
         )
-        FinalMetadata.objects.create(book=book, final_title=Path(name).stem, is_reviewed=True)
+        FinalMetadata.objects.create(book=book, final_title=Path(name).stem, is_reviewed=True, final_cover_path=_write_default_cover(self.scan_root))
         return book, src
 
     def _cover(self, name="cover.jpg", data=b"\xff\xd8\xff\xd9"):
@@ -1015,6 +1202,7 @@ class EpubMetadataWiringTests(TestCase):
                 book=book, final_title="Great Book", final_author="Jane Doe",
                 language="en", final_publisher="Acme", publication_year=1999,
                 description="A great read", isbn="9781234567890", is_reviewed=True,
+                final_cover_path=_write_default_cover(self.scan_root),
             )
         return book, src
 
@@ -1051,7 +1239,7 @@ class EpubMetadataWiringTests(TestCase):
         book = create_test_book_with_file(
             file_path=str(src), file_format="pdf", scan_folder=self.scan_folder,
         )
-        FinalMetadata.objects.create(book=book, final_title="Pdf Title", is_reviewed=True)
+        FinalMetadata.objects.create(book=book, final_title="Pdf Title", is_reviewed=True, final_cover_path=_write_default_cover(self.scan_root))
         target = self.target_dir / "book.pdf"
         row = safe_move_book(book, str(target))
         self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
@@ -1166,7 +1354,7 @@ class CoverPageMoveTests(TestCase):
         book = create_test_book_with_file(
             file_path=str(src), file_format="epub", scan_folder=self.scan_folder,
         )
-        FinalMetadata.objects.create(book=book, final_title="Cover Book", is_reviewed=True)
+        FinalMetadata.objects.create(book=book, final_title="Cover Book", is_reviewed=True, final_cover_path=_write_default_cover(self.scan_root))
         return book, src
 
     def _cover(self, data=b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\xff\xd9"):
@@ -1293,6 +1481,9 @@ class SidecarOpfTests(TestCase):
         bf.opf_path = str(sidecar)
         bf.cover_path = str(cover)
         bf.save(update_fields=["opf_path", "cover_path"])
+        fm = book.finalmetadata
+        fm.final_cover_path = str(cover)
+        fm.save(update_fields=["final_cover_path"])
         return book, src, sidecar, cover
 
     def test_target_opf_holds_final_metadata_and_cover_reference(self):
@@ -1382,6 +1573,9 @@ class SidecarOpfTests(TestCase):
         bf = BookFile.objects.get(book=book)
         bf.cover_path = str(cover)
         bf.save(update_fields=["cover_path"])
+        fm = book.finalmetadata
+        fm.final_cover_path = str(cover)
+        fm.save(update_fields=["final_cover_path"])
         target = self.target_dir / "book.epub"
         row = safe_move_book(book, str(target))
         self.assertEqual(row.state, FileMove.State.PENDING_DELETION)

@@ -14,6 +14,7 @@ from django.db.models import Q
 
 from books.models import BookFile, FileMove, FinalMetadata
 from books.utils.batch_renamer import CompanionFileFinder
+from books.utils.cover_cache import CoverCache
 from books.utils.epub_fix.fixer import IMAGE_MEDIA_BY_EXT, _validate_cover
 from books.utils.renaming_engine import is_renamable
 from books.utils.safe_move.archive import default_archive_root
@@ -54,11 +55,11 @@ def _cover_flag(cover_path):
         return None
     if cover_path == "":
         return "cover-missing"
-    p = Path(cover_path)
+    p = Path(CoverCache.resolve_path(cover_path))
     if not p.is_file():
         return "cover-missing"
     try:
-        _validate_cover(cover_path)
+        _validate_cover(str(p))
     except ValueError:
         # _validate_cover raises for both a non-image extension and an
         # unreadable path; distinguish the two so the flag stays precise.
@@ -129,15 +130,17 @@ def _flag_companion_outside(parent, source):
 
 
 def _duplicate_content_flag(book, hash_value):
-    """Return ``duplicate-content:<book id>`` when another book's FileMove journal
-    already records ``hash_value`` as ``original_sha256`` or ``new_sha256``, else
-    None. One query per hash (indexed only if ``original_sha256`` and
-    ``new_sha256`` carry a ``db_index``); never loads all hashes into memory."""
+    """Return ``duplicate-content:<book id>`` when another book's MAIN FileMove
+    journal row already records ``hash_value`` as ``original_sha256`` or
+    ``new_sha256``, else None. Companion moves (cover/OPF/sidecar) are ignored
+    so two books sharing a cover or companion are never duplicates. One query
+    per hash (indexed on ``original_sha256`` and ``new_sha256``); never loads
+    all hashes into memory."""
     if not hash_value:
         return None
     other_book_id = (
         FileMove.objects
-        .filter(Q(original_sha256=hash_value) | Q(new_sha256=hash_value))
+        .filter(Q(original_sha256=hash_value) | Q(new_sha256=hash_value), kind=FileMove.Kind.MAIN)
         .exclude(book=book)
         .values_list("book_id", flat=True)
         .first()
@@ -263,8 +266,9 @@ def _move_companion(book, parent, source, target, db_field, *, scan_folder, scan
         fm = book.final_metadata
         curated = fm.final_cover_path if fm else ""
         if curated and _cover_flag(curated) is None:
-            cover_content = Path(curated).read_bytes()
-            target = str(Path(target).with_suffix(Path(curated).suffix))
+            resolved = CoverCache.resolve_path(curated)
+            cover_content = Path(resolved).read_bytes()
+            target = str(Path(target).with_suffix(Path(resolved).suffix))
 
     previous_paths = {db_field: getattr(primary_file, db_field)} if db_field else {}
     child = FileMove.objects.create(
@@ -394,19 +398,24 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
     # without a cover change and record the reason as a review flag instead.
     is_epub_repack = repack_epub and Path(source_path).suffix.lower() == ".epub"
     cover_flag = _cover_flag(cover_path) if is_epub_repack else None
-    effective_cover = None if cover_flag is not None else cover_path
+    # Resolve the cover once here so the repack and the cover embed receive the
+    # resolved filesystem path (a media-relative path like ``cover_cache/abc.jpg``
+    # resolves against MEDIA_ROOT), never the raw relative path.
+    effective_cover = None
+    if cover_flag is None and cover_path:
+        effective_cover = CoverCache.resolve_path(cover_path)
     metadata = build_epub_metadata(book) if is_epub_repack else None
     scan_label = f"{scan_folder.name} {scan_folder.id}"
     archive_root = default_archive_root(scan_folder.path)
     final_metadata = book.final_metadata
 
-    # Part C: the cover companion becomes a copy of the curated cover. When the
-    # curated cover is empty or invalid the companion moves unchanged and the
-    # move is flagged cover-missing / cover-invalid.
+    # A missing or invalid final cover blocks the move before anything is
+    # copied, archived or deleted: the row ends needs_review with the
+    # cover-missing / cover-invalid flag. The path is resolved against the
+    # media root via the single CoverCache resolver, so a media-relative path
+    # (e.g. ``cover_cache/abc.jpg``) is checked against MEDIA_ROOT.
     final_cover_path = final_metadata.final_cover_path if final_metadata else ""
-    final_cover_flag = None
-    if primary_file.cover_path:
-        final_cover_flag = _cover_flag(final_cover_path) if final_cover_path else "cover-missing"
+    final_cover_flag = _cover_flag(final_cover_path) if final_cover_path else "cover-missing"
 
     # (b) Journal the move (planned) with the paths needed to roll back, before
     # any file operation happens.
@@ -427,8 +436,18 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
         state=FileMove.State.PLANNED,
         previous_paths=previous_paths,
     )
+
+    # Blocking cover check: a missing/invalid final cover ends the move in
+    # needs_review before anything is copied, archived or deleted.
+    if final_cover_flag is not None:
+        FileMove.objects.filter(pk=row.pk).update(
+            state=FileMove.State.NEEDS_REVIEW,
+            review_flags=[final_cover_flag],
+        )
+        raise NeedsReview([final_cover_flag])
+
     initial_flags = []
-    for flag in (cover_flag, final_cover_flag):
+    for flag in (cover_flag,):
         if flag is not None and flag not in initial_flags:
             initial_flags.append(flag)
     if initial_flags:
@@ -522,7 +541,7 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
     synthetic_cover_source = None
     if final_cover_path and _cover_flag(final_cover_path) is None:
         if not primary_file.cover_path or not Path(primary_file.cover_path).is_file():
-            curated = Path(final_cover_path)
+            curated = Path(CoverCache.resolve_path(final_cover_path))
             synthetic_cover_source = str(curated)
             companions.insert(0, (
                 synthetic_cover_source,

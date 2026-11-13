@@ -32,6 +32,9 @@ class MoveApprovedCommandTests(TestCase):
             scan_folder=self.scan_folder,
             content_type=content_type,
         )
+        cover = Path(self.temp_dir) / "_default_cover.jpg"
+        if not cover.exists():
+            cover.write_bytes(b"\xff\xd8\xff\xd9")
         FinalMetadata.objects.create(
             book=book,
             final_title=Path(name).stem,
@@ -40,6 +43,7 @@ class MoveApprovedCommandTests(TestCase):
             final_series=series,
             final_series_number=series_number,
             final_author=author,
+            final_cover_path=str(cover),
         )
         return book, path
 
@@ -252,6 +256,50 @@ class MoveApprovedCommandTests(TestCase):
         self.assertIn("moved 1", out)
         self.assertIn("target-exists", out)
         self.assertEqual([p.exists() for p in (p1, p2)].count(True), 1)
+
+
+    def test_execute_epub_media_relative_cover_embeds_and_lands_beside(self):
+        import zipfile
+
+        from django.conf import settings
+
+        from books.tests.test_safe_move_book import _write_epub
+
+        path = Path(self.temp_dir) / "sub" / "book.epub"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _write_epub(path)
+        book = create_test_book_with_file(
+            file_path=str(path), file_format="epub",
+            scan_folder=self.scan_folder, content_type="ebook",
+        )
+        FinalMetadata.objects.create(
+            book=book, final_title="book", is_reviewed=True,
+            language="en", final_author="Jane Doe",
+        )
+        media = Path(settings.MEDIA_ROOT) / "cover_cache" / "mv_approved.jpg"
+        media.parent.mkdir(parents=True, exist_ok=True)
+        media.write_bytes(b"\xff\xd8\xff\xe0CURATED")
+        fm = book.finalmetadata
+        fm.final_cover_path = "cover_cache/mv_approved.jpg"
+        fm.save(update_fields=["final_cover_path"])
+
+        out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        self.assertIn("moved 1", out)
+        target = Path(self.temp_dir) / "Approved" / "book.epub"
+        self.assertTrue(target.is_file())
+        row = FileMove.objects.get(book=book, kind=FileMove.Kind.MAIN)
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertNotIn("cover-missing", row.review_flags or [])
+        self.assertNotIn("cover-invalid", row.review_flags or [])
+        with zipfile.ZipFile(target) as z:
+            names = z.namelist()
+            cover_name = next(
+                n for n in names if n.lower().endswith((".jpg", ".jpeg", ".png"))
+            )
+            self.assertEqual(z.read(cover_name), media.read_bytes())
+        beside = Path(self.temp_dir) / "Approved" / "book.jpg"
+        self.assertTrue(beside.is_file())
+        self.assertEqual(beside.read_bytes(), media.read_bytes())
 
 
 class FitPathTests(TestCase):
