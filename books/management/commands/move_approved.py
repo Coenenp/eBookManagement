@@ -20,6 +20,7 @@ from django.db.models import Case, IntegerField, Max, Value, When
 from books.models import FileMove
 from books.utils.renaming_engine import RenamingEngine, is_renamable
 from books.utils.safe_move import NeedsReview, safe_move_book
+from books.utils.safe_move.book import _cover_flag
 
 # A move in one of these states is still in flight; recover it with
 # ``recover_file_moves --apply`` rather than re-selecting the book.
@@ -139,13 +140,24 @@ class Command(BaseCommand):
                 planned.append(book)
 
         if not execute:
+            dry_skips = []
             for book in planned:
                 target = self._compute_target(book, folder_pattern, filename_pattern)
+                if Path(target).exists():
+                    dry_skips.append((book, "target-exists"))
+                    continue
+                final_cover_path = book.finalmetadata.final_cover_path if book.finalmetadata else ""
+                final_cover_flag = _cover_flag(final_cover_path) if final_cover_path else "cover-missing"
+                if final_cover_flag is not None:
+                    dry_skips.append((book, final_cover_flag))
+                    continue
                 language = book.finalmetadata.language if book.finalmetadata else ""
                 self.stdout.write(f"{book.id} | {language} | {book.file_path} -> {target}")
-            for book, reason in skipped:
+            for book, reason in skipped + dry_skips:
                 self.stdout.write(f"skipped {book.id} | {reason}")
-            self.stdout.write(f"planned {len(planned)}, skipped {len(skipped)}")
+            planned_count = len(planned) - len(dry_skips)
+            skipped_count = len(skipped) + len(dry_skips)
+            self.stdout.write(f"planned {planned_count}, skipped {skipped_count}")
             return
 
         batch_id = str(uuid.uuid4())
