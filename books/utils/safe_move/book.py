@@ -415,9 +415,7 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
     # media root via the single CoverCache resolver, so a media-relative path
     # (e.g. ``cover_cache/abc.jpg``) is checked against MEDIA_ROOT.
     final_cover_path = final_metadata.final_cover_path if final_metadata else ""
-    final_cover_flag = None
-    if primary_file.cover_path:
-        final_cover_flag = _cover_flag(final_cover_path) if final_cover_path else "cover-missing"
+    final_cover_flag = _cover_flag(final_cover_path) if final_cover_path else "cover-missing"
 
     # (b) Journal the move (planned) with the paths needed to roll back, before
     # any file operation happens.

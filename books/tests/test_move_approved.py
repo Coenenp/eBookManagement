@@ -32,6 +32,9 @@ class MoveApprovedCommandTests(TestCase):
             scan_folder=self.scan_folder,
             content_type=content_type,
         )
+        cover = Path(self.temp_dir) / "_default_cover.jpg"
+        if not cover.exists():
+            cover.write_bytes(b"\xff\xd8\xff\xd9")
         FinalMetadata.objects.create(
             book=book,
             final_title=Path(name).stem,
@@ -40,6 +43,7 @@ class MoveApprovedCommandTests(TestCase):
             final_series=series,
             final_series_number=series_number,
             final_author=author,
+            final_cover_path=str(cover),
         )
         return book, path
 
