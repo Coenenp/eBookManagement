@@ -80,10 +80,14 @@ CRITERIA_LABELS = [
     "title equals author",
     "duplicate",
     "suspicious pattern",
+    "cover shared",
+    "cover rejected by review",
     "cover empty",
     "cover url (needs download)",
     "cover missing file",
     "cover invalid image",
+    "cover placeholder",
+    "cover shape",
 ]
 
 CONFIDENCE_THRESHOLD = 0.80
@@ -137,6 +141,13 @@ def _cover_reason(cover_path):
         return "cover missing file"
     if flag == "cover-invalid":
         return "cover invalid image"
+    from books.utils.cover_quality import cover_quality_flag
+
+    quality = cover_quality_flag(CoverCache.resolve_path(cover_path))
+    if quality == "placeholder":
+        return "cover placeholder"
+    if quality == "shape":
+        return "cover shape"
     return None
 
 
@@ -149,6 +160,9 @@ class Command(BaseCommand):
         parser.add_argument("--apply", action="store_true")
         parser.add_argument("--manifest")
         parser.add_argument("--confirm", type=int)
+        parser.add_argument("--exclude-ids")
+        parser.add_argument("--exclude-reason", default="review")
+        parser.add_argument("--allow-high-exclusion", action="store_true")
         parser.add_argument("--reject-id", type=int)
         parser.add_argument("--reason")
         parser.add_argument("--size", type=int, default=25)
@@ -187,17 +201,26 @@ class Command(BaseCommand):
 
         dup_title_author = Counter()
         dup_isbn = Counter()
-        for title, author, isbn in (
+        cover_use = Counter()
+        for title, author, isbn, cover_path in (
             Book.objects.filter(finalmetadata__isnull=False)
-            .values_list("finalmetadata__final_title", "finalmetadata__final_author", "finalmetadata__isbn")
+            .values_list(
+                "finalmetadata__final_title",
+                "finalmetadata__final_author",
+                "finalmetadata__isbn",
+                "finalmetadata__final_cover_path",
+            )
             .iterator()
         ):
             dup_title_author[(_norm_text(title), _norm_author(author))] += 1
             isbn = (isbn or "").strip()
             if isbn:
                 dup_isbn[isbn] += 1
+            if cover_path and not cover_path.startswith(("http://", "https://")):
+                cover_use[cover_path] += 1
         ctx["dup_title_author"] = dup_title_author
         ctx["dup_isbn"] = dup_isbn
+        ctx["cover_use"] = cover_use
 
         return ctx
 
@@ -237,6 +260,10 @@ class Command(BaseCommand):
         for _name, pred in SUSPICIOUS_PATTERNS:
             if pred(title, author):
                 return "suspicious pattern"
+        cover_path = fm.final_cover_path
+        if cover_path and not cover_path.startswith(("http://", "https://")):
+            if ctx["cover_use"].get(cover_path, 0) > 1:
+                return "cover shared"
         cover_reason = _cover_reason(fm.final_cover_path)
         if cover_reason:
             return cover_reason
@@ -256,6 +283,104 @@ class Command(BaseCommand):
             return f"planner error: {type(exc).__name__}: {exc}"
 
     # ------------------------------------------------------------------ #
+    # Contact sheets and review exclusions
+    # ------------------------------------------------------------------ #
+
+    def _read_rejected_ids(self, manifest_dir):
+        """Book ids rejected by cover review, read once per run into a set.
+
+        ``rejected_ids.txt`` holds one ``<id><TAB><reason>`` line per rejected
+        book; only the first column (the id) is read back. A missing file means
+        no ids have been rejected yet.
+        """
+        path = Path(manifest_dir) / "rejected_ids.txt"
+        if not path.exists():
+            return set()
+        ids = set()
+        for line in path.read_text().splitlines():
+            col = line.split("\t", 1)[0].strip()
+            if col.isdigit():
+                ids.add(int(col))
+        return ids
+
+    def _parse_exclude_ids(self, raw):
+        """Parse the comma separated ``--exclude-ids`` value into ints."""
+        if not raw:
+            return []
+        ids = []
+        for part in str(raw).split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if not part.isdigit():
+                raise CommandError(f"refusing: invalid exclude id {part!r}")
+            ids.append(int(part))
+        return ids
+
+    def _write_contact_sheets(self, selected, ctx, manifest_dir, batch_id):
+        """Write contact sheets for every id of the batch, 50 covers per sheet.
+
+        Each thumbnail is at most 150 by 225 pixels in a 10-column grid, with
+        a label under it showing the book id and primary file format. A cover
+        that cannot be opened is drawn as a red ``ERR`` label. Sheet file names
+        are returned (and recorded in the manifest); the resolved paths are
+        printed for the reviewer.
+        """
+        from PIL import Image, ImageDraw, ImageFont
+
+        from books.models import FinalMetadata
+
+        ids = [bid for _corr, bid in selected]
+        if not ids:
+            return []
+
+        cover_paths = dict(
+            FinalMetadata.objects.filter(book_id__in=ids).values_list(
+                "book_id", "final_cover_path"
+            )
+        )
+
+        COLS = 10
+        SHEET_SIZE = 50
+        THUMB_W, THUMB_H = 150, 225
+        PAD = 4
+        LABEL_H = 18
+        cell_w = THUMB_W + PAD
+        cell_h = THUMB_H + LABEL_H + PAD
+
+        try:
+            font = ImageFont.load_default()
+        except Exception:  # pragma: no cover - Pillow always ships a default font
+            font = None
+
+        sheet_names = []
+        for offset in range(0, len(ids), SHEET_SIZE):
+            chunk = ids[offset : offset + SHEET_SIZE]
+            rows = (len(chunk) + COLS - 1) // COLS
+            sheet = Image.new("RGB", (COLS * cell_w, rows * cell_h), "white")
+            draw = ImageDraw.Draw(sheet)
+            for i, bid in enumerate(chunk):
+                col = i % COLS
+                row = i // COLS
+                x = col * cell_w + PAD // 2
+                y = row * cell_h + PAD // 2
+                fmt = ctx["primary_file"].get(bid, ("", ""))[1]
+                label = f"{bid} {fmt}"
+                resolved = CoverCache.resolve_path(cover_paths.get(bid, "") or "")
+                try:
+                    thumb = Image.open(resolved).convert("RGB")
+                    thumb.thumbnail((THUMB_W, THUMB_H))
+                    sheet.paste(thumb, (x, y))
+                except Exception:
+                    draw.text((x, y), "ERR", fill=(255, 0, 0), font=font)
+                draw.text((x, y + THUMB_H + 2), label, fill=(0, 0, 0), font=font)
+            name = f"{batch_id}sheet{offset // SHEET_SIZE + 1}.png"
+            sheet.save(manifest_dir / name)
+            sheet_names.append(name)
+            self.stdout.write(f"contact sheet: {manifest_dir / name}")
+        return sheet_names
+
+    # ------------------------------------------------------------------ #
     # Modes
     # ------------------------------------------------------------------ #
 
@@ -263,12 +388,17 @@ class Command(BaseCommand):
         from books.models import Book
 
         size = min(options["size"], MAX_SIZE)
+        manifest_dir = Path(options["manifest_dir"]) if options["manifest_dir"] else DEFAULT_MANIFEST_DIR
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        rejected = self._read_rejected_ids(manifest_dir)
         ctx = self._build_context()
 
         eligible = []  # minimal tuples: (corroborated, book_id)
         for book in (
             Book.objects.select_related("finalmetadata", "scan_folder").order_by("id").iterator()
         ):
+            if book.id in rejected:
+                continue
             fm = _get_fm(book)
             if self._exclusion(book, fm, ctx):
                 continue
@@ -293,9 +423,8 @@ class Command(BaseCommand):
             "sample_ids": [bid for _corr, bid in sample_entries],
             "status": "prepared",
         }
+        manifest["sheets"] = self._write_contact_sheets(selected, ctx, manifest_dir, batch_id)
 
-        manifest_dir = Path(options["manifest_dir"]) if options["manifest_dir"] else DEFAULT_MANIFEST_DIR
-        manifest_dir.mkdir(parents=True, exist_ok=True)
         manifest_path = manifest_dir / f"{batch_id}.json"
         manifest_path.write_text(json.dumps(manifest, indent=2))
 
@@ -322,6 +451,8 @@ class Command(BaseCommand):
     def _report(self, options):
         from books.models import Book
 
+        manifest_dir = Path(options["manifest_dir"]) if options["manifest_dir"] else DEFAULT_MANIFEST_DIR
+        rejected = self._read_rejected_ids(manifest_dir)
         ctx = self._build_context()
         total = Book.objects.count()
 
@@ -335,6 +466,9 @@ class Command(BaseCommand):
             Book.objects.select_related("finalmetadata", "scan_folder").order_by("id").iterator()
         ):
             fm = _get_fm(book)
+            if book.id in rejected:
+                excluded["cover rejected by review"] += 1
+                continue
             reason = self._exclusion(book, fm, ctx)
             if reason:
                 excluded[reason] += 1
@@ -363,11 +497,18 @@ class Command(BaseCommand):
     def _reject(self, options):
         manifest_path = Path(options["manifest"])
         data = json.loads(manifest_path.read_text())
-        data["status"] = "blocked"
-        data["rejection_reason"] = options["reason"] or ""
-        data["rejected_id"] = options["reject_id"]
+        rid = options["reject_id"]
+        reason = options["reason"] or ""
+        if rid not in data.get("ids", []):
+            raise CommandError(f"refusing: reject id {rid} not in manifest")
+        excluded = data.setdefault("excluded", {})
+        excluded[str(rid)] = reason
+        # Leave the status prepared: one held-back book never blocks the batch.
         manifest_path.write_text(json.dumps(data, indent=2))
-        self.stdout.write(f"blocked {options['reject_id']}: {options['reason']}")
+        clean = reason.replace("\t", " ").replace("\n", " ").replace("\r", " ")
+        with open(manifest_path.parent / "rejected_ids.txt", "a") as fh:
+            fh.write(f"{rid}\t{clean}\n")
+        self.stdout.write(f"rejected {rid}: {reason}")
 
     def _apply(self, options):
         from books.models import Book
@@ -383,10 +524,42 @@ class Command(BaseCommand):
         if confirm != len(ids):
             raise CommandError(f"refusing: confirm {confirm} != id count {len(ids)}")
 
+        exclude_ids = self._parse_exclude_ids(options.get("exclude_ids"))
+        for eid in exclude_ids:
+            if eid not in ids:
+                raise CommandError(f"refusing: exclude id {eid} not in manifest")
+
+        # Every held-back id lives in the manifest "excluded" map (id -> reason),
+        # whether it came from --reject-id or from this run's --exclude-ids.
+        excluded = data.setdefault("excluded", {})
+        exclude_reason = options.get("exclude_reason") or "review"
+        excluded.update({str(eid): exclude_reason for eid in exclude_ids})
+
+        total = len(ids)
+        excluded_count = len(excluded)
+        if excluded_count * 100 > 30 * total and not options.get("allow_high_exclusion"):
+            pct = excluded_count * 100.0 / total
+            raise CommandError(
+                f"refusing: {pct:.1f}% of manifest ids excluded (limit 30%)"
+            )
+
+        # Write this run's --exclude-ids records before the approval loop, so a
+        # crash mid-apply loses nothing.
+        if exclude_ids:
+            with open(manifest_path.parent / "rejected_ids.txt", "a") as fh:
+                for eid in exclude_ids:
+                    fh.write(f"{eid}\t{exclude_reason}\n")
+            manifest_path.write_text(json.dumps(data, indent=2))
+
+        excluded_ids = {int(k) for k in excluded}
         ctx = self._build_context()
         approved = []
         skipped = 0
         for bid in ids:
+            if bid in excluded_ids:
+                skipped += 1
+                self.stdout.write(f"skipped {bid}: {excluded.get(str(bid), 'cover review')}")
+                continue
             book = Book.objects.select_related("finalmetadata").filter(id=bid).first()
             if book is None:
                 skipped += 1

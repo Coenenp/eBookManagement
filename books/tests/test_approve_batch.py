@@ -276,6 +276,206 @@ class ApproveBatchCommandTests(TestCase):
         self.assertIn("cover missing file: 1", text)
         self.assertIn("cover invalid image: 1", text)
 
+    def test_cover_placeholder_excludes(self):
+        import hashlib
+        from unittest import mock
+
+        cover = Path(self.temp_dir) / "placeholder.jpg"
+        cover_bytes = b"\xff\xd8\xff" + b"placeholder" + b"\x00" * 16
+        cover.write_bytes(cover_bytes)
+        sha = hashlib.sha256(cover_bytes).hexdigest()
+        book = self._make_book("ph", title="Placeholder Cover", author="Ph Author", cover_path=str(cover))
+        with mock.patch("books.utils.cover_quality.PLACEHOLDER_HASHES", {sha}):
+            _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertNotIn(book.id, manifest["ids"])
+
+    def test_shape_and_placeholder_covers_reported(self):
+        import hashlib
+        from unittest import mock
+
+        from PIL import Image
+
+        shape_cover = Path(self.temp_dir) / "shape_cover.png"
+        Image.new("L", (300, 200), 128).save(shape_cover)
+        self._make_book("shp", title="Shape Cover", author="Shape Author", cover_path=str(shape_cover))
+        ph_cover = Path(self.temp_dir) / "ph_cover.jpg"
+        ph_bytes = b"\xff\xd8\xff" + b"placeholder" + b"\x00" * 16
+        ph_cover.write_bytes(ph_bytes)
+        ph_sha = hashlib.sha256(ph_bytes).hexdigest()
+        self._make_book("phc", title="Ph Cover", author="Ph Author", cover_path=str(ph_cover))
+        with mock.patch("books.utils.cover_quality.PLACEHOLDER_HASHES", {ph_sha}):
+            out = StringIO()
+            call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("cover shape: 1", out.getvalue())
+        self.assertIn("cover placeholder: 1", out.getvalue())
+
+    # ------------------------------------------------------------------ #
+    # Shared cover criterion
+    # ------------------------------------------------------------------ #
+
+    def test_two_books_sharing_cover_are_both_excluded(self):
+        shared = Path(self.temp_dir) / "shared.jpg"
+        shared.write_bytes(b"\xff\xd8\xff" + b"\x00" * 16)
+        b1 = self._make_book("sh1", title="Shared One", author="Shar Author A", cover_path=str(shared))
+        b2 = self._make_book("sh2", title="Shared Two", author="Shar Author B", cover_path=str(shared))
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertNotIn(b1.id, manifest["ids"])
+        self.assertNotIn(b2.id, manifest["ids"])
+
+    def test_book_with_own_cover_is_not_excluded(self):
+        book = self._make_book("owncover", title="Own Cover", author="Own Author")
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertIn(book.id, manifest["ids"])
+
+    def test_report_counts_shared_covers(self):
+        shared = Path(self.temp_dir) / "shared2.jpg"
+        shared.write_bytes(b"\xff\xd8\xff" + b"\x00" * 16)
+        self._make_book("rsh1", title="Report Shared One", author="RSh A", cover_path=str(shared))
+        self._make_book("rsh2", title="Report Shared Two", author="RSh B", cover_path=str(shared))
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("cover shared: 2", out.getvalue())
+
+    # ------------------------------------------------------------------ #
+    # Contact sheets
+    # ------------------------------------------------------------------ #
+
+    def test_prepare_writes_contact_sheet_for_all_ids(self):
+        for name in ("alpha", "beta", "gamma"):
+            self._make_book(f"cs_{name}", title=f"Contact {name}", author=f"CA {name}")
+        text, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertIn("sheets", manifest)
+        self.assertTrue(manifest["sheets"])
+        sheet_name = manifest["sheets"][0]
+        self.assertEqual(sheet_name, f"{manifest['batch_id']}sheet1.png")
+        sheet_path = self.manifest_dir / sheet_name
+        self.assertTrue(sheet_path.exists())
+        with open(sheet_path, "rb") as fh:
+            self.assertEqual(fh.read(8), b"\x89PNG\r\n\x1a\n")
+        self.assertIn(str(sheet_path), text)
+
+    def test_unreadable_cover_draws_err_without_raising(self):
+        from PIL import Image
+
+        bad = Path(self.temp_dir) / "badcover.jpg"
+        bad.write_bytes(b"\xff\xd8\xff" + b"\x00" * 16)  # valid magic, undecodable
+        book = self._make_book("badc", title="Bad Cover", author="Bad Author", cover_path=str(bad))
+        _, mpath = self._prepare()  # must not raise
+        manifest = self._manifest(mpath)
+        self.assertIn(book.id, manifest["ids"])
+        sheet_path = self.manifest_dir / manifest["sheets"][0]
+        img = Image.open(sheet_path).convert("RGB")
+        px = img.load()
+        has_red = any(
+            px[x, y][0] > 250 and px[x, y][1] < 200 and px[x, y][2] < 200
+            for x in range(img.width) for y in range(img.height)
+        )
+        self.assertTrue(has_red, "ERR label must be drawn red for an unreadable cover")
+
+    # ------------------------------------------------------------------ #
+    # Per-book exclusion (--exclude-ids)
+    # ------------------------------------------------------------------ #
+
+    def test_apply_exclude_ids_skips_excluded(self):
+        b1 = self._make_book("x1", title="Exclude One", author="XA One")
+        b2 = self._make_book("x2", title="Exclude Two", author="XA Two")
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        out = StringIO()
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            apply=True,
+            confirm=len(manifest["ids"]),
+            exclude_ids=str(b1.id),
+            allow_high_exclusion=True,
+            stdout=out,
+        )
+        b1.refresh_from_db()
+        b2.refresh_from_db()
+        self.assertFalse(b1.finalmetadata.is_reviewed)
+        self.assertTrue(b2.finalmetadata.is_reviewed)
+        self.assertIn(str(b1.id), out.getvalue())
+
+    def test_exclude_writes_rejected_file(self):
+        b1 = self._make_book("rf1", title="Rej One", author="RA One")
+        self._make_book("rf2", title="Rej Two", author="RA Two")
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            apply=True,
+            confirm=len(manifest["ids"]),
+            exclude_ids=str(b1.id),
+            allow_high_exclusion=True,
+            stdout=StringIO(),
+        )
+        rejected_file = self.manifest_dir / "rejected_ids.txt"
+        self.assertTrue(rejected_file.exists())
+        columns = [line.split("\t", 1)[0] for line in rejected_file.read_text().splitlines()]
+        self.assertIn(str(b1.id), columns)
+
+    def test_later_prepare_skips_rejected_ids(self):
+        b1 = self._make_book("sp1", title="Skip One", author="SA One")
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            apply=True,
+            confirm=len(manifest["ids"]),
+            exclude_ids=str(b1.id),
+            allow_high_exclusion=True,
+            stdout=StringIO(),
+        )
+        b3 = self._make_book("sp3", title="Skip Three", author="SA Three")
+        _, mpath2 = self._prepare()
+        manifest2 = self._manifest(mpath2)
+        self.assertNotIn(b1.id, manifest2["ids"])
+        self.assertIn(b3.id, manifest2["ids"])
+
+    def test_unknown_exclude_id_raises(self):
+        book = self._make_book("ue", title="Unknown Exclude", author="UA")
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        with self.assertRaises(CommandError):
+            call_command(
+                "approve_batch",
+                manifest=str(mpath),
+                apply=True,
+                confirm=len(manifest["ids"]),
+                exclude_ids="999999",
+                stdout=StringIO(),
+            )
+
+    def test_report_counts_rejected_by_review(self):
+        b1 = self._make_book("rr1", title="Rej Report", author="RRA")
+        self._make_book("rr2", title="Keep Report", author="RRA Two")
+        (self.manifest_dir / "rejected_ids.txt").write_text(f"{b1.id}\n")
+        out = StringIO()
+        call_command("approve_batch", report=True, manifest_dir=str(self.manifest_dir), stdout=out)
+        self.assertIn("cover rejected by review: 1", out.getvalue())
+
+    def test_reject_id_behaviour_unchanged(self):
+        book = self._make_book("rj", title="Reject Id", author="RJ")
+        _, mpath = self._prepare()
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            reject_id=book.id,
+            reason="still works",
+            stdout=StringIO(),
+        )
+        manifest = self._manifest(mpath)
+        self.assertEqual(manifest["status"], "prepared")
+        self.assertIn(str(book.id), manifest["excluded"])
+        self.assertEqual(manifest["excluded"][str(book.id)], "still works")
+
     def test_sample_line_ends_with_resolved_cover_path(self):
         from django.test import override_settings
 
@@ -428,9 +628,144 @@ class ApproveBatchCommandTests(TestCase):
             stdout=StringIO(),
         )
         manifest = self._manifest(mpath)
-        self.assertEqual(manifest["status"], "blocked")
-        self.assertEqual(manifest["rejection_reason"], "title looks wrong")
-        self.assertEqual(manifest["rejected_id"], book.id)
+        self.assertEqual(manifest["status"], "prepared")
+        self.assertEqual(manifest["excluded"][str(book.id)], "title looks wrong")
+        rejected = (self.manifest_dir / "rejected_ids.txt").read_text().splitlines()
+        self.assertIn(f"{book.id}\ttitle looks wrong", rejected)
+
+    def test_reject_id_other_books_still_apply(self):
+        books = [
+            self._make_book(f"rja{i}", title=f"Reject A {i}", author=f"RJA {chr(65+i)}")
+            for i in range(4)
+        ]
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        rid = books[0].id
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            reject_id=rid,
+            reason="bad cover",
+            stdout=StringIO(),
+        )
+        manifest = self._manifest(mpath)
+        self.assertEqual(manifest["status"], "prepared")
+        out = StringIO()
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            apply=True,
+            confirm=len(manifest["ids"]),
+            stdout=out,
+        )
+        for b in books[1:]:
+            b.refresh_from_db()
+            self.assertTrue(b.finalmetadata.is_reviewed)
+        books[0].refresh_from_db()
+        self.assertFalse(books[0].finalmetadata.is_reviewed)
+        self.assertIn(str(rid), out.getvalue())
+
+    def test_reject_reason_in_file_and_manifest(self):
+        books = [
+            self._make_book(f"rrb{i}", title=f"Reason B {i}", author=f"RRB {chr(65+i)}")
+            for i in range(4)
+        ]
+        _, mpath = self._prepare()
+        rid = books[0].id
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            reject_id=rid,
+            reason="title looks wrong",
+            stdout=StringIO(),
+        )
+        manifest = self._manifest(mpath)
+        self.assertEqual(manifest["excluded"][str(rid)], "title looks wrong")
+        lines = (self.manifest_dir / "rejected_ids.txt").read_text().splitlines()
+        self.assertIn(f"{rid}\ttitle looks wrong", lines)
+
+    def test_reject_reason_tabs_newlines_become_spaces(self):
+        books = [
+            self._make_book(f"rrc{i}", title=f"Reason C {i}", author=f"RRC {chr(65+i)}")
+            for i in range(4)
+        ]
+        _, mpath = self._prepare()
+        rid = books[0].id
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            reject_id=rid,
+            reason="bad\ttitle\nwith newline",
+            stdout=StringIO(),
+        )
+        lines = (self.manifest_dir / "rejected_ids.txt").read_text().splitlines()
+        self.assertIn(f"{rid}\tbad title with newline", lines)
+
+    def test_reject_unknown_id_raises(self):
+        self._make_book("u1", title="Unknown Reject", author="UR")
+        _, mpath = self._prepare()
+        with self.assertRaises(CommandError):
+            call_command(
+                "approve_batch",
+                manifest=str(mpath),
+                reject_id=999999,
+                reason="x",
+                stdout=StringIO(),
+            )
+
+    def test_valve_refuses_above_30_percent(self):
+        books = [
+            self._make_book(f"hv{i}", title=f"High {i}", author=f"HV {chr(65+i)}")
+            for i in range(10)
+        ]
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        excl = ",".join(str(books[i].id) for i in range(4))
+        with self.assertRaises(CommandError) as cm:
+            call_command(
+                "approve_batch",
+                manifest=str(mpath),
+                apply=True,
+                confirm=len(manifest["ids"]),
+                exclude_ids=excl,
+                stdout=StringIO(),
+            )
+        self.assertIn("40.0%", str(cm.exception))
+
+    def test_valve_accepts_exactly_30_percent(self):
+        books = [
+            self._make_book(f"ev{i}", title=f"Exact {i}", author=f"EV {chr(65+i)}")
+            for i in range(10)
+        ]
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        excl = ",".join(str(books[i].id) for i in range(3))
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            apply=True,
+            confirm=len(manifest["ids"]),
+            exclude_ids=excl,
+            stdout=StringIO(),
+        )
+
+    def test_valve_accepts_above_30_with_allow_high_exclusion(self):
+        books = [
+            self._make_book(f"ah{i}", title=f"Allow {i}", author=f"AH {chr(65+i)}")
+            for i in range(10)
+        ]
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        excl = ",".join(str(books[i].id) for i in range(4))
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            apply=True,
+            confirm=len(manifest["ids"]),
+            exclude_ids=excl,
+            allow_high_exclusion=True,
+            stdout=StringIO(),
+        )
 
     # ------------------------------------------------------------------ #
     # Apply
@@ -455,14 +790,9 @@ class ApproveBatchCommandTests(TestCase):
     def test_apply_refuses_blocked_manifest(self):
         book = self._make_book("blocked")
         _, mpath = self._prepare()
-        call_command(
-            "approve_batch",
-            manifest=str(mpath),
-            reject_id=book.id,
-            reason="hold",
-            stdout=StringIO(),
-        )
         manifest = self._manifest(mpath)
+        manifest["status"] = "blocked"
+        mpath.write_text(json.dumps(manifest))
         with self.assertRaises(CommandError):
             call_command(
                 "approve_batch",

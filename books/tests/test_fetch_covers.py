@@ -130,6 +130,20 @@ class FetchCoversCommandTests(TestCase):
         fm = FinalMetadata.objects.get(book=book)
         self.assertEqual(fm.final_cover_path, "https://example.com/tiny.jpg")  # unchanged
 
+    def test_placeholder_not_stored_and_logged(self):
+        book = self._make_url_book("https://example.com/placeholder.jpg")
+        content = _jpeg_bytes()
+        sha = hashlib.sha256(content).hexdigest()
+        with mock.patch("books.management.commands.fetch_covers.PLACEHOLDER_HASHES", {sha}):
+            self._run(get_response=FakeResponse(content))
+        fm = FinalMetadata.objects.get(book=book)
+        self.assertEqual(fm.final_cover_path, "https://example.com/placeholder.jpg")  # keeps URL
+        self.assertEqual(list(Path(settings.MEDIA_ROOT).rglob("*")), [])  # nothing stored
+        with open(self.temp_dir / "log.csv", newline="") as fh:
+            rows = list(csv.DictReader(fh))
+        self.assertTrue(rows)
+        self.assertEqual(rows[0]["outcome"], "placeholder")
+
     def test_failure_leaves_path_unchanged(self):
         book = self._make_url_book("https://example.com/missing.jpg")
         with mock.patch(
@@ -210,6 +224,47 @@ class FetchCoversCommandTests(TestCase):
         fm2 = FinalMetadata.objects.get(book=b2)
         self.assertTrue(fm2.final_cover_path.startswith("cover_cache/"))
         # With --retry-failed the first row is tried again.
+        with mock.patch(
+            "books.management.commands.fetch_covers.requests.get",
+            return_value=FakeResponse(_jpeg_bytes()),
+        ):
+            call_command("fetch_covers", stdout=io.StringIO(), limit=1, retry_failed=True)
+        fm1.refresh_from_db()
+        self.assertTrue(fm1.final_cover_path.startswith("cover_cache/"))
+
+    def test_placeholder_resume_skips_and_retry_reaches(self):
+        b1 = self._make_url_book("https://example.com/ph1.jpg")
+        b2 = self._make_url_book("https://example.com/ph2.jpg")
+        content = _jpeg_bytes()
+        sha = hashlib.sha256(content).hexdigest()
+        with mock.patch("books.management.commands.fetch_covers.PLACEHOLDER_HASHES", {sha}):
+            with mock.patch(
+                "books.management.commands.fetch_covers.requests.get",
+                return_value=FakeResponse(content),
+            ):
+                call_command("fetch_covers", stdout=io.StringIO(), limit=1)
+        # b1 keeps its URL (a placeholder is never stored).
+        fm1 = FinalMetadata.objects.get(book=b1)
+        self.assertEqual(fm1.final_cover_path, "https://example.com/ph1.jpg")
+
+        # Second run (limit 1): the placeholder outcome is remembered, so b1 is
+        # skipped and b2 is reached without a second request for b1.
+        requested = []
+
+        def _get(url, *a, **kw):
+            requested.append(url)
+            return FakeResponse(_jpeg_bytes())
+
+        with mock.patch(
+            "books.management.commands.fetch_covers.requests.get", side_effect=_get
+        ):
+            call_command("fetch_covers", stdout=io.StringIO(), limit=1)
+        fm2 = FinalMetadata.objects.get(book=b2)
+        self.assertTrue(fm2.final_cover_path.startswith("cover_cache/"))
+        self.assertNotIn("https://example.com/ph1.jpg", requested)
+        self.assertIn("https://example.com/ph2.jpg", requested)
+
+        # With --retry-failed the placeholder book is requested again.
         with mock.patch(
             "books.management.commands.fetch_covers.requests.get",
             return_value=FakeResponse(_jpeg_bytes()),
