@@ -276,6 +276,35 @@ class ApproveBatchCommandTests(TestCase):
         self.assertIn("cover missing file: 1", text)
         self.assertIn("cover invalid image: 1", text)
 
+    # ------------------------------------------------------------------ #
+    # Shared cover criterion
+    # ------------------------------------------------------------------ #
+
+    def test_two_books_sharing_cover_are_both_excluded(self):
+        shared = Path(self.temp_dir) / "shared.jpg"
+        shared.write_bytes(b"\xff\xd8\xff" + b"\x00" * 16)
+        b1 = self._make_book("sh1", title="Shared One", author="Shar Author A", cover_path=str(shared))
+        b2 = self._make_book("sh2", title="Shared Two", author="Shar Author B", cover_path=str(shared))
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertNotIn(b1.id, manifest["ids"])
+        self.assertNotIn(b2.id, manifest["ids"])
+
+    def test_book_with_own_cover_is_not_excluded(self):
+        book = self._make_book("owncover", title="Own Cover", author="Own Author")
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertIn(book.id, manifest["ids"])
+
+    def test_report_counts_shared_covers(self):
+        shared = Path(self.temp_dir) / "shared2.jpg"
+        shared.write_bytes(b"\xff\xd8\xff" + b"\x00" * 16)
+        self._make_book("rsh1", title="Report Shared One", author="RSh A", cover_path=str(shared))
+        self._make_book("rsh2", title="Report Shared Two", author="RSh B", cover_path=str(shared))
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("cover shared: 2", out.getvalue())
+
     def test_sample_line_ends_with_resolved_cover_path(self):
         from django.test import override_settings
 

@@ -80,6 +80,7 @@ CRITERIA_LABELS = [
     "title equals author",
     "duplicate",
     "suspicious pattern",
+    "cover shared",
     "cover empty",
     "cover url (needs download)",
     "cover missing file",
@@ -187,17 +188,26 @@ class Command(BaseCommand):
 
         dup_title_author = Counter()
         dup_isbn = Counter()
-        for title, author, isbn in (
+        cover_use = Counter()
+        for title, author, isbn, cover_path in (
             Book.objects.filter(finalmetadata__isnull=False)
-            .values_list("finalmetadata__final_title", "finalmetadata__final_author", "finalmetadata__isbn")
+            .values_list(
+                "finalmetadata__final_title",
+                "finalmetadata__final_author",
+                "finalmetadata__isbn",
+                "finalmetadata__final_cover_path",
+            )
             .iterator()
         ):
             dup_title_author[(_norm_text(title), _norm_author(author))] += 1
             isbn = (isbn or "").strip()
             if isbn:
                 dup_isbn[isbn] += 1
+            if cover_path and not cover_path.startswith(("http://", "https://")):
+                cover_use[cover_path] += 1
         ctx["dup_title_author"] = dup_title_author
         ctx["dup_isbn"] = dup_isbn
+        ctx["cover_use"] = cover_use
 
         return ctx
 
@@ -237,6 +247,10 @@ class Command(BaseCommand):
         for _name, pred in SUSPICIOUS_PATTERNS:
             if pred(title, author):
                 return "suspicious pattern"
+        cover_path = fm.final_cover_path
+        if cover_path and not cover_path.startswith(("http://", "https://")):
+            if ctx["cover_use"].get(cover_path, 0) > 1:
+                return "cover shared"
         cover_reason = _cover_reason(fm.final_cover_path)
         if cover_reason:
             return cover_reason
