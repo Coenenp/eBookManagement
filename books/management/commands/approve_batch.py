@@ -386,6 +386,106 @@ class Command(BaseCommand):
         return sheet_names
 
     # ------------------------------------------------------------------ #
+    # Review page
+    # ------------------------------------------------------------------ #
+
+    def _path_tail(self, source_path):
+        """The last two path components (folder and file name) for display."""
+        parts = [p for p in re.split(r"[\\/]+", source_path or "") if p]
+        return " / ".join(parts[-2:])
+
+    def _cover_data_uri(self, cover_path):
+        """A JPEG data URI thumbnail (max 150x225 px), or None when unreadable."""
+        import base64
+        import io
+
+        from PIL import Image
+
+        resolved = CoverCache.resolve_path(cover_path)
+        try:
+            im = Image.open(resolved).convert("RGB")
+            im.thumbnail((150, 225))
+            buf = io.BytesIO()
+            im.save(buf, format="JPEG")
+            return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+        except Exception:
+            return None
+
+    def _write_review_page(self, selected, ctx, manifest_dir, batch_id, sample_ids, targets):
+        """Write a self-contained review HTML page (no scripts, no external assets)."""
+        import html
+
+        from books.models import FinalMetadata
+
+        ids = sorted(bid for _corr, bid in selected)
+        if not ids:
+            return None
+
+        metas = {
+            m["book_id"]: m
+            for m in FinalMetadata.objects.filter(book_id__in=ids).values(
+                "book_id", "final_title", "final_author", "language", "final_cover_path"
+            )
+        }
+        corroborated = {bid: c for c, bid in selected}
+
+        rows = []
+        for bid in ids:
+            m = metas.get(bid, {})
+            title = m.get("final_title") or ""
+            author = m.get("final_author") or ""
+            language = m.get("language") or ""
+            source, fmt = ctx["primary_file"].get(bid, ("", ""))
+            tier = "corroborated" if corroborated.get(bid, False) else "standard"
+            target = targets.get(bid, "") if bid in sample_ids else ""
+            cover_uri = self._cover_data_uri(m.get("final_cover_path") or "")
+            cover_cell = (
+                f'<img src="{html.escape(cover_uri, quote=True)}" alt="cover">'
+                if cover_uri
+                else "ERR"
+            )
+            mark = "&#10003;" if bid in sample_ids else ""
+            row_class = ' class="sampled"' if bid in sample_ids else ""
+            cells = (
+                f"<td>{cover_cell}</td>"
+                f"<td>{html.escape(str(bid))}</td>"
+                f"<td>{html.escape(title)}</td>"
+                f"<td>{html.escape(author)}</td>"
+                f"<td>{html.escape(language)}</td>"
+                f"<td>{html.escape(fmt)}</td>"
+                f"<td>{html.escape(tier)}</td>"
+                f"<td>{html.escape(self._path_tail(source))}</td>"
+                f"<td>{html.escape(target)}</td>"
+                f"<td>{mark}</td>"
+            )
+            rows.append(f"<tr{row_class}>{cells}</tr>")
+
+        hold = html.escape(
+            "To hold back books use --apply --manifest <manifest path> "
+            "--confirm <count> --exclude-ids <ids> --exclude-reason <text>"
+        )
+        page = (
+            '<!doctype html><html><head><meta charset="utf-8">'
+            f"<title>Batch review {html.escape(batch_id)}</title>"
+            "<style>"
+            "table{border-collapse:collapse}th,td{border:1px solid #999;padding:4px;"
+            "vertical-align:top}tr.sampled{background:#fff59d}"
+            "</style></head><body>"
+            f"<h1>Batch {html.escape(batch_id)}</h1>"
+            f"<p>criteria version: {html.escape(CRITERIA_VERSION)}</p>"
+            f"<p>{hold}</p>"
+            "<table><thead><tr><th>cover</th><th>id</th><th>title</th><th>author</th>"
+            "<th>language</th><th>format</th><th>tier</th><th>path</th>"
+            "<th>target</th><th>sample</th></tr></thead><tbody>"
+            + "".join(rows)
+            + "</tbody></table></body></html>"
+        )
+        path = manifest_dir / f"{batch_id}_review.html"
+        path.write_text(page)
+        self.stdout.write(f"review page: {path}")
+        return path.name
+
+    # ------------------------------------------------------------------ #
     # Modes
     # ------------------------------------------------------------------ #
 
@@ -420,6 +520,13 @@ class Command(BaseCommand):
         rng = random.Random(seed)
         n_sample = min(len(selected), MAX_SAMPLE)
         sample_entries = rng.sample(selected, n_sample) if n_sample else []
+        sample_ids = {bid for _corr, bid in sample_entries}
+
+        # Planned targets run only for sampled ids (the planner is expensive).
+        targets = {}
+        for _corr, bid in sample_entries:
+            book = Book.objects.select_related("finalmetadata", "scan_folder").filter(id=bid).first()
+            targets[bid] = self._planned_target(book)
 
         manifest = {
             "batch_id": batch_id,
@@ -429,6 +536,9 @@ class Command(BaseCommand):
             "status": "prepared",
         }
         manifest["sheets"] = self._write_contact_sheets(selected, ctx, manifest_dir, batch_id)
+        manifest["review_page"] = self._write_review_page(
+            selected, ctx, manifest_dir, batch_id, sample_ids, targets
+        )
 
         manifest_path = manifest_dir / f"{batch_id}.json"
         manifest_path.write_text(json.dumps(manifest, indent=2))
@@ -436,9 +546,9 @@ class Command(BaseCommand):
         self.stdout.write(f"batch_id: {batch_id}")
         self.stdout.write(f"manifest: {manifest_path}")
         for corroborated, bid in sample_entries:
-            self.stdout.write(self._sample_line(bid, corroborated, ctx))
+            self.stdout.write(self._sample_line(bid, corroborated, ctx, targets.get(bid, "")))
 
-    def _sample_line(self, bid, corroborated, ctx):
+    def _sample_line(self, bid, corroborated, ctx, target=None):
         """Full detail line for one sampled entry; the planner runs only here."""
         from books.models import Book
 
@@ -446,7 +556,8 @@ class Command(BaseCommand):
         fm = _get_fm(book)
         source, fmt = ctx["primary_file"].get(bid, ("", ""))
         tier = "corroborated" if corroborated else "standard"
-        target = self._planned_target(book)
+        if target is None:
+            target = self._planned_target(book)
         cover = CoverCache.resolve_path(fm.final_cover_path or "")
         return (
             f"{bid} | {fm.final_title or ''} | {fm.final_author or ''} | "

@@ -89,6 +89,25 @@ class ApproveBatchCommandTests(TestCase):
     def _manifest(self, path):
         return json.loads(Path(path).read_text())
 
+    def _valid_cover(self, name):
+        """Write a decodable, non-flat cover image (passes the shape check)."""
+        from PIL import Image
+
+        w, h = 300, 450
+        img = Image.new("L", (w, h))
+        px = img.load()
+        blocks = 8
+        bw = w // blocks
+        bh = h // blocks
+        for y in range(h):
+            for x in range(w):
+                bx = min(x // bw, blocks - 1)
+                by = min(y // bh, blocks - 1)
+                px[x, y] = (bx * 37 + by * 17) % 256
+        p = Path(self.temp_dir) / name
+        img.save(p)
+        return str(p)
+
     # ------------------------------------------------------------------ #
     # Constants / plumbing
     # ------------------------------------------------------------------ #
@@ -379,6 +398,76 @@ class ApproveBatchCommandTests(TestCase):
             for x in range(img.width) for y in range(img.height)
         )
         self.assertTrue(has_red, "ERR label must be drawn red for an unreadable cover")
+
+    # ------------------------------------------------------------------ #
+    # Review page
+    # ------------------------------------------------------------------ #
+
+    def test_review_page_exists_with_escaped_titles_and_manifest_entry(self):
+        self._make_book("rp1", title="Tom & Jerry", author="Amper Author",
+                        cover_path=self._valid_cover("rp1.jpg"))
+        self._make_book("rp2", title="Plain Title", author="Plain Author",
+                        cover_path=self._valid_cover("rp2.jpg"))
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertIn("review_page", manifest)
+        self.assertEqual(manifest["review_page"], f"{manifest['batch_id']}_review.html")
+        page_path = self.manifest_dir / manifest["review_page"]
+        self.assertTrue(page_path.exists())
+        text = page_path.read_text()
+        # ampersand is escaped in the title cell
+        self.assertIn("Tom &amp; Jerry", text)
+        self.assertNotIn("Tom & Jerry</td>", text)
+        # every title is present
+        self.assertIn("Plain Title", text)
+        # heading carries the batch id and the hold-back sentence
+        self.assertIn(manifest["batch_id"], text)
+        self.assertIn("--exclude-ids &lt;ids&gt;", text)
+
+    def test_review_page_inline_data_uri_for_valid_cover(self):
+        self._make_book("rpuri", title="URI Cover Book", author="URI Author",
+                        cover_path=self._valid_cover("rpuri.jpg"))
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        self.assertIn("data:image/jpeg;base64,", text)
+
+    def test_review_page_err_for_unreadable_cover(self):
+        bad = Path(self.temp_dir) / "unreadable.jpg"
+        bad.write_bytes(b"\xff\xd8\xff" + b"\x00" * 16)  # valid magic, undecodable
+        self._make_book("rperr", title="Err Cover Book", author="Err Author",
+                        cover_path=str(bad))
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        self.assertIn("ERR", text)
+
+    def test_review_page_path_tails(self):
+        self._make_book("rptail", title="Tail Book", author="Tail Author",
+                        cover_path=self._valid_cover("rptail.jpg"))
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        self.assertIn("rptail Tail Book Tail Author.epub", text)
+
+    def test_review_page_sample_mark(self):
+        import itertools
+        import string
+
+        suffixes = ["".join(p) for p in itertools.product(string.ascii_lowercase, repeat=2)]
+        for i in range(25):
+            self._make_book(
+                f"rps{i:02d}",
+                title=f"Sample Book {suffixes[i]}",
+                author=f"Sample Author {suffixes[i]}",
+            )
+        _, mpath = self._prepare(seed=1)
+        manifest = self._manifest(mpath)
+        sample_ids = set(manifest["sample_ids"])
+        self.assertEqual(len(sample_ids), MAX_SAMPLE)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        self.assertEqual(text.count("&#10003;"), len(sample_ids))
+        self.assertIn('class="sampled"', text)
 
     # ------------------------------------------------------------------ #
     # Per-book exclusion (--exclude-ids)
