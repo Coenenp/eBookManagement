@@ -473,6 +473,52 @@ class TC6MetadataPreservationTests(RenamingEngineTests):
         self.assertTrue(self.book.series_relationships.exists())
 
 
+class MovePathComponentTests(TestCase):
+    """Part B: Windows-safe folder and file name component sanitisation."""
+
+    def setUp(self):
+        self.engine = RenamingEngine()
+
+    # -- folder components ---------------------------------------------------
+
+    def test_folder_trailing_period_stripped(self):
+        self.assertEqual(self.engine._normalize_path("Konsalik, Heinz G."), "Konsalik, Heinz G")
+
+    def test_folder_trailing_period_stripped_interior_kept(self):
+        self.assertEqual(self.engine._normalize_path("Baantjer, A.C."), "Baantjer, A.C")
+
+    def test_folder_only_periods_becomes_underscore(self):
+        self.assertEqual(self.engine._normalize_path("..."), "_")
+
+    def test_folder_leading_spaces_stripped(self):
+        self.assertEqual(self.engine._normalize_path("  Konsalik, Heinz G."), "Konsalik, Heinz G")
+
+    def test_folder_interior_periods_and_spaces_stay(self):
+        self.assertEqual(self.engine._normalize_path("A. B C"), "A. B C")
+
+    # -- reserved device names ----------------------------------------------
+
+    def test_reserved_device_name_con_prefixed(self):
+        self.assertEqual(self.engine._normalize_path("CON"), "_CON")
+
+    def test_reserved_device_name_com3_prefixed(self):
+        self.assertEqual(self.engine._normalize_path("COM3"), "_COM3")
+
+    def test_reserved_device_name_trailing_period_prefixed(self):
+        self.assertEqual(self.engine._normalize_path("Aux."), "_Aux")
+
+    def test_reserved_device_name_with_extension_prefixed(self):
+        self.assertEqual(self.engine._normalize_path("con.txt", filename=True), "_con.txt")
+
+    # -- file name -----------------------------------------------------------
+
+    def test_filename_stem_trailing_space_stripped(self):
+        self.assertEqual(self.engine._normalize_path("Title .epub", filename=True), "Title.epub")
+
+    def test_filename_extension_unchanged(self):
+        self.assertEqual(self.engine._normalize_path("My Book.epub", filename=True), "My Book.epub")
+
+
 class RenamingPatternValidatorTests(TestCase):
     """Test cases for pattern validation"""
 

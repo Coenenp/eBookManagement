@@ -28,6 +28,33 @@ def is_renamable(book):
     return FinalMetadata.objects.filter(book=book, is_reviewed=True).exists()
 
 
+# Windows reserved device names that a folder/file component must never take,
+# because the filesystem (and SMB clients) will not store them verbatim. The
+# comparison is case-insensitive and also matches a name followed by a period
+# and an extension (e.g. "con.txt").
+RESERVED_DEVICE_NAMES = frozenset(
+    ["con", "prn", "aux", "nul"]
+    + ["com%d" % i for i in range(1, 10)]
+    + ["lpt%d" % i for i in range(1, 10)]
+)
+
+
+def _is_reserved_device(name: str) -> bool:
+    """Return True when ``name`` is a Windows reserved device name."""
+    base = name.lower()
+    if "." in base:
+        base = base.split(".", 1)[0]
+    return base in RESERVED_DEVICE_NAMES
+
+
+def _split_stem_ext(name: str) -> Tuple[str, str]:
+    """Split a file name into (stem, extension); a trailing dot is not an extension."""
+    dot = name.rfind(".")
+    if 0 < dot < len(name) - 1:
+        return name[:dot], name[dot:]
+    return name, ""
+
+
 class RenamingEngine:
     """
     Core template engine for ebook renaming with JMTE-style token processing.
@@ -75,7 +102,7 @@ class RenamingEngine:
             }
         )
 
-    def process_template(self, template: str, book: models.Model, companion_file: Optional[str] = None) -> str:
+    def process_template(self, template: str, book: models.Model, companion_file: Optional[str] = None, filename: bool = False) -> str:
         """
         Process a template string with book metadata tokens.
 
@@ -83,6 +110,8 @@ class RenamingEngine:
             template: Template string with ${token} placeholders
             book: Book model instance
             companion_file: Optional companion file extension override
+            filename: True when the template resolves to a file name (the last
+                component is then a file, not a folder); default False
 
         Returns:
             Processed template with tokens replaced by actual values
@@ -113,7 +142,7 @@ class RenamingEngine:
                 processed = self._omit_empty_token(processed, token_placeholder)
 
         # Clean up the final result
-        processed = self._normalize_path(processed)
+        processed = self._normalize_path(processed, filename=filename)
 
         return processed
 
@@ -236,13 +265,42 @@ class RenamingEngine:
 
         return text.strip()
 
-    def _normalize_path(self, path: str) -> str:
+    def _sanitize_component(self, part: str, filename: bool = False) -> str:
+        """Sanitise one path component (a folder name or a file name).
+
+        Invalid filesystem characters are replaced and runs of whitespace are
+        collapsed first (unchanged behaviour). A folder component then has its
+        leading spaces and trailing periods/spaces stripped, and a file name has
+        trailing spaces stripped from its stem (the extension is left alone).
+        Either way, a component that becomes empty is replaced by an underscore
+        and a Windows reserved device name is prefixed with an underscore.
+        """
+        part = re.sub(r'[<>:"|?*&]', self.REPLACEMENT_CHAR, part)
+        part = re.sub(r"\s+", " ", part)
+        if filename:
+            stem, ext = _split_stem_ext(part)
+            stem = stem.strip(" ")
+            if not stem:
+                stem = "_"
+            if _is_reserved_device(stem):
+                stem = "_" + stem
+            return stem + ext
+        name = part.lstrip(" ").rstrip(" .")
+        if not name:
+            name = "_"
+        if _is_reserved_device(name):
+            name = "_" + name
+        return name
+
+    def _normalize_path(self, path: str, filename: bool = False) -> str:
         """
         Normalize path for filesystem compatibility.
 
         - Replace invalid characters with underscores
         - Collapse multiple spaces
-        - Handle portable naming requirements
+        - Strip trailing periods/spaces and leading spaces from folder components
+        - Prefix Windows reserved device names, replace empty components
+        - Strip trailing spaces from a file name stem, leaving its extension
         - Preserve path separators
         """
         if not path:
@@ -254,11 +312,7 @@ class RenamingEngine:
         # Handle both forward and back slashes
         for part in re.split(r"[/\\]", path):
             if part.strip():  # Skip empty parts
-                # Replace invalid filesystem characters except path separators
-                normalized_part = re.sub(r'[<>:"|?*&]', self.REPLACEMENT_CHAR, part)
-                # Collapse multiple spaces
-                normalized_part = re.sub(r"\s+", " ", normalized_part)
-                normalized_part = normalized_part.strip()
+                normalized_part = self._sanitize_component(part, filename=filename)
                 if normalized_part:
                     parts.append(normalized_part)
 

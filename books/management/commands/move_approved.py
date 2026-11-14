@@ -260,6 +260,6 @@ class Command(BaseCommand):
         engine = RenamingEngine()
         base_dir = Path(book.scan_folder.path)
         folder = engine.process_template(folder_pattern, book) if folder_pattern else ""
-        filename = engine.process_template(filename_pattern, book)
+        filename = engine.process_template(filename_pattern, book, filename=True)
         target = base_dir / folder / filename if folder else base_dir / filename
         return fit_path(str(target), limit=232)
