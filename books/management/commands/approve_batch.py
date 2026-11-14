@@ -86,6 +86,7 @@ CRITERIA_LABELS = [
     "cover url (needs download)",
     "cover missing file",
     "cover invalid image",
+    "cover placeholder",
 ]
 
 CONFIDENCE_THRESHOLD = 0.80
@@ -139,6 +140,11 @@ def _cover_reason(cover_path):
         return "cover missing file"
     if flag == "cover-invalid":
         return "cover invalid image"
+    from books.utils.cover_quality import cover_quality_flag
+
+    quality = cover_quality_flag(CoverCache.resolve_path(cover_path))
+    if quality in ("placeholder", "shape"):
+        return "cover placeholder"
     return None
 
 

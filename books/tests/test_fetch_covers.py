@@ -130,6 +130,20 @@ class FetchCoversCommandTests(TestCase):
         fm = FinalMetadata.objects.get(book=book)
         self.assertEqual(fm.final_cover_path, "https://example.com/tiny.jpg")  # unchanged
 
+    def test_placeholder_not_stored_and_logged(self):
+        book = self._make_url_book("https://example.com/placeholder.jpg")
+        content = _jpeg_bytes()
+        sha = hashlib.sha256(content).hexdigest()
+        with mock.patch("books.management.commands.fetch_covers.PLACEHOLDER_HASHES", {sha}):
+            self._run(get_response=FakeResponse(content))
+        fm = FinalMetadata.objects.get(book=book)
+        self.assertEqual(fm.final_cover_path, "https://example.com/placeholder.jpg")  # keeps URL
+        self.assertEqual(list(Path(settings.MEDIA_ROOT).rglob("*")), [])  # nothing stored
+        with open(self.temp_dir / "log.csv", newline="") as fh:
+            rows = list(csv.DictReader(fh))
+        self.assertTrue(rows)
+        self.assertEqual(rows[0]["outcome"], "placeholder")
+
     def test_failure_leaves_path_unchanged(self):
         book = self._make_url_book("https://example.com/missing.jpg")
         with mock.patch(

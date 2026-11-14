@@ -29,6 +29,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Q
 
 from books.models import FinalMetadata
+from books.utils.cover_quality import PLACEHOLDER_HASHES
 from books.utils.safe_move.book import _cover_flag
 
 try:
@@ -252,7 +253,14 @@ class Command(BaseCommand):
                     self._log(fm, url, "", 0, 0, 0, "failed")
                 continue
 
-            name = hashlib.sha256(content).hexdigest() + ext
+            content_sha = hashlib.sha256(content).hexdigest()
+            if content_sha in PLACEHOLDER_HASHES:
+                # a placeholder graphic is a failed download: never stored, and
+                # the book keeps its URL so it can be retried from another source.
+                self._log(fm, url, "", len(content), width, height, "placeholder")
+                continue
+
+            name = content_sha + ext
             rel = f"cover_cache/{name}"
             dest = Path(settings.MEDIA_ROOT) / rel
 

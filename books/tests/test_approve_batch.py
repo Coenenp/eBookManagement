@@ -276,6 +276,20 @@ class ApproveBatchCommandTests(TestCase):
         self.assertIn("cover missing file: 1", text)
         self.assertIn("cover invalid image: 1", text)
 
+    def test_cover_placeholder_excludes(self):
+        import hashlib
+        from unittest import mock
+
+        cover = Path(self.temp_dir) / "placeholder.jpg"
+        cover_bytes = b"\xff\xd8\xff" + b"placeholder" + b"\x00" * 16
+        cover.write_bytes(cover_bytes)
+        sha = hashlib.sha256(cover_bytes).hexdigest()
+        book = self._make_book("ph", title="Placeholder Cover", author="Ph Author", cover_path=str(cover))
+        with mock.patch("books.utils.cover_quality.PLACEHOLDER_HASHES", {sha}):
+            _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertNotIn(book.id, manifest["ids"])
+
     # ------------------------------------------------------------------ #
     # Shared cover criterion
     # ------------------------------------------------------------------ #
