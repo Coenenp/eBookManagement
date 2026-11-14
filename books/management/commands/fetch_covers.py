@@ -344,8 +344,9 @@ class Command(BaseCommand):
     def _read_attempted(self):
         """Stream the log once into a set of ints (book ids) to skip.
 
-        Only ``failed`` and ``too-small`` outcomes are remembered: a book whose
-        cover could not be fetched should not be retried on every run unless
+        ``failed``, ``too-small`` and ``placeholder`` outcomes are all
+        remembered: a book whose cover could not be fetched (or came back as a
+        placeholder graphic) should not be retried on every run unless
         ``--retry-failed`` is given.
         """
         attempted = set()
@@ -353,7 +354,7 @@ class Command(BaseCommand):
             return attempted
         with open(self.log_path, newline="") as fh:
             for row in csv.DictReader(fh):
-                if row.get("outcome") in ("failed", "too-small"):
+                if row.get("outcome") in ("failed", "too-small", "placeholder"):
                     try:
                         attempted.add(int(row["book_id"]))
                     except (ValueError, KeyError):
