@@ -81,6 +81,7 @@ CRITERIA_LABELS = [
     "duplicate",
     "suspicious pattern",
     "cover shared",
+    "cover rejected by review",
     "cover empty",
     "cover url (needs download)",
     "cover missing file",
@@ -150,6 +151,7 @@ class Command(BaseCommand):
         parser.add_argument("--apply", action="store_true")
         parser.add_argument("--manifest")
         parser.add_argument("--confirm", type=int)
+        parser.add_argument("--exclude-ids")
         parser.add_argument("--reject-id", type=int)
         parser.add_argument("--reason")
         parser.add_argument("--size", type=int, default=25)
@@ -270,6 +272,103 @@ class Command(BaseCommand):
             return f"planner error: {type(exc).__name__}: {exc}"
 
     # ------------------------------------------------------------------ #
+    # Contact sheets and review exclusions
+    # ------------------------------------------------------------------ #
+
+    def _read_rejected_ids(self, manifest_dir):
+        """Book ids rejected by cover review, read once per run into a set.
+
+        ``cover_rejected.txt`` holds one id per line; a missing file means no
+        ids have been rejected yet.
+        """
+        path = Path(manifest_dir) / "cover_rejected.txt"
+        if not path.exists():
+            return set()
+        ids = set()
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if line.isdigit():
+                ids.add(int(line))
+        return ids
+
+    def _parse_exclude_ids(self, raw):
+        """Parse the comma separated ``--exclude-ids`` value into ints."""
+        if not raw:
+            return []
+        ids = []
+        for part in str(raw).split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if not part.isdigit():
+                raise CommandError(f"refusing: invalid exclude id {part!r}")
+            ids.append(int(part))
+        return ids
+
+    def _write_contact_sheets(self, selected, ctx, manifest_dir, batch_id):
+        """Write contact sheets for every id of the batch, 50 covers per sheet.
+
+        Each thumbnail is at most 150 by 225 pixels in a 10-column grid, with
+        a label under it showing the book id and primary file format. A cover
+        that cannot be opened is drawn as a red ``ERR`` label. Sheet file names
+        are returned (and recorded in the manifest); the resolved paths are
+        printed for the reviewer.
+        """
+        from PIL import Image, ImageDraw, ImageFont
+
+        from books.models import FinalMetadata
+
+        ids = [bid for _corr, bid in selected]
+        if not ids:
+            return []
+
+        cover_paths = dict(
+            FinalMetadata.objects.filter(book_id__in=ids).values_list(
+                "book_id", "final_cover_path"
+            )
+        )
+
+        COLS = 10
+        SHEET_SIZE = 50
+        THUMB_W, THUMB_H = 150, 225
+        PAD = 4
+        LABEL_H = 18
+        cell_w = THUMB_W + PAD
+        cell_h = THUMB_H + LABEL_H + PAD
+
+        try:
+            font = ImageFont.load_default()
+        except Exception:  # pragma: no cover - Pillow always ships a default font
+            font = None
+
+        sheet_names = []
+        for offset in range(0, len(ids), SHEET_SIZE):
+            chunk = ids[offset : offset + SHEET_SIZE]
+            rows = (len(chunk) + COLS - 1) // COLS
+            sheet = Image.new("RGB", (COLS * cell_w, rows * cell_h), "white")
+            draw = ImageDraw.Draw(sheet)
+            for i, bid in enumerate(chunk):
+                col = i % COLS
+                row = i // COLS
+                x = col * cell_w + PAD // 2
+                y = row * cell_h + PAD // 2
+                fmt = ctx["primary_file"].get(bid, ("", ""))[1]
+                label = f"{bid} {fmt}"
+                resolved = CoverCache.resolve_path(cover_paths.get(bid, "") or "")
+                try:
+                    thumb = Image.open(resolved).convert("RGB")
+                    thumb.thumbnail((THUMB_W, THUMB_H))
+                    sheet.paste(thumb, (x, y))
+                except Exception:
+                    draw.text((x, y), "ERR", fill=(255, 0, 0), font=font)
+                draw.text((x, y + THUMB_H + 2), label, fill=(0, 0, 0), font=font)
+            name = f"{batch_id}sheet{offset // SHEET_SIZE}.png"
+            sheet.save(manifest_dir / name)
+            sheet_names.append(name)
+            self.stdout.write(f"contact sheet: {manifest_dir / name}")
+        return sheet_names
+
+    # ------------------------------------------------------------------ #
     # Modes
     # ------------------------------------------------------------------ #
 
@@ -277,12 +376,17 @@ class Command(BaseCommand):
         from books.models import Book
 
         size = min(options["size"], MAX_SIZE)
+        manifest_dir = Path(options["manifest_dir"]) if options["manifest_dir"] else DEFAULT_MANIFEST_DIR
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        rejected = self._read_rejected_ids(manifest_dir)
         ctx = self._build_context()
 
         eligible = []  # minimal tuples: (corroborated, book_id)
         for book in (
             Book.objects.select_related("finalmetadata", "scan_folder").order_by("id").iterator()
         ):
+            if book.id in rejected:
+                continue
             fm = _get_fm(book)
             if self._exclusion(book, fm, ctx):
                 continue
@@ -307,9 +411,8 @@ class Command(BaseCommand):
             "sample_ids": [bid for _corr, bid in sample_entries],
             "status": "prepared",
         }
+        manifest["sheets"] = self._write_contact_sheets(selected, ctx, manifest_dir, batch_id)
 
-        manifest_dir = Path(options["manifest_dir"]) if options["manifest_dir"] else DEFAULT_MANIFEST_DIR
-        manifest_dir.mkdir(parents=True, exist_ok=True)
         manifest_path = manifest_dir / f"{batch_id}.json"
         manifest_path.write_text(json.dumps(manifest, indent=2))
 
@@ -336,6 +439,8 @@ class Command(BaseCommand):
     def _report(self, options):
         from books.models import Book
 
+        manifest_dir = Path(options["manifest_dir"]) if options["manifest_dir"] else DEFAULT_MANIFEST_DIR
+        rejected = self._read_rejected_ids(manifest_dir)
         ctx = self._build_context()
         total = Book.objects.count()
 
@@ -349,6 +454,9 @@ class Command(BaseCommand):
             Book.objects.select_related("finalmetadata", "scan_folder").order_by("id").iterator()
         ):
             fm = _get_fm(book)
+            if book.id in rejected:
+                excluded["cover rejected by review"] += 1
+                continue
             reason = self._exclusion(book, fm, ctx)
             if reason:
                 excluded[reason] += 1
@@ -397,10 +505,19 @@ class Command(BaseCommand):
         if confirm != len(ids):
             raise CommandError(f"refusing: confirm {confirm} != id count {len(ids)}")
 
+        exclude_ids = self._parse_exclude_ids(options.get("exclude_ids"))
+        for eid in exclude_ids:
+            if eid not in ids:
+                raise CommandError(f"refusing: exclude id {eid} not in manifest")
+
         ctx = self._build_context()
         approved = []
         skipped = 0
         for bid in ids:
+            if bid in exclude_ids:
+                skipped += 1
+                self.stdout.write(f"skipped {bid}: cover review")
+                continue
             book = Book.objects.select_related("finalmetadata").filter(id=bid).first()
             if book is None:
                 skipped += 1
@@ -420,6 +537,14 @@ class Command(BaseCommand):
             fm.save(update_fields=["is_reviewed"])
             mark_resolved(book)
             approved.append(bid)
+
+        if exclude_ids:
+            cover_rejected = data.setdefault("cover_rejected", {})
+            for eid in exclude_ids:
+                cover_rejected[str(eid)] = "cover review"
+            with open(manifest_path.parent / "cover_rejected.txt", "a") as fh:
+                for eid in exclude_ids:
+                    fh.write(f"{eid}\n")
 
         data["status"] = "applied"
         data["applied_at"] = timezone.now().isoformat()

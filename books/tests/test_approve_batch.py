@@ -305,6 +305,138 @@ class ApproveBatchCommandTests(TestCase):
         call_command("approve_batch", report=True, stdout=out)
         self.assertIn("cover shared: 2", out.getvalue())
 
+    # ------------------------------------------------------------------ #
+    # Contact sheets
+    # ------------------------------------------------------------------ #
+
+    def test_prepare_writes_contact_sheet_for_all_ids(self):
+        for name in ("alpha", "beta", "gamma"):
+            self._make_book(f"cs_{name}", title=f"Contact {name}", author=f"CA {name}")
+        text, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertIn("sheets", manifest)
+        self.assertTrue(manifest["sheets"])
+        sheet_name = manifest["sheets"][0]
+        self.assertEqual(sheet_name, f"{manifest['batch_id']}sheet0.png")
+        sheet_path = self.manifest_dir / sheet_name
+        self.assertTrue(sheet_path.exists())
+        with open(sheet_path, "rb") as fh:
+            self.assertEqual(fh.read(8), b"\x89PNG\r\n\x1a\n")
+        self.assertIn(str(sheet_path), text)
+
+    def test_unreadable_cover_draws_err_without_raising(self):
+        from PIL import Image
+
+        bad = Path(self.temp_dir) / "badcover.jpg"
+        bad.write_bytes(b"\xff\xd8\xff" + b"\x00" * 16)  # valid magic, undecodable
+        book = self._make_book("badc", title="Bad Cover", author="Bad Author", cover_path=str(bad))
+        _, mpath = self._prepare()  # must not raise
+        manifest = self._manifest(mpath)
+        self.assertIn(book.id, manifest["ids"])
+        sheet_path = self.manifest_dir / manifest["sheets"][0]
+        img = Image.open(sheet_path).convert("RGB")
+        px = img.load()
+        has_red = any(
+            px[x, y][0] > 250 and px[x, y][1] < 200 and px[x, y][2] < 200
+            for x in range(img.width) for y in range(img.height)
+        )
+        self.assertTrue(has_red, "ERR label must be drawn red for an unreadable cover")
+
+    # ------------------------------------------------------------------ #
+    # Per-book exclusion (--exclude-ids)
+    # ------------------------------------------------------------------ #
+
+    def test_apply_exclude_ids_skips_excluded(self):
+        b1 = self._make_book("x1", title="Exclude One", author="XA One")
+        b2 = self._make_book("x2", title="Exclude Two", author="XA Two")
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        out = StringIO()
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            apply=True,
+            confirm=len(manifest["ids"]),
+            exclude_ids=str(b1.id),
+            stdout=out,
+        )
+        b1.refresh_from_db()
+        b2.refresh_from_db()
+        self.assertFalse(b1.finalmetadata.is_reviewed)
+        self.assertTrue(b2.finalmetadata.is_reviewed)
+        self.assertIn(str(b1.id), out.getvalue())
+
+    def test_exclude_writes_rejected_file(self):
+        b1 = self._make_book("rf1", title="Rej One", author="RA One")
+        self._make_book("rf2", title="Rej Two", author="RA Two")
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            apply=True,
+            confirm=len(manifest["ids"]),
+            exclude_ids=str(b1.id),
+            stdout=StringIO(),
+        )
+        rejected_file = self.manifest_dir / "cover_rejected.txt"
+        self.assertTrue(rejected_file.exists())
+        self.assertIn(str(b1.id), rejected_file.read_text().splitlines())
+
+    def test_later_prepare_skips_rejected_ids(self):
+        b1 = self._make_book("sp1", title="Skip One", author="SA One")
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            apply=True,
+            confirm=len(manifest["ids"]),
+            exclude_ids=str(b1.id),
+            stdout=StringIO(),
+        )
+        b3 = self._make_book("sp3", title="Skip Three", author="SA Three")
+        _, mpath2 = self._prepare()
+        manifest2 = self._manifest(mpath2)
+        self.assertNotIn(b1.id, manifest2["ids"])
+        self.assertIn(b3.id, manifest2["ids"])
+
+    def test_unknown_exclude_id_raises(self):
+        book = self._make_book("ue", title="Unknown Exclude", author="UA")
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        with self.assertRaises(CommandError):
+            call_command(
+                "approve_batch",
+                manifest=str(mpath),
+                apply=True,
+                confirm=len(manifest["ids"]),
+                exclude_ids="999999",
+                stdout=StringIO(),
+            )
+
+    def test_report_counts_rejected_by_review(self):
+        b1 = self._make_book("rr1", title="Rej Report", author="RRA")
+        self._make_book("rr2", title="Keep Report", author="RRA Two")
+        (self.manifest_dir / "cover_rejected.txt").write_text(f"{b1.id}\n")
+        out = StringIO()
+        call_command("approve_batch", report=True, manifest_dir=str(self.manifest_dir), stdout=out)
+        self.assertIn("cover rejected by review: 1", out.getvalue())
+
+    def test_reject_id_behaviour_unchanged(self):
+        book = self._make_book("rj", title="Reject Id", author="RJ")
+        _, mpath = self._prepare()
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            reject_id=book.id,
+            reason="still works",
+            stdout=StringIO(),
+        )
+        manifest = self._manifest(mpath)
+        self.assertEqual(manifest["status"], "blocked")
+        self.assertEqual(manifest["rejected_id"], book.id)
+
     def test_sample_line_ends_with_resolved_cover_path(self):
         from django.test import override_settings
 
