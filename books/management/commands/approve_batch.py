@@ -158,6 +158,8 @@ class Command(BaseCommand):
         parser.add_argument("--manifest")
         parser.add_argument("--confirm", type=int)
         parser.add_argument("--exclude-ids")
+        parser.add_argument("--exclude-reason", default="review")
+        parser.add_argument("--allow-high-exclusion", action="store_true")
         parser.add_argument("--reject-id", type=int)
         parser.add_argument("--reason")
         parser.add_argument("--size", type=int, default=25)
@@ -284,17 +286,18 @@ class Command(BaseCommand):
     def _read_rejected_ids(self, manifest_dir):
         """Book ids rejected by cover review, read once per run into a set.
 
-        ``cover_rejected.txt`` holds one id per line; a missing file means no
-        ids have been rejected yet.
+        ``rejected_ids.txt`` holds one ``<id><TAB><reason>`` line per rejected
+        book; only the first column (the id) is read back. A missing file means
+        no ids have been rejected yet.
         """
-        path = Path(manifest_dir) / "cover_rejected.txt"
+        path = Path(manifest_dir) / "rejected_ids.txt"
         if not path.exists():
             return set()
         ids = set()
         for line in path.read_text().splitlines():
-            line = line.strip()
-            if line.isdigit():
-                ids.add(int(line))
+            col = line.split("\t", 1)[0].strip()
+            if col.isdigit():
+                ids.add(int(col))
         return ids
 
     def _parse_exclude_ids(self, raw):
@@ -368,7 +371,7 @@ class Command(BaseCommand):
                 except Exception:
                     draw.text((x, y), "ERR", fill=(255, 0, 0), font=font)
                 draw.text((x, y + THUMB_H + 2), label, fill=(0, 0, 0), font=font)
-            name = f"{batch_id}sheet{offset // SHEET_SIZE}.png"
+            name = f"{batch_id}sheet{offset // SHEET_SIZE + 1}.png"
             sheet.save(manifest_dir / name)
             sheet_names.append(name)
             self.stdout.write(f"contact sheet: {manifest_dir / name}")
@@ -491,11 +494,18 @@ class Command(BaseCommand):
     def _reject(self, options):
         manifest_path = Path(options["manifest"])
         data = json.loads(manifest_path.read_text())
-        data["status"] = "blocked"
-        data["rejection_reason"] = options["reason"] or ""
-        data["rejected_id"] = options["reject_id"]
+        rid = options["reject_id"]
+        reason = options["reason"] or ""
+        if rid not in data.get("ids", []):
+            raise CommandError(f"refusing: reject id {rid} not in manifest")
+        excluded = data.setdefault("excluded", {})
+        excluded[str(rid)] = reason
+        # Leave the status prepared: one held-back book never blocks the batch.
         manifest_path.write_text(json.dumps(data, indent=2))
-        self.stdout.write(f"blocked {options['reject_id']}: {options['reason']}")
+        clean = reason.replace("\t", " ").replace("\n", " ").replace("\r", " ")
+        with open(manifest_path.parent / "rejected_ids.txt", "a") as fh:
+            fh.write(f"{rid}\t{clean}\n")
+        self.stdout.write(f"rejected {rid}: {reason}")
 
     def _apply(self, options):
         from books.models import Book
@@ -516,13 +526,36 @@ class Command(BaseCommand):
             if eid not in ids:
                 raise CommandError(f"refusing: exclude id {eid} not in manifest")
 
+        # Every held-back id lives in the manifest "excluded" map (id -> reason),
+        # whether it came from --reject-id or from this run's --exclude-ids.
+        excluded = data.setdefault("excluded", {})
+        exclude_reason = options.get("exclude_reason") or "review"
+        excluded.update({str(eid): exclude_reason for eid in exclude_ids})
+
+        total = len(ids)
+        excluded_count = len(excluded)
+        if excluded_count * 100 > 30 * total and not options.get("allow_high_exclusion"):
+            pct = excluded_count * 100.0 / total
+            raise CommandError(
+                f"refusing: {pct:.1f}% of manifest ids excluded (limit 30%)"
+            )
+
+        # Write this run's --exclude-ids records before the approval loop, so a
+        # crash mid-apply loses nothing.
+        if exclude_ids:
+            with open(manifest_path.parent / "rejected_ids.txt", "a") as fh:
+                for eid in exclude_ids:
+                    fh.write(f"{eid}\t{exclude_reason}\n")
+            manifest_path.write_text(json.dumps(data, indent=2))
+
+        excluded_ids = {int(k) for k in excluded}
         ctx = self._build_context()
         approved = []
         skipped = 0
         for bid in ids:
-            if bid in exclude_ids:
+            if bid in excluded_ids:
                 skipped += 1
-                self.stdout.write(f"skipped {bid}: cover review")
+                self.stdout.write(f"skipped {bid}: {excluded.get(str(bid), 'cover review')}")
                 continue
             book = Book.objects.select_related("finalmetadata").filter(id=bid).first()
             if book is None:
@@ -543,14 +576,6 @@ class Command(BaseCommand):
             fm.save(update_fields=["is_reviewed"])
             mark_resolved(book)
             approved.append(bid)
-
-        if exclude_ids:
-            cover_rejected = data.setdefault("cover_rejected", {})
-            for eid in exclude_ids:
-                cover_rejected[str(eid)] = "cover review"
-            with open(manifest_path.parent / "cover_rejected.txt", "a") as fh:
-                for eid in exclude_ids:
-                    fh.write(f"{eid}\n")
 
         data["status"] = "applied"
         data["applied_at"] = timezone.now().isoformat()
