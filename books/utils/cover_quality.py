@@ -73,9 +73,11 @@ def cover_quality_flag(path):
     if hashlib.sha256(data).hexdigest() in PLACEHOLDER_HASHES:
         return "placeholder"
     try:
+        import io
+
         from PIL import Image
 
-        im = Image.open(path).convert("L")
+        im = Image.open(io.BytesIO(data)).convert("L")
     except Exception:
         return None
     if _shape_rejected(im):

@@ -290,6 +290,26 @@ class ApproveBatchCommandTests(TestCase):
         manifest = self._manifest(mpath)
         self.assertNotIn(book.id, manifest["ids"])
 
+    def test_shape_and_placeholder_covers_reported(self):
+        import hashlib
+        from unittest import mock
+
+        from PIL import Image
+
+        shape_cover = Path(self.temp_dir) / "shape_cover.png"
+        Image.new("L", (300, 200), 128).save(shape_cover)
+        self._make_book("shp", title="Shape Cover", author="Shape Author", cover_path=str(shape_cover))
+        ph_cover = Path(self.temp_dir) / "ph_cover.jpg"
+        ph_bytes = b"\xff\xd8\xff" + b"placeholder" + b"\x00" * 16
+        ph_cover.write_bytes(ph_bytes)
+        ph_sha = hashlib.sha256(ph_bytes).hexdigest()
+        self._make_book("phc", title="Ph Cover", author="Ph Author", cover_path=str(ph_cover))
+        with mock.patch("books.utils.cover_quality.PLACEHOLDER_HASHES", {ph_sha}):
+            out = StringIO()
+            call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("cover shape: 1", out.getvalue())
+        self.assertIn("cover placeholder: 1", out.getvalue())
+
     # ------------------------------------------------------------------ #
     # Shared cover criterion
     # ------------------------------------------------------------------ #
