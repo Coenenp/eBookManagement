@@ -27,6 +27,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from books.utils.cover_cache import CoverCache
+from books.utils.name_match import name_agrees
 
 CRITERIA_VERSION = "v2"
 
@@ -80,6 +81,7 @@ CRITERIA_LABELS = [
     "title equals author",
     "duplicate",
     "suspicious pattern",
+    "name mismatch",
     "cover shared",
     "cover rejected by review",
     "cover empty",
@@ -260,6 +262,9 @@ class Command(BaseCommand):
         for _name, pred in SUSPICIOUS_PATTERNS:
             if pred(title, author):
                 return "suspicious pattern"
+        source_path = ctx["primary_file"].get(book.id, ("", ""))[0]
+        if not name_agrees(title, author, source_path):
+            return "name mismatch"
         cover_path = fm.final_cover_path
         if cover_path and not cover_path.startswith(("http://", "https://")):
             if ctx["cover_use"].get(cover_path, 0) > 1:

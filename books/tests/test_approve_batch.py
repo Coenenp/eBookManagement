@@ -47,7 +47,11 @@ class ApproveBatchCommandTests(TestCase):
         fmt="epub",
         content_type="ebook",
     ):
-        path = Path(self.temp_dir) / f"{name}.{fmt}"
+        # The file name carries the key plus a sanitised title and author, so a
+        # book's own metadata still agrees with its path under the name check.
+        stem = re.sub(r"[^A-Za-z0-9 ]+", " ", f"{name} {title} {author}")
+        stem = re.sub(r"\s+", " ", stem).strip()[:80]
+        path = Path(self.temp_dir) / f"{stem}.{fmt}"
         path.write_bytes(b"fake")
         if cover_path is None:
             cover_path = str(Path(self.temp_dir) / f"{name}_cover.jpg")
@@ -559,6 +563,57 @@ class ApproveBatchCommandTests(TestCase):
     def test_suspicious_patterns_is_a_single_constant_list(self):
         self.assertIsInstance(SUSPICIOUS_PATTERNS, (list, tuple))
         self.assertGreater(len(SUSPICIOUS_PATTERNS), 0)
+
+    # ------------------------------------------------------------------ #
+    # Name agreement (name mismatch)
+    # ------------------------------------------------------------------ #
+
+    def test_name_mismatch_book_excluded(self):
+        # The file name carries one title/author, the stored metadata another.
+        book = self._make_book("mm", title="Path Title", author="Path Author")
+        fm = book.finalmetadata
+        fm.final_title = "Wrong Story"
+        fm.final_author = "Wrong Person"
+        fm.save(update_fields=["final_title", "final_author"])
+        control = self._make_book("mmctl", title="Control Match", author="Ctrl Author")
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertNotIn(book.id, manifest["ids"])
+        self.assertIn(control.id, manifest["ids"])
+
+    def test_report_counts_name_mismatch(self):
+        book = self._make_book("rmm", title="Path Title", author="Path Author")
+        fm = book.finalmetadata
+        fm.final_title = "Wrong Story"
+        fm.final_author = "Wrong Person"
+        fm.save(update_fields=["final_title", "final_author"])
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("name mismatch: 1", out.getvalue())
+
+    def test_apply_skips_book_changed_to_mismatch(self):
+        b1 = self._make_book("am1", title="Keeps Match", author="Keep Author")
+        b2 = self._make_book("am2", title="Was Match", author="Was Author")
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        # After prepare the title (and author) drift to values that no longer
+        # appear in b2's file name; the apply-time re-check must skip it.
+        b2.finalmetadata.final_title = "Renamed Elsewhere"
+        b2.finalmetadata.final_author = "Changed Person"
+        b2.finalmetadata.save(update_fields=["final_title", "final_author"])
+        out = StringIO()
+        call_command(
+            "approve_batch",
+            manifest=str(mpath),
+            apply=True,
+            confirm=len(manifest["ids"]),
+            stdout=out,
+        )
+        b1.refresh_from_db()
+        b2.refresh_from_db()
+        self.assertTrue(b1.finalmetadata.is_reviewed)
+        self.assertFalse(b2.finalmetadata.is_reviewed)
+        self.assertIn(str(b2.id), out.getvalue())
 
     # ------------------------------------------------------------------ #
     # Report
