@@ -571,6 +571,83 @@ class SafeMoveBookTests(TestCase):
         self.assertNotIn("cover-missing", flags)
         self.assertEqual((self.target_dir / "book.jpg").read_bytes(), curated.read_bytes())
 
+    # -- Part C: sidecar cover images are archived, never recreated ----------
+
+    def _make_book_with_sidecar_image(self, sidecar_ext=".jpg", curated_ext=".jpg"):
+        book, src = self._make_book("sub/book.pdf", data=b"%PDF-1.4 fake pdf")
+        sub = src.parent
+        sidecar = sub / f"book{sidecar_ext}"
+        sidecar.write_bytes(b"\xff\xd8\xff\xd9" if sidecar_ext != ".png" else b"\x89PNG\r\n\x1a\n")
+        curated = self.scan_root / f"curated{curated_ext}"
+        curated.write_bytes(b"\xff\xd8\xff\xe0CURATED")
+        fm = book.finalmetadata
+        fm.final_cover_path = str(curated)
+        fm.save(update_fields=["final_cover_path"])
+        return book, src, sidecar, curated
+
+    def test_sidecar_cover_same_extension_archived_not_recreated(self):
+        book, src, sidecar, curated = self._make_book_with_sidecar_image(".jpg", ".jpg")
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        # Exactly one cover file beside the book: the curated cover.
+        covers = [p for p in self.target_dir.glob("book.*")
+                  if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".gif"}]
+        self.assertEqual([p.name for p in covers], ["book.jpg"])
+        self.assertEqual(covers[0].read_bytes(), curated.read_bytes())
+        # Original sidecar archived (gone from source, present in the archive).
+        self.assertFalse(sidecar.exists())
+        sidecar_row = FileMove.objects.get(parent=row, source_path=str(sidecar))
+        self.assertTrue(Path(sidecar_row.archived_path).is_file())
+        # No failed companion row and no companion-failed flag.
+        self.assertFalse(FileMove.objects.filter(parent=row, state=FileMove.State.FAILED).exists())
+        row.refresh_from_db()
+        self.assertFalse(any(f.startswith("companion-failed") for f in (row.review_flags or [])))
+
+    def test_sidecar_cover_other_extension_archived_not_recreated(self):
+        book, src, sidecar, curated = self._make_book_with_sidecar_image(".png", ".jpg")
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        # Only the curated cover is recreated; the .png sidecar is not.
+        self.assertEqual((self.target_dir / "book.jpg").read_bytes(), curated.read_bytes())
+        self.assertFalse((self.target_dir / "book.png").exists())
+        self.assertFalse(sidecar.exists())
+        sidecar_row = FileMove.objects.get(parent=row, source_path=str(sidecar))
+        self.assertTrue(Path(sidecar_row.archived_path).is_file())
+        self.assertFalse(FileMove.objects.filter(parent=row, state=FileMove.State.FAILED).exists())
+
+    def test_no_sidecar_cover_still_gets_curated(self):
+        book, src = self._make_book("sub/book.pdf", data=b"%PDF-1.4 fake pdf")
+        curated = self.scan_root / "curated.jpg"
+        curated.write_bytes(b"\xff\xd8\xff\xe0CURATED")
+        fm = book.finalmetadata
+        fm.final_cover_path = str(curated)
+        fm.save(update_fields=["final_cover_path"])
+        target = self.target_dir / "book.pdf"
+        row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertEqual((self.target_dir / "book.jpg").read_bytes(), curated.read_bytes())
+        self.assertFalse(FileMove.objects.filter(parent=row, state=FileMove.State.FAILED).exists())
+
+    def test_failing_opf_copy_ends_failed_and_flags_parent(self):
+        book, src, cover, opf, txt = self._make_book_with_companions()
+        target = self.target_dir / "book.pdf"
+        real = safe_move_file
+
+        def fake(source, tgt, **kw):
+            if str(source).endswith("book.opf"):
+                raise OSError("cannot copy OPF")
+            return real(source, tgt, **kw)
+
+        with mock.patch("books.utils.safe_move.book.safe_move_file", side_effect=fake):
+            row = safe_move_book(book, str(target))
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        row.refresh_from_db()
+        self.assertIn("companion-failed:book.opf", row.review_flags)
+        child = FileMove.objects.get(parent=row, source_path=str(opf))
+        self.assertEqual(child.state, FileMove.State.FAILED)
+
     # -- B: missing/invalid final cover blocks the move ----------------------
 
     def _set_media_cover(self, book, rel="cover_cache/abc.jpg", data=b"\xff\xd8\xff\xe0CURATED"):
@@ -827,7 +904,7 @@ class SafeMoveBookTests(TestCase):
 
         book, src, cover, opf, txt = self._make_book_with_companions()
         primary_file = BookFile.objects.get(book=book)
-        result, shared, outside = _discover_companions(
+        result, shared, outside, images = _discover_companions(
             primary_file, str(self.target_dir / "book.pdf")
         )
         db_fields = [db_field for _source, db_field, _target in result]
