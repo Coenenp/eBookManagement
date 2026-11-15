@@ -89,16 +89,15 @@ class ApproveBatchCommandTests(TestCase):
     def _manifest(self, path):
         return json.loads(Path(path).read_text())
 
-    def _valid_cover(self, name):
+    def _valid_cover(self, name, w=300, h=450):
         """Write a decodable, non-flat cover image (passes the shape check)."""
         from PIL import Image
 
-        w, h = 300, 450
         img = Image.new("L", (w, h))
         px = img.load()
         blocks = 8
-        bw = w // blocks
-        bh = h // blocks
+        bw = max(w // blocks, 1)
+        bh = max(h // blocks, 1)
         for y in range(h):
             for x in range(w):
                 bx = min(x // bw, blocks - 1)
@@ -332,6 +331,40 @@ class ApproveBatchCommandTests(TestCase):
             call_command("approve_batch", report=True, stdout=out)
         self.assertIn("cover shape: 1", out.getvalue())
         self.assertIn("cover placeholder: 1", out.getvalue())
+
+    def test_cover_small_criterion(self):
+        # 150x200: short side 150 < 200 is held with "cover small".
+        small = self._make_book(
+            "csm", title="Small Cover", author="Small Author",
+            cover_path=self._valid_cover("csm.jpg", 150, 200),
+        )
+        # 400x600 and 200x300 (short side exactly 200) both pass.
+        big = self._make_book(
+            "cbg", title="Big Cover", author="Big Author",
+            cover_path=self._valid_cover("cbg.jpg", 400, 600),
+        )
+        exact = self._make_book(
+            "cex", title="Exact Cover", author="Exact Author",
+            cover_path=self._valid_cover("cex.jpg", 200, 300),
+        )
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("cover small: 1", out.getvalue())
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        ids = set(manifest["ids"])
+        self.assertNotIn(small.id, ids)
+        self.assertIn(big.id, ids)
+        self.assertIn(exact.id, ids)
+
+    def test_invalid_image_not_cover_small(self):
+        bad = Path(self.temp_dir) / "badcov2.jpg"
+        bad.write_bytes(b"not an image")
+        self._make_book("cinv", title="Invalid Cover", author="Inv Author", cover_path=str(bad))
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("cover invalid image: 1", out.getvalue())
+        self.assertIn("cover small: 0", out.getvalue())
 
     # ------------------------------------------------------------------ #
     # Shared cover criterion

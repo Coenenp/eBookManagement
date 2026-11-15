@@ -91,6 +91,7 @@ CRITERIA_LABELS = [
     "cover invalid image",
     "cover placeholder",
     "cover shape",
+    "cover small",
 ]
 
 CONFIDENCE_THRESHOLD = 0.80
@@ -151,6 +152,8 @@ def _cover_reason(cover_path):
         return "cover placeholder"
     if quality == "shape":
         return "cover shape"
+    if quality == "small":
+        return "cover small"
     return None
 
 
