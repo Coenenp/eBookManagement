@@ -743,6 +743,36 @@ class ApproveBatchCommandTests(TestCase):
         call_command("approve_batch", report=True, stdout=out)
         self.assertIn("name mismatch: 1", out.getvalue())
 
+    def test_series_junk_criterion_excludes_and_passes(self):
+        junk = ["martin", "martin6", "4 3 2"]
+        ok = ["Dune", "Ender", "SPQR", "The Dark Tower", ""]
+        junk_books = []
+        ok_books = []
+        for i, s in enumerate(junk):
+            b = self._make_book(
+                f"sj{i}", title=f"Series Junk {chr(65 + i)}", author=f"SJ Author {chr(65 + i)}"
+            )
+            b.finalmetadata.final_series = s
+            b.finalmetadata.save(update_fields=["final_series"])
+            junk_books.append(b)
+        for i, s in enumerate(ok):
+            b = self._make_book(
+                f"sok{i}", title=f"Series Ok {chr(65 + i)}", author=f"SO Author {chr(65 + i)}"
+            )
+            b.finalmetadata.final_series = s
+            b.finalmetadata.save(update_fields=["final_series"])
+            ok_books.append(b)
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("series junk: 3", out.getvalue())
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        ids = set(manifest["ids"])
+        for b in junk_books:
+            self.assertNotIn(b.id, ids, f"junk series {b.finalmetadata.final_series!r} must be held")
+        for b in ok_books:
+            self.assertIn(b.id, ids, f"ok series {b.finalmetadata.final_series!r} must pass")
+
     def test_apply_skips_book_changed_to_mismatch(self):
         b1 = self._make_book("am1", title="Keeps Match", author="Keep Author")
         b2 = self._make_book("am2", title="Was Match", author="Was Author")

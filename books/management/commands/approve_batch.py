@@ -82,6 +82,7 @@ CRITERIA_LABELS = [
     "duplicate",
     "suspicious pattern",
     "name mismatch",
+    "series junk",
     "cover shared",
     "cover rejected by review",
     "cover empty",
@@ -161,6 +162,27 @@ def _apply_command_text(manifest_path, n_ids):
         f"--manifest {manifest_path} --confirm {n_ids} "
         "--exclude-ids <comma separated ids>"
     )
+
+
+_SERIES_DIGIT_ADJACENT_RE = re.compile(r"[a-zA-Z]\d|\d[a-zA-Z]")
+
+
+def _series_is_junk(series):
+    """True when a non-empty series name looks like junk (unreviewable)."""
+    s = (series or "").strip()
+    if not s:
+        return False
+    # No letter at all: "4 3 2" carries no series identity.
+    if not any(ch.isalpha() for ch in s):
+        return True
+    # A digit directly attached to a letter: "martin6".
+    if _SERIES_DIGIT_ADJACENT_RE.search(s):
+        return True
+    # A single token that is all lowercase: "martin".
+    tokens = s.split()
+    if len(tokens) == 1 and tokens[0] == tokens[0].lower():
+        return True
+    return False
 
 
 class Command(BaseCommand):
@@ -275,6 +297,8 @@ class Command(BaseCommand):
         source_path = ctx["primary_file"].get(book.id, ("", ""))[0]
         if not name_agrees(title, author, source_path):
             return "name mismatch"
+        if _series_is_junk(fm.final_series):
+            return "series junk"
         cover_path = fm.final_cover_path
         if cover_path and not cover_path.startswith(("http://", "https://")):
             if ctx["cover_use"].get(cover_path, 0) > 1:
