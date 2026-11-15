@@ -34,6 +34,10 @@ WHITE_MAX = 0.732178
 THUMB_SIZE = 64
 WHITE_LUMINANCE = 240
 
+# The short side of a decoded cover must be at least this many pixels; a
+# smaller cover is held back for review as too small to curate.
+MIN_COVER_SHORT_SIDE = 200
+
 
 def _shape_rejected(im):
     """Return True when a grey-scale image trips a measured shape threshold."""
@@ -58,11 +62,12 @@ def _shape_rejected(im):
 
 
 def cover_quality_flag(path):
-    """Return ``"placeholder"``, ``"shape"`` or ``None`` for a cover file.
+    """Return ``"placeholder"``, ``"shape"``, ``"small"`` or ``None``.
 
     ``None`` means the cover is not flagged (it is either absent/unreadable,
     or it passes every check). A placeholder (hash match) is reported before
-    any shape test.
+    any shape test; ``"small"`` is reported only after the shape test passes,
+    reusing the single decode of the image.
     """
     if not path:
         return None
@@ -82,4 +87,6 @@ def cover_quality_flag(path):
         return None
     if _shape_rejected(im):
         return "shape"
+    if min(im.size) < MIN_COVER_SHORT_SIDE:
+        return "small"
     return None

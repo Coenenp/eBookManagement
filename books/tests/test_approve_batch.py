@@ -89,16 +89,15 @@ class ApproveBatchCommandTests(TestCase):
     def _manifest(self, path):
         return json.loads(Path(path).read_text())
 
-    def _valid_cover(self, name):
+    def _valid_cover(self, name, w=300, h=450):
         """Write a decodable, non-flat cover image (passes the shape check)."""
         from PIL import Image
 
-        w, h = 300, 450
         img = Image.new("L", (w, h))
         px = img.load()
         blocks = 8
-        bw = w // blocks
-        bh = h // blocks
+        bw = max(w // blocks, 1)
+        bh = max(h // blocks, 1)
         for y in range(h):
             for x in range(w):
                 bx = min(x // bw, blocks - 1)
@@ -333,6 +332,40 @@ class ApproveBatchCommandTests(TestCase):
         self.assertIn("cover shape: 1", out.getvalue())
         self.assertIn("cover placeholder: 1", out.getvalue())
 
+    def test_cover_small_criterion(self):
+        # 150x200: short side 150 < 200 is held with "cover small".
+        small = self._make_book(
+            "csm", title="Small Cover", author="Small Author",
+            cover_path=self._valid_cover("csm.jpg", 150, 200),
+        )
+        # 400x600 and 200x300 (short side exactly 200) both pass.
+        big = self._make_book(
+            "cbg", title="Big Cover", author="Big Author",
+            cover_path=self._valid_cover("cbg.jpg", 400, 600),
+        )
+        exact = self._make_book(
+            "cex", title="Exact Cover", author="Exact Author",
+            cover_path=self._valid_cover("cex.jpg", 200, 300),
+        )
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("cover small: 1", out.getvalue())
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        ids = set(manifest["ids"])
+        self.assertNotIn(small.id, ids)
+        self.assertIn(big.id, ids)
+        self.assertIn(exact.id, ids)
+
+    def test_invalid_image_not_cover_small(self):
+        bad = Path(self.temp_dir) / "badcov2.jpg"
+        bad.write_bytes(b"not an image")
+        self._make_book("cinv", title="Invalid Cover", author="Inv Author", cover_path=str(bad))
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("cover invalid image: 1", out.getvalue())
+        self.assertIn("cover small: 0", out.getvalue())
+
     # ------------------------------------------------------------------ #
     # Shared cover criterion
     # ------------------------------------------------------------------ #
@@ -468,6 +501,58 @@ class ApproveBatchCommandTests(TestCase):
         text = (self.manifest_dir / manifest["review_page"]).read_text()
         self.assertEqual(text.count("&#10003;"), len(sample_ids))
         self.assertIn('class="sampled"', text)
+
+    def test_review_page_lists_series_number_and_target_for_non_sample(self):
+        import itertools
+        import string
+
+        suffixes = ["".join(p) for p in itertools.product(string.ascii_lowercase, repeat=2)]
+        books = []
+        for i in range(25):
+            b = self._make_book(
+                f"rpser{i:02d}",
+                title=f"Series Book {suffixes[i]}",
+                author=f"Series Author {suffixes[i]}",
+            )
+            fm = b.finalmetadata
+            fm.final_series = f"Serie {suffixes[i]}"
+            fm.final_series_number = str(i)
+            fm.save(update_fields=["final_series", "final_series_number"])
+            books.append(b)
+        _, mpath = self._prepare(seed=1)
+        manifest = self._manifest(mpath)
+        sample_ids = set(manifest["sample_ids"])
+        non_sample = next(b for b in books if b.id not in sample_ids)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        self.assertIn(non_sample.finalmetadata.final_series, text)
+        self.assertIn(non_sample.finalmetadata.final_series_number, text)
+        target = Command()._planned_target(non_sample)
+        self.assertTrue(target, "planned target must be non-empty for a non-sample book")
+        self.assertIn(target, text)
+
+    def test_review_page_escapes_series_less_than(self):
+        book = self._make_book(
+            "rpse", title="Esc Series Book", author="Esc Author",
+            cover_path=self._valid_cover("rpse.jpg"),
+        )
+        fm = book.finalmetadata
+        fm.final_series = "A < B"
+        fm.final_series_number = "3"
+        fm.save(update_fields=["final_series", "final_series_number"])
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        self.assertIn("A &lt; B", text)
+        self.assertNotIn("A < B</td>", text)
+
+    def test_apply_command_printed_with_manifest_and_count(self):
+        self._make_book("cmd", title="Command Book", author="Cmd Author")
+        text, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertIn("--manifest", text)
+        self.assertIn(str(mpath), text)
+        self.assertIn(f"--confirm {len(manifest['ids'])}", text)
+        self.assertIn("--exclude-ids <comma separated ids>", text)
 
     # ------------------------------------------------------------------ #
     # Per-book exclusion (--exclude-ids)
@@ -680,6 +765,47 @@ class ApproveBatchCommandTests(TestCase):
         call_command("approve_batch", report=True, stdout=out)
         self.assertIn("name mismatch: 1", out.getvalue())
 
+    def test_author_only_agreement_held_with_name_mismatch(self):
+        # A book whose path shares only the author (not the title) is held back
+        # with the name mismatch label under the title-first rule.
+        book = self._make_book("ao", title="Path Title", author="Path Author")
+        fm = book.finalmetadata
+        fm.final_title = "Unrelated Story"
+        fm.save(update_fields=["final_title"])
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("name mismatch: 1", out.getvalue())
+
+    def test_series_junk_criterion_excludes_and_passes(self):
+        junk = ["martin", "martin6", "4 3 2"]
+        ok = ["Dune", "Ender", "SPQR", "The Dark Tower", ""]
+        junk_books = []
+        ok_books = []
+        for i, s in enumerate(junk):
+            b = self._make_book(
+                f"sj{i}", title=f"Series Junk {chr(65 + i)}", author=f"SJ Author {chr(65 + i)}"
+            )
+            b.finalmetadata.final_series = s
+            b.finalmetadata.save(update_fields=["final_series"])
+            junk_books.append(b)
+        for i, s in enumerate(ok):
+            b = self._make_book(
+                f"sok{i}", title=f"Series Ok {chr(65 + i)}", author=f"SO Author {chr(65 + i)}"
+            )
+            b.finalmetadata.final_series = s
+            b.finalmetadata.save(update_fields=["final_series"])
+            ok_books.append(b)
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("series junk: 3", out.getvalue())
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        ids = set(manifest["ids"])
+        for b in junk_books:
+            self.assertNotIn(b.id, ids, f"junk series {b.finalmetadata.final_series!r} must be held")
+        for b in ok_books:
+            self.assertIn(b.id, ids, f"ok series {b.finalmetadata.final_series!r} must pass")
+
     def test_apply_skips_book_changed_to_mismatch(self):
         b1 = self._make_book("am1", title="Keeps Match", author="Keep Author")
         b2 = self._make_book("am2", title="Was Match", author="Was Author")
@@ -740,7 +866,7 @@ class ApproveBatchCommandTests(TestCase):
         _, m2 = self._prepare(seed=42)
         self.assertEqual(self._manifest(m1)["sample_ids"], self._manifest(m2)["sample_ids"])
 
-    def test_planned_target_called_only_for_sample(self):
+    def test_planned_target_called_for_all_selected_books(self):
         import itertools
         import string
         from unittest.mock import patch
@@ -759,7 +885,8 @@ class ApproveBatchCommandTests(TestCase):
                 prepare=True,
                 stdout=StringIO(),
             )
-        self.assertLessEqual(mock_target.call_count, MAX_SAMPLE)
+        # The planner now runs for every selected book (default size 25 of 30).
+        self.assertEqual(mock_target.call_count, 25)
 
     def test_rejection_reason_stored(self):
         book = self._make_book("rej")

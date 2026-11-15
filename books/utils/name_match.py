@@ -3,9 +3,11 @@
 The external lookup can return a wrong title and author with a high confidence
 (see the 2026-11-14 measurement in ``/workspace/state/name_match_20261114.txt``).
 ``name_agrees`` is a cheap, deterministic guard: it accepts a book only when at
-least one significant word of the title or the author also appears in the last
-two components of the primary file path (the containing folder and the file
-name). Accents are folded away so ``Kök`` and ``Kok`` are the same token.
+least one significant word of the title appears in the last two components of
+the primary file path (the containing folder and the file name). Accents are
+folded away so ``Kök`` and ``Kok`` are the same token. When the title yields no
+significant token, the author may still match (as a fallback for titleless
+books); the author alone never passes for a book with a real title.
 """
 
 import re
@@ -41,15 +43,19 @@ def _last_two_components(path):
 
 
 def name_agrees(title, author, source_path):
-    """True when a title or author token appears in the last two path components.
+    """True when a title token appears in the last two path components.
 
-    Returns False when neither title nor author yields a single token.
+    The title is authoritative: when it yields at least one usable token, at
+    least one of those tokens must appear in the last two path components. The
+    author alone no longer passes. Only when the title yields no usable token
+    does the author rule apply (as before), so a titleless book can still be
+    matched by its author.
     """
     title_tokens = name_tokens(title)
-    author_tokens = name_tokens(author)
-    if not title_tokens and not author_tokens:
-        return False
     path_tokens = set(name_tokens(" ".join(_last_two_components(source_path))))
-    return any(t in path_tokens for t in title_tokens) or any(
-        t in path_tokens for t in author_tokens
-    )
+    if title_tokens:
+        return any(t in path_tokens for t in title_tokens)
+    author_tokens = name_tokens(author)
+    if not author_tokens:
+        return False
+    return any(t in path_tokens for t in author_tokens)
