@@ -54,6 +54,7 @@ class MoveResult:
     tmp_path: str = ""
     on_step: Optional[Callable] = None
     keep_source: bool = False
+    archive_only: bool = False
 
 
 def _sha256(path) -> str:
@@ -144,19 +145,55 @@ def _notify(on_step, name, state):
 def safe_move_file(source, target, *, scan_root, scan_label, archive_root,
                    repack_epub=True, cover_path=None, fix_encoding=False,
                    on_step=None, metadata=None, content=None, verify=None,
-                   keep_source=False, before_commit=None, check_duplicate=None):
-    """Move ``source`` to ``target``, archiving the original. Returns MoveResult."""
+                   keep_source=False, before_commit=None, check_duplicate=None,
+                   archive_only=False):
+    """Move ``source`` to ``target``, archiving the original. Returns MoveResult.
+
+    With ``archive_only=True`` the original is archived (and later deleted on
+    finalize) but no target file is created: the returned ``MoveResult`` has an
+    empty ``target`` and ``created_target=False``.
+    """
     src = Path(source).resolve()
     tgt = Path(target)
 
     if not src.is_file():
         raise FileNotFoundError(f"source does not exist: {source}")
+
+    src_hash = _retry_io(lambda: _sha256(src))
+
+    if archive_only:
+        # Archive the original without creating any target file.
+        archived_path = archive_destination(str(src), scan_root, scan_label, archive_root)
+        Path(archived_path).parent.mkdir(parents=True, exist_ok=True)
+        try:
+            _retry_io(lambda: shutil.copy2(str(src), archived_path))
+            _fsync_file(archived_path)
+            archived_hash = _retry_io(lambda: _sha256(archived_path))
+            if archived_hash != src_hash:
+                _remove(archived_path)
+                raise NeedsReview(["archive-hash"])
+        except Exception:
+            _remove(archived_path)
+            raise
+        _notify(on_step, "archived", {
+            "source": str(src),
+            "archived_path": archived_path,
+            "original_sha256": src_hash,
+            "archived_sha256": archived_hash,
+        })
+        return MoveResult(
+            source=str(src), target="", archived_path=archived_path,
+            original_sha256=src_hash, archived_sha256=archived_hash,
+            new_sha256=src_hash, repacked=False, review_flags=[],
+            created_target=False, tmp_path="", on_step=on_step,
+            keep_source=False, archive_only=True,
+        )
+
     if src == tgt.resolve():
         raise ValueError("target must differ from the source")
     if tgt.exists():
         raise FileExistsError(f"target already exists: {target}")
 
-    src_hash = _retry_io(lambda: _sha256(src))
     archived_path = (
         "" if keep_source
         else archive_destination(str(src), scan_root, scan_label, archive_root)
@@ -370,10 +407,11 @@ def finalize_move(result):
             raise NeedsReview(["archive-missing"])
         if _sha256(result.archived_path) != result.original_sha256:
             raise NeedsReview(["archive-hash"])
-    if not Path(result.target).is_file():
-        raise NeedsReview(["target-missing"])
-    if _sha256(result.target) != result.new_sha256:
-        raise NeedsReview(["target-hash"])
+    if not result.archive_only:
+        if not Path(result.target).is_file():
+            raise NeedsReview(["target-missing"])
+        if _sha256(result.target) != result.new_sha256:
+            raise NeedsReview(["target-hash"])
 
     _notify(result.on_step, "finalized", state)
     if not result.keep_source:

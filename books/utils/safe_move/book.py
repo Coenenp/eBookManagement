@@ -36,6 +36,12 @@ _MAGIC_BY_EXT = {
     ".gif": (b"GIF87a", b"GIF89a"),
 }
 
+# Sidecar image extensions that are original cover images: when the discovery
+# finds one for a book it is archived like any other original and never
+# recreated at the target (the curated FinalMetadata.final_cover_path is the
+# single cover placed beside the book).
+_COVER_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif"}
+
 
 def _cover_flag(cover_path):
     """Classify a requested cover path; return a review flag or None.
@@ -151,7 +157,7 @@ def _duplicate_content_flag(book, hash_value):
 
 
 def _discover_companions(primary_file, target_path):
-    """Return ``([(source, db_field, target), ...], [shared], [outside])``.
+    """Return ``([(source, db_field, target), ...], [shared], [outside], [images])``.
 
     Sources are ``BookFile.cover_path`` / ``BookFile.opf_path`` (tracked with a
     ``db_field``) plus any sidecar files ``CompanionFileFinder`` discovers. Each
@@ -165,6 +171,10 @@ def _discover_companions(primary_file, target_path):
     claimed: it is left in place and reported in the returned ``shared`` list
     instead. A cover/OPF path outside the main file's source folder tree is
     also left in place and reported in the ``outside`` list.
+
+    Sidecar image files (``jpg``/``jpeg``/``png``/``gif``) are original cover
+    images: they are returned in ``images`` (archive-only) rather than in the
+    companion list, so they are never recreated at the target.
     """
     finder = CompanionFileFinder()
     target_folder = Path(target_path).parent
@@ -201,6 +211,7 @@ def _discover_companions(primary_file, target_path):
     seen_sources = set()
     shared = []
     outside = []
+    images = []  # sidecar image sources to archive (never recreated)
 
     def add(source, db_field):
         s = str(source)
@@ -229,6 +240,11 @@ def _discover_companions(primary_file, target_path):
             if s not in shared and s not in seen_sources:
                 shared.append(s)
             continue
+        if Path(s).suffix.lower() in _COVER_IMAGE_SUFFIXES:
+            if s not in seen_sources:
+                seen_sources.add(s)
+                images.append(s)
+            continue
         add(cf, "")
 
     result = []
@@ -241,10 +257,10 @@ def _discover_companions(primary_file, target_path):
             name = f"{main_stem}{ext}"
         seen_ext[ext] = n + 1
         result.append((source, db_field, str(target_folder / name)))
-    return result, shared, outside
+    return result, shared, outside, images
 
 
-def _move_companion(book, parent, source, target, db_field, *, scan_folder, scan_label, archive_root, cover_name=None, keep_source=False):
+def _move_companion(book, parent, source, target, db_field, *, scan_folder, scan_label, archive_root, cover_name=None, keep_source=False, archive_only=False):
     """Move one companion under its own child :class:`FileMove` row.
 
     Mirrors the main move (archive, journal, Check C, finalize) but with
@@ -252,8 +268,49 @@ def _move_companion(book, parent, source, target, db_field, *, scan_folder, scan
     A NeedsReview or unexpected exception leaves the companion original in
     place, ends ``needs_review``/``failed``, and flags the parent; the main move
     is never rolled back.
+
+    With ``archive_only=True`` the original is archived and deleted but no
+    target file is created (used for original sidecar cover images).
     """
     primary_file = book.primary_file
+
+    if archive_only:
+        child = FileMove.objects.create(
+            book=book,
+            parent=parent,
+            kind=FileMove.Kind.COMPANION,
+            db_field="",
+            source_path=str(source),
+            target_path="",
+            archived_path="",
+            tmp_path="",
+            state=FileMove.State.PLANNED,
+            previous_paths={},
+        )
+        try:
+            result = safe_move_file(
+                source, "", scan_root=scan_folder.path, scan_label=scan_label,
+                archive_root=archive_root, repack_epub=False, archive_only=True,
+            )
+        except Exception as exc:
+            _mark_failed_and_cleanup(child, exc)
+            _flag_companion_failure(parent, source)
+            return child
+        FileMove.objects.filter(pk=child.pk).update(
+            archived_path=result.archived_path,
+            original_sha256=result.original_sha256,
+            archived_sha256=result.archived_sha256,
+            new_sha256=result.new_sha256,
+        )
+        try:
+            finalize_move(result)
+        except Exception as exc:
+            _mark_failed_and_cleanup(child, exc)
+            _flag_companion_failure(parent, source)
+            return child
+        FileMove.objects.filter(pk=child.pk).update(state=FileMove.State.PENDING_DELETION)
+        child.refresh_from_db()
+        return child
 
     # The cover companion is regenerated as a copy of the curated
     # FinalMetadata.final_cover_path (valid magic bytes) under the new stem,
@@ -534,7 +591,7 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
         return row
 
     # Discover companions while the main source still exists (finalize deletes it).
-    companions, shared, outside = _discover_companions(primary_file, target)
+    companions, shared, outside, images = _discover_companions(primary_file, target)
     # Part C: when the curated cover is valid but no companion cover exists on
     # disk, synthesize one beside the book. The curated file is a read-only
     # template: it is never moved, archived or deleted.
@@ -578,5 +635,15 @@ def safe_move_book(book, target_path, *, cover_path=None, repack_epub=True, fix_
         )
         if db_field == FileMove.DBField.COVER_PATH and child.state == FileMove.State.PENDING_DELETION:
             cover_name = Path(child.target_path).name
+
+    # (i) Archive original sidecar cover images (never recreated beside the
+    # book). A failure here flags the parent like any other companion failure
+    # but never rolls back the main move.
+    for image_source in images:
+        _move_companion(
+            book, row, image_source, "", "",
+            scan_folder=scan_folder, scan_label=scan_label, archive_root=archive_root,
+            archive_only=True,
+        )
 
     return row

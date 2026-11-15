@@ -446,6 +446,15 @@ class ApprovedLayoutTests(TestCase):
         expected = str(Path(self.temp_dir) / "English" / "Books" / "Smith, John" / "Smith, John - Standalone.pdf")
         self.assertEqual(self._target(book), expected)
 
+    def test_ebook_standalone_author_trailing_period_stripped(self):
+        book = self._make_book("Konsalik Book.pdf", author="Konsalik, Heinz G.", content_type="ebook")
+        target = self._target(book)
+        # No folder component ends in a period, and the author folder is stripped.
+        for comp in target.split(os.sep):
+            if comp:
+                self.assertFalse(comp.endswith("."), comp)
+        self.assertIn(os.sep + "Konsalik, Heinz G" + os.sep, target)
+
     def test_comic_series_target(self):
         book = self._make_book("Issue One.pdf", series="Batman", series_number="3", content_type="comic")
         expected = str(Path(self.temp_dir) / "English" / "Comics" / "Batman" / "Batman #03 - Issue One.pdf")
