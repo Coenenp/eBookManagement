@@ -153,6 +153,16 @@ def _cover_reason(cover_path):
     return None
 
 
+def _apply_command_text(manifest_path, n_ids):
+    """The exact command to apply a prepared batch, with the manifest path and
+    id count filled in; only ``--exclude-ids`` is left for the user to type."""
+    return (
+        "python manage.py approve_batch --apply "
+        f"--manifest {manifest_path} --confirm {n_ids} "
+        "--exclude-ids <comma separated ids>"
+    )
+
+
 class Command(BaseCommand):
     help = "Approve a batch of eligible books (prepare/report/apply/reject)."
 
@@ -424,7 +434,8 @@ class Command(BaseCommand):
         metas = {
             m["book_id"]: m
             for m in FinalMetadata.objects.filter(book_id__in=ids).values(
-                "book_id", "final_title", "final_author", "language", "final_cover_path"
+                "book_id", "final_title", "final_author", "language",
+                "final_series", "final_series_number", "final_cover_path"
             )
         }
         corroborated = {bid: c for c, bid in selected}
@@ -435,9 +446,11 @@ class Command(BaseCommand):
             title = m.get("final_title") or ""
             author = m.get("final_author") or ""
             language = m.get("language") or ""
+            series = m.get("final_series") or ""
+            series_number = m.get("final_series_number") or ""
             source, fmt = ctx["primary_file"].get(bid, ("", ""))
             tier = "corroborated" if corroborated.get(bid, False) else "standard"
-            target = targets.get(bid, "") if bid in sample_ids else ""
+            target = targets.get(bid, "")
             cover_uri = self._cover_data_uri(m.get("final_cover_path") or "")
             cover_cell = (
                 f'<img src="{html.escape(cover_uri, quote=True)}" alt="cover">'
@@ -451,6 +464,8 @@ class Command(BaseCommand):
                 f"<td>{html.escape(str(bid))}</td>"
                 f"<td>{html.escape(title)}</td>"
                 f"<td>{html.escape(author)}</td>"
+                f"<td>{html.escape(series)}</td>"
+                f"<td>{html.escape(series_number)}</td>"
                 f"<td>{html.escape(language)}</td>"
                 f"<td>{html.escape(fmt)}</td>"
                 f"<td>{html.escape(tier)}</td>"
@@ -475,8 +490,8 @@ class Command(BaseCommand):
             f"<p>criteria version: {html.escape(CRITERIA_VERSION)}</p>"
             f"<p>{hold}</p>"
             "<table><thead><tr><th>cover</th><th>id</th><th>title</th><th>author</th>"
-            "<th>language</th><th>format</th><th>tier</th><th>path</th>"
-            "<th>target</th><th>sample</th></tr></thead><tbody>"
+            "<th>series</th><th>number</th><th>language</th><th>format</th><th>tier</th>"
+            "<th>path</th><th>target</th><th>sample</th></tr></thead><tbody>"
             + "".join(rows)
             + "</tbody></table></body></html>"
         )
@@ -522,9 +537,10 @@ class Command(BaseCommand):
         sample_entries = rng.sample(selected, n_sample) if n_sample else []
         sample_ids = {bid for _corr, bid in sample_entries}
 
-        # Planned targets run only for sampled ids (the planner is expensive).
+        # Planned targets run for every selected book (up to MAX_SIZE), so the
+        # review page can show the target for the whole batch, not just the sample.
         targets = {}
-        for _corr, bid in sample_entries:
+        for _corr, bid in selected:
             book = Book.objects.select_related("finalmetadata", "scan_folder").filter(id=bid).first()
             targets[bid] = self._planned_target(book)
 
@@ -547,6 +563,7 @@ class Command(BaseCommand):
         self.stdout.write(f"manifest: {manifest_path}")
         for corroborated, bid in sample_entries:
             self.stdout.write(self._sample_line(bid, corroborated, ctx, targets.get(bid, "")))
+        self.stdout.write(_apply_command_text(manifest_path, len(manifest["ids"])))
 
     def _sample_line(self, bid, corroborated, ctx, target=None):
         """Full detail line for one sampled entry; the planner runs only here."""
@@ -609,6 +626,7 @@ class Command(BaseCommand):
         self.stdout.write("eligible by confidence tier:")
         for tier, n in sorted(by_tier.items()):
             self.stdout.write(f"  {tier}: {n}")
+        self.stdout.write(_apply_command_text(str(manifest_dir / "<batch_id>.json"), eligible_count))
 
     def _reject(self, options):
         manifest_path = Path(options["manifest"])

@@ -469,6 +469,58 @@ class ApproveBatchCommandTests(TestCase):
         self.assertEqual(text.count("&#10003;"), len(sample_ids))
         self.assertIn('class="sampled"', text)
 
+    def test_review_page_lists_series_number_and_target_for_non_sample(self):
+        import itertools
+        import string
+
+        suffixes = ["".join(p) for p in itertools.product(string.ascii_lowercase, repeat=2)]
+        books = []
+        for i in range(25):
+            b = self._make_book(
+                f"rpser{i:02d}",
+                title=f"Series Book {suffixes[i]}",
+                author=f"Series Author {suffixes[i]}",
+            )
+            fm = b.finalmetadata
+            fm.final_series = f"Serie {suffixes[i]}"
+            fm.final_series_number = str(i)
+            fm.save(update_fields=["final_series", "final_series_number"])
+            books.append(b)
+        _, mpath = self._prepare(seed=1)
+        manifest = self._manifest(mpath)
+        sample_ids = set(manifest["sample_ids"])
+        non_sample = next(b for b in books if b.id not in sample_ids)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        self.assertIn(non_sample.finalmetadata.final_series, text)
+        self.assertIn(non_sample.finalmetadata.final_series_number, text)
+        target = Command()._planned_target(non_sample)
+        self.assertTrue(target, "planned target must be non-empty for a non-sample book")
+        self.assertIn(target, text)
+
+    def test_review_page_escapes_series_less_than(self):
+        book = self._make_book(
+            "rpse", title="Esc Series Book", author="Esc Author",
+            cover_path=self._valid_cover("rpse.jpg"),
+        )
+        fm = book.finalmetadata
+        fm.final_series = "A < B"
+        fm.final_series_number = "3"
+        fm.save(update_fields=["final_series", "final_series_number"])
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        self.assertIn("A &lt; B", text)
+        self.assertNotIn("A < B</td>", text)
+
+    def test_apply_command_printed_with_manifest_and_count(self):
+        self._make_book("cmd", title="Command Book", author="Cmd Author")
+        text, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertIn("--manifest", text)
+        self.assertIn(str(mpath), text)
+        self.assertIn(f"--confirm {len(manifest['ids'])}", text)
+        self.assertIn("--exclude-ids <comma separated ids>", text)
+
     # ------------------------------------------------------------------ #
     # Per-book exclusion (--exclude-ids)
     # ------------------------------------------------------------------ #
@@ -751,7 +803,7 @@ class ApproveBatchCommandTests(TestCase):
         _, m2 = self._prepare(seed=42)
         self.assertEqual(self._manifest(m1)["sample_ids"], self._manifest(m2)["sample_ids"])
 
-    def test_planned_target_called_only_for_sample(self):
+    def test_planned_target_called_for_all_selected_books(self):
         import itertools
         import string
         from unittest.mock import patch
@@ -770,7 +822,8 @@ class ApproveBatchCommandTests(TestCase):
                 prepare=True,
                 stdout=StringIO(),
             )
-        self.assertLessEqual(mock_target.call_count, MAX_SAMPLE)
+        # The planner now runs for every selected book (default size 25 of 30).
+        self.assertEqual(mock_target.call_count, 25)
 
     def test_rejection_reason_stored(self):
         book = self._make_book("rej")
