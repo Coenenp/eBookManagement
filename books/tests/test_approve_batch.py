@@ -680,6 +680,17 @@ class ApproveBatchCommandTests(TestCase):
         call_command("approve_batch", report=True, stdout=out)
         self.assertIn("name mismatch: 1", out.getvalue())
 
+    def test_author_only_agreement_held_with_name_mismatch(self):
+        # A book whose path shares only the author (not the title) is held back
+        # with the name mismatch label under the title-first rule.
+        book = self._make_book("ao", title="Path Title", author="Path Author")
+        fm = book.finalmetadata
+        fm.final_title = "Unrelated Story"
+        fm.save(update_fields=["final_title"])
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("name mismatch: 1", out.getvalue())
+
     def test_apply_skips_book_changed_to_mismatch(self):
         b1 = self._make_book("am1", title="Keeps Match", author="Keep Author")
         b2 = self._make_book("am2", title="Was Match", author="Was Author")

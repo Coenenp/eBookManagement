@@ -90,13 +90,43 @@ class NameAgreesTests(SimpleTestCase):
                 f"matching pair must agree: {title!r} | {author!r} | {path!r}",
             )
 
-    def test_match_through_author_only(self):
+    def test_author_only_agreement_rejected(self):
         # The folder carries the author's surname; the title shares no token.
-        self.assertTrue(
+        # Under the title-first rule the author alone no longer passes.
+        self.assertFalse(
             name_agrees(
                 "Blood Fever",
                 "Charles Higson",
                 "Charlie Higson/Higson, Charlie - [Enemy 2] - The Dead.epub",
+            )
+        )
+
+    def test_title_token_in_path_passes(self):
+        # The title shares a token with the path even though the author differs.
+        self.assertTrue(
+            name_agrees(
+                "The Dead",
+                "Someone Else",
+                "Charlie Higson/Higson, Charlie - [Enemy 2] - The Dead.epub",
+            )
+        )
+
+    def test_title_with_no_usable_token_falls_back_to_author(self):
+        # The title is all stop tokens ("The Book"), so the author rule applies.
+        self.assertTrue(
+            name_agrees(
+                "The Book",
+                "Charles Higson",
+                "Charlie Higson/Higson, Charlie - [Enemy 2] - The Dead.epub",
+            )
+        )
+
+    def test_neither_title_nor_author_in_path_rejected(self):
+        self.assertFalse(
+            name_agrees(
+                "Blood Fever",
+                "Charles Higson",
+                "Some Other Folder/Entirely Different - Unknown Author.epub",
             )
         )
 
