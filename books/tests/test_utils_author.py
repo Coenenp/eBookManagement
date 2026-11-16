@@ -8,6 +8,7 @@ from books.models import Author, BookAuthor, DataSource, FinalMetadata
 from books.services.author_cleanup import fix_all_books_by_author, normalize_all_author_names
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 from books.utils.author import attach_authors, split_author_parts
+from books.utils.authors import parse_author_name
 
 
 class AuthorUtilsTests(TestCase):
@@ -48,8 +49,15 @@ class AuthorUtilsTests(TestCase):
     def test_split_author_parts_single_name(self):
         """Test splitting single name"""
         first, last = split_author_parts("Cher")
-        self.assertEqual(first, "Cher")
-        self.assertEqual(last, "")
+        self.assertEqual(first, "")
+        self.assertEqual(last, "Cher")
+
+    def test_split_author_parts_particle(self):
+        """Test particle surname is kept whole and matches parse_author_name."""
+        first, last = split_author_parts("John van Gogh")
+        self.assertEqual(first, "John")
+        self.assertEqual(last, "van Gogh")
+        self.assertEqual((first, last), parse_author_name("John van Gogh"))
 
     def test_split_author_parts_empty_string(self):
         """Test splitting empty string"""

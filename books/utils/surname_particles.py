@@ -111,9 +111,10 @@ def split_author(full_name):
         last_tokens = head.split()
         tail_tokens = tail.split()
         # Move trailing particles from the first-name part to the front of the
-        # last name.
+        # last name, but only while at least one other word remains as the
+        # first name (a lone particle is a first name, not a surname prefix).
         moved = []
-        while tail_tokens and _is_particle_word(tail_tokens[-1]):
+        while len(tail_tokens) > 1 and _is_particle_word(tail_tokens[-1]):
             moved.insert(0, tail_tokens.pop())
         last_tokens = moved + last_tokens
         return " ".join(tail_tokens).strip(), " ".join(last_tokens).strip()

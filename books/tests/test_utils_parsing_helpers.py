@@ -286,3 +286,6 @@ class ParseAuthorNameTests(TestCase):
 
     def test_no_comma_particle_den(self):
         self.assertEqual(parse_author_name("Ellen den Hollander"), ("Ellen", "den Hollander"))
+
+    def test_comma_trailing_particle_moves(self):
+        self.assertEqual(parse_author_name("Sambeek, Liza van"), ("Liza", "van Sambeek"))

@@ -71,18 +71,4 @@ def parse_author_name(full_name):
     """
     from books.utils.surname_particles import split_author
 
-    if not full_name:
-        return "", ""
-
-    name = full_name.strip()
-    if not name:
-        return "", ""
-
-    # Comma-separated: inverted format "Last, First"; the last name is
-    # everything before the first comma (no particle logic).
-    if "," in name:
-        head, _, tail = name.partition(",")
-        return tail.strip(), head.strip()
-
-    # Otherwise use the shared particle-aware split.
-    return split_author(name)
+    return split_author(full_name)

@@ -71,6 +71,10 @@ class SurnameParticlesTests(TestCase):
         self.assertEqual(split_author("Sambeek, Liza van"), ("Liza", "van Sambeek"))
         self.assert_sort_and_letters("Sambeek, Liza van", "van Sambeek, Liza")
 
+    def test_comma_lone_particle_keeps_first_name(self):
+        self.assertEqual(split_author("Morrison, Van"), ("Van", "Morrison"))
+        self.assertEqual(sort_name("Morrison, Van"), "Morrison, Van")
+
     def test_de_nore(self):
         self.assertEqual(split_author("Annel de Nore"), ("Annel", "de Nore"))
         self.assert_sort_and_letters("Annel de Nore", "de Nore, Annel")
