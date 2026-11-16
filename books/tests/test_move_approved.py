@@ -455,6 +455,17 @@ class ApprovedLayoutTests(TestCase):
                 self.assertFalse(comp.endswith("."), comp)
         self.assertIn(os.sep + "Konsalik, Heinz G" + os.sep, target)
 
+    def test_ebook_standalone_author_particle_surname(self):
+        book = self._make_book("Sambeek Book.pdf", author="Liza van Sambeek", content_type="ebook")
+        expected = str(
+            Path(self.temp_dir)
+            / "English"
+            / "Books"
+            / "van Sambeek, Liza"
+            / "van Sambeek, Liza - Sambeek Book.pdf"
+        )
+        self.assertEqual(self._target(book), expected)
+
     def test_comic_series_target(self):
         book = self._make_book("Issue One.pdf", series="Batman", series_number="3", content_type="comic")
         expected = str(Path(self.temp_dir) / "English" / "Comics" / "Batman" / "Batman #03 - Issue One.pdf")
