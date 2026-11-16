@@ -2,6 +2,8 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from books.utils.surname_particles import SURNAME_PARTICLES
+
 
 def clean_title_and_extract_series_number(raw_title: str) -> Tuple[str, Optional[float]]:
     """
@@ -48,41 +50,9 @@ def normalize_surnames(authors: List[str]) -> List[str]:
     Handle prefix-based surname normalization for names like "van Gogh" or "de la Cruz".
     Joins prefix + surname if matched.
     """
-    # Extended list including multi-word prefixes the user mentioned
-    surname_particles = {
-        "de",
-        "del",
-        "dela",
-        "la",
-        "le",
-        "von",
-        "van",
-        "vanden",
-        "van den",
-        "van der",
-        "van de",
-        "da",
-        "di",
-        "o",
-        "mac",
-        "mc",
-        "von der",
-        "du",
-        "d",
-        "lo",
-        "gel",
-        "ter",
-        "den",
-        "der",
-        "dos",
-        "das",
-        "ibn",
-        "bin",
-        "ben",
-        "abd",
-        "abu",
-        "al",
-    }
+    # Single source of truth for surname particles (case-insensitive matching
+    # below keeps the historical behaviour).
+    surname_particles = SURNAME_PARTICLES
 
     normalized = []
     i = 0
