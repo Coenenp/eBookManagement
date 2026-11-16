@@ -12,6 +12,8 @@ from typing import List, Optional, Tuple
 
 from django.db import models
 
+from books.utils.surname_particles import sort_name, split_author
+
 logger = logging.getLogger(__name__)
 
 
@@ -449,26 +451,18 @@ class RenamingEngine:
     def _get_author_lastname(self) -> Optional[str]:
         """Get author last name."""
         author = self._get_author_fullname()
-        if author and "," in author:
-            # Already in "Last, First" format
-            return author.split(",")[0].strip()
-        elif author and " " in author:
-            # "First Last" format
-            return author.split()[-1]
-        return author
+        if not author:
+            return None
+        _, last = split_author(author)
+        return last or None
 
     def _get_author_firstname(self) -> Optional[str]:
         """Get author first name."""
         author = self._get_author_fullname()
-        if author and "," in author:
-            # "Last, First" format
-            parts = author.split(",")
-            return parts[1].strip() if len(parts) > 1 else None
-        elif author and " " in author:
-            # "First Last" format - return all but last part
-            parts = author.split()
-            return " ".join(parts[:-1]) if len(parts) > 1 else None
-        return None
+        if not author:
+            return None
+        first, _ = split_author(author)
+        return first or None
 
     def _get_author_fullname(self) -> Optional[str]:
         """Get full author name."""
@@ -487,6 +481,33 @@ class RenamingEngine:
         # No fallback - return None so the token gets omitted
         return None
 
+    _AUTHOR_SOURCE_PRIORITY = ["OPF File", "EPUB", "Open Library", "Google Books"]
+
+    def _stored_author_sort_form(self, final_author: str) -> Optional[str]:
+        """Return a stored comma-form author name from an official source whose
+        words equal the final author's words (case-insensitive), or None.
+
+        Official sources are tried in priority order and ``Initial Scan`` is
+        never considered.  This runs exactly one query per book and only when
+        the final author contains no comma.
+        """
+        rows = getattr(self.current_book, "author_relationships", None)
+        if rows is None:
+            return None
+        rows = rows.select_related("author", "source").filter(
+            source__name__in=self._AUTHOR_SOURCE_PRIORITY
+        )
+        order = {name: i for i, name in enumerate(self._AUTHOR_SOURCE_PRIORITY)}
+        rows = sorted(rows, key=lambda r: order.get(r.source.name, len(order)))
+        target_words = sorted(w.lower() for w in re.split(r"[ ,]+", final_author) if w)
+        for row in rows:
+            name = row.author.name
+            if "," in name:
+                words = sorted(w.lower() for w in re.split(r"[ ,]+", name) if w)
+                if words == target_words:
+                    return name
+        return None
+
     def _get_author_sortname(self) -> Optional[str]:
         """Get author name in sortable format (Last, First)."""
         # First try to get from FinalMetadata final_author_sort if available
@@ -498,17 +519,13 @@ class RenamingEngine:
         if not author:
             return None
 
-        if "," in author:
-            # Already in correct format
-            return author
-        elif " " in author:
-            # Convert "First Last" to "Last, First"
-            parts = author.split()
-            last_name = parts[-1]
-            first_names = " ".join(parts[:-1])
-            return f"{last_name}, {first_names}"
+        # Only names without a comma consult the stored official-source rows.
+        if "," not in author:
+            stored = self._stored_author_sort_form(author)
+            if stored:
+                return stored
 
-        return author
+        return sort_name(author)
 
     def _get_language(self) -> Optional[str]:
         """Get book language."""

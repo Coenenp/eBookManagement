@@ -560,6 +560,51 @@ class SlashTokenValueTests(RenamingEngineTests):
         self.assertEqual(result, "Court, Maddy/Aan Chesil Beach _ druk Heruitgave.epub")
 
 
+class AuthorSortNameTests(RenamingEngineTests):
+    """Author sort-name now honours surname particles and stored comma forms."""
+
+    def _set_final_author(self, name):
+        self.final_metadata.final_author = name
+        self.final_metadata.save()
+
+    def _add_author_row(self, name, source_name):
+        from books.models import Author, BookAuthor
+
+        source, _ = DataSource.objects.get_or_create(
+            name=source_name, defaults={"priority": 1, "trust_level": 5}
+        )
+        author = Author.objects.create(name=name)
+        BookAuthor.objects.create(book=self.book, author=author, source=source)
+
+    def _sortname(self):
+        self.engine.current_book = self.book
+        return self.engine._get_author_sortname()
+
+    def test_epub_comma_row_copied_verbatim(self):
+        self._add_author_row("van der Meer, Vonne", DataSource.EPUB_INTERNAL)
+        self._set_final_author("Vonne van der meer")
+        self.assertEqual(self._sortname(), "van der Meer, Vonne")
+
+    def test_epub_comma_row_copied_le_guin(self):
+        self._add_author_row("Le Guin, Ursula K.", DataSource.EPUB_INTERNAL)
+        self._set_final_author("Ursula K. Le Guin")
+        self.assertEqual(self._sortname(), "Le Guin, Ursula K.")
+
+    def test_google_books_different_words_ignored(self):
+        self._add_author_row("Ciel van Sambeek", DataSource.GOOGLE_BOOKS)
+        self._set_final_author("Liza van Sambeek")
+        self.assertEqual(self._sortname(), "van Sambeek, Liza")
+
+    def test_initial_scan_comma_row_never_wins(self):
+        self._add_author_row("van Sambeek, Liza", DataSource.INITIAL_SCAN)
+        self._set_final_author("Liza van Sambeek")
+        self.assertEqual(self._sortname(), "van Sambeek, Liza")
+
+    def test_final_author_with_comma_trailing_particle_fixed(self):
+        self._set_final_author("Sambeek, Liza van")
+        self.assertEqual(self._sortname(), "van Sambeek, Liza")
+
+
 class RenamingPatternValidatorTests(TestCase):
     """Test cases for pattern validation"""
 

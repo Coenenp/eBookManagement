@@ -17,6 +17,7 @@ from books.utils.parsing_helpers import (
     normalize_surnames,
     split_authors,
 )
+from books.utils.authors import parse_author_name
 
 
 class ParsingHelpersTests(TestCase):
@@ -272,3 +273,16 @@ class ParsingHelpersTests(TestCase):
         # Multiple word prefixes
         result = normalize_surnames(["Marie", "von", "der", "Leyen"])
         self.assertEqual(result, ["Marie von der Leyen"])
+
+
+class ParseAuthorNameTests(TestCase):
+    """parse_author_name keeps the whole surname including particles."""
+
+    def test_comma_surname_with_particle(self):
+        self.assertEqual(parse_author_name("van der Meer, Vonne"), ("Vonne", "van der Meer"))
+
+    def test_comma_surname_le_guin(self):
+        self.assertEqual(parse_author_name("Le Guin, Ursula K."), ("Ursula K.", "Le Guin"))
+
+    def test_no_comma_particle_den(self):
+        self.assertEqual(parse_author_name("Ellen den Hollander"), ("Ellen", "den Hollander"))
