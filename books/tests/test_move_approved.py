@@ -480,6 +480,19 @@ class ApprovedLayoutTests(TestCase):
         expected = str(Path(self.temp_dir) / "Custom" / "Smith, John - My Book.pdf")
         self.assertEqual(target, expected)
 
+    def test_slash_title_same_component_count(self):
+        slash_book = self._make_book("Slash.pdf", author="John Smith", content_type="ebook")
+        slash_book.finalmetadata.final_title = "Aan Chesil Beach / druk Heruitgave"
+        slash_book.finalmetadata.save(update_fields=["final_title"])
+        plain_book = self._make_book("Plain.pdf", author="John Smith", content_type="ebook")
+        plain_book.finalmetadata.final_title = "Aan Chesil Beach druk Heruitgave"
+        plain_book.finalmetadata.save(update_fields=["final_title"])
+        slash_target = self._target(slash_book)
+        plain_target = self._target(plain_book)
+        self.assertIsNotNone(slash_target)
+        self.assertIsNotNone(plain_target)
+        self.assertEqual(slash_target.count(os.sep), plain_target.count(os.sep))
+
     def test_filename_pattern_only_uses_default_folder(self):
         book = self._make_book("My Book.pdf", author="John Smith", content_type="ebook")
         out = StringIO()
