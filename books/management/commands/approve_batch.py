@@ -181,9 +181,15 @@ def _series_is_junk(series):
     # A digit directly attached to a letter: "martin6".
     if _SERIES_DIGIT_ADJACENT_RE.search(s):
         return True
-    # A single token that is all lowercase: "martin".
+    # A single token that is all lowercase and has at least one cased letter:
+    # "martin". A single token in a script without case (Hebrew, Chinese, Thai)
+    # has token.lower() == token.upper() and is therefore not junk.
     tokens = s.split()
-    if len(tokens) == 1 and tokens[0] == tokens[0].lower():
+    if (
+        len(tokens) == 1
+        and tokens[0].lower() != tokens[0].upper()
+        and tokens[0] == tokens[0].lower()
+    ):
         return True
     return False
 

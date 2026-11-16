@@ -778,7 +778,8 @@ class ApproveBatchCommandTests(TestCase):
 
     def test_series_junk_criterion_excludes_and_passes(self):
         junk = ["martin", "martin6", "4 3 2"]
-        ok = ["Dune", "Ender", "SPQR", "The Dark Tower", ""]
+        # A single token in a script without case (Hebrew, Chinese) is not junk.
+        ok = ["Dune", "Ender", "SPQR", "The Dark Tower", "", "ספר", "三体"]
         junk_books = []
         ok_books = []
         for i, s in enumerate(junk):
