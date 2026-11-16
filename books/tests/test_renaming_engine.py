@@ -605,6 +605,35 @@ class AuthorSortNameTests(RenamingEngineTests):
         self.assertEqual(self._sortname(), "van Sambeek, Liza")
 
 
+class StoredAuthorSortFormCacheTests(RenamingEngineTests):
+    """The stored sort form query runs at most once per book per engine."""
+
+    def _bookauthor_queries(self, ctx):
+        return [q for q in ctx.captured_queries if "bookauthor" in q["sql"].lower()]
+
+    def test_two_process_template_calls_run_one_query(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        engine = RenamingEngine()
+        with CaptureQueriesContext(connection) as ctx:
+            engine.process_template("${author.sortname}", self.book)
+            engine.process_template("${author.sortname}", self.book)
+        self.assertEqual(len(self._bookauthor_queries(ctx)), 1)
+
+    def test_second_book_gets_its_own_query(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        book2 = create_test_book_with_file(file_path="/test/Second.epub", file_format="epub", file_size=1024)
+        FinalMetadata.objects.create(book=book2, final_title="Second", final_author="Isaac Asimov", language="English")
+        engine = RenamingEngine()
+        with CaptureQueriesContext(connection) as ctx:
+            engine.process_template("${author.sortname}", self.book)
+            engine.process_template("${author.sortname}", book2)
+        self.assertEqual(len(self._bookauthor_queries(ctx)), 2)
+
+
 class RenamingPatternValidatorTests(TestCase):
     """Test cases for pattern validation"""
 
