@@ -53,8 +53,6 @@ TITLE_EXTENSION_RE = re.compile(
 # (name, predicate) pair; the predicate takes (title, author) and returns
 # True when the book trips that pattern (and must therefore be excluded).
 SUSPICIOUS_PATTERNS = [
-    ("contains_http", lambda t, a: "http" in t.lower() or "http" in a.lower()),
-    ("contains_www", lambda t, a: "www" in t.lower() or "www" in a.lower()),
     ("contains_at", lambda t, a: "@" in t or "@" in a),
     ("title_has_extension", lambda t, a: bool(TITLE_EXTENSION_RE.search(t.strip()))),
     ("all_digit_title", lambda t, a: t.strip().isdigit()),
@@ -83,6 +81,7 @@ CRITERIA_LABELS = [
     "suspicious pattern",
     "name mismatch",
     "series junk",
+    "url in name",
     "cover shared",
     "cover rejected by review",
     "cover empty",
@@ -192,6 +191,14 @@ def _series_is_junk(series):
     ):
         return True
     return False
+
+
+_URL_IN_NAME_RE = re.compile(r"https?://|www\.", re.IGNORECASE)
+
+
+def _url_in_name(title, author):
+    """True when the final title or author carries a URL-like marker."""
+    return bool(_URL_IN_NAME_RE.search(f"{title or ''} {author or ''}"))
 
 
 class Command(BaseCommand):
@@ -308,6 +315,8 @@ class Command(BaseCommand):
             return "name mismatch"
         if _series_is_junk(fm.final_series):
             return "series junk"
+        if _url_in_name(title, author):
+            return "url in name"
         cover_path = fm.final_cover_path
         if cover_path and not cover_path.startswith(("http://", "https://")):
             if ctx["cover_use"].get(cover_path, 0) > 1:

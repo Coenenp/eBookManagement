@@ -706,8 +706,6 @@ class ApproveBatchCommandTests(TestCase):
 
     def test_each_suspicious_pattern_excludes(self):
         cases = [
-            ("http", {"title": "Buy http books"}),
-            ("www", {"title": "See www.example.com"}),
             ("at_sign", {"title": "Mail me @ home"}),
             ("title_extension", {"title": "My Book.epub"}),
             ("all_digit_title", {"title": "12345678"}),
@@ -806,6 +804,22 @@ class ApproveBatchCommandTests(TestCase):
             self.assertNotIn(b.id, ids, f"junk series {b.finalmetadata.final_series!r} must be held")
         for b in ok_books:
             self.assertIn(b.id, ids, f"ok series {b.finalmetadata.final_series!r} must pass")
+
+    def test_url_in_name_criterion_excludes_and_passes(self):
+        url_author = self._make_book("urla", title="Some Title", author="https://avxhome.in")
+        www_title = self._make_book("urlw", title="See www.example.com", author="Normal Author")
+        ordinary = self._make_book("normal", title="Ordinary Book", author="Ordinary Author")
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        text = out.getvalue()
+        self.assertIn("url in name: 2", text)
+        self.assertIn("suspicious pattern: 0", text)
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        ids = set(manifest["ids"])
+        self.assertNotIn(url_author.id, ids)
+        self.assertNotIn(www_title.id, ids)
+        self.assertIn(ordinary.id, ids)
 
     def test_apply_skips_book_changed_to_mismatch(self):
         b1 = self._make_book("am1", title="Keeps Match", author="Keep Author")
