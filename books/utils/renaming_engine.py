@@ -491,7 +491,10 @@ class RenamingEngine:
         never considered.  This runs exactly one query per book and only when
         the final author contains no comma.
         """
-        rows = self.current_book.author_relationships.select_related("author", "source").filter(
+        rows = getattr(self.current_book, "author_relationships", None)
+        if rows is None:
+            return None
+        rows = rows.select_related("author", "source").filter(
             source__name__in=self._AUTHOR_SOURCE_PRIORITY
         )
         order = {name: i for i, name in enumerate(self._AUTHOR_SOURCE_PRIORITY)}
