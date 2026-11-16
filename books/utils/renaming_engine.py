@@ -12,6 +12,7 @@ from typing import List, Optional, Tuple
 
 from django.db import models
 
+from books.models import DataSource
 from books.utils.surname_particles import sort_name, split_author
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,7 @@ class RenamingEngine:
 
     def __init__(self):
         self.token_registry = {}
+        self._author_sort_cache = {}
         self._register_default_tokens()
 
     def _register_default_tokens(self):
@@ -481,32 +483,46 @@ class RenamingEngine:
         # No fallback - return None so the token gets omitted
         return None
 
-    _AUTHOR_SOURCE_PRIORITY = ["OPF File", "EPUB", "Open Library", "Google Books"]
+    _AUTHOR_SOURCE_PRIORITY = [
+        DataSource.OPF_FILE,
+        DataSource.EPUB_INTERNAL,
+        DataSource.OPEN_LIBRARY,
+        DataSource.GOOGLE_BOOKS,
+    ]
 
     def _stored_author_sort_form(self, final_author: str) -> Optional[str]:
         """Return a stored comma-form author name from an official source whose
         words equal the final author's words (case-insensitive), or None.
 
         Official sources are tried in priority order and ``Initial Scan`` is
-        never considered.  This runs exactly one query per book and only when
-        the final author contains no comma.
+        never considered.  The result is cached per engine instance keyed by
+        book id and final author, so two ``process_template`` calls for the
+        same book run the BookAuthor query once.
         """
         rows = getattr(self.current_book, "author_relationships", None)
         if rows is None:
             return None
+
+        key = (self.current_book.pk, final_author)
+        if key in self._author_sort_cache:
+            return self._author_sort_cache[key]
+
         rows = rows.select_related("author", "source").filter(
             source__name__in=self._AUTHOR_SOURCE_PRIORITY
         )
         order = {name: i for i, name in enumerate(self._AUTHOR_SOURCE_PRIORITY)}
         rows = sorted(rows, key=lambda r: order.get(r.source.name, len(order)))
         target_words = sorted(w.lower() for w in re.split(r"[ ,]+", final_author) if w)
+        result = None
         for row in rows:
             name = row.author.name
             if "," in name:
                 words = sorted(w.lower() for w in re.split(r"[ ,]+", name) if w)
                 if words == target_words:
-                    return name
-        return None
+                    result = name
+                    break
+        self._author_sort_cache[key] = result
+        return result
 
     def _get_author_sortname(self) -> Optional[str]:
         """Get author name in sortable format (Last, First)."""
