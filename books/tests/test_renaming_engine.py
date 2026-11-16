@@ -519,6 +519,47 @@ class MovePathComponentTests(TestCase):
         self.assertEqual(self.engine._normalize_path("My Book.epub", filename=True), "My Book.epub")
 
 
+class SlashTokenValueTests(RenamingEngineTests):
+    """Part A: slashes/backslashes inside a token value become underscores,
+    while slashes written in the pattern itself remain path separators."""
+
+    def test_title_slash_stays_single_component(self):
+        self.final_metadata.final_title = "Aan Chesil Beach / druk Heruitgave"
+        self.final_metadata.final_author = "Maddy Court"
+        self.final_metadata.save()
+        pattern = "${author.sortname} - ${title}.${ext}"
+        result = self.engine.process_template(pattern, self.book)
+        self.assertEqual(result, "Court, Maddy - Aan Chesil Beach _ druk Heruitgave.epub")
+        self.assertEqual(result.count("/"), 0)
+
+    def test_title_numeric_slash_becomes_underscore(self):
+        self.final_metadata.final_title = "11/22/63"
+        self.final_metadata.save()
+        result = self.engine.process_template("${title}.${ext}", self.book)
+        self.assertEqual(result, "11_22_63.epub")
+
+    def test_author_backslash_becomes_underscore(self):
+        self.final_metadata.final_author = "Smith\\Jones"
+        self.final_metadata.save()
+        result = self.engine.process_template("${author.fullname}", self.book)
+        self.assertEqual(result, "Smith_Jones")
+
+    def test_series_slash_single_folder(self):
+        self.final_metadata.final_series = "Star/ Trek"
+        self.final_metadata.save()
+        pattern = "${author.sortname}/${bookseries.title}/${title}.${ext}"
+        result = self.engine.process_template(pattern, self.book)
+        self.assertEqual(result, "Asimov, Isaac/Star_ Trek/Foundation.epub")
+
+    def test_pattern_separator_still_splits(self):
+        self.final_metadata.final_title = "Aan Chesil Beach / druk Heruitgave"
+        self.final_metadata.final_author = "Maddy Court"
+        self.final_metadata.save()
+        pattern = "${author.sortname}/${title}.${ext}"
+        result = self.engine.process_template(pattern, self.book)
+        self.assertEqual(result, "Court, Maddy/Aan Chesil Beach _ druk Heruitgave.epub")
+
+
 class RenamingPatternValidatorTests(TestCase):
     """Test cases for pattern validation"""
 

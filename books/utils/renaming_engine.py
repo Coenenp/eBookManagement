@@ -136,7 +136,15 @@ class RenamingEngine:
             token_placeholder = "${" + token + "}"
 
             if value:
-                processed = processed.replace(token_placeholder, str(value))
+                # A slash or backslash that arrived inside a token value must
+                # not be treated as a path separator later in _normalize_path,
+                # so it is replaced up front (pattern separators stay literal).
+                value_str = (
+                    str(value)
+                    .replace("/", self.REPLACEMENT_CHAR)
+                    .replace("\\", self.REPLACEMENT_CHAR)
+                )
+                processed = processed.replace(token_placeholder, value_str)
             else:
                 # Handle empty token omission
                 processed = self._omit_empty_token(processed, token_placeholder)
