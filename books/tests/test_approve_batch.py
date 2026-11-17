@@ -940,6 +940,42 @@ class ApproveBatchCommandTests(TestCase):
         for b in ok_books:
             self.assertIn(b.id, ids, f"series number {b.finalmetadata.final_series_number!r} must pass")
 
+    def test_series_from_title_criterion(self):
+        held = [
+            ("Boy 7", "Boy", "7"),
+            ("Boy 07", "Boy", "7"),
+            ("The Dark Tower 7", "The Dark Tower", "7"),
+        ]
+        ok = [
+            ("Boy 7", "Boy", "8"),
+            ("Dune", "Dune", "1"),
+            ("The Gunslinger", "The Dark Tower", "1"),
+        ]
+        held_books = []
+        ok_books = []
+        for i, (title, series, number) in enumerate(held):
+            b = self._make_book(f"sft{i}", title=title, author=f"SFT Author {chr(65 + i)}")
+            b.finalmetadata.final_series = series
+            b.finalmetadata.final_series_number = number
+            b.finalmetadata.save(update_fields=["final_series", "final_series_number"])
+            held_books.append(b)
+        for i, (title, series, number) in enumerate(ok):
+            b = self._make_book(f"sfo{i}", title=title, author=f"SFO Author {chr(65 + i)}")
+            b.finalmetadata.final_series = series
+            b.finalmetadata.final_series_number = number
+            b.finalmetadata.save(update_fields=["final_series", "final_series_number"])
+            ok_books.append(b)
+        out = StringIO()
+        call_command("approve_batch", report=True, manifest_dir=str(self.manifest_dir), stdout=out)
+        self.assertIn("series from title: 3", out.getvalue())
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        ids = set(manifest["ids"])
+        for b in held_books:
+            self.assertNotIn(b.id, ids, f"title {b.finalmetadata.final_title!r} must be held")
+        for b in ok_books:
+            self.assertIn(b.id, ids, f"title {b.finalmetadata.final_title!r} must pass")
+
     def test_title_noise_criterion(self):
         held = [
             ("By Naguib Mahfouz - The Day the Leader Was Killed", "", ""),
@@ -957,7 +993,6 @@ class ApproveBatchCommandTests(TestCase):
             ("Stand-up Comedy", "", ""),
             ("$100M Offers", "", ""),
             ("From #BlackLivesMatter to Black Liberation", "", ""),
-            ("Boy 7", "Boy", "7"),
         ]
         held_books = []
         ok_books = []

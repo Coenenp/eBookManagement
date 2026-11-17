@@ -82,6 +82,7 @@ CRITERIA_LABELS = [
     "name mismatch",
     "series junk",
     "series number",
+    "series from title",
     "title noise",
     "url in name",
     "cover shared",
@@ -211,6 +212,25 @@ def _series_number_value(series_number):
         return float(s)
     except ValueError:
         return None
+
+
+def _series_from_title(title, series, series_number):
+    """True when the series merely repeats the title's words plus its number."""
+    s = (series or "").strip()
+    if not s:
+        return False
+    series_val = _series_number_value(series_number)
+    if series_val is None:
+        return False
+    words = (title or "").split()
+    if len(words) < 2:
+        return False
+    last = words[-1]
+    if not last.isdigit():
+        return False
+    if _series_number_value(last) != series_val:
+        return False
+    return " ".join(words[:-1]).casefold() == s.casefold()
 
 
 _TITLE_SERIES_MARKER_RE = re.compile(r"#\s*\d")
@@ -382,6 +402,8 @@ class Command(BaseCommand):
         series_num = _series_number_value(fm.final_series_number)
         if series_num is not None and series_num >= 1000:
             return "series number"
+        if _series_from_title(title, fm.final_series, fm.final_series_number):
+            return "series from title"
         if _title_is_noisy(title, fm.final_series_number):
             return "title noise"
         if _url_in_name(title, author):
