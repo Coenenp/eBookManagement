@@ -893,6 +893,52 @@ class ApproveBatchCommandTests(TestCase):
         for b in ok_books:
             self.assertIn(b.id, ids, f"ok series {b.finalmetadata.final_series!r} must pass")
 
+    def test_series_bracket_is_junk(self):
+        book = self._make_book("sbk", title="Bracket Series Book", author="BS Author")
+        book.finalmetadata.final_series = "Black Britain Writing Back [ ed.]"
+        book.finalmetadata.save(update_fields=["final_series"])
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("series junk: 1", out.getvalue())
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertNotIn(book.id, manifest["ids"])
+
+    def test_series_number_criterion_holds_years_and_passes_small(self):
+        held = [("Serie Years", "1966"), ("Serie War", "1940")]
+        ok = [
+            ("The Dark Tower", "7"),
+            ("Serie One", "1"),
+            ("Serie Zero", "04"),
+            ("Serie Half", "1.5"),
+            ("Serie Big", "999"),
+            ("Serie Empty", ""),
+        ]
+        held_books = []
+        ok_books = []
+        for i, (series, number) in enumerate(held):
+            b = self._make_book(f"sny{i}", title=f"Series Year {chr(65 + i)}", author=f"SNY Author {chr(65 + i)}")
+            b.finalmetadata.final_series = series
+            b.finalmetadata.final_series_number = number
+            b.finalmetadata.save(update_fields=["final_series", "final_series_number"])
+            held_books.append(b)
+        for i, (series, number) in enumerate(ok):
+            b = self._make_book(f"sno{i}", title=f"Series Ok {chr(65 + i)}", author=f"SNO Author {chr(65 + i)}")
+            b.finalmetadata.final_series = series
+            b.finalmetadata.final_series_number = number
+            b.finalmetadata.save(update_fields=["final_series", "final_series_number"])
+            ok_books.append(b)
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("series number: 2", out.getvalue())
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        ids = set(manifest["ids"])
+        for b in held_books:
+            self.assertNotIn(b.id, ids, f"series number {b.finalmetadata.final_series_number!r} must be held")
+        for b in ok_books:
+            self.assertIn(b.id, ids, f"series number {b.finalmetadata.final_series_number!r} must pass")
+
     def test_url_in_name_criterion_excludes_and_passes(self):
         url_author = self._make_book("urla", title="Some Title", author="https://avxhome.in")
         www_title = self._make_book("urlw", title="See www.example.com", author="Normal Author")

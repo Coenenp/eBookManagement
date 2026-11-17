@@ -81,6 +81,7 @@ CRITERIA_LABELS = [
     "suspicious pattern",
     "name mismatch",
     "series junk",
+    "series number",
     "url in name",
     "cover shared",
     "cover rejected by review",
@@ -174,6 +175,10 @@ def _series_is_junk(series):
     s = (series or "").strip()
     if not s:
         return False
+    # A bracketed annotation ("[ ed.]") marks an anthology/editor note, not a
+    # real series name.
+    if "[" in s or "]" in s:
+        return True
     # No letter at all: "4 3 2" carries no series identity.
     if not any(ch.isalpha() for ch in s):
         return True
@@ -194,6 +199,17 @@ def _series_is_junk(series):
 
 
 _URL_IN_NAME_RE = re.compile(r"https?://|www\.", re.IGNORECASE)
+
+
+def _series_number_value(series_number):
+    """The series number read as a number (float), or None when empty/unparseable."""
+    s = (series_number or "").strip()
+    if not s:
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
 
 
 def _url_in_name(title, author):
@@ -335,6 +351,9 @@ class Command(BaseCommand):
             return "name mismatch"
         if _series_is_junk(fm.final_series):
             return "series junk"
+        series_num = _series_number_value(fm.final_series_number)
+        if series_num is not None and series_num >= 1000:
+            return "series number"
         if _url_in_name(title, author):
             return "url in name"
         cover_path = fm.final_cover_path
