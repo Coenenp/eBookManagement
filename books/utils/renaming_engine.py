@@ -287,7 +287,7 @@ class RenamingEngine:
         Either way, a component that becomes empty is replaced by an underscore
         and a Windows reserved device name is prefixed with an underscore.
         """
-        part = re.sub(r'[<>:"|?*&]', self.REPLACEMENT_CHAR, part)
+        part = re.sub(r'[<>:"|?*!]', self.REPLACEMENT_CHAR, part)
         part = re.sub(r"\s+", " ", part)
         if filename:
             stem, ext = _split_stem_ext(part)

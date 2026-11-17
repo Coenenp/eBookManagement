@@ -16,6 +16,7 @@ from books.management.commands.approve_batch import (
     DEFAULT_MANIFEST_DIR,
     MAX_SAMPLE,
     SUSPICIOUS_PATTERNS,
+    _title_is_noisy,
     Command,
 )
 from books.models import FileMove
@@ -528,7 +529,7 @@ class ApproveBatchCommandTests(TestCase):
         self.assertIn(non_sample.finalmetadata.final_series_number, text)
         target = Command()._planned_target(non_sample)
         self.assertTrue(target, "planned target must be non-empty for a non-sample book")
-        self.assertIn(target, text)
+        self.assertIn(Path(target).name, text)
 
     def test_review_page_escapes_series_less_than(self):
         book = self._make_book(
@@ -544,6 +545,94 @@ class ApproveBatchCommandTests(TestCase):
         text = (self.manifest_dir / manifest["review_page"]).read_text()
         self.assertIn("A &lt; B", text)
         self.assertNotIn("A < B</td>", text)
+
+    def _review_page_row_cells(self, text):
+        """The <td> cell values of the single data row (cover, id, ... sample)."""
+        return re.findall(r"<td>(.*?)</td>", text, re.DOTALL)
+
+    def test_review_page_last_and_first_name(self):
+        self._make_book("rpn", title="Name Book", author="Liza van Sambeek",
+                        cover_path=self._valid_cover("rpn.jpg"))
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        cells = self._review_page_row_cells(text)
+        self.assertEqual(cells[3], "van Sambeek")
+        self.assertEqual(cells[4], "Liza")
+
+    def test_review_page_author_sortname_from_epub_row(self):
+        from books.models import Author, BookAuthor, DataSource, FinalMetadata
+
+        stem = "rpv Vonne Book Vonne van der meer"
+        path = Path(self.temp_dir) / f"{stem}.epub"
+        path.write_bytes(b"fake")
+        book = create_test_book_with_file(
+            file_path=str(path), file_format="epub",
+            scan_folder=self.scan_folder, content_type="ebook",
+        )
+        # Create the stored EPUB comma form before FinalMetadata so the
+        # BookAuthor save() re-sync has no FinalMetadata to clobber.
+        source, _ = DataSource.objects.get_or_create(
+            name=DataSource.EPUB_INTERNAL, defaults={"priority": 1, "trust_level": 5}
+        )
+        author = Author.objects.create(name="van der Meer, Vonne")
+        BookAuthor.objects.create(book=book, author=author, source=source)
+        FinalMetadata.objects.create(
+            book=book, final_title="Vonne Book", final_title_confidence=0.95,
+            final_author="Vonne van der meer", final_author_confidence=0.95,
+            final_cover_path=self._valid_cover("rpv.jpg"), final_cover_confidence=0.95,
+            language="en",
+        )
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        cells = self._review_page_row_cells(text)
+        self.assertEqual(cells[3], "van der Meer")
+        self.assertEqual(cells[4], "Vonne")
+
+    def test_review_page_folder_omits_scan_folder(self):
+        self._make_book("rpf", title="Folder Book", author="Folder Author",
+                        cover_path=self._valid_cover("rpf.jpg"))
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        cells = self._review_page_row_cells(text)
+        self.assertNotIn(self.scan_folder.path, cells[10])
+
+    def test_review_page_file_name_is_target_basename(self):
+        book = self._make_book("rpfn", title="File Name Book", author="File Author",
+                               cover_path=self._valid_cover("rpfn.jpg"))
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        cells = self._review_page_row_cells(text)
+        target = Command()._planned_target(book)
+        self.assertEqual(cells[11], Path(target).name)
+
+    def test_review_page_escapes_less_than_in_last_name(self):
+        self._make_book("rplt", title="Esc Last Book", author="Van < Sambeek, Liza",
+                        cover_path=self._valid_cover("rplt.jpg"))
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        self.assertIn("Van &lt; Sambeek", text)
+        self.assertNotIn("Van < Sambeek</td>", text)
+
+    def test_review_page_header_columns(self):
+        self._make_book("rph", title="Header Book", author="Header Author",
+                        cover_path=self._valid_cover("rph.jpg"))
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        headers = re.findall(r"<th>(.*?)</th>", text)
+        self.assertEqual(
+            headers,
+            [
+                "cover", "id", "title", "last name", "first name", "series",
+                "number", "language", "format", "tier", "folder", "file name",
+                "source path", "sample",
+            ],
+        )
 
     def test_apply_command_printed_with_manifest_and_count(self):
         self._make_book("cmd", title="Command Book", author="Cmd Author")
@@ -804,6 +893,138 @@ class ApproveBatchCommandTests(TestCase):
             self.assertNotIn(b.id, ids, f"junk series {b.finalmetadata.final_series!r} must be held")
         for b in ok_books:
             self.assertIn(b.id, ids, f"ok series {b.finalmetadata.final_series!r} must pass")
+
+    def test_series_bracket_is_junk(self):
+        book = self._make_book("sbk", title="Bracket Series Book", author="BS Author")
+        book.finalmetadata.final_series = "Black Britain Writing Back [ ed.]"
+        book.finalmetadata.save(update_fields=["final_series"])
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("series junk: 1", out.getvalue())
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        self.assertNotIn(book.id, manifest["ids"])
+
+    def test_series_number_criterion_holds_years_and_passes_small(self):
+        held = [("Serie Years", "1966"), ("Serie War", "1940")]
+        ok = [
+            ("The Dark Tower", "7"),
+            ("Serie One", "1"),
+            ("Serie Zero", "04"),
+            ("Serie Half", "1.5"),
+            ("Serie Big", "999"),
+            ("Serie Empty", ""),
+        ]
+        held_books = []
+        ok_books = []
+        for i, (series, number) in enumerate(held):
+            b = self._make_book(f"sny{i}", title=f"Series Year {chr(65 + i)}", author=f"SNY Author {chr(65 + i)}")
+            b.finalmetadata.final_series = series
+            b.finalmetadata.final_series_number = number
+            b.finalmetadata.save(update_fields=["final_series", "final_series_number"])
+            held_books.append(b)
+        for i, (series, number) in enumerate(ok):
+            b = self._make_book(f"sno{i}", title=f"Series Ok {chr(65 + i)}", author=f"SNO Author {chr(65 + i)}")
+            b.finalmetadata.final_series = series
+            b.finalmetadata.final_series_number = number
+            b.finalmetadata.save(update_fields=["final_series", "final_series_number"])
+            ok_books.append(b)
+        out = StringIO()
+        call_command("approve_batch", report=True, stdout=out)
+        self.assertIn("series number: 2", out.getvalue())
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        ids = set(manifest["ids"])
+        for b in held_books:
+            self.assertNotIn(b.id, ids, f"series number {b.finalmetadata.final_series_number!r} must be held")
+        for b in ok_books:
+            self.assertIn(b.id, ids, f"series number {b.finalmetadata.final_series_number!r} must pass")
+
+    def test_series_from_title_criterion(self):
+        held = [
+            ("Boy 7", "Boy", "7"),
+            ("Boy 07", "Boy", "7"),
+            ("The Dark Tower 7", "The Dark Tower", "7"),
+        ]
+        ok = [
+            ("Boy 7", "Boy", "8"),
+            ("Dune", "Dune", "1"),
+            ("The Gunslinger", "The Dark Tower", "1"),
+        ]
+        held_books = []
+        ok_books = []
+        for i, (title, series, number) in enumerate(held):
+            b = self._make_book(f"sft{i}", title=title, author=f"SFT Author {chr(65 + i)}")
+            b.finalmetadata.final_series = series
+            b.finalmetadata.final_series_number = number
+            b.finalmetadata.save(update_fields=["final_series", "final_series_number"])
+            held_books.append(b)
+        for i, (title, series, number) in enumerate(ok):
+            b = self._make_book(f"sfo{i}", title=title, author=f"SFO Author {chr(65 + i)}")
+            b.finalmetadata.final_series = series
+            b.finalmetadata.final_series_number = number
+            b.finalmetadata.save(update_fields=["final_series", "final_series_number"])
+            ok_books.append(b)
+        out = StringIO()
+        call_command("approve_batch", report=True, manifest_dir=str(self.manifest_dir), stdout=out)
+        self.assertIn("series from title: 3", out.getvalue())
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        ids = set(manifest["ids"])
+        for b in held_books:
+            self.assertNotIn(b.id, ids, f"title {b.finalmetadata.final_title!r} must be held")
+        for b in ok_books:
+            self.assertIn(b.id, ids, f"title {b.finalmetadata.final_title!r} must pass")
+
+    def test_title_noise_criterion(self):
+        held = [
+            ("By Naguib Mahfouz - The Day the Leader Was Killed", "", ""),
+            ("A - B", "", ""),
+            ("Muse of Nightmares (Strange the Dreamer #2_UK)", "", ""),
+            ("Seekers: Return to the Wild #2: The Melting Sea", "", ""),
+            ("023 The Melted Coins", "", "23"),
+            ("073 The Billion Dollar Ransom", "", "73"),
+        ]
+        ok = [
+            ("365 Essential Survival Skills", "", ""),
+            ("365 Days", "", "2"),
+            ("Run to the Mountain", "", ""),
+            ("Bywater Blues", "", ""),
+            ("Stand-up Comedy", "", ""),
+            ("$100M Offers", "", ""),
+            ("From #BlackLivesMatter to Black Liberation", "", ""),
+        ]
+        held_books = []
+        ok_books = []
+        for i, (title, series, number) in enumerate(held):
+            b = self._make_book(f"tnh{i}", title=title, author=f"TN Author {chr(65 + i)}")
+            b.finalmetadata.final_series = series
+            b.finalmetadata.final_series_number = number
+            b.finalmetadata.save(update_fields=["final_series", "final_series_number"])
+            held_books.append(b)
+        for i, (title, series, number) in enumerate(ok):
+            b = self._make_book(f"tno{i}", title=title, author=f"TNO Author {chr(65 + i)}")
+            b.finalmetadata.final_series = series
+            b.finalmetadata.final_series_number = number
+            b.finalmetadata.save(update_fields=["final_series", "final_series_number"])
+            ok_books.append(b)
+        out = StringIO()
+        call_command("approve_batch", report=True, manifest_dir=str(self.manifest_dir), stdout=out)
+        self.assertIn("title noise: 6", out.getvalue())
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        ids = set(manifest["ids"])
+        for b in held_books:
+            self.assertNotIn(b.id, ids, f"title {b.finalmetadata.final_title!r} must be held")
+        for b in ok_books:
+            self.assertIn(b.id, ids, f"title {b.finalmetadata.final_title!r} must pass")
+
+    def test_title_is_noisy_series_number_value_does_not_raise(self):
+        # A Unicode digit such as the superscript two satisfies isdigit() but
+        # makes float() raise, which would abort a whole batch's report.
+        self.assertFalse(_title_is_noisy("\u00b2 Gone", "2"))
+        self.assertTrue(_title_is_noisy("023 The Melted Coins", "23"))
+        self.assertFalse(_title_is_noisy("365 Days", "2"))
 
     def test_url_in_name_criterion_excludes_and_passes(self):
         url_author = self._make_book("urla", title="Some Title", author="https://avxhome.in")

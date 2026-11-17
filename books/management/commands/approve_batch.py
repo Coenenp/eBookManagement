@@ -81,6 +81,9 @@ CRITERIA_LABELS = [
     "suspicious pattern",
     "name mismatch",
     "series junk",
+    "series number",
+    "series from title",
+    "title noise",
     "url in name",
     "cover shared",
     "cover rejected by review",
@@ -174,6 +177,10 @@ def _series_is_junk(series):
     s = (series or "").strip()
     if not s:
         return False
+    # A bracketed annotation ("[ ed.]") marks an anthology/editor note, not a
+    # real series name.
+    if "[" in s or "]" in s:
+        return True
     # No letter at all: "4 3 2" carries no series identity.
     if not any(ch.isalpha() for ch in s):
         return True
@@ -196,9 +203,86 @@ def _series_is_junk(series):
 _URL_IN_NAME_RE = re.compile(r"https?://|www\.", re.IGNORECASE)
 
 
+def _series_number_value(series_number):
+    """The series number read as a number (float), or None when empty/unparseable."""
+    s = (series_number or "").strip()
+    if not s:
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _series_from_title(title, series, series_number):
+    """True when the series merely repeats the title's words plus its number."""
+    s = (series or "").strip()
+    if not s:
+        return False
+    series_val = _series_number_value(series_number)
+    if series_val is None:
+        return False
+    words = (title or "").split()
+    if len(words) < 2:
+        return False
+    last = words[-1]
+    if not last.isdigit():
+        return False
+    if _series_number_value(last) != series_val:
+        return False
+    return " ".join(words[:-1]).casefold() == s.casefold()
+
+
+_TITLE_SERIES_MARKER_RE = re.compile(r"#\s*\d")
+
+
+def _title_is_noisy(title, series_number):
+    """True when the final title carries a marker that does not belong in it."""
+    t = (title or "").strip()
+    if not t:
+        return False
+    # (1) starts with "by " (case-insensitive); (2) contains " - ".
+    if t.casefold().startswith("by "):
+        return True
+    if " - " in t:
+        return True
+    # (3) a series marker: "#" directly followed (after optional spaces) by a
+    # digit, e.g. "Strange the Dreamer #2_UK".
+    if _TITLE_SERIES_MARKER_RE.search(t):
+        return True
+    # (4) a series number repeated at the start of the title: the first word is
+    # all digits and equals the series number ("023" and "23").
+    first_word = t.split()[0]
+    if first_word.isdigit():
+        series_val = _series_number_value(series_number)
+        if series_val is not None and _series_number_value(first_word) == series_val:
+            return True
+    return False
+
+
 def _url_in_name(title, author):
     """True when the final title or author carries a URL-like marker."""
     return bool(_URL_IN_NAME_RE.search(f"{title or ''} {author or ''}"))
+
+
+def _target_parts(target, scan_path):
+    """Split a planned target into ``(folder, file name)``.
+
+    ``folder`` is the directory part without the scan-folder prefix (so it
+    starts with the language folder); ``file name`` is the base name.
+    """
+    if not target:
+        return "", ""
+    t = Path(target)
+    filename = t.name
+    folder = str(t.parent)
+    if scan_path:
+        scan = str(Path(scan_path)).rstrip("/\\")
+        if folder == scan:
+            folder = ""
+        elif folder.startswith(scan + "/") or folder.startswith(scan + "\\"):
+            folder = folder[len(scan) + 1 :]
+    return folder, filename
 
 
 class Command(BaseCommand):
@@ -315,6 +399,13 @@ class Command(BaseCommand):
             return "name mismatch"
         if _series_is_junk(fm.final_series):
             return "series junk"
+        series_num = _series_number_value(fm.final_series_number)
+        if series_num is not None and series_num >= 1000:
+            return "series number"
+        if _series_from_title(title, fm.final_series, fm.final_series_number):
+            return "series from title"
+        if _title_is_noisy(title, fm.final_series_number):
+            return "title noise"
         if _url_in_name(title, author):
             return "url in name"
         cover_path = fm.final_cover_path
@@ -467,33 +558,50 @@ class Command(BaseCommand):
         """Write a self-contained review HTML page (no scripts, no external assets)."""
         import html
 
-        from books.models import FinalMetadata
+        from books.models import Book
+        from books.utils.renaming_engine import RenamingEngine
 
         ids = sorted(bid for _corr, bid in selected)
         if not ids:
             return None
 
-        metas = {
-            m["book_id"]: m
-            for m in FinalMetadata.objects.filter(book_id__in=ids).values(
-                "book_id", "final_title", "final_author", "language",
-                "final_series", "final_series_number", "final_cover_path"
+        books = {
+            b.id: b
+            for b in Book.objects.select_related("finalmetadata", "scan_folder").filter(
+                id__in=ids
             )
         }
+        engine = RenamingEngine()
         corroborated = {bid: c for c, bid in selected}
 
         rows = []
         for bid in ids:
-            m = metas.get(bid, {})
-            title = m.get("final_title") or ""
-            author = m.get("final_author") or ""
-            language = m.get("language") or ""
-            series = m.get("final_series") or ""
-            series_number = m.get("final_series_number") or ""
+            book = books.get(bid)
+            fm = book.finalmetadata if book is not None else None
+            title = (fm.final_title if fm else None) or ""
+            language = (fm.language if fm else None) or ""
+            series = (fm.final_series if fm else None) or ""
+            series_number = (fm.final_series_number if fm else None) or ""
+            cover_path = (fm.final_cover_path if fm else None) or ""
+
+            last_name = ""
+            first_name = ""
+            if book is not None:
+                engine.current_book = book
+                sortname = engine._get_author_sortname() or ""
+                if "," in sortname:
+                    last_name, first_name = sortname.split(",", 1)
+                else:
+                    last_name = sortname
+                last_name = (last_name or "").strip()
+                first_name = (first_name or "").strip()
+
             source, fmt = ctx["primary_file"].get(bid, ("", ""))
             tier = "corroborated" if corroborated.get(bid, False) else "standard"
             target = targets.get(bid, "")
-            cover_uri = self._cover_data_uri(m.get("final_cover_path") or "")
+            scan_path = book.scan_folder.path if (book is not None and book.scan_folder) else ""
+            folder, filename = _target_parts(target, scan_path)
+            cover_uri = self._cover_data_uri(cover_path)
             cover_cell = (
                 f'<img src="{html.escape(cover_uri, quote=True)}" alt="cover">'
                 if cover_uri
@@ -505,14 +613,16 @@ class Command(BaseCommand):
                 f"<td>{cover_cell}</td>"
                 f"<td>{html.escape(str(bid))}</td>"
                 f"<td>{html.escape(title)}</td>"
-                f"<td>{html.escape(author)}</td>"
+                f"<td>{html.escape(last_name)}</td>"
+                f"<td>{html.escape(first_name)}</td>"
                 f"<td>{html.escape(series)}</td>"
                 f"<td>{html.escape(series_number)}</td>"
                 f"<td>{html.escape(language)}</td>"
                 f"<td>{html.escape(fmt)}</td>"
                 f"<td>{html.escape(tier)}</td>"
+                f"<td>{html.escape(folder)}</td>"
+                f"<td>{html.escape(filename)}</td>"
                 f"<td>{html.escape(self._path_tail(source))}</td>"
-                f"<td>{html.escape(target)}</td>"
                 f"<td>{mark}</td>"
             )
             rows.append(f"<tr{row_class}>{cells}</tr>")
@@ -531,9 +641,10 @@ class Command(BaseCommand):
             f"<h1>Batch {html.escape(batch_id)}</h1>"
             f"<p>criteria version: {html.escape(CRITERIA_VERSION)}</p>"
             f"<p>{hold}</p>"
-            "<table><thead><tr><th>cover</th><th>id</th><th>title</th><th>author</th>"
-            "<th>series</th><th>number</th><th>language</th><th>format</th><th>tier</th>"
-            "<th>path</th><th>target</th><th>sample</th></tr></thead><tbody>"
+            "<table><thead><tr><th>cover</th><th>id</th><th>title</th><th>last name</th>"
+            "<th>first name</th><th>series</th><th>number</th><th>language</th><th>format</th>"
+            "<th>tier</th><th>folder</th><th>file name</th><th>source path</th><th>sample</th>"
+            "</tr></thead><tbody>"
             + "".join(rows)
             + "</tbody></table></body></html>"
         )
