@@ -528,7 +528,7 @@ class ApproveBatchCommandTests(TestCase):
         self.assertIn(non_sample.finalmetadata.final_series_number, text)
         target = Command()._planned_target(non_sample)
         self.assertTrue(target, "planned target must be non-empty for a non-sample book")
-        self.assertIn(target, text)
+        self.assertIn(Path(target).name, text)
 
     def test_review_page_escapes_series_less_than(self):
         book = self._make_book(
@@ -544,6 +544,94 @@ class ApproveBatchCommandTests(TestCase):
         text = (self.manifest_dir / manifest["review_page"]).read_text()
         self.assertIn("A &lt; B", text)
         self.assertNotIn("A < B</td>", text)
+
+    def _review_page_row_cells(self, text):
+        """The <td> cell values of the single data row (cover, id, ... sample)."""
+        return re.findall(r"<td>(.*?)</td>", text, re.DOTALL)
+
+    def test_review_page_last_and_first_name(self):
+        self._make_book("rpn", title="Name Book", author="Liza van Sambeek",
+                        cover_path=self._valid_cover("rpn.jpg"))
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        cells = self._review_page_row_cells(text)
+        self.assertEqual(cells[3], "van Sambeek")
+        self.assertEqual(cells[4], "Liza")
+
+    def test_review_page_author_sortname_from_epub_row(self):
+        from books.models import Author, BookAuthor, DataSource, FinalMetadata
+
+        stem = "rpv Vonne Book Vonne van der meer"
+        path = Path(self.temp_dir) / f"{stem}.epub"
+        path.write_bytes(b"fake")
+        book = create_test_book_with_file(
+            file_path=str(path), file_format="epub",
+            scan_folder=self.scan_folder, content_type="ebook",
+        )
+        # Create the stored EPUB comma form before FinalMetadata so the
+        # BookAuthor save() re-sync has no FinalMetadata to clobber.
+        source, _ = DataSource.objects.get_or_create(
+            name=DataSource.EPUB_INTERNAL, defaults={"priority": 1, "trust_level": 5}
+        )
+        author = Author.objects.create(name="van der Meer, Vonne")
+        BookAuthor.objects.create(book=book, author=author, source=source)
+        FinalMetadata.objects.create(
+            book=book, final_title="Vonne Book", final_title_confidence=0.95,
+            final_author="Vonne van der meer", final_author_confidence=0.95,
+            final_cover_path=self._valid_cover("rpv.jpg"), final_cover_confidence=0.95,
+            language="en",
+        )
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        cells = self._review_page_row_cells(text)
+        self.assertEqual(cells[3], "van der Meer")
+        self.assertEqual(cells[4], "Vonne")
+
+    def test_review_page_folder_omits_scan_folder(self):
+        self._make_book("rpf", title="Folder Book", author="Folder Author",
+                        cover_path=self._valid_cover("rpf.jpg"))
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        cells = self._review_page_row_cells(text)
+        self.assertNotIn(self.scan_folder.path, cells[10])
+
+    def test_review_page_file_name_is_target_basename(self):
+        book = self._make_book("rpfn", title="File Name Book", author="File Author",
+                               cover_path=self._valid_cover("rpfn.jpg"))
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        cells = self._review_page_row_cells(text)
+        target = Command()._planned_target(book)
+        self.assertEqual(cells[11], Path(target).name)
+
+    def test_review_page_escapes_less_than_in_last_name(self):
+        self._make_book("rplt", title="Esc Last Book", author="Van < Sambeek, Liza",
+                        cover_path=self._valid_cover("rplt.jpg"))
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        self.assertIn("Van &lt; Sambeek", text)
+        self.assertNotIn("Van < Sambeek</td>", text)
+
+    def test_review_page_header_columns(self):
+        self._make_book("rph", title="Header Book", author="Header Author",
+                        cover_path=self._valid_cover("rph.jpg"))
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        text = (self.manifest_dir / manifest["review_page"]).read_text()
+        headers = re.findall(r"<th>(.*?)</th>", text)
+        self.assertEqual(
+            headers,
+            [
+                "cover", "id", "title", "last name", "first name", "series",
+                "number", "language", "format", "tier", "folder", "file name",
+                "source path", "sample",
+            ],
+        )
 
     def test_apply_command_printed_with_manifest_and_count(self):
         self._make_book("cmd", title="Command Book", author="Cmd Author")

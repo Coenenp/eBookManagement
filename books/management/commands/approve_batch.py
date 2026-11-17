@@ -201,6 +201,26 @@ def _url_in_name(title, author):
     return bool(_URL_IN_NAME_RE.search(f"{title or ''} {author or ''}"))
 
 
+def _target_parts(target, scan_path):
+    """Split a planned target into ``(folder, file name)``.
+
+    ``folder`` is the directory part without the scan-folder prefix (so it
+    starts with the language folder); ``file name`` is the base name.
+    """
+    if not target:
+        return "", ""
+    t = Path(target)
+    filename = t.name
+    folder = str(t.parent)
+    if scan_path:
+        scan = str(Path(scan_path)).rstrip("/\\")
+        if folder == scan:
+            folder = ""
+        elif folder.startswith(scan + "/") or folder.startswith(scan + "\\"):
+            folder = folder[len(scan) + 1 :]
+    return folder, filename
+
+
 class Command(BaseCommand):
     help = "Approve a batch of eligible books (prepare/report/apply/reject)."
 
@@ -467,33 +487,50 @@ class Command(BaseCommand):
         """Write a self-contained review HTML page (no scripts, no external assets)."""
         import html
 
-        from books.models import FinalMetadata
+        from books.models import Book
+        from books.utils.renaming_engine import RenamingEngine
 
         ids = sorted(bid for _corr, bid in selected)
         if not ids:
             return None
 
-        metas = {
-            m["book_id"]: m
-            for m in FinalMetadata.objects.filter(book_id__in=ids).values(
-                "book_id", "final_title", "final_author", "language",
-                "final_series", "final_series_number", "final_cover_path"
+        books = {
+            b.id: b
+            for b in Book.objects.select_related("finalmetadata", "scan_folder").filter(
+                id__in=ids
             )
         }
+        engine = RenamingEngine()
         corroborated = {bid: c for c, bid in selected}
 
         rows = []
         for bid in ids:
-            m = metas.get(bid, {})
-            title = m.get("final_title") or ""
-            author = m.get("final_author") or ""
-            language = m.get("language") or ""
-            series = m.get("final_series") or ""
-            series_number = m.get("final_series_number") or ""
+            book = books.get(bid)
+            fm = book.finalmetadata if book is not None else None
+            title = (fm.final_title if fm else None) or ""
+            language = (fm.language if fm else None) or ""
+            series = (fm.final_series if fm else None) or ""
+            series_number = (fm.final_series_number if fm else None) or ""
+            cover_path = (fm.final_cover_path if fm else None) or ""
+
+            last_name = ""
+            first_name = ""
+            if book is not None:
+                engine.current_book = book
+                sortname = engine._get_author_sortname() or ""
+                if "," in sortname:
+                    last_name, first_name = sortname.split(",", 1)
+                else:
+                    last_name = sortname
+                last_name = (last_name or "").strip()
+                first_name = (first_name or "").strip()
+
             source, fmt = ctx["primary_file"].get(bid, ("", ""))
             tier = "corroborated" if corroborated.get(bid, False) else "standard"
             target = targets.get(bid, "")
-            cover_uri = self._cover_data_uri(m.get("final_cover_path") or "")
+            scan_path = book.scan_folder.path if (book is not None and book.scan_folder) else ""
+            folder, filename = _target_parts(target, scan_path)
+            cover_uri = self._cover_data_uri(cover_path)
             cover_cell = (
                 f'<img src="{html.escape(cover_uri, quote=True)}" alt="cover">'
                 if cover_uri
@@ -505,14 +542,16 @@ class Command(BaseCommand):
                 f"<td>{cover_cell}</td>"
                 f"<td>{html.escape(str(bid))}</td>"
                 f"<td>{html.escape(title)}</td>"
-                f"<td>{html.escape(author)}</td>"
+                f"<td>{html.escape(last_name)}</td>"
+                f"<td>{html.escape(first_name)}</td>"
                 f"<td>{html.escape(series)}</td>"
                 f"<td>{html.escape(series_number)}</td>"
                 f"<td>{html.escape(language)}</td>"
                 f"<td>{html.escape(fmt)}</td>"
                 f"<td>{html.escape(tier)}</td>"
+                f"<td>{html.escape(folder)}</td>"
+                f"<td>{html.escape(filename)}</td>"
                 f"<td>{html.escape(self._path_tail(source))}</td>"
-                f"<td>{html.escape(target)}</td>"
                 f"<td>{mark}</td>"
             )
             rows.append(f"<tr{row_class}>{cells}</tr>")
@@ -531,9 +570,10 @@ class Command(BaseCommand):
             f"<h1>Batch {html.escape(batch_id)}</h1>"
             f"<p>criteria version: {html.escape(CRITERIA_VERSION)}</p>"
             f"<p>{hold}</p>"
-            "<table><thead><tr><th>cover</th><th>id</th><th>title</th><th>author</th>"
-            "<th>series</th><th>number</th><th>language</th><th>format</th><th>tier</th>"
-            "<th>path</th><th>target</th><th>sample</th></tr></thead><tbody>"
+            "<table><thead><tr><th>cover</th><th>id</th><th>title</th><th>last name</th>"
+            "<th>first name</th><th>series</th><th>number</th><th>language</th><th>format</th>"
+            "<th>tier</th><th>folder</th><th>file name</th><th>source path</th><th>sample</th>"
+            "</tr></thead><tbody>"
             + "".join(rows)
             + "</tbody></table></body></html>"
         )
