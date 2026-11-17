@@ -939,6 +939,50 @@ class ApproveBatchCommandTests(TestCase):
         for b in ok_books:
             self.assertIn(b.id, ids, f"series number {b.finalmetadata.final_series_number!r} must pass")
 
+    def test_title_noise_criterion(self):
+        held = [
+            ("By Naguib Mahfouz - The Day the Leader Was Killed", "", ""),
+            ("A - B", "", ""),
+            ("Muse of Nightmares (Strange the Dreamer #2_UK)", "", ""),
+            ("Seekers: Return to the Wild #2: The Melting Sea", "", ""),
+            ("023 The Melted Coins", "", "23"),
+            ("073 The Billion Dollar Ransom", "", "73"),
+        ]
+        ok = [
+            ("365 Essential Survival Skills", "", ""),
+            ("365 Days", "", "2"),
+            ("Run to the Mountain", "", ""),
+            ("Bywater Blues", "", ""),
+            ("Stand-up Comedy", "", ""),
+            ("$100M Offers", "", ""),
+            ("From #BlackLivesMatter to Black Liberation", "", ""),
+            ("Boy 7", "Boy", "7"),
+        ]
+        held_books = []
+        ok_books = []
+        for i, (title, series, number) in enumerate(held):
+            b = self._make_book(f"tnh{i}", title=title, author=f"TN Author {chr(65 + i)}")
+            b.finalmetadata.final_series = series
+            b.finalmetadata.final_series_number = number
+            b.finalmetadata.save(update_fields=["final_series", "final_series_number"])
+            held_books.append(b)
+        for i, (title, series, number) in enumerate(ok):
+            b = self._make_book(f"tno{i}", title=title, author=f"TNO Author {chr(65 + i)}")
+            b.finalmetadata.final_series = series
+            b.finalmetadata.final_series_number = number
+            b.finalmetadata.save(update_fields=["final_series", "final_series_number"])
+            ok_books.append(b)
+        out = StringIO()
+        call_command("approve_batch", report=True, manifest_dir=str(self.manifest_dir), stdout=out)
+        self.assertIn("title noise: 6", out.getvalue())
+        _, mpath = self._prepare()
+        manifest = self._manifest(mpath)
+        ids = set(manifest["ids"])
+        for b in held_books:
+            self.assertNotIn(b.id, ids, f"title {b.finalmetadata.final_title!r} must be held")
+        for b in ok_books:
+            self.assertIn(b.id, ids, f"title {b.finalmetadata.final_title!r} must pass")
+
     def test_url_in_name_criterion_excludes_and_passes(self):
         url_author = self._make_book("urla", title="Some Title", author="https://avxhome.in")
         www_title = self._make_book("urlw", title="See www.example.com", author="Normal Author")

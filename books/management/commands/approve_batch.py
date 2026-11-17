@@ -82,6 +82,7 @@ CRITERIA_LABELS = [
     "name mismatch",
     "series junk",
     "series number",
+    "title noise",
     "url in name",
     "cover shared",
     "cover rejected by review",
@@ -210,6 +211,33 @@ def _series_number_value(series_number):
         return float(s)
     except ValueError:
         return None
+
+
+_TITLE_SERIES_MARKER_RE = re.compile(r"#\s*\d")
+
+
+def _title_is_noisy(title, series_number):
+    """True when the final title carries a marker that does not belong in it."""
+    t = (title or "").strip()
+    if not t:
+        return False
+    # (1) starts with "by " (case-insensitive); (2) contains " - ".
+    if t.casefold().startswith("by "):
+        return True
+    if " - " in t:
+        return True
+    # (3) a series marker: "#" directly followed (after optional spaces) by a
+    # digit, e.g. "Strange the Dreamer #2_UK".
+    if _TITLE_SERIES_MARKER_RE.search(t):
+        return True
+    # (4) a series number repeated at the start of the title: the first word is
+    # all digits and equals the series number ("023" and "23").
+    first_word = t.split()[0]
+    if first_word.isdigit():
+        series_val = _series_number_value(series_number)
+        if series_val is not None and float(first_word) == series_val:
+            return True
+    return False
 
 
 def _url_in_name(title, author):
@@ -354,6 +382,8 @@ class Command(BaseCommand):
         series_num = _series_number_value(fm.final_series_number)
         if series_num is not None and series_num >= 1000:
             return "series number"
+        if _title_is_noisy(title, fm.final_series_number):
+            return "title noise"
         if _url_in_name(title, author):
             return "url in name"
         cover_path = fm.final_cover_path
