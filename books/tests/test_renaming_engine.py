@@ -518,6 +518,12 @@ class MovePathComponentTests(TestCase):
     def test_filename_extension_unchanged(self):
         self.assertEqual(self.engine._normalize_path("My Book.epub", filename=True), "My Book.epub")
 
+    def test_exclamation_becomes_underscore(self):
+        self.assertEqual(self.engine._normalize_path("Wow! Really?"), "Wow_ Really_")
+
+    def test_ampersand_is_legal_in_filenames(self):
+        self.assertEqual(self.engine._normalize_path("Tom & Jerry"), "Tom & Jerry")
+
 
 class SlashTokenValueTests(RenamingEngineTests):
     """Part A: slashes/backslashes inside a token value become underscores,
