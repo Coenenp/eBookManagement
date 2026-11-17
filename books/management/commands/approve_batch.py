@@ -235,7 +235,7 @@ def _title_is_noisy(title, series_number):
     first_word = t.split()[0]
     if first_word.isdigit():
         series_val = _series_number_value(series_number)
-        if series_val is not None and float(first_word) == series_val:
+        if series_val is not None and _series_number_value(first_word) == series_val:
             return True
     return False
 

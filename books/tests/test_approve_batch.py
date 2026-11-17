@@ -16,6 +16,7 @@ from books.management.commands.approve_batch import (
     DEFAULT_MANIFEST_DIR,
     MAX_SAMPLE,
     SUSPICIOUS_PATTERNS,
+    _title_is_noisy,
     Command,
 )
 from books.models import FileMove
@@ -982,6 +983,13 @@ class ApproveBatchCommandTests(TestCase):
             self.assertNotIn(b.id, ids, f"title {b.finalmetadata.final_title!r} must be held")
         for b in ok_books:
             self.assertIn(b.id, ids, f"title {b.finalmetadata.final_title!r} must pass")
+
+    def test_title_is_noisy_series_number_value_does_not_raise(self):
+        # A Unicode digit such as the superscript two satisfies isdigit() but
+        # makes float() raise, which would abort a whole batch's report.
+        self.assertFalse(_title_is_noisy("\u00b2 Gone", "2"))
+        self.assertTrue(_title_is_noisy("023 The Melted Coins", "23"))
+        self.assertFalse(_title_is_noisy("365 Days", "2"))
 
     def test_url_in_name_criterion_excludes_and_passes(self):
         url_author = self._make_book("urla", title="Some Title", author="https://avxhome.in")
