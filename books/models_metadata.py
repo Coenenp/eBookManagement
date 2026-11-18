@@ -1,6 +1,7 @@
 """Final consolidated metadata model for the books app."""
 
 import logging
+import re
 from difflib import SequenceMatcher
 
 from django.db import models
@@ -11,6 +12,11 @@ from books.utils.language_names import LANGUAGE_NAMES
 from books.utils.source_agreement import pick_by_support
 
 logger = logging.getLogger("books.scanner")
+
+
+# A title row that names a series: "<series words> <number><separator> <title>"
+# where the separator is a colon or " - " and the number has at most 3 digits.
+_SERIES_TITLE_RE = re.compile(r"^(.+)\s+(\d{1,3})(?::| - )\s(.+)$")
 
 
 def _normalize(value):
@@ -296,14 +302,61 @@ class FinalMetadata(models.Model):
         try:
             next_series = self.book.series_relationships.select_related("series", "source").filter(is_active=True).order_by("-confidence").first()
 
-            self.final_series = next_series.series.name if next_series and next_series.series else ""
-            self.final_series_number = next_series.series_number or "" if next_series else ""
-            self.final_series_confidence = next_series.confidence if next_series else 0.0
+            if next_series and next_series.series:
+                self.final_series = next_series.series.name
+                self.final_series_number = next_series.series_number or ""
+                self.final_series_confidence = next_series.confidence
+            else:
+                self._derive_series_from_titles()
         except Exception as e:
             logger.error(f"Error updating final series for book {self.book.id}: {e}")
             self.final_series = ""
             self.final_series_number = ""
             self.final_series_confidence = 0.0
+
+    def _derive_series_from_titles(self):
+        """Derive final series/number from title rows when no series row exists.
+
+        When the chosen final title is the trailing part of another active
+        title row of the form ``"<series words> <number><separator> <title>"``
+        (separator a colon or ``" - "``, number at most three digits, at least
+        one series word), the series words and number become the final series.
+        When more than one distinct derivation exists, nothing is derived.
+        """
+        self.final_series = ""
+        self.final_series_number = ""
+        self.final_series_confidence = 0.0
+
+        rows = list(self.book.titles.select_related("source").filter(is_active=True))
+        if not rows:
+            return
+
+        chosen = self.final_title
+        if not chosen:
+            chosen = pick_by_support([(t.title, t.confidence, t.source) for t in rows], "title")
+        if not chosen:
+            return
+
+        derivations = {}
+        for t in rows:
+            if t.title == chosen:
+                continue
+            m = _SERIES_TITLE_RE.match(t.title)
+            if not m:
+                continue
+            series_words = m.group(1).strip()
+            number = m.group(2)
+            tail = m.group(3).strip()
+            if not series_words or tail != chosen:
+                continue
+            key = (series_words, number)
+            derivations[key] = max(derivations.get(key, -1.0), t.confidence)
+
+        if len(derivations) == 1:
+            (series_words, number), confidence = next(iter(derivations.items()))
+            self.final_series = series_words
+            self.final_series_number = number
+            self.final_series_confidence = confidence
 
     def sync_from_sources(self, force=False, save_after=True):
         """
