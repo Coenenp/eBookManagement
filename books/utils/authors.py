@@ -92,5 +92,6 @@ def find_author_by_name(name):
     normalized = normalize_author_name(name)
     return (
         Author.objects.filter(Q(name_normalized=normalized) | Q(name__iexact=name.strip()))
+        .order_by("-is_reviewed", "id")
         .first()
     )
