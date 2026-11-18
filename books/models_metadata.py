@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from books.utils.language import normalize_language
 from books.utils.language_names import LANGUAGE_NAMES
+from books.utils.source_agreement import pick_by_support
 
 logger = logging.getLogger("books.scanner")
 
@@ -222,10 +223,16 @@ class FinalMetadata(models.Model):
     def update_final_title(self):
         """Update final title from sources."""
         try:
-            next_title = self.book.titles.select_related("source").filter(is_active=True).order_by("-confidence").first()
+            rows = self.book.titles.select_related("source").filter(is_active=True)
+            candidates = [(t.title, t.confidence, t.source) for t in rows]
 
-            self.final_title = next_title.title if next_title else ""
-            self.final_title_confidence = next_title.confidence if next_title else 0.0
+            winner = pick_by_support(candidates, "title")
+            if winner is None:
+                self.final_title = ""
+                self.final_title_confidence = 0.0
+            else:
+                self.final_title = winner
+                self.final_title_confidence = max(c for v, c, _ in candidates if v == winner)
         except Exception as e:
             logger.error(f"Error updating final title for book {self.book.id}: {e}")
             self.final_title = ""
@@ -234,10 +241,16 @@ class FinalMetadata(models.Model):
     def update_final_author(self):
         """Update final author from sources."""
         try:
-            next_author = self.book.author_relationships.select_related("author", "source").filter(is_active=True).order_by("-confidence", "-is_main_author").first()
+            rows = self.book.author_relationships.select_related("author", "source").filter(is_active=True)
+            candidates = [(r.author.name if r.author else "", r.confidence, r.source) for r in rows]
 
-            self.final_author = next_author.author.name if next_author and next_author.author else ""
-            self.final_author_confidence = next_author.confidence if next_author else 0.0
+            winner = pick_by_support(candidates, "author")
+            if winner is None:
+                self.final_author = ""
+                self.final_author_confidence = 0.0
+            else:
+                self.final_author = winner
+                self.final_author_confidence = max(c for v, c, _ in candidates if v == winner)
         except Exception as e:
             logger.error(f"Error updating final author for book {self.book.id}: {e}")
             self.final_author = ""
