@@ -43,6 +43,9 @@ class FinalMetadataBusinessLogicTests(TestCase):
 
     def test_metadata_sync_priority_resolution(self):
         """Test metadata synchronization with conflicting sources."""
+        # Remove the auto-created title so only the conflicting titles remain.
+        self.book.titles.all().delete()
+
         final_metadata = FinalMetadata.objects.create(book=self.book)
 
         # Create conflicting titles with different trust levels
@@ -52,9 +55,10 @@ class FinalMetadataBusinessLogicTests(TestCase):
 
         final_metadata.update_final_title()
 
-        # Should choose highest confidence regardless of source trust level (current behavior)
-        self.assertEqual(final_metadata.final_title, "Low Trust Title")
-        self.assertEqual(final_metadata.final_title_confidence, 0.9)  # Highest confidence
+        # An Initial Scan (filename) value cannot win over a non-Initial-Scan
+        # value, even with higher confidence.
+        self.assertEqual(final_metadata.final_title, "High Trust Title")
+        self.assertEqual(final_metadata.final_title_confidence, 0.7)
 
     def test_metadata_sync_with_inactive_sources(self):
         """Test that inactive metadata sources are properly ignored."""

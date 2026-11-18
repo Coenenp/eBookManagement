@@ -1,6 +1,7 @@
 """Final consolidated metadata model for the books app."""
 
 import logging
+import re
 from difflib import SequenceMatcher
 
 from django.db import models
@@ -8,8 +9,14 @@ from django.utils import timezone
 
 from books.utils.language import normalize_language
 from books.utils.language_names import LANGUAGE_NAMES
+from books.utils.source_agreement import pick_by_support
 
 logger = logging.getLogger("books.scanner")
+
+
+# A title row that names a series: "<series words> <number><separator> <title>"
+# where the separator is a colon or " - " and the number has at most 3 digits.
+_SERIES_TITLE_RE = re.compile(r"^(.+)\s+(\d{1,3})(?::\s+|\s+-\s+)(.+)$")
 
 
 def _normalize(value):
@@ -222,10 +229,16 @@ class FinalMetadata(models.Model):
     def update_final_title(self):
         """Update final title from sources."""
         try:
-            next_title = self.book.titles.select_related("source").filter(is_active=True).order_by("-confidence").first()
+            rows = self.book.titles.select_related("source").filter(is_active=True).order_by("-confidence")
+            candidates = [(t.title, t.confidence, t.source) for t in rows]
 
-            self.final_title = next_title.title if next_title else ""
-            self.final_title_confidence = next_title.confidence if next_title else 0.0
+            winner = pick_by_support(candidates, "title")
+            if winner is None:
+                self.final_title = ""
+                self.final_title_confidence = 0.0
+            else:
+                self.final_title = winner
+                self.final_title_confidence = max(c for v, c, _ in candidates if v == winner)
         except Exception as e:
             logger.error(f"Error updating final title for book {self.book.id}: {e}")
             self.final_title = ""
@@ -234,10 +247,16 @@ class FinalMetadata(models.Model):
     def update_final_author(self):
         """Update final author from sources."""
         try:
-            next_author = self.book.author_relationships.select_related("author", "source").filter(is_active=True).order_by("-confidence", "-is_main_author").first()
+            rows = self.book.author_relationships.select_related("author", "source").filter(is_active=True).order_by("-confidence", "-is_main_author")
+            candidates = [(r.author.name if r.author else "", r.confidence, r.source) for r in rows]
 
-            self.final_author = next_author.author.name if next_author and next_author.author else ""
-            self.final_author_confidence = next_author.confidence if next_author else 0.0
+            winner = pick_by_support(candidates, "author")
+            if winner is None:
+                self.final_author = ""
+                self.final_author_confidence = 0.0
+            else:
+                self.final_author = winner
+                self.final_author_confidence = max(c for v, c, _ in candidates if v == winner)
         except Exception as e:
             logger.error(f"Error updating final author for book {self.book.id}: {e}")
             self.final_author = ""
@@ -283,14 +302,61 @@ class FinalMetadata(models.Model):
         try:
             next_series = self.book.series_relationships.select_related("series", "source").filter(is_active=True).order_by("-confidence").first()
 
-            self.final_series = next_series.series.name if next_series and next_series.series else ""
-            self.final_series_number = next_series.series_number or "" if next_series else ""
-            self.final_series_confidence = next_series.confidence if next_series else 0.0
+            if next_series and next_series.series:
+                self.final_series = next_series.series.name
+                self.final_series_number = next_series.series_number or ""
+                self.final_series_confidence = next_series.confidence
+            else:
+                self._derive_series_from_titles()
         except Exception as e:
             logger.error(f"Error updating final series for book {self.book.id}: {e}")
             self.final_series = ""
             self.final_series_number = ""
             self.final_series_confidence = 0.0
+
+    def _derive_series_from_titles(self):
+        """Derive final series/number from title rows when no series row exists.
+
+        When the chosen final title is the trailing part of another active
+        title row of the form ``"<series words> <number><separator> <title>"``
+        (separator a colon or ``" - "``, number at most three digits, at least
+        one series word), the series words and number become the final series.
+        When more than one distinct derivation exists, nothing is derived.
+        """
+        self.final_series = ""
+        self.final_series_number = ""
+        self.final_series_confidence = 0.0
+
+        rows = list(self.book.titles.select_related("source").filter(is_active=True))
+        if not rows:
+            return
+
+        chosen = self.final_title
+        if not chosen:
+            chosen = pick_by_support([(t.title, t.confidence, t.source) for t in rows], "title")
+        if not chosen:
+            return
+
+        derivations = {}
+        for t in rows:
+            if t.title == chosen:
+                continue
+            m = _SERIES_TITLE_RE.match(t.title)
+            if not m:
+                continue
+            series_words = m.group(1).strip()
+            number = m.group(2)
+            tail = m.group(3).strip()
+            if not series_words or tail != chosen:
+                continue
+            key = (series_words, number)
+            derivations[key] = max(derivations.get(key, -1.0), t.confidence)
+
+        if len(derivations) == 1:
+            (series_words, number), confidence = next(iter(derivations.items()))
+            self.final_series = series_words
+            self.final_series_number = number
+            self.final_series_confidence = confidence
 
     def sync_from_sources(self, force=False, save_after=True):
         """

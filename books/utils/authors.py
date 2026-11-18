@@ -72,3 +72,25 @@ def parse_author_name(full_name):
     from books.utils.surname_particles import split_author
 
     return split_author(full_name)
+
+
+def find_author_by_name(name):
+    """Return the Author whose name matches ``name``, or None.
+
+    Matches on ``name_normalized == normalize_author_name(name)`` OR a
+    case-insensitive exact ``name`` match, in one query. Shared by the renaming
+    engine's reviewed-author lookup and ``set_author_order`` so the two stay in
+    agreement even after ``Author.save`` rewrites ``name_normalized`` from
+    ``first_name + last_name``.
+    """
+    from django.db.models import Q
+
+    from books.models import Author
+
+    if not name:
+        return None
+    normalized = normalize_author_name(name)
+    return (
+        Author.objects.filter(Q(name_normalized=normalized) | Q(name__iexact=name.strip()))
+        .first()
+    )
