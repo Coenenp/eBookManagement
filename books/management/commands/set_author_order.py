@@ -3,7 +3,7 @@
 from django.core.management.base import BaseCommand, CommandError
 
 from books.models import Author
-from books.utils.authors import normalize_author_name
+from books.utils.authors import find_author_by_name, normalize_author_name
 
 
 class Command(BaseCommand):
@@ -39,7 +39,7 @@ class Command(BaseCommand):
             )
             return
 
-        author = Author.objects.filter(name_normalized=normalized).first()
+        author = find_author_by_name(name)
         if author is None:
             author = Author(name=name)
             author.save()

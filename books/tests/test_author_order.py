@@ -43,6 +43,20 @@ class ReviewedAuthorOrderTests(TestCase):
         engine = RenamingEngine()
         self.assertEqual(engine.process_template("${author.sortname}", book), "Kang, Han")
 
+    def test_reviewed_order_survives_author_save(self):
+        call_command("set_author_order", "Han Kang", "--last", "Han", "--first", "Kang", "--execute")
+        author = Author.objects.get(name_normalized="han kang")
+        author.save()  # Author.save recomputes name_normalized to "kang han"
+        book = self._book("Han Kang")
+        engine = RenamingEngine()
+        self.assertEqual(engine.process_template("${author.sortname}", book), "Han, Kang")
+
+    def test_reviewed_order_case_insensitive_final_author(self):
+        self._reviewed_author("Han Kang", "Han", "Kang")
+        book = self._book("han kang")
+        engine = RenamingEngine()
+        self.assertEqual(engine.process_template("${author.sortname}", book), "Han, Kang")
+
 
 class SetAuthorOrderCommandTests(TestCase):
     def test_without_execute_stores_nothing(self):
