@@ -538,6 +538,8 @@ class RenamingEngine:
         so each distinct final author runs at most one indexed query per engine
         instance.
         """
+        if getattr(self.current_book, "author_relationships", None) is None:
+            return None
         normalized = normalize_author_name(final_author)
         if not normalized:
             return None
