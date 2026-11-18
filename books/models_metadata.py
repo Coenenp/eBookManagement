@@ -16,7 +16,7 @@ logger = logging.getLogger("books.scanner")
 
 # A title row that names a series: "<series words> <number><separator> <title>"
 # where the separator is a colon or " - " and the number has at most 3 digits.
-_SERIES_TITLE_RE = re.compile(r"^(.+)\s+(\d{1,3})(?::| - )\s(.+)$")
+_SERIES_TITLE_RE = re.compile(r"^(.+)\s+(\d{1,3})(?::\s+|\s+-\s+)(.+)$")
 
 
 def _normalize(value):

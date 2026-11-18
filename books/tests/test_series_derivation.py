@@ -69,3 +69,31 @@ class SeriesFromTitleTests(TestCase):
         final.update_final_series()
         self.assertEqual(final.final_series, "")
         self.assertEqual(final.final_series_number, "")
+
+    def test_series_derived_from_hyphen_separator(self):
+        book = Book.objects.create()
+        epub = self._source(DataSource.EPUB_INTERNAL)
+        scan = self._source(DataSource.INITIAL_SCAN)
+
+        BookTitle.objects.create(book=book, title="Vlammen", source=epub, confidence=0.8)
+        BookTitle.objects.create(book=book, title="Hongerspelen 2 - Vlammen", source=scan, confidence=0.2)
+
+        final = FinalMetadata.objects.create(book=book)
+        final.update_final_title()
+        final.update_final_series()
+        self.assertEqual(final.final_series, "Hongerspelen")
+        self.assertEqual(final.final_series_number, "2")
+
+    def test_chapter_title_derives_nothing_when_chosen_differs(self):
+        book = Book.objects.create()
+        epub = self._source(DataSource.EPUB_INTERNAL)
+        gb = self._source(DataSource.GOOGLE_BOOKS)
+
+        BookTitle.objects.create(book=book, title="Some Book", source=epub, confidence=0.8)
+        BookTitle.objects.create(book=book, title="Chapter 3 - The Return", source=gb, confidence=0.7)
+
+        final = FinalMetadata.objects.create(book=book)
+        final.update_final_title()
+        final.update_final_series()
+        self.assertEqual(final.final_series, "")
+        self.assertEqual(final.final_series_number, "")
