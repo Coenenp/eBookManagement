@@ -82,6 +82,56 @@ class PickBySupportUnitTests(TestCase):
         candidates = [("Foo", 0.5, "A"), ("Bar", 0.5, "B")]
         self.assertEqual(pick_by_support(candidates, "title"), "Foo")
 
+    def test_leading_article_not_containment(self):
+        # Book 14: "Een Verborgen leven" must not lose to "Verborgen leven":
+        # a leading article is neither a series prefix nor an edition suffix.
+        candidates = [
+            ("Een Verborgen leven", 0.8, "EPUB"),
+            ("Verborgen leven", 0.665, "Google Books"),
+        ]
+        self.assertEqual(pick_by_support(candidates, "title"), "Een Verborgen leven")
+
+    def test_series_prefix_shorter_wins(self):
+        # A longer title that is the shorter one plus a series prefix still
+        # supports the shorter one.
+        candidates = [
+            ("Merlijn Trilogie 03 - De Laatste Betovering", 0.8, "EPUB"),
+            ("De laatste betovering", 0.7, "Google Books"),
+        ]
+        self.assertEqual(pick_by_support(candidates, "title"), "De laatste betovering")
+
+    def test_initial_scan_not_a_same_string_vote(self):
+        # Book 285: the official "L.J. Smith" must not lose to "L J Smith"
+        # because an Initial Scan file-name value counts as a same-string vote.
+        candidates = [
+            ("L.J. Smith", 0.9, "OPF File"),
+            ("L J Smith", 0.8, "EPUB"),
+            ("L J Smith", 0.2, "Initial Scan"),
+        ]
+        self.assertEqual(pick_by_support(candidates, "author"), "L.J. Smith")
+
+    def test_embedded_group_rows_never_support_each_other(self):
+        # EPUB and OPF File are one "embedded" group, so two rows with the same
+        # string count as a single vote and cannot support each other.
+        candidates = [
+            ("Foo", 0.6, "EPUB"),
+            ("Foo", 0.6, "OPF File"),
+            ("Bar", 0.9, "Google Books"),
+        ]
+        self.assertEqual(pick_by_support(candidates, "title"), "Bar")
+
+    def test_nfc_and_nfd_count_as_same_string(self):
+        import unicodedata
+
+        nfc = "Björn Hellberg"
+        nfd = unicodedata.normalize("NFD", nfc)
+        candidates = [
+            (nfc, 0.4, "EPUB"),
+            (nfd, 0.5, "Google Books"),
+            ("Unrelated Title", 0.99, "Open Library"),
+        ]
+        self.assertIn(pick_by_support(candidates, "title"), (nfc, nfd))
+
 
 class SourceAgreementIntegrationTests(TestCase):
     """End-to-end tests of the vote through update_final_title/author."""
