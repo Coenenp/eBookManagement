@@ -12,7 +12,8 @@ from typing import List, Optional, Tuple
 
 from django.db import models
 
-from books.models import DataSource
+from books.models import Author, DataSource
+from books.utils.authors import normalize_author_name
 from books.utils.surname_particles import sort_name, split_author
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,7 @@ class RenamingEngine:
     def __init__(self):
         self.token_registry = {}
         self._author_sort_cache = {}
+        self._reviewed_author_cache = {}
         self._register_default_tokens()
 
     def _register_default_tokens(self):
@@ -524,6 +526,39 @@ class RenamingEngine:
         self._author_sort_cache[key] = result
         return result
 
+    def _reviewed_author_sort_form(self, final_author: str) -> Optional[str]:
+        """Return the reviewed sort form for a final author, or None.
+
+        Looks up the ``Author`` whose ``name_normalized`` equals the normalized
+        final author and which is reviewed (``is_reviewed`` True, non-empty
+        ``last_name``), and returns ``"last_name, first_name"`` (just the last
+        name when ``first_name`` is empty), copied exactly as stored.
+
+        The result is cached per engine instance keyed by the normalized name,
+        so each distinct final author runs at most one indexed query per engine
+        instance.
+        """
+        normalized = normalize_author_name(final_author)
+        if not normalized:
+            return None
+        if normalized in self._reviewed_author_cache:
+            return self._reviewed_author_cache[normalized]
+
+        result = None
+        author = (
+            Author.objects.filter(name_normalized=normalized, is_reviewed=True)
+            .exclude(last_name="")
+            .first()
+        )
+        if author is not None:
+            result = (
+                f"{author.last_name}, {author.first_name}"
+                if author.first_name
+                else author.last_name
+            )
+        self._reviewed_author_cache[normalized] = result
+        return result
+
     def _get_author_sortname(self) -> Optional[str]:
         """Get author name in sortable format (Last, First)."""
         # First try to get from FinalMetadata final_author_sort if available
@@ -534,6 +569,12 @@ class RenamingEngine:
         author = self._get_author_fullname()
         if not author:
             return None
+
+        # A reviewed author's stored order wins over the stored comma form and
+        # the splitter.
+        reviewed = self._reviewed_author_sort_form(author)
+        if reviewed:
+            return reviewed
 
         # Only names without a comma consult the stored official-source rows.
         if "," not in author:
