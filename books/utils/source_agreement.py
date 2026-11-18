@@ -9,6 +9,10 @@ value; it only selects one of the already-present source values.
 
 import re
 
+# Matches DataSource.INITIAL_SCAN in books.models, kept as a literal here so
+# this module does not import books.models (books.models_metadata imports us).
+INITIAL_SCAN_SOURCE = "Initial Scan"
+
 
 def _key(value, mode):
     """Return the comparison key of a value.
@@ -45,7 +49,11 @@ def pick_by_support(candidates, mode):
 
     The winner is the candidate with, in order: the highest support, the
     highest number of candidates with exactly the same string (case sensitive),
-    and the highest confidence.
+    and the highest confidence. An exact tie is won by the candidate listed
+    first. A candidate whose source is Initial Scan still counts as a supporter
+    for other candidates but cannot win while at least one candidate from
+    another source exists; when every candidate is Initial Scan the rule above
+    applies unchanged.
     """
     if not candidates:
         return None
@@ -72,12 +80,20 @@ def pick_by_support(candidates, mode):
         value = candidates[i][0]
         return sum(1 for v, _, _ in candidates if v == value)
 
-    best_index = 0
+    is_initial_scan = [
+        getattr(source, "name", source) == INITIAL_SCAN_SOURCE
+        for _, _, source in candidates
+    ]
+    has_non_initial_scan = any(not x for x in is_initial_scan)
+
+    best_index = None
     best_score = None
     for i in range(len(candidates)):
+        if has_non_initial_scan and is_initial_scan[i]:
+            continue
         score = (support(i), same_string(i), candidates[i][1])
         if best_score is None or score > best_score:
             best_score = score
             best_index = i
 
-    return candidates[best_index][0]
+    return candidates[best_index][0] if best_index is not None else None

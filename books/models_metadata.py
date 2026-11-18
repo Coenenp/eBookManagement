@@ -229,7 +229,7 @@ class FinalMetadata(models.Model):
     def update_final_title(self):
         """Update final title from sources."""
         try:
-            rows = self.book.titles.select_related("source").filter(is_active=True)
+            rows = self.book.titles.select_related("source").filter(is_active=True).order_by("-confidence")
             candidates = [(t.title, t.confidence, t.source) for t in rows]
 
             winner = pick_by_support(candidates, "title")
@@ -247,7 +247,7 @@ class FinalMetadata(models.Model):
     def update_final_author(self):
         """Update final author from sources."""
         try:
-            rows = self.book.author_relationships.select_related("author", "source").filter(is_active=True)
+            rows = self.book.author_relationships.select_related("author", "source").filter(is_active=True).order_by("-confidence", "-is_main_author")
             candidates = [(r.author.name if r.author else "", r.confidence, r.source) for r in rows]
 
             winner = pick_by_support(candidates, "author")

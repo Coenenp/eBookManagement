@@ -67,6 +67,21 @@ class PickBySupportUnitTests(TestCase):
         result = pick_by_support(candidates, "title")
         self.assertIn(result, {v for v, _, _ in candidates})
 
+    def test_initial_scan_cannot_win_with_other_sources(self):
+        candidates = [
+            ("Dune Messiah", 0.8, "EPUB"),
+            ("Dune Messiah", 0.665, "Google Books"),
+            ("Dune", 0.2, "Initial Scan"),
+        ]
+        self.assertEqual(pick_by_support(candidates, "title"), "Dune Messiah")
+
+    def test_initial_scan_only_returns_it(self):
+        self.assertEqual(pick_by_support([("Dune", 0.2, "Initial Scan")], "title"), "Dune")
+
+    def test_exact_tie_returns_first_listed(self):
+        candidates = [("Foo", 0.5, "A"), ("Bar", 0.5, "B")]
+        self.assertEqual(pick_by_support(candidates, "title"), "Foo")
+
 
 class SourceAgreementIntegrationTests(TestCase):
     """End-to-end tests of the vote through update_final_title/author."""
@@ -170,3 +185,30 @@ class SourceAgreementIntegrationTests(TestCase):
         final = FinalMetadata.objects.create(book=book)
         final.update_final_title()
         self.assertEqual(final.final_title, "The Vegetarian")
+
+    def test_dune_messiah_not_dune(self):
+        book = self._book()
+        epub = self._source(DataSource.EPUB_INTERNAL)
+        gb = self._source(DataSource.GOOGLE_BOOKS)
+        scan = self._source(DataSource.INITIAL_SCAN)
+
+        BookTitle.objects.create(book=book, title="Dune Messiah", source=epub, confidence=0.8)
+        BookTitle.objects.create(book=book, title="Dune Messiah", source=gb, confidence=0.665)
+        BookTitle.objects.create(book=book, title="Dune", source=scan, confidence=0.2)
+
+        final = FinalMetadata.objects.create(book=book)
+        final.update_final_title()
+        self.assertEqual(final.final_title, "Dune Messiah")
+
+    def test_monaldi_main_before_secondary(self):
+        book = self._book()
+        epub = self._source(DataSource.EPUB_INTERNAL)
+
+        sorti = Author.objects.create(name="Sorti")
+        monaldi = Author.objects.create(name="Monaldi")
+        BookAuthor.objects.create(book=book, author=sorti, source=epub, confidence=0.8, is_main_author=False)
+        BookAuthor.objects.create(book=book, author=monaldi, source=epub, confidence=0.8, is_main_author=True)
+
+        final = FinalMetadata.objects.create(book=book)
+        final.update_final_author()
+        self.assertEqual(final.final_author, "Monaldi")
