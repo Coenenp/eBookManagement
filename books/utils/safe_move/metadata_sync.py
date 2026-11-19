@@ -8,6 +8,9 @@ Check B during a safe move.
 
 import re
 
+from books.utils.authors import find_author_by_name
+from books.utils.surname_particles import sort_name
+
 _AUTHOR_SPLIT = re.compile(r"\s*;\s*|\s+and\s+", re.IGNORECASE)
 
 
@@ -24,7 +27,7 @@ def build_epub_metadata(book):
 
     if final.final_title:
         meta["title"] = final.final_title
-    authors = _authors(book, final)
+    authors = _authors(final)
     if authors:
         meta["authors"] = authors
     if final.language:
@@ -47,28 +50,41 @@ def build_epub_metadata(book):
     return meta
 
 
-def _authors(book, final):
-    """Author entries from main relationships, else from final_author text."""
-    rels = list(
-        book.author_relationships.filter(is_active=True, is_main_author=True)
-        .select_related("author")
-        .order_by("-confidence", "id")
-    )
-    if rels:
-        result = []
-        for rel in rels:
-            author = rel.author
-            if not author or not author.name:
-                continue
-            entry = {"name": author.name}
-            file_as = _file_as(author)
-            if file_as:
-                entry["file_as"] = file_as
-            result.append(entry)
-        if result:
-            return result
-    parts = [p.strip() for p in _AUTHOR_SPLIT.split(final.final_author or "") if p.strip()]
-    return [{"name": p} for p in parts]
+def _authors(final):
+    """Author entries from final_author text only.
+
+    The repacked OPF carries exactly the curated final author list: split on the
+    shared separator, drop empty and repeated names, keep order. ``file_as``
+    comes from the reviewed Author row found by ``find_author_by_name`` (a
+    reviewed row wins), otherwise from ``sort_name``. Per-source relationship
+    rows are never written, so other books' authors and file-name misparses
+    cannot leak into the OPF while the title is correct.
+    """
+    names = []
+    seen = set()
+    for part in _AUTHOR_SPLIT.split(final.final_author or ""):
+        name = part.strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        names.append(name)
+
+    result = []
+    for name in names:
+        entry = {"name": name}
+        file_as = _file_as_for_name(name)
+        if file_as:
+            entry["file_as"] = file_as
+        result.append(entry)
+    return result
+
+
+def _file_as_for_name(name):
+    """'Last, First' from the reviewed Author row, else from ``sort_name``."""
+    author = find_author_by_name(name)
+    if author is not None:
+        return _file_as(author) or sort_name(name)
+    return sort_name(name)
 
 
 def _file_as(author):
