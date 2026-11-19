@@ -57,6 +57,18 @@ class ReviewedAuthorOrderTests(TestCase):
         engine = RenamingEngine()
         self.assertEqual(engine.process_template("${author.sortname}", book), "Han, Kang")
 
+    def test_reviewed_wins_over_unreviewed_same_name(self):
+        # An unreviewed Author created first and a reviewed Author created
+        # second both match the same final author; the reviewed row must win
+        # for the sort name.
+        Author.objects.create(name="Han Kang")  # unreviewed, created first
+        Author.objects.create(
+            name="Han Kang", first_name="Kang", last_name="Han", is_reviewed=True
+        )
+        book = self._book("Han Kang")
+        engine = RenamingEngine()
+        self.assertEqual(engine.process_template("${author.sortname}", book), "Han, Kang")
+
 
 class SetAuthorOrderCommandTests(TestCase):
     def test_without_execute_stores_nothing(self):
