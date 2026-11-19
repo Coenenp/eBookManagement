@@ -60,6 +60,46 @@ class ResyncFinalMetadataCommandTests(TestCase):
         self.assertEqual(fm.completeness_score, 0.6)
         self.assertEqual(fm.accuracy_score, 0.55)
 
+    def test_execute_does_not_write_field_outside_the_seven(self):
+        # A patched update_final_title that also sets a field outside the seven
+        # (final_publisher) in memory must not leak that in-memory change to the
+        # database: the command persists only FIELDS via update_fields.
+        from unittest import mock
+
+        book, fm = self._book_with_changed_title(final_publisher="Old Publisher")
+        original = FinalMetadata.update_final_title
+
+        def also_set_publisher(self):
+            original(self)
+            self.final_publisher = "Hacked Publisher"
+
+        with mock.patch.object(FinalMetadata, "update_final_title", also_set_publisher):
+            call_command("resync_final_metadata", "--execute")
+
+        fm.refresh_from_db()
+        self.assertEqual(fm.final_publisher, "Old Publisher")
+
+    def test_csv_preserves_accented_title(self):
+        # The CSV must round-trip an accented title as UTF-8. ``errors="replace"``
+        # keeps a wrong encoding a clean assertion failure instead of a decode
+        # traceback.
+        book, fm = self._book_with_changed_title()
+        BookTitle.objects.filter(book=book).update(title="Café")
+
+        path = tempfile.mktemp(suffix=".csv")
+        try:
+            call_command("resync_final_metadata", "--execute", "--csv", path)
+
+            with open(path, encoding="utf-8", errors="replace") as fh:
+                rows = list(csv.reader(fh))
+
+            new_titles = [r[3] for r in rows[1:] if r[1] == "final_title"]
+            self.assertIn("Café", new_titles)
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+
     def test_approved_book_never_touched(self):
         book, fm = self._book_with_changed_title(is_reviewed=True)
 
