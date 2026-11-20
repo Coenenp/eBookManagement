@@ -21,19 +21,20 @@ pytest
 
 ### Test database
 
-Tests use a dedicated file-based SQLite database (`ebook_manager/test_db.sqlite3`)
-configured in `ebook_manager/settings_test.py`, so they never touch the live
-MariaDB/MySQL database. `pytest` is configured with `--reuse-db` to keep the test
-schema between runs for faster local iteration.
+Tests use SQLite and redirect the database, media files, and file-based cache
+into a unique temporary directory for each test process via
+[`ebook_manager/settings_test.py`](../ebook_manager/settings_test.py). This
+isolates tests from the configured live MariaDB/MySQL database and from
+persistent application media/cache directories. The temporary directory is
+removed when the process exits, so `pytest --reuse-db` can reuse the schema
+within a run but does not preserve it across separate runs.
 
-Because the test database persists, a stale schema can accumulate after a
-migration. Rebuild it whenever migrations change, or periodically in CI:
-
-```bash
-python manage.py test books.tests --create-db
-# or
-pytest --create-db
-```
+The numbered `books` migration modules are currently tracked in Git. The
+`reset_database` management command is available for a deliberate,
+confirmed MySQL/MariaDB database rebuild; it deletes and regenerates the
+`books` migration modules before applying them. This is destructive and is
+not needed for routine test runs. A plan to stop tracking generated migrations
+has not yet been completed.
 
 ### Run a Specific Area
 

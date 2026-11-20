@@ -4,24 +4,24 @@ This document tracks planned, partially implemented, and proposed features. Impl
 
 ## Mission
 
-This app is a **metadata accuracy + file renaming pipeline** that prepares a large library (100,000+ books) for import into BookOrbit. Reading, reading status, and library browsing/discovery are owned by BookOrbit, not this app. The pipeline:
-
-1. **Recognize (AI, multi-signal)** — fuse filename parsing/cleaning, embedded metadata (EPUB, OPF, ComicInfo, ID3), and OCR (title, author, publisher, ISBN) into structured candidate fields.
-2. **Decide (AI)** — the accuracy engine scores each signal and decides whether enough accurate information exists to query external providers.
-3. **Enrich + validate (AI)** — query Google Books, Open Library, Goodreads, and Comic Vine only when confidence is high; immediately verify the returned record matches the request (ISBN/title/author) and reject mismatches, then merge through the trust hierarchy and produce a per-book accuracy score.
-4. **Rename** — auto-apply the naming template and (re)generate OPF metadata only when the score clears a high threshold (target 99%), covering ~90% of the library unattended.
-5. **AI pre-confirmation** — for books below the auto-rename threshold, run a second, heavier verification pass (agent-driven): open the actual file, extract OCR from the title page, and cross-check candidate metadata against a live websearch, not just the cached provider lookup. This either resolves the book with a documented evidence trail or narrows it down to a specific, named reason it can't be resolved (no ISBN and multiple candidates, degraded OCR, suspected duplicate, corrupted file, uncertain language). This tier does not touch corrupted files or duplicate resolution; those route directly to step 6.
-6. **Verify + confirm (ultrafast, human)** — route the remainder to a keyboard-driven confirmation workbench; confirm, edit, or reject each book in seconds, and feed corrections back into the AI. This step remains human-only. It is the ground truth source for retraining, and its volume is what step 5 exists to shrink, not eliminate.
-
-The goal is for the validation gate plus the AI pre-confirmation tier to resolve the large majority of the library at near-100% accuracy, so the human confirm step only ever touches the small remainder that genuinely needs judgment: corrupted files, real duplicates, and cases where even a deeper AI pass couldn't reach confidence.
-
-Every filter and statistic in the UI is a metadata-quality workbench: filter to find books needing the same fix, correct them in bulk, then rename and move them to the final library location.
+This app is intended to prepare digital libraries for downstream cataloging, including import into BookOrbit. The high-throughput, confidence-gated, human-review pipeline described in earlier plans is a **target design, not the current end-to-end behavior**. The implemented system scans libraries, extracts local and external metadata, validates external matches, resolves source records into reviewable final metadata, and provides separate rename and approved-move workflows. It does not currently perform score-gated automatic renaming, AI pre-confirmation, or spreadsheet-style verification at the planned scale.
 
 ## How to Read
 
 - **Planned** — agreed direction with a known design.
 - **Partial** — some pieces exist but the feature is not complete.
 - **Proposed** — ideas open for discussion.
+
+## Implementation status checked against PR history
+
+The project Markdown was compared with the code delivered through the repository's 78 pull requests (76 merged; 2 closed without merge). The merged changes are reflected in the current repository, but the Markdown had not kept pace. The following capabilities are implemented and should be treated as current behavior:
+
+- Metadata resolution includes source-agreement voting for title and author, separate completeness and accuracy signals, and external-result match verification. The accuracy value is a deterministic heuristic, not a calibrated probability or automatic-rename gate.
+- `approve_batch` stages criteria-based approvals; `move_approved` is dry-run by default and executes eligible moves through the journaled safe-move path. Recovery tooling is available for interrupted moves.
+- EPUB metadata synchronization, improved author cleanup/name handling, and per-process test/live-resource isolation have been added.
+- The `reset_database` command exists and recreates local `books` migrations during a reset. However, numbered migration files are still tracked, so the planned migration-ignore/untracking work is incomplete.
+
+Important unfinished work remains: restart-safe background workers and reliable checkpoint recovery; consistent rescan semantics; OCR-driven multi-signal validation; score-gated automatic rename; the AI pre-confirmation tier and keyboard spreadsheet workbench; complete bulk metadata operations; and a single rename/move engine shared by all entry points. The existing template batch renamer and approved safe-move workflow have different safety and collision behavior.
 
 ---
 
@@ -74,8 +74,10 @@ The core pipeline is implemented: extraction ([`cover_extractor.py`](books/utils
 
 ## Scanner and CLI
 
-[`scan_books`](books/management/commands/scan_books.py) is the sole scan entry point and already exposes `scan`, `rescan`, `status`, `list`, and `cancel` subcommands. The legacy `scan_ebooks` / `EbookScanner` path was retired in Phase 4. Remaining work:
+[`scan_books`](books/management/commands/scan_books.py) is the primary scan command and exposes `scan`, `rescan`, `status`, `list`, and `cancel` subcommands. Metadata-maintenance commands remain separate, and web scans run in process rather than through a durable worker. The legacy `scan_ebooks` / `EbookScanner` path was retired in Phase 4. Remaining work:
 
+- **Durable execution and resume (Planned)** — background scans currently use daemon threads. A `ScanStatus` checkpoint records progress, and `scan --resume` attempts to continue after the last processed file, but the worker is not restart-safe and recovery is manual/best-effort. Add a durable worker and per-job/per-folder checkpoints so an interrupted job can reliably continue where it stopped without being confused with a new scan or rescan.
+- **Unify rescan modes (Planned)** — define book-ID rescan as a targeted metadata rebuild (clear/re-extract source-derived metadata, then resolve again under an explicit policy for reviewed values); define folder rescan as a folder traversal with file-change detection and missing/reappearing-file cleanup. The web folder-rescan path uses traversal, but `scan_books rescan --folder` currently resolves the folder to book IDs and uses the targeted path. Align the CLI and web behavior and make the distinction explicit to users.
 - **Fold metadata-maintenance commands (Planned)** — make `scan_content_isbn` and `enrich_metadata` subcommands of `scan_books` so there is a single scanning CLI.
 - **Content-ISBN subcommand** — expose [`bulk_scan_content_isbns`](books/scanner/extractors/content_isbn.py:343) as `scan_books isbn`.
 - **Enrichment subcommand** — expose [`enrich_metadata`](books/management/commands/enrich_metadata.py) behavior as `scan_books enrich` for external-API repair of earlier filename-only scans.
@@ -102,6 +104,15 @@ Grouping is the foundation for series-level bulk operations (see Bulk Actions an
 ## Bulk Actions and Maintenance
 
 Many of the primitives below already exist (author cleanup, batch delete, batch rename, a `BulkUpdateForm`); the work is to turn them into a cohesive, previewable bulk-management surface. Grouping (comics/audiobooks) feeds directly into this because a group becomes a natural selection and application unit.
+
+### Unified rename/move engine and batch UI
+
+- **Current gap** — the template UI uses `RenamingEngine` / `BatchRenamer`, while `move_approved` computes a target and executes through `safe_move_book`. These paths differ in collision reservation, journaling/recovery, companion handling, and EPUB metadata/cover synchronization.
+- **Shared engine (Planned, foundational)** — route single-book UI, batch UI, APIs, management commands, approval flows, and future background jobs through the same destination planner and file-operation engine. Entry points may orchestrate selection, confirmation, and reporting, but must not implement independent path planning, collision handling, or file mutation. Batch target reservations must prevent collisions among books in the same batch.
+- **Batch lifecycle UI (Planned)** — create, preview, execute, monitor, and control batches from the UI. Persist per-item status and show actionable outcomes (pending, moved, `needs_review`, failed, skipped), reasons, and recovery/retry actions. A `needs_review` item must remain visible and must not be presented as moved.
+- **EPUB parity (Planned)** — every EPUB rename/move through the shared engine synchronizes curated metadata and embeds the selected cover; companion OPF handling and failures must be consistent across entry points.
+- **Metadata after move (Planned)** — allow users to edit and save metadata for already-moved books. Preserve the existing reviewed-`FinalMetadata` protection against automatic source replacement; saving a manual edit must also update the EPUB and OPF at their current location without requiring another rename.
+- **Trust display (Partial)** — source trust values are already shown in source-management and book-detail views. Complete the UI so source trust, candidate confidence, evidence/agreement, and the actual winning value/source are distinct and consistent with the resolver's selection rules. A manual override always takes precedence over source-derived candidates.
 
 ### Confidence-gated auto-rename
 
@@ -239,7 +250,7 @@ Scope: cataloguing and maintenance only — **no reader and no reading status**.
 
 ### Calibre-style catalog features
 
-- **Sort names (Planned)** — store `author_sort` (surname-first) and `title_sort` (article-ignoring) for correct ordering.
+- **Persistent sort fields (Planned)** — author-name cleanup and surname-aware parsing now exist, but separate stored `author_sort` / `title_sort` fields and article-ignoring title ordering do not.
 - **Bulk search & replace (Planned)** — regex find/replace across a metadata field with a preview, applied to many books.
 - **Flexible book identifiers (Proposed)** — store multiple identifiers per book (`isbn`, `asin`, `doi`, `goodreads`, etc.) instead of a single ISBN.
 - **Metadata backup/restore (Planned)** — export and restore library metadata independently of files.
@@ -269,13 +280,13 @@ Scope: cataloguing and maintenance only — **no reader and no reading status**.
 
 ## Background Processing and Scheduled Jobs
 
-- **Current state** — [`background.py`](books/scanner/background.py) launches scans as daemon threads with cache-based progress, serialised through [`ScanQueue`](books/models_operations.py:530). Daemon threads die with the web process: no cross-restart retry, no durable state, and no multi-worker scaling.
+- **Current state** — [`background.py`](books/scanner/background.py) launches scans as daemon threads with cache-based progress, serialised through [`ScanQueue`](books/models_operations.py:530). The thread dies with the web process. A database checkpoint (`ScanStatus.last_processed_file`) can support a manual resume attempt, but it does not keep the job running, automatically restart it, or guarantee exact recovery.
 - **Keep synchronous** — ordinary CRUD and DB-only bulk updates (`bulk_update`/`bulk_delete`) are fast and stay in the request cycle; they do not need a worker.
 - **External data enrichment (Planned)** — the primary worker use. Rate-limited API calls ([`rate_limiting.py`](books/scanner/rate_limiting.py): Comic Vine ~18s/request, Google Books 1000/day, Open Library 60/min) and per-book delays in [`rescan_existing_books`](books/scanner/background.py:526) make this the long pole; run it with retries/backoff and progress.
 - **AI training/retraining (Planned)** — [`train_ai_models`](books/management/commands/train_ai_models.py) is CPU-bound (RandomForest); move training and retraining off the request cycle.
 - **Scheduled maintenance (Planned)** — periodic jobs via a scheduler (Celery Beat / django-celery-beat / RQ scheduler): nightly rescan, orphan cover cleanup, author duplicate detection, cover-cache rebuild, and model retraining.
 - **Long bulk jobs (Planned)** — the 100k+ validation/rename/enrich passes run in the worker so they survive restarts and report progress; use chunked `bulk_update`/`bulk_create` and `select_related`/`prefetch_related` so each batch stays within memory and time limits. Keep fast, single-book operations synchronous.
-- **Decision** — keep [`ScanQueue`](books/models_operations.py:530) as the scheduling/user-facing layer and add a durable worker (Celery on Redis/RabbitMQ is the default; Django-RQ is a lighter option) for the four cases above. Do not use daemon threads for anything that must survive a restart.
+- **Decision** — keep [`ScanQueue`](books/models_operations.py:530) as the scheduling/user-facing layer and add a durable worker (Celery on Redis/RabbitMQ is the default; Django-RQ is a lighter option) for the four cases above. Persist job identity and folder-specific checkpoints, and make resume continue after the last completed unit rather than restarting or behaving like a rescan. Do not use daemon threads for anything that must survive a restart.
 
 ## Testing and Quality
 
@@ -289,13 +300,13 @@ The project already has two test layers — Django tests under [`books/tests/`](
 
 ### Test/live database isolation
 
-- **Implemented** — [`settings_test.py`](ebook_manager/settings_test.py) forces a dedicated file-based SQLite database (`test_db.sqlite3`); [`pytest.ini`](pytest.ini:3) and [`manage.py`](manage.py:13) both route `test` runs to it, and the fragile `sys.argv` / `sys.modules` override was removed from [`settings.py`](ebook_manager/settings.py).
+- **Implemented** — [`settings_test.py`](ebook_manager/settings_test.py) redirects the file-based SQLite database, media, and cache into a unique temporary directory per test process; [`pytest.ini`](pytest.ini:3) and [`manage.py`](manage.py:13) route test runs to it, and the fragile `sys.argv` / `sys.modules` override was removed from [`settings.py`](ebook_manager/settings.py).
 - **Rule** — tests may read MySQL fixtures if needed but must never write to the live database.
 
 ### Database reset
 
-- **Add a `reset_database` management command (Planned)** — drop and recreate the MySQL database, run `makemigrations books`, run `migrate`, and (optionally) `createsuperuser`; read connection details from [`settings.py`](ebook_manager/settings.py) so no credentials are hardcoded.
-- **Do not check in migrations** — gitignore `books/migrations/*.py` (keep `__init__.py`) and untrack the numbered migration files; they are regenerated by `makemigrations`.
+- **Reset command (Implemented, with deviations)** — [`reset_database`](books/management/commands/reset_database.py) prompts before dropping the configured MySQL/MariaDB database (unless `--noinput`), can back it up, deletes generated `books` migration modules, regenerates them, and applies migrations. This command is destructive and engine-restricted.
+- **Do not check in generated migrations (Planned)** — ignore `books/migrations/*.py` except `__init__.py` and untrack numbered migration files. This is not implemented: migration files are currently tracked.
 
 ## Legal and Privacy
 

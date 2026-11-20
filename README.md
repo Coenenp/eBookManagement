@@ -13,37 +13,15 @@ A Django application that prepares a large personal media library (100,000+ book
 
 ## Pipeline
 
-1. **Scan** — recursively discover books, comics, and audiobooks.
-2. **Recognize (AI, multi-signal)** — fuse filename parsing/cleaning, embedded metadata (EPUB, OPF, ComicInfo, ID3), and OCR (title, author, publisher, ISBN) into structured candidate fields.
-3. **Decide (AI)** — the accuracy engine scores each signal and decides whether enough accurate information exists to query external providers.
-4. **Enrich + validate (AI)** — query Google Books, Open Library, Goodreads, and Comic Vine only when confidence is high; immediately verify the returned record matches the request (ISBN/title/author) and reject mismatches, then merge through the trust hierarchy and produce a per-book accuracy score.
-5. **Rename** — auto-apply the naming template and (re)generate OPF only when the score clears a high-confidence threshold (~99%), covering ~90% of the library unattended.
-6. **AI pre-confirmation** — for books below the auto-rename threshold, a heavier agent-driven pass opens the file, OCRs the title page, and cross-checks candidate metadata against a live websearch; it resolves the book with a recorded evidence trail or narrows it to a specific unresolved reason. Corrupted files and duplicate resolution bypass this tier and go straight to step 7.
-7. **Verify + confirm (ultrafast, human)** — the remaining books are confirmed, edited, or rejected in a keyboard-driven workbench in seconds each; corrections retrain the AI. This human-only step is the ground truth for retraining, and step 6 exists to shrink its volume.
+1. **Scan and extract** — scan folders by configured content type; parse filenames and supported embedded metadata, and extract covers and ISBN/language evidence where supported.
+2. **Enrich** — when external lookups are enabled, query configured providers. Returned records pass match-verification checks before they are stored as source-attributed metadata. Provider calls are controlled by scan options and availability; they are not gated by a calibrated AI accuracy threshold.
+3. **Resolve** — combine source records into `FinalMetadata`. Title and author use source-agreement voting; other fields use their field-specific selection rules. Completeness, confidence, and evidence-based accuracy scores are stored separately.
+4. **Review and approve** — users can review metadata in the book workflow. The `approve_batch` command can prepare a criteria-based manifest, report exclusions, and apply approval only after explicit confirmation and a fresh criteria check.
+5. **Move approved books** — `move_approved` is a dry run by default. With `--execute`, it uses the journaled safe-move workflow to validate, stage, verify, and record file moves, including EPUB metadata synchronization and companion handling.
 
 See [`ROADMAP.md`](ROADMAP.md) for status and [`FUNCTIONAL_SPECIFICATION.md`](FUNCTIONAL_SPECIFICATION.md) for what is already implemented.
 
-## Ultrafast verification & confirmation
-
-The human step is the bottleneck at 100k+ books, so confirmation is optimized for **seconds per book**, not page-by-page editing:
-
-- **Spreadsheet workbench** — every book is a row with suggested vs. current metadata shown as an inline diff.
-- **Keyboard-driven** — move with the keyboard, `Enter`/`Y` to confirm, `N`/`Esc` to reject, arrow keys to jump fields; auto-advance to the next unconfirmed book.
-- **Bulk confirm** — confirm a whole filtered page (or everything above a confidence threshold) in one action.
-- **Inline correction** — fix a single wrong field without leaving the flow; the correction becomes training data.
-- **Confirm-to-rename** — confirmed books flow straight into the rename + move step.
-
-## Metadata quality filters
-
-Every filter and statistic is a metadata-quality workbench, not a browsing view. Common examples:
-
-- **Same author** — verify the author name is clean and identical across all books.
-- **Series completeness** — find missing volumes and correct series name/numbering.
-- **Missing covers** — re-trigger cover extraction/downloads.
-- **Missing/incorrect filenames** — target books that still need renaming.
-- **Unprocessed enrichment** — e.g. books where the Google Books lookup has not run yet.
-
-The loop is always **filter → correct metadata → rename → move to the final library location**, and every correction becomes training data for the AI.
+The metadata review workflow is book-oriented. A spreadsheet-style verification queue, keyboard-driven bulk confirmation, automatic retraining, AI pre-confirmation, and score-gated unattended renaming remain roadmap work; see [`ROADMAP.md`](ROADMAP.md).
 
 ## Features
 
@@ -55,16 +33,17 @@ The loop is always **filter → correct metadata → rename → move to the fina
 
 ### Core Functionality
 
-- Recursive folder scanning with background jobs, progress tracking, resume, and history.
-- AI filename recognition with confidence scoring and a user feedback loop.
-- Multi-source metadata aggregation from Google Books, Open Library, Goodreads, and Comic Vine.
-- Trust-hierarchy conflict resolution (manual edits always win).
-- Ultrafast metadata verification workbench (keyboard confirm/reject, bulk accept, inline edit) with cover, file, and duplicate handling.
-- Template-based renaming and file organization with OPF metadata generation.
+- Folder scanning, content-type processing, progress/history, and scan resume, currently run through in-process background threads.
+- Filename recognition and parsing, plus supported format extractors and local ISBN/language analysis. OCR does not currently extract general title, author, and publisher candidates.
+- Multi-source metadata aggregation with match verification, source-agreement voting for titles/authors, and separate confidence, completeness, and accuracy scores.
+- Book-level metadata review and a staged, criteria-based batch approval command.
+- Template-based rename previews and batch operations, plus an approved-book move command with a journal, verification, recovery, EPUB metadata synchronization, and companion-file handling.
 - Series, author, and genre management (including duplicate author detection, name normalization, and fix-all-by-author).
 - Cover extraction, caching, manual upload, restore, and internal-cover selection.
 - User settings with themes and default renaming templates.
 - Setup wizard for first-run configuration.
+
+The template batch-renamer and the journaled approved-move pipeline are separate implementations today. Do not assume their collision, companion-file, or rollback behavior is identical. In particular, batch renames do not reserve destinations among the items in the same batch; avoid submitting books that resolve to the same target path.
 
 ## Supported Formats
 
@@ -152,6 +131,12 @@ python manage.py scan_books cancel <job_id>
 python manage.py enrich_metadata
 python manage.py train_ai_models --include-seed
 python manage.py scan_content_isbn
+python manage.py approve_batch --report
+python manage.py approve_batch --size 20
+python manage.py move_approved --limit 50
+python manage.py move_approved --limit 50 --execute
+python manage.py recover_file_moves
+python manage.py recover_file_moves --apply
 
 # Author data quality
 python manage.py clean_authors --dry-run --all
@@ -213,28 +198,23 @@ Google Books and Open Library are queried automatically without API keys. Option
 - Source-attributed metadata: `BookTitle`, `BookAuthor`, `BookSeries`, `BookGenre`, `BookPublisher`, `BookCover`, `BookMetadata`.
 - [`DataSource`](books/models.py:82) — metadata sources with trust levels.
 - [`Author`](books/models.py:628), [`Series`](books/models.py:775), [`Genre`](books/models.py:817), [`Publisher`](books/models.py:915).
-- [`ScanQueue`](books/models_operations.py:530) and [`ScanHistory`](books/models_operations.py:65) — background scan scheduling and results.
+- [`ScanQueue`](books/models_operations.py:530) and [`ScanHistory`](books/models_operations.py:65) — scan scheduling and results; queue execution is not backed by a durable worker.
 - [`AIFeedback`](books/models_operations.py:235) — AI prediction feedback for retraining.
 - [`UserProfile`](books/models_operations.py:303) — themes and renaming preferences.
 
-### Metadata Trust Hierarchy
+### Metadata Source Resolution
 
-When sources disagree, the highest-trust value wins:
+Source confidence and agreement both matter; there is not one universal
+"highest trust always wins" rule. For titles and authors, independent source
+groups vote for supporting values (EPUB and OPF count as one embedded source);
+an `Initial Scan` value cannot win when another source group has a candidate.
+Agreement, exact-string support, and candidate confidence break ties. Other
+fields use their own selection rules, including confidence ordering. Reviewed
+final metadata is protected from ordinary source synchronization.
 
-| Priority | Source              | Trust |
-| -------- | ------------------- | ----- |
-| 1        | Manual Entry        | 1.0   |
-| 2        | Open Library        | 0.95  |
-| 3        | Comic Vine          | 0.9   |
-| 4        | OPF File            | 0.9   |
-| 5        | ISBN Content Scan   | 0.85  |
-| 6        | EPUB                | 0.8   |
-| 7        | MOBI                | 0.75  |
-| 8        | Google Books        | 0.7   |
-| 9        | Open Library Covers | 0.65  |
-| 10       | PDF                 | 0.6   |
-| 11       | Google Books Covers | 0.55  |
-| 12       | Initial Scan        | 0.2   |
+`accuracy_score` is an evidence-agreement heuristic, distinct from field
+completeness and source confidence. It is not a calibrated AI probability and
+does not currently trigger automatic renaming or gate external lookups.
 
 ### External APIs
 
@@ -257,8 +237,10 @@ The cover system extracts internal covers during scanning and caches them in `ME
 | `epub_internal` | Cover extracted from an EPUB             |
 | `pdf_page`      | First page of a PDF rendered as an image |
 | `archive_first` | First image in a CBZ/CBR                 |
-| `mobi_internal` | Cover extracted from a MOBI              |
 | `manual`        | User-uploaded cover                      |
+
+MOBI/AZW3 internal cover extraction is not implemented; these formats may use
+companion or external covers instead.
 
 ### Key Fields on `BookFile`
 
