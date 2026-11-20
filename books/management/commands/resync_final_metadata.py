@@ -59,7 +59,7 @@ class Command(BaseCommand):
         csv_file = None
         csv_writer = None
         if csv_path:
-            csv_file = open(csv_path, "w", newline="")
+            csv_file = open(csv_path, "w", newline="", encoding="utf-8")
             csv_writer = csv.writer(csv_file)
             csv_writer.writerow(["book_id", "field", "old", "new"])
 

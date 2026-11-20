@@ -784,6 +784,8 @@ class BuildEpubMetadataTests(TestCase):
     def test_dict_keys_and_empty_omission(self):
         self._author("Jane Doe", "Jane", "Doe")
         self._genre("Fiction", 0.9)
+        self.final.final_author = "Jane Doe"
+        self.final.save()
         d = build_epub_metadata(self.book)
         self.assertEqual(d["title"], "Great Book")
         self.assertEqual(d["language"], "en")
@@ -796,26 +798,34 @@ class BuildEpubMetadataTests(TestCase):
         self.assertEqual(d["subjects"], ["Fiction"])
         self.assertEqual(d["authors"], [{"name": "Jane Doe", "file_as": "Doe, Jane"}])
 
-    def test_authors_from_main_relationships_file_as(self):
+    def test_authors_from_final_author_with_file_as(self):
         self._author("Jane Doe", "Jane", "Doe")
         self._author("John Smith", "John", "Smith")
+        self.final.final_author = "Jane Doe; John Smith"
+        self.final.save()
         d = build_epub_metadata(self.book)
         self.assertEqual(d["authors"], [
             {"name": "Jane Doe", "file_as": "Doe, Jane"},
             {"name": "John Smith", "file_as": "Smith, John"},
         ])
 
-    def test_authors_fallback_splits_final_author(self):
+    def test_authors_split_final_author(self):
         self.final.final_author = "Doe, Jane; Smith, John"
         self.final.save()
         d = build_epub_metadata(self.book)
-        self.assertEqual(d["authors"], [{"name": "Doe, Jane"}, {"name": "Smith, John"}])
+        self.assertEqual(d["authors"], [
+            {"name": "Doe, Jane", "file_as": "Doe, Jane"},
+            {"name": "Smith, John", "file_as": "Smith, John"},
+        ])
 
-    def test_authors_fallback_splits_on_and(self):
+    def test_authors_split_on_and(self):
         self.final.final_author = "Jane Doe and John Smith"
         self.final.save()
         d = build_epub_metadata(self.book)
-        self.assertEqual(d["authors"], [{"name": "Jane Doe"}, {"name": "John Smith"}])
+        self.assertEqual(d["authors"], [
+            {"name": "Jane Doe", "file_as": "Doe, Jane"},
+            {"name": "John Smith", "file_as": "Smith, John"},
+        ])
 
     def test_subjects_highest_confidence_first(self):
         self._genre("Zeta", 0.5)
@@ -824,12 +834,13 @@ class BuildEpubMetadataTests(TestCase):
         d = build_epub_metadata(self.book)
         self.assertEqual(d["subjects"], ["Alpha", "Beta", "Zeta"])
 
-    def test_authors_ordered_confidence_then_id(self):
+    def test_authors_split_preserves_order(self):
         for name, first, last in [("Zeta", "Zeta", "Zz"), ("Alpha", "Alpha", "Aa"), ("Beta", "Beta", "Bb")]:
-            author = Author.objects.create(name=name, first_name=first, last_name=last)
-            BookAuthor.objects.create(book=self.book, author=author, source=self.source, is_main_author=True, confidence=0.5)
+            Author.objects.create(name=name, first_name=first, last_name=last)
+        self.final.final_author = "Zeta; Alpha; Beta"
+        self.final.save()
         d = build_epub_metadata(self.book)
-        # Equal confidence -> insertion (id) order is the tie-break.
+        # The final author list is split in place, so its order is kept.
         self.assertEqual([a["name"] for a in d["authors"]], ["Zeta", "Alpha", "Beta"])
 
     def test_subjects_ordered_confidence_then_name(self):
