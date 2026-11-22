@@ -18,6 +18,26 @@ INITIAL_SCAN_SOURCE = "Initial Scan"
 EMBEDDED_SOURCE_NAMES = {"EPUB", "OPF File"}
 EMBEDDED_GROUP = "embedded"
 
+# Leading articles dropped when comparing title word tokens. ``l'`` tokenises
+# to the bare ``l``, so ``l`` is included too.
+_LEADING_ARTICLE_TOKENS = frozenset({
+    "the", "a", "an", "de", "het", "een", "le", "la", "les", "l",
+    "der", "die", "das",
+})
+
+# Single-codepoint letters that NFD leaves intact, folded for the author key.
+_DIACRITIC_FOLDS = str.maketrans({
+    "ø": "o", "Ø": "o",
+    "æ": "ae", "Æ": "ae",
+    "œ": "oe", "Œ": "oe",
+    "ß": "ss",
+    "ł": "l", "Ł": "l",
+    "ð": "d", "Ð": "d",
+})
+
+# Two or more single letters joined by dots with no space: "M.J.", "L.J.", ...
+_INITIALS_DOTS_RE = re.compile(r"\b\w(?:\.\w)+\b")
+
 
 def _norm(value):
     """Normalize a value for key comparison: NFC, casefold, collapse spaces."""
@@ -31,9 +51,43 @@ def _nfc(value):
     return unicodedata.normalize("NFC", value)
 
 
+def _fold_diacritics(value):
+    """Fold diacritics and special letters for the author key.
+
+    NFD, drop combining marks, then map the stroke/ligature letters (ø, æ, œ,
+    ß, ł, ð) that NFD leaves intact to their plain equivalents.
+    """
+    value = unicodedata.normalize("NFD", value)
+    value = "".join(ch for ch in value if not unicodedata.combining(ch))
+    return value.translate(_DIACRITIC_FOLDS)
+
+
 def _tokens(norm):
     """Word token tuple of an already-normalized value."""
     return tuple(re.findall(r"\w+", norm))
+
+
+def _strip_leading_article(tokens):
+    """Return the token tuple with one leading article removed, if present."""
+    if tokens and tokens[0] in _LEADING_ARTICLE_TOKENS:
+        return tokens[1:]
+    return tokens
+
+
+def _has_leading_article(norm):
+    """True when ``norm`` starts with a leading-article word token."""
+    tokens = _tokens(norm)
+    return bool(tokens) and tokens[0] in _LEADING_ARTICLE_TOKENS
+
+
+def _has_dots_initials(value):
+    """True when ``value`` has dots-with-no-space initials ("M.J.")."""
+    return bool(_INITIALS_DOTS_RE.search(value))
+
+
+def _has_diacritics(norm):
+    """True when ``norm`` carries diacritics the author key folds away."""
+    return _fold_diacritics(norm) != norm
 
 
 def _key(value, mode):
@@ -41,9 +95,12 @@ def _key(value, mode):
 
     For ``title`` the key is the ordered tuple of word tokens; for ``author``
     the key is the sorted tuple of tokens, so word order does not matter when
-    matching the same author.
+    matching the same author. The author key also folds diacritics.
     """
-    tokens = _tokens(_norm(value))
+    norm = _norm(value)
+    if mode == "author":
+        norm = _fold_diacritics(norm)
+    tokens = _tokens(norm)
     if mode == "author":
         tokens = tuple(sorted(tokens))
     return tokens
@@ -58,14 +115,19 @@ def _group(source):
 def _title_support(c_norm, t_norm):
     """True if ``t_norm`` supports ``c_norm`` under the title rule.
 
-    ``c_norm`` is supported when the word token tuples are equal, or when
-    ``t_norm`` is ``c_norm`` plus a series prefix (before) or an edition
-    suffix (after) at a recognised boundary. Containment anywhere else does
-    not count. Both arguments are already NFC/casefolded, whitespace-collapsed.
+    ``c_norm`` is supported when the word token tuples are equal, when they are
+    equal after dropping one leading article, or when ``t_norm`` is ``c_norm``
+    plus a series prefix (before) or an edition suffix (after) at a recognised
+    boundary. Containment anywhere else does not count. Both arguments are
+    already NFC/casefolded, whitespace-collapsed.
     """
     if not c_norm:
         return False
-    if _tokens(c_norm) == _tokens(t_norm):
+    c_tokens = _tokens(c_norm)
+    t_tokens = _tokens(t_norm)
+    if c_tokens == t_tokens:
+        return True
+    if _strip_leading_article(c_tokens) == _strip_leading_article(t_tokens):
         return True
     if t_norm.startswith(c_norm) and len(t_norm) > len(c_norm):
         after = t_norm[len(c_norm):]
@@ -90,16 +152,18 @@ def pick_by_support(candidates, mode):
     same group never support each other. Initial Scan still supports other
     candidates but contributes nothing to the same-string count.
 
-    The winner is the candidate with, in order: the highest support, the
-    highest number of groups with exactly the same string (NFC form), and the
-    highest confidence. An exact tie is won by the candidate listed first. A
-    candidate whose source is Initial Scan cannot win while at least one
-    candidate from another source exists; when every candidate is Initial Scan
-    the rule above applies unchanged.
+    The winner is the candidate with, in order: the highest support; for
+    titles the highest same-string count then a leading article; for authors a
+    dots-and-no-space initials form, then a diacritic form, then the highest
+    same-string count; and finally the highest confidence. An exact tie is won
+    by the candidate listed first. A candidate whose source is Initial Scan
+    cannot win while at least one candidate from another source exists; when
+    every candidate is Initial Scan the rule above applies unchanged.
     """
     if not candidates:
         return None
 
+    values = [value for value, _, _ in candidates]
     norm_values = [_norm(value) for value, _, _ in candidates]
     nfc_values = [_nfc(value) for value, _, _ in candidates]
     keys = [_key(value, mode) for value, _, _ in candidates]
@@ -139,7 +203,21 @@ def pick_by_support(candidates, mode):
     for i in range(len(candidates)):
         if has_non_initial_scan and is_initial_scan[i]:
             continue
-        score = (support(i), same_string(i), candidates[i][1])
+        if mode == "author":
+            score = (
+                support(i),
+                _has_dots_initials(values[i]),
+                _has_diacritics(norm_values[i]),
+                same_string(i),
+                candidates[i][1],
+            )
+        else:
+            score = (
+                support(i),
+                same_string(i),
+                _has_leading_article(norm_values[i]),
+                candidates[i][1],
+            )
         if best_score is None or score > best_score:
             best_score = score
             best_index = i
