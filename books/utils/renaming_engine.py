@@ -13,7 +13,7 @@ from typing import List, Optional, Tuple
 from django.db import models
 
 from books.models import DataSource
-from books.utils.authors import find_author_by_name, normalize_author_name
+from books.utils.authors import author_file_as, find_author_by_name, normalize_author_name
 from books.utils.surname_particles import sort_name, split_author
 
 logger = logging.getLogger(__name__)
@@ -549,11 +549,7 @@ class RenamingEngine:
         result = None
         author = find_author_by_name(final_author)
         if author is not None and author.is_reviewed and author.last_name:
-            result = (
-                f"{author.last_name}, {author.first_name}"
-                if author.first_name
-                else author.last_name
-            )
+            result = author_file_as(final_author)
         self._reviewed_author_cache[normalized] = result
         return result
 

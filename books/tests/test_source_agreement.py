@@ -132,6 +132,51 @@ class PickBySupportUnitTests(TestCase):
         ]
         self.assertIn(pick_by_support(candidates, "title"), (nfc, nfd))
 
+    # -- leading article ------------------------------------------------------
+
+    def test_leading_article_support_article_wins(self):
+        # "The Nick Adams stories" and "Nick Adams Stories" agree word-for-word
+        # after dropping the leading article; the article-carrying form wins.
+        candidates = [
+            ("The Nick Adams stories", 0.8, "EPUB"),
+            ("Nick Adams Stories", 0.9, "Google Books"),
+            ("Nick Adams stories", 0.2, "Initial Scan"),
+        ]
+        self.assertEqual(pick_by_support(candidates, "title"), "The Nick Adams stories")
+
+    def test_elided_leading_article_wins(self):
+        candidates = [
+            ("L'Ignorance", 0.8, "EPUB"),
+            ("Ignorance", 0.9, "Google Books"),
+        ]
+        self.assertEqual(pick_by_support(candidates, "title"), "L'Ignorance")
+
+    # -- initials -------------------------------------------------------------
+
+    def test_initials_dots_no_space_wins(self):
+        candidates = [
+            ("M.J. Arlidge", 0.9, "OPF File"),
+            ("M J Arlidge", 0.8, "EPUB"),
+            ("M J Arlidge", 0.665, "Google Books"),
+        ]
+        self.assertEqual(pick_by_support(candidates, "author"), "M.J. Arlidge")
+
+    # -- diacritics -----------------------------------------------------------
+
+    def test_diacritic_form_wins_kierkegaard(self):
+        candidates = [
+            ("Søren Kierkegaard", 0.8, "EPUB"),
+            ("Soren Kierkegaard", 0.9, "Google Books"),
+        ]
+        self.assertEqual(pick_by_support(candidates, "author"), "Søren Kierkegaard")
+
+    def test_diacritic_form_wins_marquez(self):
+        candidates = [
+            ("Gabriel García Márquez", 0.8, "EPUB"),
+            ("Gabriel Garcia Marquez", 0.9, "Google Books"),
+        ]
+        self.assertEqual(pick_by_support(candidates, "author"), "Gabriel García Márquez")
+
 
 class SourceAgreementIntegrationTests(TestCase):
     """End-to-end tests of the vote through update_final_title/author."""
