@@ -95,3 +95,23 @@ def find_author_by_name(name):
         .order_by("-is_reviewed", "id")
         .first()
     )
+
+
+def author_file_as(name):
+    """Return 'Last, First' for ``name``, preferring a reviewed Author row.
+
+    A reviewed (``is_reviewed`` True) Author found with ``find_author_by_name``
+    supplies the sort form from its stored first/last names; any other row
+    (unreviewed, or none) is ignored and the name is split with ``sort_name``.
+    Shared by the renaming engine and the safe-move OPF metadata sync so the
+    two always agree.
+    """
+    from books.utils.surname_particles import sort_name
+
+    author = find_author_by_name(name)
+    if author is not None and author.is_reviewed:
+        first = (author.first_name or "").strip()
+        last = (author.last_name or "").strip()
+        if last:
+            return f"{last}, {first}" if first else last
+    return sort_name(name)

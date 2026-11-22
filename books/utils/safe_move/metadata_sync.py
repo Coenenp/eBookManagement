@@ -8,8 +8,7 @@ Check B during a safe move.
 
 import re
 
-from books.utils.authors import find_author_by_name
-from books.utils.surname_particles import sort_name
+from books.utils.authors import author_file_as
 
 _AUTHOR_SPLIT = re.compile(r"\s*;\s*|\s+and\s+", re.IGNORECASE)
 
@@ -72,28 +71,11 @@ def _authors(final):
     result = []
     for name in names:
         entry = {"name": name}
-        file_as = _file_as_for_name(name)
+        file_as = author_file_as(name)
         if file_as:
             entry["file_as"] = file_as
         result.append(entry)
     return result
-
-
-def _file_as_for_name(name):
-    """'Last, First' from the reviewed Author row, else from ``sort_name``."""
-    author = find_author_by_name(name)
-    if author is not None:
-        return _file_as(author) or sort_name(name)
-    return sort_name(name)
-
-
-def _file_as(author):
-    """'Last, First' from the Author model's names (or whichever part exists)."""
-    first = (author.first_name or "").strip()
-    last = (author.last_name or "").strip()
-    if last and first:
-        return f"{last}, {first}"
-    return last or first or ""
 
 
 def _subjects(book):
