@@ -102,12 +102,12 @@ class ScannerFileOpsTests(TestCase):
         self.assertEqual(result, "/books/author/cover1.jpg")
 
     def test_find_opf_file_same_directory(self):
-        """Test finding OPF file in same directory as ebook"""
+        """Test that a same-directory OPF whose stem matches the ebook wins."""
         ebook_path = "/books/author/book.epub"
         opf_files = ["/books/author/metadata.opf", "/books/other/metadata.opf", "/books/author/book.opf"]
 
         result = find_opf_file(ebook_path, opf_files)
-        self.assertEqual(result, "/books/author/metadata.opf")
+        self.assertEqual(result, "/books/author/book.opf")
 
     def test_find_opf_file_different_directory(self):
         """Test finding OPF file when none in same directory"""
@@ -126,13 +126,12 @@ class ScannerFileOpsTests(TestCase):
         self.assertEqual(result, "")
 
     def test_find_opf_file_multiple_in_same_dir(self):
-        """Test finding OPF file with multiple OPF files in same directory"""
+        """Test that OPFs without a matching stem or a single-ebook metadata.opf are not matched."""
         ebook_path = "/books/author/book.epub"
         opf_files = ["/books/author/content.opf", "/books/author/metadata.opf", "/books/other/metadata.opf"]
 
-        # Should return first match in same directory
         result = find_opf_file(ebook_path, opf_files)
-        self.assertEqual(result, "/books/author/content.opf")
+        self.assertEqual(result, "")
 
     def test_find_cover_file_windows_paths(self):
         """Test finding cover file with Windows-style paths"""
@@ -147,8 +146,54 @@ class ScannerFileOpsTests(TestCase):
         ebook_path = "C:\\Books\\Author\\book.epub"
         opf_files = ["C:\\Books\\Author\\metadata.opf", "C:\\Books\\Other\\metadata.opf"]
 
-        result = find_opf_file(ebook_path, opf_files)
+        result = find_opf_file(ebook_path, opf_files, ebook_files=[ebook_path])
         self.assertEqual(result, "C:\\Books\\Author\\metadata.opf")
+
+    def test_find_opf_file_no_stem_match_multiple_ebooks(self):
+        """A folder with several ebooks and one unmatched OPF: no book matches it."""
+        a = "/books/author/a.epub"
+        b = "/books/author/b.epub"
+        c = "/books/author/c.epub"
+        opf_files = ["/books/author/x.opf"]
+        ebook_files = [a, b, c]
+        for ebook in ebook_files:
+            self.assertEqual(find_opf_file(ebook, opf_files, ebook_files), "")
+
+    def test_find_opf_file_stem_match_wins_regardless_of_order(self):
+        """a.epub matches a.opf even when other.opf is listed first."""
+        ebook_path = "/books/author/a.epub"
+        opf_files = ["/books/author/other.opf", "/books/author/a.opf"]
+        result = find_opf_file(ebook_path, opf_files)
+        self.assertEqual(result, "/books/author/a.opf")
+
+    def test_find_opf_file_metadata_opf_single_ebook(self):
+        """A folder with one ebook and metadata.opf matches metadata.opf."""
+        ebook_path = "/books/author/a.epub"
+        opf_files = ["/books/author/metadata.opf"]
+        result = find_opf_file(ebook_path, opf_files, ebook_files=[ebook_path])
+        self.assertEqual(result, "/books/author/metadata.opf")
+
+    def test_find_opf_file_metadata_opf_two_ebooks_does_not_match(self):
+        """metadata.opf is not matched when the folder holds two ebooks."""
+        a = "/books/author/a.epub"
+        b = "/books/author/b.epub"
+        opf_files = ["/books/author/metadata.opf"]
+        for ebook in (a, b):
+            self.assertEqual(find_opf_file(ebook, opf_files, ebook_files=[a, b]), "")
+
+    def test_find_opf_file_stem_match_case_insensitive(self):
+        """A.OPF matches a.epub regardless of case."""
+        ebook_path = "/books/author/a.epub"
+        opf_files = ["/books/author/other.opf", "/books/author/A.OPF"]
+        result = find_opf_file(ebook_path, opf_files)
+        self.assertEqual(result, "/books/author/A.OPF")
+
+    def test_find_opf_file_unrelated_stray_single_ebook(self):
+        """A folder with one ebook and an unrelated stray.opf gets an empty string."""
+        ebook_path = "/books/author/a.epub"
+        opf_files = ["/books/author/stray.opf"]
+        result = find_opf_file(ebook_path, opf_files, ebook_files=[ebook_path])
+        self.assertEqual(result, "")
 
     def test_get_file_format_with_path(self):
         """Test file format detection with full path"""

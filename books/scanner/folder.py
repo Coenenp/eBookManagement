@@ -317,7 +317,7 @@ def _process_files_individually(ebook_files, scan_folder, cover_files, opf_files
     """Process files using the original individual approach"""
     for i, ebook_path in enumerate(ebook_files, 1):
         try:
-            _process_book(ebook_path, scan_folder, cover_files, opf_files, rescan, enable_external_apis=enable_external_apis, ai_recognizer=ai_recognizer)
+            _process_book(ebook_path, scan_folder, cover_files, opf_files, rescan, enable_external_apis=enable_external_apis, ai_recognizer=ai_recognizer, ebook_files=ebook_files)
 
             # Update global progress tracking
             scan_status.processed_files += 1
@@ -445,7 +445,7 @@ def _collect_files(directory, ebook_exts, cover_exts):
     return ebook_files, cover_files, opf_files
 
 
-def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False, enable_external_apis=True, ai_recognizer=None):
+def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False, enable_external_apis=True, ai_recognizer=None, ebook_files=None):
     book, created = _get_or_create_book_by_path(
         file_path=file_path,
         scan_folder=scan_folder,
@@ -466,7 +466,7 @@ def _process_book(file_path, scan_folder, cover_files, opf_files, rescan=False, 
         primary_file.cover_internal_path = cover_internal_path or ""
         primary_file.has_internal_cover = has_internal_cover
 
-        primary_file.opf_path = find_opf_file(file_path, opf_files) or ""
+        primary_file.opf_path = find_opf_file(file_path, opf_files, ebook_files) or ""
         primary_file.save()
 
     logger.info(f"[FILENAME PARSE] Path: {file_path}")

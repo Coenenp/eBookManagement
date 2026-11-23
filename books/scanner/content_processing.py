@@ -124,7 +124,7 @@ def process_files_by_content_type(
     else:
         # For ebooks, process individually (existing behavior)
         for file_path in file_paths:
-            _process_individual_ebook(file_path, scan_folder, cover_files, opf_files, rescan, enable_external_apis=enable_external_apis)
+            _process_individual_ebook(file_path, scan_folder, cover_files, opf_files, rescan, enable_external_apis=enable_external_apis, ebook_files=file_paths)
 
 
 def _process_comic_files(
@@ -447,13 +447,14 @@ def _process_individual_ebook(
     rescan: bool,
     enable_external_apis: bool = True,
     ai_recognizer=None,
+    ebook_files: List[str] = None,
 ):
     """Process individual ebook file (existing behavior for ebooks)"""
     # Import the original processing function
     from books.scanner.folder import _process_book
 
     # Use the existing book processing logic for ebooks
-    _process_book(file_path, scan_folder, cover_files, opf_files, rescan, enable_external_apis=enable_external_apis, ai_recognizer=ai_recognizer)
+    _process_book(file_path, scan_folder, cover_files, opf_files, rescan, enable_external_apis=enable_external_apis, ai_recognizer=ai_recognizer, ebook_files=ebook_files)
 
 
 def detect_content_type_from_files(file_paths: List[str]) -> str:
@@ -526,7 +527,7 @@ def process_files_by_type(
         else:
             # Process as individual ebooks
             for file_path in file_paths:
-                _process_individual_ebook(file_path, scan_folder, cover_files, opf_files, rescan, enable_external_apis=enable_external_apis, ai_recognizer=ai_recognizer)
+                _process_individual_ebook(file_path, scan_folder, cover_files, opf_files, rescan, enable_external_apis=enable_external_apis, ai_recognizer=ai_recognizer, ebook_files=file_paths)
 
 
 def _query_audiobook_external_metadata(book):
