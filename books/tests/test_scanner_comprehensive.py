@@ -13,10 +13,10 @@ from unittest.mock import Mock, patch
 from django.contrib.auth.models import User
 from django.test import TestCase
 
-from books.models import ScanFolder, ScanLog, ScanStatus
+from books.models import Book, ScanFolder, ScanLog, ScanStatus
 from books.scanner.background import BackgroundScanner, background_scan_folder
 from books.scanner.file_ops import get_file_format
-from books.scanner.folder import _collect_files
+from books.scanner.folder import _collect_files, _handle_orphans
 
 
 class BackgroundScannerTests(TestCase):
@@ -178,6 +178,45 @@ class FolderScannerTests(TestCase):
 
         total_size = sum(os.path.getsize(f) for f in ebook_files)
         self.assertEqual(total_size, total_expected_size)
+
+    def test_stray_opf_in_folder_of_ebooks_is_orphaned(self):
+        """A stray OPF that matches no ebook in a folder of several ebooks becomes an orphan placeholder."""
+        scan_folder = ScanFolder.objects.create(name="Orphan Test Folder", path=self.temp_dir, is_active=True)
+
+        (Path(self.temp_dir) / "a.epub").write_text("ebook a")
+        (Path(self.temp_dir) / "b.epub").write_text("ebook b")
+        stray_opf = Path(self.temp_dir) / "stray.opf"
+        stray_opf.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="2.0">'
+            '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            '<dc:title>Stray Title</dc:title>'
+            '</metadata></package>'
+        )
+
+        ebook_files, cover_files, opf_files = _collect_files(self.temp_dir, {".epub"}, {".jpg"})
+
+        _handle_orphans(self.temp_dir, cover_files, opf_files, ebook_files, scan_folder)
+
+        placeholder = Book.objects.filter(scan_folder=scan_folder, is_placeholder=True).first()
+        self.assertIsNotNone(placeholder, "stray OPF in a folder of several ebooks should be orphaned")
+        self.assertEqual(placeholder.primary_file.opf_path, str(stray_opf))
+        # No junk rows: the only book created is the placeholder for the stray OPF.
+        self.assertEqual(Book.objects.filter(scan_folder=scan_folder).count(), 1)
+
+    def test_matched_opf_is_not_orphaned(self):
+        """An OPF whose stem matches an ebook is not turned into a placeholder."""
+        scan_folder = ScanFolder.objects.create(name="Matched OPF Test Folder", path=self.temp_dir, is_active=True)
+
+        (Path(self.temp_dir) / "a.epub").write_text("ebook a")
+        (Path(self.temp_dir) / "a.opf").write_text("<package/>")
+
+        ebook_files, cover_files, opf_files = _collect_files(self.temp_dir, {".epub"}, {".jpg"})
+
+        _handle_orphans(self.temp_dir, cover_files, opf_files, ebook_files, scan_folder)
+
+        self.assertEqual(Book.objects.filter(scan_folder=scan_folder).count(), 0,
+                         "a stem-matched OPF must not be treated as an orphan")
 
 
 class ScanStatusTrackingTests(TestCase):

@@ -713,11 +713,19 @@ def _cleanup_missing_books(directory, scan_folder, found_files):
 
 
 def _handle_orphans(directory, cover_files, opf_files, ebook_files, scan_folder):
-    ebook_dirs = {os.path.dirname(f) for f in ebook_files}
+    # An OPF is an orphan when no ebook claims it via find_opf_file. Before the
+    # matching rule tightened, an OPF in a folder with any ebooks was claimed by
+    # the first book of that folder, so a stray OPF among several ebooks was
+    # silently dropped instead of being orphaned. Now every OPF that no ebook
+    # matches becomes a placeholder book, exactly like an OPF that never matched.
+    claimed = set()
+    for ebook_path in ebook_files:
+        match = find_opf_file(ebook_path, opf_files, ebook_files)
+        if match:
+            claimed.add(match)
 
     for opf_file in opf_files:
-        opf_dir = os.path.dirname(opf_file)
-        if opf_dir not in ebook_dirs:
+        if opf_file not in claimed:
             _create_placeholder_book(opf_file, scan_folder)
 
 
