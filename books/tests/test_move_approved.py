@@ -59,6 +59,21 @@ class MoveApprovedCommandTests(TestCase):
         self.assertIn("planned 1", out)
         self.assertIn(f"{book.id} |", out)
 
+    def test_golden_output_exact_format(self):
+        """Golden output: dry-run and execute lines are byte-for-byte stable."""
+        book, path = self._make_book("golden.pdf", language="en")
+        source = str(path)
+        target = str(Path(self.temp_dir) / "Approved" / "golden.pdf")
+        dry = self._run(folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        self.assertEqual(
+            dry,
+            f"{book.id} | en | {source} -> {target}\n"
+            f"planned 1, skipped 0\n",
+        )
+
+        out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        self.assertEqual(out, "moved 1, needs_review 0, failed 0, skipped 0\n")
+
     def test_execute_moves_approved_and_tags_batch_id(self):
         book, path = self._make_book("m.pdf")
         out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
@@ -131,7 +146,7 @@ class MoveApprovedCommandTests(TestCase):
     def test_becomes_unapproved_between_selection_and_move(self):
         book, path = self._make_book("ba.pdf")
         with mock.patch(
-            "books.management.commands.move_approved.is_renamable",
+            "books.services.moves.is_renamable",
             side_effect=[True, False],
         ):
             out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
@@ -149,18 +164,18 @@ class MoveApprovedCommandTests(TestCase):
         self.assertIn("failed 1", out)
 
     def test_compute_target_failure_marks_failed_and_continues(self):
-        from books.management.commands.move_approved import Command
+        from books.services import moves as _moves
 
         good, good_path = self._make_book("a-good.pdf")
         bad, bad_path = self._make_book("a-bad.pdf")
-        real = Command._compute_target
+        real = _moves._compute_target
 
-        def _raise_for_bad(self, book, folder_pattern, filename_pattern):
+        def _raise_for_bad(book, folder_pattern, filename_pattern):
             if book.finalmetadata.final_title == "a-bad":
                 raise RuntimeError("boom")
-            return real(self, book, folder_pattern, filename_pattern)
+            return real(book, folder_pattern, filename_pattern)
 
-        with mock.patch.object(Command, "_compute_target", _raise_for_bad):
+        with mock.patch("books.services.moves._compute_target", _raise_for_bad):
             out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
         self.assertFalse(good_path.exists())
         self.assertTrue((Path(self.temp_dir) / "Approved" / "a-good.pdf").exists())
@@ -170,7 +185,7 @@ class MoveApprovedCommandTests(TestCase):
 
     def test_queryset_filters_unreviewed(self):
         unapproved, _ = self._make_book("u.pdf", is_reviewed=False)
-        with mock.patch("books.management.commands.move_approved.is_renamable", return_value=True):
+        with mock.patch("books.services.moves.is_renamable", return_value=True):
             out = self._run(folder_pattern="Approved", filename_pattern="${title}.${ext}")
         self.assertNotIn(f"{unapproved.id} |", out)
         self.assertIn("planned 0", out)
@@ -215,7 +230,7 @@ class MoveApprovedCommandTests(TestCase):
             )
             return real(b, target, cover_path=cover_path)
 
-        with mock.patch("books.management.commands.move_approved.safe_move_book", side_effect=_inject):
+        with mock.patch("books.services.moves.safe_move_book", side_effect=_inject):
             out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
         injected = FileMove.objects.get(book=other)
         self.assertEqual(injected.batch_id, "")
