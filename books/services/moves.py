@@ -308,3 +308,63 @@ def run_moves(plan, *, folder_pattern=None, filename_pattern=None):
         "skipped": skipped,
         "batch_id": batch_id,
     }
+
+
+def move_status(batch_id=None, limit=50):
+    """Read-only status for the moves page. Writes nothing.
+
+    Returns a dict:
+
+    * ``counts_per_state`` — mapping of every ``FileMove`` state to its row
+      count (states with no rows are absent).
+    * ``counts_per_batch`` — mapping of ``batch_id`` to its row count (rows
+      without a batch id are excluded).
+    * ``review_rows`` — the latest rows in ``needs_review``, ``failed`` or
+      ``failed_verification``, each with ``id``, ``book_id``, ``state``,
+      ``error`` and ``review_flags``.
+    * ``completed_rows`` — the latest rows in ``pending_deletion`` or
+      ``purged``, each with ``id``, ``book_id``, ``state`` and ``target_path``.
+    """
+    qs = FileMove.objects.all()
+    if batch_id:
+        qs = qs.filter(batch_id=batch_id)
+
+    counts_per_state = dict(
+        qs.order_by()
+        .values("state")
+        .annotate(n=Count("id"))
+        .values_list("state", "n")
+    )
+
+    counts_per_batch = dict(
+        qs.exclude(batch_id="")
+        .order_by()
+        .values("batch_id")
+        .annotate(n=Count("id"))
+        .values_list("batch_id", "n")
+    )
+
+    review_states = (
+        FileMove.State.NEEDS_REVIEW,
+        FileMove.State.FAILED,
+        FileMove.State.FAILED_VERIFICATION,
+    )
+    review_rows = list(
+        qs.filter(state__in=review_states)
+        .order_by("-pk")[:limit]
+        .values("id", "book_id", "state", "error", "review_flags")
+    )
+
+    completed_states = (FileMove.State.PENDING_DELETION, FileMove.State.PURGED)
+    completed_rows = list(
+        qs.filter(state__in=completed_states)
+        .order_by("-pk")[:limit]
+        .values("id", "book_id", "state", "target_path")
+    )
+
+    return {
+        "counts_per_state": counts_per_state,
+        "counts_per_batch": counts_per_batch,
+        "review_rows": review_rows,
+        "completed_rows": completed_rows,
+    }

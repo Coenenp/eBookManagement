@@ -9,7 +9,7 @@ from django.core.management import call_command
 from django.test import TestCase
 
 from books.models import FileMove, FinalMetadata
-from books.services.moves import dry_run_report, plan_moves, run_moves
+from books.services.moves import dry_run_report, move_status, plan_moves, run_moves
 from books.tests.test_helpers import create_test_book_with_file, create_test_scan_folder
 
 
@@ -130,3 +130,58 @@ class MoveServiceParityTests(TestCase):
         self.assertEqual(len(plan["planned"]), 1)
         self.assertEqual(plan["planned"][0]["id"], book.id)
         self.assertEqual(plan["skipped"], [])
+
+
+class MoveStatusTests(TestCase):
+    def _row(self, state, **kwargs):
+        return FileMove.objects.create(
+            kind=FileMove.Kind.MAIN,
+            db_field=FileMove.DBField.FILE_PATH,
+            source_path="/tmp/mv/book.pdf",
+            target_path="/tmp/mv/out/book.pdf",
+            state=state,
+            **kwargs,
+        )
+
+    def test_counts_cover_every_state(self):
+        states = [s[0] for s in FileMove.State.choices]
+        for state in states:
+            self._row(state)
+        status = move_status()
+        self.assertEqual(set(status["counts_per_state"]), set(states))
+        for state in states:
+            self.assertEqual(status["counts_per_state"][state], 1)
+
+    def test_counts_per_batch(self):
+        self._row(FileMove.State.PLANNED, batch_id="b1")
+        self._row(FileMove.State.PLANNED, batch_id="b1")
+        self._row(FileMove.State.PLANNED, batch_id="b2")
+        self._row(FileMove.State.PLANNED, batch_id="")
+        status = move_status()
+        self.assertEqual(status["counts_per_batch"], {"b1": 2, "b2": 1})
+
+    def test_review_rows_have_error_and_flags(self):
+        nr = self._row(FileMove.State.NEEDS_REVIEW, error="", review_flags=["cover-missing"])
+        fl = self._row(FileMove.State.FAILED, error="boom", review_flags=[])
+        self._row(FileMove.State.PLANNED)  # not a review row
+        status = move_status()
+        by_id = {r["id"]: r for r in status["review_rows"]}
+        self.assertEqual(set(by_id), {nr.id, fl.id})
+        self.assertEqual(by_id[nr.id]["review_flags"], ["cover-missing"])
+        self.assertEqual(by_id[nr.id]["error"], "")
+        self.assertEqual(by_id[fl.id]["error"], "boom")
+
+    def test_completed_rows_latest_first(self):
+        older = self._row(FileMove.State.PURGED)
+        newer = self._row(FileMove.State.PENDING_DELETION)
+        self._row(FileMove.State.PLANNED)  # not completed
+        status = move_status()
+        self.assertEqual([r["id"] for r in status["completed_rows"]], [newer.id, older.id])
+
+    def test_writes_nothing(self):
+        for state in (FileMove.State.PLANNED, FileMove.State.NEEDS_REVIEW, FileMove.State.PURGED):
+            self._row(state)
+        before = list(FileMove.objects.order_by("pk").values_list("id", "state", "error", "review_flags"))
+        move_status()
+        after = list(FileMove.objects.order_by("pk").values_list("id", "state", "error", "review_flags"))
+        self.assertEqual(after, before)
