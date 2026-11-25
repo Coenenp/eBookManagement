@@ -1,6 +1,6 @@
 # Universal Media Manager
 
-A Django application that prepares a large personal media library (100,000+ books) for import into **BookOrbit**. It scans ebooks, comics, and audiobooks, extracts metadata from files and external APIs, validates it with AI, and renames/organizes files with user-defined naming templates plus embedded OPF metadata. It is **not a reader** — reading, reading status, and library browsing are handled by BookOrbit.
+A Django application that prepares a large personal media library (100,000+ books) for import into **BookOrbit**. It scans ebooks, comics, and audiobooks, extracts and reviews metadata, and renames/organizes files with user-defined naming templates and OPF metadata. It is **not a reader** — reading, reading status, and general library browsing are handled by BookOrbit. Its own UI provides the functional overview and controls needed to review, correct, rename, and track books.
 
 ## Documentation Index
 
@@ -21,7 +21,7 @@ A Django application that prepares a large personal media library (100,000+ book
 
 See [`ROADMAP.md`](ROADMAP.md) for status and [`FUNCTIONAL_SPECIFICATION.md`](FUNCTIONAL_SPECIFICATION.md) for what is already implemented.
 
-The metadata review workflow is book-oriented. A spreadsheet-style verification queue, keyboard-driven bulk confirmation, automatic retraining, AI pre-confirmation, and score-gated unattended renaming remain roadmap work; see [`ROADMAP.md`](ROADMAP.md).
+The metadata review workflow is book-oriented. A spreadsheet-style verification queue, keyboard-driven bulk confirmation, automatic retraining, and AI-assisted review remain roadmap work; see [`ROADMAP.md`](ROADMAP.md). Until metadata accuracy has reached an extremely high, independently demonstrated level and the policy is explicitly revisited, renaming and moving require human review and approval, individually or in a reviewed batch. A confidence score alone is not approval.
 
 ## Features
 
@@ -43,7 +43,7 @@ The metadata review workflow is book-oriented. A spreadsheet-style verification 
 - User settings with themes and default renaming templates.
 - Setup wizard for first-run configuration.
 
-The template batch-renamer and the journaled approved-move pipeline are separate implementations today. Do not assume their collision, companion-file, or rollback behavior is identical. In particular, batch renames do not reserve destinations among the items in the same batch; avoid submitting books that resolve to the same target path.
+The template batch-renamer and the journaled approved-move pipeline are separate implementations today. The required approval and shared-engine policy is not yet a guarantee across every entry point. Do not assume their collision, companion-file, or rollback behavior is identical. In particular, batch renames do not reserve destinations among the items in the same batch; avoid submitting books that resolve to the same target path.
 
 ## Supported Formats
 
@@ -114,7 +114,8 @@ Scans run in the background and can be monitored, cancelled, and resumed.
 
 - **Quick scan** — discovers new/changed/removed files and extracts local metadata without calling external APIs.
 - **Deep scan** — everything in a quick scan, plus external metadata and cover lookups.
-- **Rescan** — re-query external sources for existing books.
+- **Resume** — attempt to continue an interrupted scan from its checkpoint; current recovery is best-effort and not restart-safe.
+- **Rescan** — intended to rebuild source-derived metadata for selected book IDs or detect file changes in a folder. Current entry points differ and the web folder-rescan path has a known startup defect; see [`FUNCTIONAL_SPECIFICATION.md`](FUNCTIONAL_SPECIFICATION.md#resume-and-rescan).
 
 ### Management Commands
 
@@ -181,7 +182,7 @@ TESSERACT_CMD=  # e.g. C:\Program Files\Tesseract-OCR\tesseract.exe
 
 Caching uses Django's file-based cache backend (stored in `cache_storage/`) and needs no configuration.
 
-Google Books and Open Library are queried automatically without API keys. Optional `GOOGLE_BOOKS_API_KEY` and `COMICVINE_API_KEY` values raise rate limits; Goodreads enrichment requires an `APIFY_API_TOKEN`.
+Open Library does not require an API key. The combined Google Books metadata and cover lookup requires `GOOGLE_BOOKS_API_KEY`; ComicVine uses `COMICVINE_API_KEY`, and Goodreads enrichment requires an `APIFY_API_TOKEN`. Lookups also depend on scan options and provider availability.
 
 ## Architecture
 

@@ -128,10 +128,10 @@ The primary command-line scan entry point is [`scan_books`](books/management/com
 #### Resume and Rescan
 
 - **Resume an interrupted scan** — continue the same folder scan after its last recorded file checkpoint, completing metadata for incomplete books first. Resume is not a fresh scan and should not reset completed metadata. Current recovery is best-effort and must be requested; the in-process background thread is not restart-safe.
-- **Rescan selected book IDs** — re-extract file metadata and, when enabled, query external metadata for those books, then resolve final metadata again. The intended reset is to rebuild source-derived metadata for the selected books, not to apply folder-level file discovery or missing-file cleanup. Current ID-based code re-extracts and resolves, but does not fully clear old source records first; reviewed final metadata is protected from automatic resolution.
+- **Rescan selected book IDs** — re-extract file metadata and, when enabled, query external metadata for those books, then resolve final metadata again. The intended reset is to rebuild source-derived metadata for the selected books while protecting reviewed final values, not to apply folder-level file discovery or missing-file cleanup. Marking a book unreviewed unlocks its metadata for automatic updates, including replacement of earlier manual values. Current ID-based code re-extracts and resolves, but does not fully clear old source records first; reviewed final metadata is protected from ordinary automatic resolution.
 - **Rescan a folder** — traverse the folder and apply the file-change detection behavior below, including handling files that are new, modified, missing, or reappearing. This is distinct from selecting a fixed set of existing book IDs.
 
-The web folder-rescan workflow uses the folder traversal path. There is an entry-point inconsistency to resolve: `scan_books rescan --folder` currently collects book IDs and dispatches the ID-based rescan rather than the folder traversal path. Until unified, those two folder-rescan entry points do not have identical behavior.
+The web folder-rescan workflow is intended to use folder traversal, but its immediate-start thread currently supplies incompatible arguments to the background function, so that path fails to start. Separately, `scan_books rescan --folder` collects book IDs and dispatches the ID-based rescan rather than folder traversal. Both need correction and parity; the intended semantics above are not yet fully implemented.
 
 #### Process
 
@@ -141,6 +141,8 @@ The web folder-rescan workflow uses the folder traversal path. There is an entry
 4. Extract supported embedded and filename metadata and resolve available source records into `FinalMetadata`.
 5. Query external sources inline when enabled by the scan configuration; returned candidates are match-verified before persistence.
 6. During a folder rescan, reconcile missing and reappearing files using the scan cleanup path. A book-ID rescan does not perform folder-wide missing-file detection. Duplicate identification is a separate review/move concern.
+
+For ebook OPF companions, the scanner prefers an OPF with the same filename stem. If no stem matches, it uses a sole OPF only when the folder contains one supported book file; otherwise it leaves the OPF unassigned and records a scan error for review. This scan-log warning is not yet a per-book review-queue status, and existing incorrectly imported metadata is not automatically repaired by this change.
 
 #### File Change Detection
 
@@ -211,11 +213,17 @@ These are currently separate implementations with different collision, companion
 
 All rename/move entry points—single-book UI, batch UI, API, management command, approval workflow, and future background jobs—must use the same destination planner and file-operation engine. The UI and command layers may orchestrate selection, preview, approval, progress, and reporting, but must not implement separate path planning, collision handling, EPUB synchronization, or file movement. The shared engine must reserve destinations across a batch, journal and verify every operation, and provide consistent rollback/recovery behavior.
 
-The batch UI must let users create a batch, preview it, execute it, monitor progress, and inspect/control each item. It must expose item outcomes such as pending, moved, `needs_review`, failed, and skipped, with the reason and recovery action where applicable. A `needs_review` item must remain visible and actionable; it must not be reported as successfully moved.
+The same service must handle each business action across entry points, including preparing batches, reviewing and holding items, applying approvals, planning and executing moves, reading status, author ordering, and metadata resynchronization. Parity tests must verify equivalent outcomes for equivalent inputs.
+
+Until metadata accuracy is independently demonstrated to be extremely high and the policy is explicitly revisited, only books reviewed and approved by a person may be renamed or moved. A person may approve a reviewed group; confidence alone is not approval. Approval does not itself move files.
+
+The batch UI must let users create a batch, preview it, execute it, monitor progress, and inspect/control each item. It must show review, correction, approval, rename, and move status; provide contact sheets, holds with reasons, dry runs, and explicit confirmation counts; and expose item outcomes such as pending, moved, `needs_review`, failed, and skipped, with the reason and recovery action where applicable. A `needs_review` item must remain visible and actionable; it must not be reported as successfully moved. UI move requests enqueue durable work rather than moving files inside the request.
+
+The shared planner must support a validated destination root distinct from the source scan folder. The current `move_approved` target is anchored to the scan folder, so this destination requirement remains planned.
 
 Every EPUB rename/move through this engine must embed the selected curated metadata and cover, and regenerate or update the companion OPF when one is managed. Cover or metadata validation failures must be surfaced as an item-level review/failure, not silently omitted. These requirements replace the current path-specific embedding behavior.
 
-Metadata review must display the trust and evidence used to resolve each field accurately. A user-entered manual override must take precedence over source-derived values. This remains true after the file has been moved: users must be able to edit and save metadata for an already-moved book, and the shared engine must synchronize the EPUB and OPF at their current location without requiring another rename.
+Metadata review must display the trust and evidence used to resolve each field accurately. A user may always edit metadata, including deliberately clearing a field; saving a manual choice must apply that choice. Reviewed values, including intentional blanks, remain protected from automatic updates. A user can mark a book unreviewed to allow external sources to replace its values again; an unreviewed book remains open to such updates, and editing it must not automatically approve it. These rules also apply after a file has been moved: users must be able to edit and save metadata for an already-moved book, and the shared engine must synchronize the EPUB and OPF at their current location without requiring another rename.
 
 #### EPUB and OPF Metadata
 
