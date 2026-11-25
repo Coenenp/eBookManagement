@@ -52,6 +52,8 @@ def find_opf_file(ebook_path: str, opf_files: list, ebook_files: list = None) ->
     Returns, in order:
     1. the OPF in the same folder whose file stem equals the ebook's stem
        (compared NFC-normalized and case insensitive, independent of list order);
+       when more than one OPF matches the stem the match is ambiguous and an
+       empty string is returned;
     2. otherwise ``metadata.opf`` in that folder, but only when the folder holds
        exactly one ebook file (this rule needs ``ebook_files`` and is skipped when
        it is not passed);
@@ -60,10 +62,18 @@ def find_opf_file(ebook_path: str, opf_files: list, ebook_files: list = None) ->
     ebook_dir = _dirname(ebook_path)
     ebook_stem = _normalized_stem(ebook_path)
 
-    # Rule 1: stem match in the same folder, independent of list order.
-    for opf_file in opf_files:
-        if _dirname(opf_file) == ebook_dir and _normalized_stem(opf_file) == ebook_stem:
-            return opf_file
+    # Rule 1: stem match in the same folder, independent of list order. More than
+    # one stem match is ambiguous: no OPF is assigned so the OPFs surface as
+    # orphans instead of being silently guessed.
+    stem_matches = [
+        opf_file
+        for opf_file in opf_files
+        if _dirname(opf_file) == ebook_dir and _normalized_stem(opf_file) == ebook_stem
+    ]
+    if len(stem_matches) == 1:
+        return stem_matches[0]
+    if len(stem_matches) > 1:
+        return ""
 
     # Rule 2: metadata.opf, only when the folder holds exactly one ebook file.
     if ebook_files is not None:
