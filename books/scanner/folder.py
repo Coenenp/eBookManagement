@@ -726,6 +726,11 @@ def _handle_orphans(directory, cover_files, opf_files, ebook_files, scan_folder)
 
     for opf_file in opf_files:
         if opf_file not in claimed:
+            log_scan_error(
+                "OPF companion is ambiguous or has no matching filename; review required",
+                opf_file,
+                scan_folder,
+            )
             _create_placeholder_book(opf_file, scan_folder)
 
 

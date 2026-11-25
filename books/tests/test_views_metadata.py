@@ -280,6 +280,61 @@ class BookMetadataUpdateViewTests(TestCase):
         self.final_metadata.refresh_from_db()
         self.assertIsNone(self.final_metadata.final_series_number)
 
+    def test_manual_edit_stays_reviewed_until_explicitly_unreviewed(self):
+        manual_edit = {
+            "final_title": "__manual__",
+            "manual_title": "Chosen Title",
+            "is_reviewed": "on",
+        }
+        response = self.client.post(reverse("books:book_metadata_update", kwargs={"pk": self.book.pk}), manual_edit)
+        self.assertEqual(response.status_code, 302)
+        self.final_metadata.refresh_from_db()
+        self.assertEqual(self.final_metadata.final_title, "Chosen Title")
+        self.assertTrue(self.final_metadata.is_reviewed)
+
+        from books.models import BookTitle, DataSource
+
+        for name in (DataSource.EPUB_INTERNAL, DataSource.GOOGLE_BOOKS):
+            source, _ = DataSource.objects.get_or_create(name=name)
+            BookTitle.objects.create(book=self.book, source=source, title="External Title", confidence=0.8)
+        self.final_metadata.refresh_from_db()
+        self.assertFalse(self.final_metadata.sync_from_sources())
+        self.assertEqual(self.final_metadata.final_title, "Chosen Title")
+
+        response = self.client.post(
+            reverse("books:book_metadata_update", kwargs={"pk": self.book.pk}),
+            {"final_title": "Chosen Title"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.final_metadata.refresh_from_db()
+        self.assertFalse(self.final_metadata.is_reviewed)
+        self.assertTrue(self.final_metadata.sync_from_sources())
+        self.assertEqual(self.final_metadata.final_title, "External Title")
+
+    def test_cleared_reviewed_field_can_be_refilled_after_unreview(self):
+        from books.models import BookMetadata, DataSource
+
+        source, _ = DataSource.objects.get_or_create(name=DataSource.GOOGLE_BOOKS)
+        BookMetadata.objects.create(
+            book=self.book, source=source, field_name="description", field_value="External description", confidence=0.8
+        )
+        response = self.client.post(
+            reverse("books:book_metadata_update", kwargs={"pk": self.book.pk}),
+            {"final_title": "Original Title", "description": "", "is_reviewed": "on"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.final_metadata.refresh_from_db()
+        self.assertFalse(self.final_metadata.sync_from_sources())
+        self.assertEqual(self.final_metadata.description, "")
+
+        self.client.post(
+            reverse("books:book_metadata_update", kwargs={"pk": self.book.pk}),
+            {"final_title": "Original Title", "description": ""},
+        )
+        self.final_metadata.refresh_from_db()
+        self.assertTrue(self.final_metadata.sync_from_sources())
+        self.assertEqual(self.final_metadata.description, "External description")
+
     def test_cover_field_processing(self):
         """Test cover field processing"""
         # Test updating is_reviewed flag only (partial update)

@@ -15,7 +15,7 @@ from django.test import TestCase
 
 from books.models import Book, ScanFolder, ScanLog, ScanStatus
 from books.scanner.background import BackgroundScanner, background_scan_folder
-from books.scanner.file_ops import get_file_format
+from books.scanner.file_ops import find_opf_file, get_file_format
 from books.scanner.folder import _collect_files, _handle_orphans
 
 
@@ -217,6 +217,57 @@ class FolderScannerTests(TestCase):
 
         self.assertEqual(Book.objects.filter(scan_folder=scan_folder).count(), 0,
                          "a stem-matched OPF must not be treated as an orphan")
+
+    def test_opf_left_behind_becomes_placeholder_not_assigned(self):
+        """An OPF left behind by a moved book in a folder that still holds another
+        book becomes a placeholder and is never assigned to the remaining book."""
+        scan_folder = ScanFolder.objects.create(name="Left Behind OPF Folder", path=self.temp_dir, is_active=True)
+
+        remaining_epub = Path(self.temp_dir) / "remaining.epub"
+        remaining_epub.write_text("ebook remaining")
+        left_opf = Path(self.temp_dir) / "moved.opf"
+        left_opf.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="2.0">'
+            '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            '<dc:title>Left Behind Title</dc:title>'
+            '</metadata></package>'
+        )
+
+        ebook_files, cover_files, opf_files = _collect_files(self.temp_dir, {".epub"}, {".jpg"})
+
+        # Never assigned to the remaining book: its stem does not match.
+        self.assertEqual(find_opf_file(str(remaining_epub), opf_files, ebook_files), "")
+
+        _handle_orphans(self.temp_dir, cover_files, opf_files, ebook_files, scan_folder)
+
+        placeholder = Book.objects.filter(scan_folder=scan_folder, is_placeholder=True).first()
+        self.assertIsNotNone(placeholder, "left-behind OPF should become a placeholder")
+        self.assertEqual(placeholder.primary_file.opf_path, str(left_opf))
+        # Only the placeholder is created; the remaining book is not assigned the OPF.
+        self.assertEqual(Book.objects.filter(scan_folder=scan_folder).count(), 1)
+
+    def test_unclaimed_opf_is_recorded_for_review_once(self):
+        """An unclaimed OPF logs one review warning, not one per book."""
+        scan_folder = ScanFolder.objects.create(name="Ambiguous OPF Review Folder", path=self.temp_dir, is_active=True)
+
+        (Path(self.temp_dir) / "a.epub").write_text("ebook a")
+        (Path(self.temp_dir) / "b.epub").write_text("ebook b")
+        stray_opf = Path(self.temp_dir) / "stray.opf"
+        stray_opf.write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<package xmlns="http://www.idpf.org/2007/opf" version="2.0">'
+            '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+            '<dc:title>Stray Title</dc:title>'
+            '</metadata></package>'
+        )
+
+        ebook_files, cover_files, opf_files = _collect_files(self.temp_dir, {".epub"}, {".jpg"})
+
+        _handle_orphans(self.temp_dir, cover_files, opf_files, ebook_files, scan_folder)
+
+        # Two books share the folder, one stray OPF: exactly one review warning.
+        self.assertEqual(ScanLog.objects.filter(message__icontains="review required").count(), 1)
 
 
 class ScanStatusTrackingTests(TestCase):

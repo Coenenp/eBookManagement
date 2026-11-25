@@ -188,6 +188,13 @@ class ScannerFileOpsTests(TestCase):
         result = find_opf_file(ebook_path, opf_files)
         self.assertEqual(result, "/books/author/A.OPF")
 
+    def test_find_opf_file_multiple_stem_matches_is_ambiguous(self):
+        """More than one OPF matching the stem (case-insensitive) is ambiguous."""
+        ebook_path = "/books/author/a.epub"
+        opf_files = ["/books/author/a.opf", "/books/author/A.OPF"]
+        result = find_opf_file(ebook_path, opf_files)
+        self.assertEqual(result, "")
+
     def test_find_opf_file_unrelated_stray_single_ebook(self):
         """A folder with one ebook and an unrelated stray.opf gets an empty string."""
         ebook_path = "/books/author/a.epub"
