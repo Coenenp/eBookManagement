@@ -12,8 +12,11 @@ manifest folder) persists every held-back id so later runs skip it. Nothing is
 approved without an exact confirm count and no file is ever moved.
 """
 
+import hashlib
 import json
+import random
 import re
+import uuid
 from collections import Counter
 from pathlib import Path
 
@@ -524,4 +527,407 @@ def apply_batch(
         "skipped": skipped,
         "approved_count": len(approved),
         "skipped_count": len(skipped),
+    }
+
+
+# ------------------------------------------------------------------ #
+# Report and prepare
+# ------------------------------------------------------------------ #
+
+
+def _apply_command_text(manifest_path, n_ids):
+    """The exact command to apply a prepared batch, with the manifest path and
+    id count filled in; only ``--exclude-ids`` is left for the user to type."""
+    return (
+        "python manage.py approve_batch --apply "
+        f"--manifest {manifest_path} --confirm {n_ids} "
+        "--exclude-ids <comma separated ids>"
+    )
+
+
+def _planned_target(book):
+    """Planned destination using the shared moves planner."""
+    if book.scan_folder is None:
+        return ""
+    from books.services.moves import _compute_target, _patterns_for
+
+    try:
+        folder_pattern, filename_pattern = _patterns_for(book)
+        return _compute_target(book, folder_pattern, filename_pattern)
+    except Exception as exc:
+        return f"planner error: {type(exc).__name__}: {exc}"
+
+
+def _target_parts(target, scan_path):
+    """Split a planned target into ``(folder, file name)``.
+
+    ``folder`` is the directory part without the scan-folder prefix (so it
+    starts with the language folder); ``file name`` is the base name.
+    """
+    if not target:
+        return "", ""
+    t = Path(target)
+    filename = t.name
+    folder = str(t.parent)
+    if scan_path:
+        scan = str(Path(scan_path)).rstrip("/\\")
+        if folder == scan:
+            folder = ""
+        elif folder.startswith(scan + "/") or folder.startswith(scan + "\\"):
+            folder = folder[len(scan) + 1 :]
+    return folder, filename
+
+
+def _write_contact_sheets(selected, ctx, manifest_dir, batch_id):
+    """Write contact sheets for every id of the batch, 50 covers per sheet.
+
+    Returns ``(sheet_names, lines)``: the sheet file names (recorded in the
+    manifest) and the resolved paths to print for the reviewer.
+    """
+    from PIL import Image, ImageDraw, ImageFont
+
+    from books.models import FinalMetadata
+
+    ids = [bid for _corr, bid in selected]
+    if not ids:
+        return [], []
+
+    cover_paths = dict(
+        FinalMetadata.objects.filter(book_id__in=ids).values_list(
+            "book_id", "final_cover_path"
+        )
+    )
+
+    COLS = 10
+    SHEET_SIZE = 50
+    THUMB_W, THUMB_H = 150, 225
+    PAD = 4
+    LABEL_H = 18
+    cell_w = THUMB_W + PAD
+    cell_h = THUMB_H + LABEL_H + PAD
+
+    try:
+        font = ImageFont.load_default()
+    except Exception:  # pragma: no cover - Pillow always ships a default font
+        font = None
+
+    sheet_names = []
+    lines = []
+    for offset in range(0, len(ids), SHEET_SIZE):
+        chunk = ids[offset : offset + SHEET_SIZE]
+        rows = (len(chunk) + COLS - 1) // COLS
+        sheet = Image.new("RGB", (COLS * cell_w, rows * cell_h), "white")
+        draw = ImageDraw.Draw(sheet)
+        for i, bid in enumerate(chunk):
+            col = i % COLS
+            row = i // COLS
+            x = col * cell_w + PAD // 2
+            y = row * cell_h + PAD // 2
+            fmt = ctx["primary_file"].get(bid, ("", ""))[1]
+            label = f"{bid} {fmt}"
+            resolved = CoverCache.resolve_path(cover_paths.get(bid, "") or "")
+            try:
+                thumb = Image.open(resolved).convert("RGB")
+                thumb.thumbnail((THUMB_W, THUMB_H))
+                sheet.paste(thumb, (x, y))
+            except Exception:
+                draw.text((x, y), "ERR", fill=(255, 0, 0), font=font)
+            draw.text((x, y + THUMB_H + 2), label, fill=(0, 0, 0), font=font)
+        name = f"{batch_id}sheet{offset // SHEET_SIZE + 1}.png"
+        sheet.save(manifest_dir / name)
+        sheet_names.append(name)
+        lines.append(f"contact sheet: {manifest_dir / name}")
+    return sheet_names, lines
+
+
+def _path_tail(source_path):
+    """The last two path components (folder and file name) for display."""
+    parts = [p for p in re.split(r"[\\/]+", source_path or "") if p]
+    return " / ".join(parts[-2:])
+
+
+def _cover_data_uri(cover_path):
+    """A JPEG data URI thumbnail (max 150x225 px), or None when unreadable."""
+    import base64
+    import io
+
+    from PIL import Image
+
+    resolved = CoverCache.resolve_path(cover_path)
+    try:
+        im = Image.open(resolved).convert("RGB")
+        im.thumbnail((150, 225))
+        buf = io.BytesIO()
+        im.save(buf, format="JPEG")
+        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+    except Exception:
+        return None
+
+
+def _write_review_page(selected, ctx, manifest_dir, batch_id, sample_ids, targets):
+    """Write a self-contained review HTML page (no scripts, no external assets).
+
+    Returns ``(page_name, line)``; both are ``None`` when there is nothing to
+    review.
+    """
+    import html
+
+    from books.models import Book
+    from books.utils.renaming_engine import RenamingEngine
+
+    ids = sorted(bid for _corr, bid in selected)
+    if not ids:
+        return None, None
+
+    books = {
+        b.id: b
+        for b in Book.objects.select_related("finalmetadata", "scan_folder").filter(
+            id__in=ids
+        )
+    }
+    engine = RenamingEngine()
+    corroborated = {bid: c for c, bid in selected}
+
+    rows = []
+    for bid in ids:
+        book = books.get(bid)
+        fm = book.finalmetadata if book is not None else None
+        title = (fm.final_title if fm else None) or ""
+        language = (fm.language if fm else None) or ""
+        series = (fm.final_series if fm else None) or ""
+        series_number = (fm.final_series_number if fm else None) or ""
+        cover_path = (fm.final_cover_path if fm else None) or ""
+
+        last_name = ""
+        first_name = ""
+        if book is not None:
+            engine.current_book = book
+            sortname = engine._get_author_sortname() or ""
+            if "," in sortname:
+                last_name, first_name = sortname.split(",", 1)
+            else:
+                last_name = sortname
+            last_name = (last_name or "").strip()
+            first_name = (first_name or "").strip()
+
+        source, fmt = ctx["primary_file"].get(bid, ("", ""))
+        tier = "corroborated" if corroborated.get(bid, False) else "standard"
+        target = targets.get(bid, "")
+        scan_path = book.scan_folder.path if (book is not None and book.scan_folder) else ""
+        folder, filename = _target_parts(target, scan_path)
+        cover_uri = _cover_data_uri(cover_path)
+        cover_cell = (
+            f'<img src="{html.escape(cover_uri, quote=True)}" alt="cover">'
+            if cover_uri
+            else "ERR"
+        )
+        mark = "&#10003;" if bid in sample_ids else ""
+        row_class = ' class="sampled"' if bid in sample_ids else ""
+        cells = (
+            f"<td>{cover_cell}</td>"
+            f"<td>{html.escape(str(bid))}</td>"
+            f"<td>{html.escape(title)}</td>"
+            f"<td>{html.escape(last_name)}</td>"
+            f"<td>{html.escape(first_name)}</td>"
+            f"<td>{html.escape(series)}</td>"
+            f"<td>{html.escape(series_number)}</td>"
+            f"<td>{html.escape(language)}</td>"
+            f"<td>{html.escape(fmt)}</td>"
+            f"<td>{html.escape(tier)}</td>"
+            f"<td>{html.escape(folder)}</td>"
+            f"<td>{html.escape(filename)}</td>"
+            f"<td>{html.escape(_path_tail(source))}</td>"
+            f"<td>{mark}</td>"
+        )
+        rows.append(f"<tr{row_class}>{cells}</tr>")
+
+    hold = html.escape(
+        "To hold back books use --apply --manifest <manifest path> "
+        "--confirm <count> --exclude-ids <ids> --exclude-reason <text>"
+    )
+    page = (
+        '<!doctype html><html><head><meta charset="utf-8">'
+        f"<title>Batch review {html.escape(batch_id)}</title>"
+        "<style>"
+        "table{border-collapse:collapse}th,td{border:1px solid #999;padding:4px;"
+        "vertical-align:top}tr.sampled{background:#fff59d}"
+        "</style></head><body>"
+        f"<h1>Batch {html.escape(batch_id)}</h1>"
+        f"<p>criteria version: {html.escape(CRITERIA_VERSION)}</p>"
+        f"<p>{hold}</p>"
+        "<table><thead><tr><th>cover</th><th>id</th><th>title</th><th>last name</th>"
+        "<th>first name</th><th>series</th><th>number</th><th>language</th><th>format</th>"
+        "<th>tier</th><th>folder</th><th>file name</th><th>source path</th><th>sample</th>"
+        "</tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table></body></html>"
+    )
+    path = manifest_dir / f"{batch_id}_review.html"
+    path.write_text(page)
+    return path.name, f"review page: {path}"
+
+
+def _sample_line(bid, corroborated, ctx, target=None):
+    """Full detail line for one sampled entry; the planner runs only here."""
+    from books.models import Book
+
+    book = Book.objects.select_related("finalmetadata", "scan_folder").filter(id=bid).first()
+    fm = _get_fm(book)
+    source, fmt = ctx["primary_file"].get(bid, ("", ""))
+    tier = "corroborated" if corroborated else "standard"
+    if target is None:
+        target = _planned_target(book)
+    cover = CoverCache.resolve_path(fm.final_cover_path or "")
+    return (
+        f"{bid} | {fm.final_title or ''} | {fm.final_author or ''} | "
+        f"{fm.language or ''} | {fmt} | {tier} | {source} | {target} | {cover}"
+    )
+
+
+def select_batch(size, seed=None, manifest_dir=None):
+    """Select the next batch of eligible books. Writes nothing.
+
+    Returns a dict with the selection data the command and the batch review
+    page both need:
+
+    * ``batch_id`` — the new batch's uuid.
+    * ``selected`` — the eligible ``(corroborated, book_id)`` pairs, sorted
+      corroborated-first then by id, capped at ``size``.
+    * ``sample_entries`` / ``sample_ids`` — the deterministic sample.
+    * ``targets`` — the planned target per selected id.
+    * ``ctx`` — the streaming context (primary files, duplicate counters).
+    """
+    from books.models import Book
+
+    size = min(size, MAX_SIZE)
+    manifest_dir = Path(manifest_dir) if manifest_dir else DEFAULT_MANIFEST_DIR
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    rejected = read_holds(manifest_dir)
+    ctx = _build_context()
+
+    eligible = []  # minimal tuples: (corroborated, book_id)
+    for book in (
+        Book.objects.select_related("finalmetadata", "scan_folder").order_by("id").iterator()
+    ):
+        if book.id in rejected:
+            continue
+        fm = _get_fm(book)
+        if _exclusion(book, fm, ctx):
+            continue
+        corroborated = _conf(fm.final_title_confidence) >= CORROBORATED_THRESHOLD
+        eligible.append((corroborated, book.id))
+
+    eligible.sort(key=lambda e: (-e[0], e[1]))
+    selected = eligible[:size]
+
+    batch_id = str(uuid.uuid4())
+    if seed is None:
+        seed = int.from_bytes(hashlib.md5(batch_id.encode()).digest()[:4], "big")
+    rng = random.Random(seed)
+    n_sample = min(len(selected), MAX_SAMPLE)
+    sample_entries = rng.sample(selected, n_sample) if n_sample else []
+    sample_ids = {bid for _corr, bid in sample_entries}
+
+    # Planned targets run for every selected book (up to MAX_SIZE), so the
+    # review page can show the target for the whole batch, not just the sample.
+    targets = {}
+    for _corr, bid in selected:
+        book = Book.objects.select_related("finalmetadata", "scan_folder").filter(id=bid).first()
+        targets[bid] = _planned_target(book)
+
+    return {
+        "batch_id": batch_id,
+        "selected": selected,
+        "sample_entries": sample_entries,
+        "sample_ids": sample_ids,
+        "targets": targets,
+        "ctx": ctx,
+    }
+
+
+def write_batch_files(selection, manifest_dir):
+    """Write the manifest, contact sheets and review page for a selection.
+
+    Returns a dict with ``manifest_path``, the final ``manifest`` dict and
+    ``file_lines`` (the ordered "contact sheet" / "review page" lines to
+    print), so the command prints exactly what it printed before.
+    """
+    ctx = selection["ctx"]
+    selected = selection["selected"]
+    batch_id = selection["batch_id"]
+    sample_ids = selection["sample_ids"]
+    targets = selection["targets"]
+
+    manifest = {
+        "batch_id": batch_id,
+        "criteria_version": CRITERIA_VERSION,
+        "ids": [bid for _corr, bid in selected],
+        "sample_ids": [bid for _corr, bid in selection["sample_entries"]],
+        "status": "prepared",
+    }
+    sheets, sheet_lines = _write_contact_sheets(selected, ctx, manifest_dir, batch_id)
+    manifest["sheets"] = sheets
+    review_name, review_line = _write_review_page(
+        selected, ctx, manifest_dir, batch_id, sample_ids, targets
+    )
+    manifest["review_page"] = review_name
+
+    manifest_path = Path(manifest_dir) / f"{batch_id}.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+
+    file_lines = list(sheet_lines)
+    if review_line is not None:
+        file_lines.append(review_line)
+
+    return {
+        "manifest_path": manifest_path,
+        "manifest": manifest,
+        "file_lines": file_lines,
+    }
+
+
+def batch_report(manifest_dir=None):
+    """Summarise the criteria across the whole library. Writes nothing.
+
+    Returns ``total``, ``eligible``, ``exclusions`` (one count per criterion
+    label in CRITERIA_LABELS order), and the eligible ``by_format``,
+    ``by_language`` and ``by_tier`` counters.
+    """
+    from books.models import Book
+
+    manifest_dir = Path(manifest_dir) if manifest_dir else DEFAULT_MANIFEST_DIR
+    rejected = read_holds(manifest_dir)
+    ctx = _build_context()
+    total = Book.objects.count()
+
+    excluded = Counter()
+    by_format = Counter()
+    by_language = Counter()
+    by_tier = Counter()
+    eligible_count = 0
+
+    for book in (
+        Book.objects.select_related("finalmetadata", "scan_folder").order_by("id").iterator()
+    ):
+        fm = _get_fm(book)
+        if book.id in rejected:
+            excluded["cover rejected by review"] += 1
+            continue
+        reason = _exclusion(book, fm, ctx)
+        if reason:
+            excluded[reason] += 1
+            continue
+        eligible_count += 1
+        by_format[ctx["primary_file"].get(book.id, ("", ""))[1]] += 1
+        by_language[fm.language or ""] += 1
+        tier = "corroborated" if _conf(fm.final_title_confidence) >= CORROBORATED_THRESHOLD else "standard"
+        by_tier[tier] += 1
+
+    return {
+        "total": total,
+        "eligible": eligible_count,
+        "exclusions": {label: excluded.get(label, 0) for label in CRITERIA_LABELS},
+        "by_format": dict(by_format),
+        "by_language": dict(by_language),
+        "by_tier": dict(by_tier),
     }

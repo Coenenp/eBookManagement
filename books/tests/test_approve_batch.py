@@ -1114,7 +1114,7 @@ class ApproveBatchCommandTests(TestCase):
                 title=f"Scale Title {suffixes[i]}",
                 author=f"Scale Author {suffixes[i]}",
             )
-        with patch.object(Command, "_planned_target") as mock_target:
+        with patch("books.services.batches._planned_target") as mock_target:
             call_command(
                 "approve_batch",
                 manifest_dir=str(self.manifest_dir),
