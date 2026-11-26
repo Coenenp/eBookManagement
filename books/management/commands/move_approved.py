@@ -18,8 +18,6 @@ This command only parses options, calls the service, and prints.
 from django.core.management.base import BaseCommand
 
 from books.services.moves import (
-    _compute_target,
-    _patterns_for,
     dry_run_report,
     fit_path,
     plan_moves,
@@ -80,11 +78,3 @@ class Command(BaseCommand):
             f"moved {result['moved']}, needs_review {result['needs_review']}, "
             f"failed {result['failed']}, skipped {result['skipped']}"
         )
-
-    # Thin delegators kept so ``approve_batch`` can still reach the shared
-    # planner through the command module.
-    def _patterns_for(self, book):
-        return _patterns_for(book)
-
-    def _compute_target(self, book, folder_pattern, filename_pattern):
-        return _compute_target(book, folder_pattern, filename_pattern)
