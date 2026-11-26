@@ -1,9 +1,13 @@
-"""Set the reviewed sort order for an author keyed by natural-order name."""
+"""Set the reviewed sort order for an author keyed by natural-order name.
+
+The writing action lives in :func:`books.services.authors.store_author_order`
+so the command and the author order screen (UI) share one implementation.
+This command only parses options, calls the service, and prints.
+"""
 
 from django.core.management.base import BaseCommand, CommandError
 
-from books.models import Author
-from books.utils.authors import find_author_by_name, normalize_author_name
+from books.services.authors import store_author_order
 
 
 class Command(BaseCommand):
@@ -30,29 +34,6 @@ class Command(BaseCommand):
         if not last:
             raise CommandError("--last is required")
 
-        normalized = normalize_author_name(name)
-
-        if not execute:
-            self.stdout.write(
-                f"Would store order for '{name}' (normalized '{normalized}'): "
-                f"first_name='{first}', last_name='{last}', is_reviewed=True"
-            )
-            return
-
-        author = find_author_by_name(name)
-        if author is None:
-            author = Author(name=name)
-            author.save()
-
-        # Author.save recomputes name_normalized from first_name+last_name, so
-        # write the reviewed order with a queryset update to keep the stored
-        # values (and the name_normalized keyed to the natural-order name).
-        Author.objects.filter(pk=author.pk).update(
-            first_name=first, last_name=last, is_reviewed=True
-        )
-
-        author = Author.objects.get(pk=author.pk)
-        self.stdout.write(
-            f"Stored order: name='{author.name}', first_name='{author.first_name}', "
-            f"last_name='{author.last_name}', is_reviewed={author.is_reviewed}"
-        )
+        result = store_author_order(name, last, first, execute)
+        for line in result["lines"]:
+            self.stdout.write(line)
