@@ -311,6 +311,7 @@ def run_moves(plan, *, folder_pattern=None, filename_pattern=None, callback=None
             continue
 
         max_pk_before = FileMove.objects.aggregate(mx=Max("pk"))["mx"] or 0
+        notify = None  # (result) to report after this book's bookkeeping is done
         try:
             target = _compute_target(book, folder_pattern, filename_pattern)
             planned_target = entry.get("target")
@@ -318,29 +319,31 @@ def run_moves(plan, *, folder_pattern=None, filename_pattern=None, callback=None
             # recomputed target has since changed.
             if planned_target is not None and target != planned_target:
                 extra_skipped.append({"id": book.id, "reason": "plan changed"})
-                _notify(book.id, "plan changed", index)
-                continue
-            if Path(target).exists():
+                notify = "plan changed"
+            elif Path(target).exists():
                 extra_skipped.append({"id": book.id, "reason": "target-exists"})
-                _notify(book.id, "target-exists", index)
-                continue
-            cover_path = book.finalmetadata.final_cover_path if book.finalmetadata else None
-            safe_move_book(book, target, cover_path=cover_path)
-            moved += 1
-            results.append({"id": book.id, "result": "moved"})
-            _notify(book.id, "moved", index)
+                notify = "target-exists"
+            else:
+                cover_path = book.finalmetadata.final_cover_path if book.finalmetadata else None
+                safe_move_book(book, target, cover_path=cover_path)
+                moved += 1
+                results.append({"id": book.id, "result": "moved"})
+                notify = "moved"
         except NeedsReview as exc:
             needs_review += 1
             results.append({"id": book.id, "result": "needs_review", "codes": list(exc.codes)})
-            _notify(book.id, "needs_review", index)
+            notify = "needs_review"
         except Exception as exc:
             failed += 1
             results.append({"id": book.id, "result": "failed", "error": str(exc)})
-            _notify(book.id, "failed", index)
+            notify = "failed"
         finally:
             # Tag only this book's journal rows created during the call
             # (the main move plus its companions) with the run's batch id.
             FileMove.objects.filter(book=book, pk__gt=max_pk_before).update(batch_id=batch_id)
+        # The callback runs after the book's bookkeeping so a raising callback
+        # can never turn a completed move into a failure or double-count it.
+        _notify(book.id, notify, index)
 
     skipped = len(plan["skipped"]) + len(extra_skipped)
     return {

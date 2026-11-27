@@ -244,6 +244,39 @@ class RunMovesHardeningTests(TestCase):
             [(b1.id, "moved", 0, 2), (b2.id, "moved", 1, 2)],
         )
 
+    def test_callback_raising_does_not_double_count(self):
+        book, path = self._make_book("cbr.pdf")
+        plan = self._plan()
+        self.assertEqual(len(plan["planned"]), 1)
+
+        class Boom(Exception):
+            pass
+
+        calls = []
+
+        def cb(book_id, result, index, total):
+            calls.append((book_id, result))
+            raise Boom()
+
+        with self.assertRaises(Boom):
+            run_moves(
+                plan, folder_pattern="Approved", filename_pattern="${title}.${ext}",
+                callback=cb,
+            )
+
+        # The callback ran exactly once, with "moved" — never a second "failed".
+        self.assertEqual(calls, [(book.id, "moved")])
+        # The move succeeded and was journal-tagged with a batch id (finally ran).
+        row = FileMove.objects.filter(book=book, kind=FileMove.Kind.MAIN).latest("pk")
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertTrue(row.batch_id)
+        # The book was moved, not failed: target exists, source gone, no failed row.
+        self.assertTrue((Path(self.temp_dir) / "Approved" / "cbr.pdf").exists())
+        self.assertFalse(path.exists())
+        self.assertFalse(
+            FileMove.objects.filter(book=book, state=FileMove.State.FAILED).exists()
+        )
+
     def test_stop_check_ends_run_and_reports_not_run(self):
         b1, p1 = self._make_book("sc1.pdf")
         b2, p2 = self._make_book("sc2.pdf")
