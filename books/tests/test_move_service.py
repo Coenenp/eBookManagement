@@ -185,3 +185,124 @@ class MoveStatusTests(TestCase):
         move_status()
         after = list(FileMove.objects.order_by("pk").values_list("id", "state", "error", "review_flags"))
         self.assertEqual(after, before)
+
+
+class RunMovesHardeningTests(TestCase):
+    """Hardening of run_moves: plan-target execution, callback, stop, deletion."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(self.temp_dir, ignore_errors=True))
+        self.scan_folder = create_test_scan_folder(temp_dir=self.temp_dir)
+
+    def _make_book(self, name):
+        path = Path(self.temp_dir) / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"%PDF-1.4 fake pdf " + name.encode())
+        book = create_test_book_with_file(
+            file_path=str(path), file_format="pdf",
+            scan_folder=self.scan_folder, content_type="ebook",
+        )
+        cover = Path(self.temp_dir) / "_default_cover.jpg"
+        if not cover.exists():
+            cover.write_bytes(b"\xff\xd8\xff\xd9")
+        FinalMetadata.objects.create(
+            book=book, final_title=Path(name).stem, is_reviewed=True,
+            language="en", final_cover_path=str(cover),
+        )
+        return book, path
+
+    def _plan(self):
+        return plan_moves(folder_pattern="Approved", filename_pattern="${title}.${ext}")
+
+    def test_recomputed_target_differs_refused_plan_changed(self):
+        book, path = self._make_book("pc.pdf")
+        plan = self._plan()
+        self.assertEqual(len(plan["planned"]), 1)
+        # Metadata changes between plan and run -> recomputed target differs.
+        book.finalmetadata.final_title = "Renamed Title"
+        book.finalmetadata.save(update_fields=["final_title"])
+        result = run_moves(plan, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        self.assertEqual(result["moved"], 0)
+        self.assertIn({"id": book.id, "reason": "plan changed"}, result["extra_skipped"])
+        self.assertTrue(path.exists())  # nothing moved
+        self.assertFalse((Path(self.temp_dir) / "Approved" / "pc.pdf").exists())
+
+    def test_per_book_callback_after_each_book(self):
+        b1, _ = self._make_book("cb1.pdf")
+        b2, _ = self._make_book("cb2.pdf")
+        plan = self._plan()
+        self.assertEqual(len(plan["planned"]), 2)
+        calls = []
+        result = run_moves(
+            plan, folder_pattern="Approved", filename_pattern="${title}.${ext}",
+            callback=lambda *a: calls.append(a),
+        )
+        self.assertEqual(result["moved"], 2)
+        self.assertEqual(
+            calls,
+            [(b1.id, "moved", 0, 2), (b2.id, "moved", 1, 2)],
+        )
+
+    def test_callback_raising_does_not_double_count(self):
+        book, path = self._make_book("cbr.pdf")
+        plan = self._plan()
+        self.assertEqual(len(plan["planned"]), 1)
+
+        class Boom(Exception):
+            pass
+
+        calls = []
+
+        def cb(book_id, result, index, total):
+            calls.append((book_id, result))
+            raise Boom()
+
+        with self.assertRaises(Boom):
+            run_moves(
+                plan, folder_pattern="Approved", filename_pattern="${title}.${ext}",
+                callback=cb,
+            )
+
+        # The callback ran exactly once, with "moved" — never a second "failed".
+        self.assertEqual(calls, [(book.id, "moved")])
+        # The move succeeded and was journal-tagged with a batch id (finally ran).
+        row = FileMove.objects.filter(book=book, kind=FileMove.Kind.MAIN).latest("pk")
+        self.assertEqual(row.state, FileMove.State.PENDING_DELETION)
+        self.assertTrue(row.batch_id)
+        # The book was moved, not failed: target exists, source gone, no failed row.
+        self.assertTrue((Path(self.temp_dir) / "Approved" / "cbr.pdf").exists())
+        self.assertFalse(path.exists())
+        self.assertFalse(
+            FileMove.objects.filter(book=book, state=FileMove.State.FAILED).exists()
+        )
+
+    def test_stop_check_ends_run_and_reports_not_run(self):
+        b1, p1 = self._make_book("sc1.pdf")
+        b2, p2 = self._make_book("sc2.pdf")
+        b3, p3 = self._make_book("sc3.pdf")
+        plan = self._plan()
+        self.assertEqual(len(plan["planned"]), 3)
+        result = run_moves(
+            plan, folder_pattern="Approved", filename_pattern="${title}.${ext}",
+            stop_check=lambda: True,
+        )
+        self.assertEqual(result["moved"], 1)
+        not_run_ids = {r["id"] for r in result["results"] if r["result"] == "not run"}
+        self.assertEqual(not_run_ids, {b2.id, b3.id})
+        self.assertTrue(p2.exists())  # not moved
+        self.assertTrue(p3.exists())  # not moved
+        self.assertFalse((Path(self.temp_dir) / "Approved" / "sc2.pdf").exists())
+
+    def test_deleted_book_skipped_and_run_continues(self):
+        b1, p1 = self._make_book("db1.pdf")
+        b2, p2 = self._make_book("db2.pdf")
+        plan = self._plan()
+        self.assertEqual(len(plan["planned"]), 2)
+        b1_id = b1.id
+        b1.delete()  # deleted between plan and run
+        result = run_moves(plan, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        self.assertIn({"id": b1_id, "reason": "deleted"}, result["extra_skipped"])
+        self.assertEqual(result["moved"], 1)  # b2 still moved
+        self.assertTrue((Path(self.temp_dir) / "Approved" / "db2.pdf").exists())
+        self.assertFalse(p2.exists())  # b2 source gone

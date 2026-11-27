@@ -6,6 +6,7 @@ command and the moves page (UI) call :func:`plan_moves` (dry-run plan) and
 helpers live here too, so the command stays a thin printer.
 """
 
+import shutil
 import uuid
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
@@ -15,6 +16,8 @@ from books.models import Book, FileMove
 from books.utils.renaming_engine import RenamingEngine, is_renamable
 from books.utils.safe_move import NeedsReview, safe_move_book
 from books.utils.safe_move.book import _cover_flag
+from books.utils.safe_move.recovery import _archive_matches, _archive_present, _revert_db
+from books.utils.safe_move.routine import _remove, _sha256
 
 # A move in one of these states is still in flight; recover it with
 # ``recover_file_moves --apply`` rather than re-selecting the book.
@@ -258,45 +261,89 @@ def dry_run_report(plan):
     return {"planned": planned_out, "skipped": plan["skipped"] + dry_skips}
 
 
-def run_moves(plan, *, folder_pattern=None, filename_pattern=None):
+def run_moves(plan, *, folder_pattern=None, filename_pattern=None, callback=None, stop_check=None):
     """Execute a move plan through ``safe_move_book`` and the FileMove journal.
 
     Returns a dict with the per-book ``results`` (in execution order), the
     ``extra_skipped`` books discovered at runtime (not approved, target now
-    exists), the counts ``moved``/``needs_review``/``failed``/``skipped`` and
-    the run's ``batch_id``.
+    exists, recomputed target differs, book deleted), the counts
+    ``moved``/``needs_review``/``failed``/``skipped`` and the run's ``batch_id``.
+
+    ``callback``, when given, is called as ``callback(book_id, result, index,
+    total)`` after each attempted book, where ``result`` is one of ``"moved"``,
+    ``"needs_review"``, ``"failed"``, ``"plan changed"``, ``"not approved"``,
+    ``"target-exists"`` or ``"deleted"``. ``stop_check``, when given, is a
+    no-argument callable evaluated between books; when it returns truthy the run
+    ends cleanly and the remaining books are reported as ``"not run"``.
     """
     batch_id = str(uuid.uuid4())
     moved = needs_review = failed = 0
     extra_skipped = []
     results = []
+    planned = plan["planned"]
+    total = len(planned)
 
-    for entry in plan["planned"]:
-        book = Book.objects.get(pk=entry["id"])
+    def _notify(book_id, result, index):
+        if callback is not None:
+            callback(book_id, result, index, total)
+
+    for index, entry in enumerate(planned):
+        book_id = entry["id"]
+
+        # Stop check, evaluated between books (never before the first).
+        if index > 0 and stop_check is not None and stop_check():
+            for rest in planned[index:]:
+                results.append({"id": rest["id"], "result": "not run"})
+            break
+
+        try:
+            book = Book.objects.get(pk=book_id)
+        except Book.DoesNotExist:
+            # A book deleted between plan and run is skipped, not fatal.
+            extra_skipped.append({"id": book_id, "reason": "deleted"})
+            _notify(book_id, "deleted", index)
+            continue
+
         # Re-check approval immediately before the move.
         if not is_renamable(book):
             extra_skipped.append({"id": book.id, "reason": "not approved"})
+            _notify(book.id, "not approved", index)
             continue
+
         max_pk_before = FileMove.objects.aggregate(mx=Max("pk"))["mx"] or 0
+        notify = None  # (result) to report after this book's bookkeeping is done
         try:
             target = _compute_target(book, folder_pattern, filename_pattern)
-            if Path(target).exists():
+            planned_target = entry.get("target")
+            # Execute the target shown in the plan; refuse a book whose
+            # recomputed target has since changed.
+            if planned_target is not None and target != planned_target:
+                extra_skipped.append({"id": book.id, "reason": "plan changed"})
+                notify = "plan changed"
+            elif Path(target).exists():
                 extra_skipped.append({"id": book.id, "reason": "target-exists"})
-                continue
-            cover_path = book.finalmetadata.final_cover_path if book.finalmetadata else None
-            safe_move_book(book, target, cover_path=cover_path)
-            moved += 1
-            results.append({"id": book.id, "result": "moved"})
+                notify = "target-exists"
+            else:
+                cover_path = book.finalmetadata.final_cover_path if book.finalmetadata else None
+                safe_move_book(book, target, cover_path=cover_path)
+                moved += 1
+                results.append({"id": book.id, "result": "moved"})
+                notify = "moved"
         except NeedsReview as exc:
             needs_review += 1
             results.append({"id": book.id, "result": "needs_review", "codes": list(exc.codes)})
+            notify = "needs_review"
         except Exception as exc:
             failed += 1
             results.append({"id": book.id, "result": "failed", "error": str(exc)})
+            notify = "failed"
         finally:
             # Tag only this book's journal rows created during the call
             # (the main move plus its companions) with the run's batch id.
             FileMove.objects.filter(book=book, pk__gt=max_pk_before).update(batch_id=batch_id)
+        # The callback runs after the book's bookkeeping so a raising callback
+        # can never turn a completed move into a failure or double-count it.
+        _notify(book.id, notify, index)
 
     skipped = len(plan["skipped"]) + len(extra_skipped)
     return {
@@ -368,3 +415,174 @@ def move_status(batch_id=None, limit=50):
         "review_rows": review_rows,
         "completed_rows": completed_rows,
     }
+
+
+def _remove_empty_dirs(path, stop):
+    """Remove ``path`` and its empty ancestors, stopping before ``stop``.
+
+    Used after a revert deletes moved files: the folders left empty by the
+    deletion are removed, but the scan folder root is preserved. When ``stop``
+    is not an ancestor of ``path`` (or equal to it) nothing is removed at all,
+    so a climb can never reach outside the scan folder.
+    """
+    stop_r = Path(stop).resolve()
+    p = Path(path).resolve()
+    try:
+        p.relative_to(stop_r)
+    except ValueError:
+        return  # stop is not an ancestor of path: no cleanup
+    while p != stop_r and p.is_dir():
+        try:
+            p.rmdir()  # only succeeds on an empty directory
+        except OSError:
+            break
+        p = p.parent
+
+
+def _target_modified(row):
+    """True when the moved target still exists and no longer matches ``new_sha256``."""
+    tgt = Path(row.target_path)
+    if not tgt.is_file():
+        return False  # already gone is fine
+    return bool(row.new_sha256) and _sha256(tgt) != row.new_sha256
+
+
+def _source_exists(row):
+    """True when the source already exists with content that differs from the archive."""
+    src = Path(row.source_path)
+    if not src.is_file():
+        return False
+    return bool(row.archived_sha256) and _sha256(src) != row.archived_sha256
+
+
+def revert_moves(batch_id=None, book_ids=None, execute=False):
+    """Revert completed moves back to their archived originals.
+
+    Selects the completed (``pending_deletion`` / ``purged``) journal rows for a
+    ``batch_id`` or a list of ``book_ids`` (both optional; when neither is given
+    nothing is selected). The plan is deduplicated, rows already ``rolled_back``
+    are ignored, and every selected row must pass all of the following checks —
+    otherwise the whole revert is refused and nothing changes:
+
+    * ``archive-missing`` — the archived original is missing.
+    * ``archive-hash-mismatch`` — the archive no longer hashes to the journal.
+    * ``target-modified`` — the target still exists and no longer matches
+      ``new_sha256`` (a target that is already gone is fine).
+    * ``source-exists`` — the source already exists with different content than
+      the archive (a source with the same hash is fine, so a rerun after a
+      partial failure continues).
+
+    With ``execute=False`` (the default) the plan, the refusals and the counts
+    are returned and nothing on disk or in the database changes. With
+    ``execute=True`` each row's archived original is restored to ``source_path``,
+    the moved file (``target_path``) is deleted, the folders left empty are
+    removed, the ``BookFile``/``FinalMetadata`` paths are reset from
+    ``previous_paths`` (via the shared safe-move ``_revert_db``) and the row is
+    set ``rolled_back``, along with every journal row with the same move
+    identity (the deduplicated duplicates). Re-running on already-rolled-back
+    rows reports nothing to do. An exception during one row's revert is caught:
+    that row is reported in ``failed``, stays ``pending_deletion``, and the run
+    stops there (already-reverted rows stay reverted).
+
+    Returns ``{plan, refusals, failed, counts, dry_run}`` where ``plan`` is one
+    entry per selected row, ``refusals`` lists ``{id, reason}``, ``failed``
+    lists ``{id, reason}`` for rows whose revert raised, ``counts`` has
+    ``planned``/``restored``/``refused``/``nothing_to_do``, and ``dry_run`` is
+    True unless ``execute`` was passed.
+    """
+    S = FileMove.State
+    revertable = (S.PENDING_DELETION, S.PURGED)
+
+    qs = FileMove.objects.filter(state__in=revertable)
+    if batch_id:
+        qs = qs.filter(batch_id=batch_id)
+    if book_ids:
+        qs = qs.filter(book_id__in=book_ids)
+    if not batch_id and not book_ids:
+        qs = qs.none()
+
+    # Deduplicate (by row, then by move identity) and keep a stable order.
+    rows = []
+    seen = set()
+    for row in qs.order_by("pk"):
+        key = (row.book_id, row.source_path, row.target_path, row.archived_path)
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(row)
+
+    plan = [
+        {
+            "id": row.id,
+            "book_id": row.book_id,
+            "kind": row.kind,
+            "db_field": row.db_field,
+            "source_path": row.source_path,
+            "target_path": row.target_path,
+            "archived_path": row.archived_path,
+        }
+        for row in rows
+    ]
+
+    # Refuse the whole revert when any archive is missing or hashes wrong, a
+    # target was modified in place, or a source has reappeared with different
+    # content.
+    refusals = []
+    for row in rows:
+        if not _archive_present(row):
+            refusals.append({"id": row.id, "reason": "archive-missing"})
+        elif not _archive_matches(row):
+            refusals.append({"id": row.id, "reason": "archive-hash-mismatch"})
+        elif _target_modified(row):
+            refusals.append({"id": row.id, "reason": "target-modified"})
+        elif _source_exists(row):
+            refusals.append({"id": row.id, "reason": "source-exists"})
+
+    counts = {
+        "planned": len(rows),
+        "restored": 0,
+        "refused": len(refusals),
+        "nothing_to_do": len(rows) == 0,
+    }
+
+    failed = []
+
+    if not execute:
+        return {"plan": plan, "refusals": refusals, "failed": failed, "counts": counts, "dry_run": True}
+
+    if refusals:
+        # Refuse the whole revert: change nothing.
+        return {"plan": plan, "refusals": refusals, "failed": failed, "counts": counts, "dry_run": False}
+
+    cleanup = []  # (target_parent, scan_folder_root) for empty-folder removal
+    for row in rows:
+        try:
+            src = Path(row.source_path)
+            src.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(row.archived_path, str(src))  # restore the archived original
+            _remove(row.target_path)  # delete the moved file
+            _revert_db(row)  # reset BookFile/FinalMetadata paths from previous_paths
+            # Roll back this row and every journal row with the same move
+            # identity (the deduplicated duplicates) so a re-run finds nothing.
+            FileMove.objects.filter(
+                book_id=row.book_id,
+                source_path=row.source_path,
+                target_path=row.target_path,
+                archived_path=row.archived_path,
+            ).update(state=S.ROLLED_BACK)
+            stop = ""
+            if row.book is not None and row.book.scan_folder is not None:
+                stop = row.book.scan_folder.path
+            cleanup.append((Path(row.target_path).parent, stop))
+            counts["restored"] += 1
+        except Exception as exc:
+            # Report this row and stop: already-reverted rows stay reverted and
+            # this row stays pending_deletion for a later rerun.
+            failed.append({"id": row.id, "reason": f"failed: {exc}"})
+            break
+
+    for parent, stop in cleanup:
+        if stop:
+            _remove_empty_dirs(parent, stop)
+
+    return {"plan": plan, "refusals": refusals, "failed": failed, "counts": counts, "dry_run": False}
