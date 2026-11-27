@@ -37,6 +37,8 @@ class Command(BaseCommand):
             self.stdout.write(f"delete {row['target_path']}")
         for refusal in result["refusals"]:
             self.stdout.write(f"refusal {refusal['id']} | {refusal['reason']}")
+        for failed in result["failed"]:
+            self.stdout.write(f"failed {failed['id']} | {failed['reason']}")
 
         counts = result["counts"]
         if counts["nothing_to_do"]:

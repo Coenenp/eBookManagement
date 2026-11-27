@@ -17,7 +17,7 @@ from books.utils.renaming_engine import RenamingEngine, is_renamable
 from books.utils.safe_move import NeedsReview, safe_move_book
 from books.utils.safe_move.book import _cover_flag
 from books.utils.safe_move.recovery import _archive_matches, _archive_present, _revert_db
-from books.utils.safe_move.routine import _remove
+from books.utils.safe_move.routine import _remove, _sha256
 
 # A move in one of these states is still in flight; recover it with
 # ``recover_file_moves --apply`` rather than re-selecting the book.
@@ -421,10 +421,16 @@ def _remove_empty_dirs(path, stop):
     """Remove ``path`` and its empty ancestors, stopping before ``stop``.
 
     Used after a revert deletes moved files: the folders left empty by the
-    deletion are removed, but the scan folder root is preserved.
+    deletion are removed, but the scan folder root is preserved. When ``stop``
+    is not an ancestor of ``path`` (or equal to it) nothing is removed at all,
+    so a climb can never reach outside the scan folder.
     """
     stop_r = Path(stop).resolve()
     p = Path(path).resolve()
+    try:
+        p.relative_to(stop_r)
+    except ValueError:
+        return  # stop is not an ancestor of path: no cleanup
     while p != stop_r and p.is_dir():
         try:
             p.rmdir()  # only succeeds on an empty directory
@@ -433,15 +439,38 @@ def _remove_empty_dirs(path, stop):
         p = p.parent
 
 
+def _target_modified(row):
+    """True when the moved target still exists and no longer matches ``new_sha256``."""
+    tgt = Path(row.target_path)
+    if not tgt.is_file():
+        return False  # already gone is fine
+    return bool(row.new_sha256) and _sha256(tgt) != row.new_sha256
+
+
+def _source_exists(row):
+    """True when the source already exists with content that differs from the archive."""
+    src = Path(row.source_path)
+    if not src.is_file():
+        return False
+    return bool(row.archived_sha256) and _sha256(src) != row.archived_sha256
+
+
 def revert_moves(batch_id=None, book_ids=None, execute=False):
     """Revert completed moves back to their archived originals.
 
     Selects the completed (``pending_deletion`` / ``purged``) journal rows for a
     ``batch_id`` or a list of ``book_ids`` (both optional; when neither is given
     nothing is selected). The plan is deduplicated, rows already ``rolled_back``
-    are ignored, and the archive of every selected row must be present and hash
-    to the journal's ``original_sha256``/``archived_sha256`` — otherwise the
-    whole revert is refused and nothing changes.
+    are ignored, and every selected row must pass all of the following checks —
+    otherwise the whole revert is refused and nothing changes:
+
+    * ``archive-missing`` — the archived original is missing.
+    * ``archive-hash-mismatch`` — the archive no longer hashes to the journal.
+    * ``target-modified`` — the target still exists and no longer matches
+      ``new_sha256`` (a target that is already gone is fine).
+    * ``source-exists`` — the source already exists with different content than
+      the archive (a source with the same hash is fine, so a rerun after a
+      partial failure continues).
 
     With ``execute=False`` (the default) the plan, the refusals and the counts
     are returned and nothing on disk or in the database changes. With
@@ -449,11 +478,15 @@ def revert_moves(batch_id=None, book_ids=None, execute=False):
     the moved file (``target_path``) is deleted, the folders left empty are
     removed, the ``BookFile``/``FinalMetadata`` paths are reset from
     ``previous_paths`` (via the shared safe-move ``_revert_db``) and the row is
-    set ``rolled_back``. Re-running on already-rolled-back rows reports nothing
-    to do.
+    set ``rolled_back``, along with every journal row with the same move
+    identity (the deduplicated duplicates). Re-running on already-rolled-back
+    rows reports nothing to do. An exception during one row's revert is caught:
+    that row is reported in ``failed``, stays ``pending_deletion``, and the run
+    stops there (already-reverted rows stay reverted).
 
-    Returns ``{plan, refusals, counts, dry_run}`` where ``plan`` is one entry
-    per selected row, ``refusals`` lists ``{id, reason}``, ``counts`` has
+    Returns ``{plan, refusals, failed, counts, dry_run}`` where ``plan`` is one
+    entry per selected row, ``refusals`` lists ``{id, reason}``, ``failed``
+    lists ``{id, reason}`` for rows whose revert raised, ``counts`` has
     ``planned``/``restored``/``refused``/``nothing_to_do``, and ``dry_run`` is
     True unless ``execute`` was passed.
     """
@@ -491,13 +524,19 @@ def revert_moves(batch_id=None, book_ids=None, execute=False):
         for row in rows
     ]
 
-    # Refuse the whole revert when any archive is missing or hashes wrong.
+    # Refuse the whole revert when any archive is missing or hashes wrong, a
+    # target was modified in place, or a source has reappeared with different
+    # content.
     refusals = []
     for row in rows:
         if not _archive_present(row):
             refusals.append({"id": row.id, "reason": "archive-missing"})
         elif not _archive_matches(row):
             refusals.append({"id": row.id, "reason": "archive-hash-mismatch"})
+        elif _target_modified(row):
+            refusals.append({"id": row.id, "reason": "target-modified"})
+        elif _source_exists(row):
+            refusals.append({"id": row.id, "reason": "source-exists"})
 
     counts = {
         "planned": len(rows),
@@ -506,29 +545,44 @@ def revert_moves(batch_id=None, book_ids=None, execute=False):
         "nothing_to_do": len(rows) == 0,
     }
 
+    failed = []
+
     if not execute:
-        return {"plan": plan, "refusals": refusals, "counts": counts, "dry_run": True}
+        return {"plan": plan, "refusals": refusals, "failed": failed, "counts": counts, "dry_run": True}
 
     if refusals:
         # Refuse the whole revert: change nothing.
-        return {"plan": plan, "refusals": refusals, "counts": counts, "dry_run": False}
+        return {"plan": plan, "refusals": refusals, "failed": failed, "counts": counts, "dry_run": False}
 
     cleanup = []  # (target_parent, scan_folder_root) for empty-folder removal
     for row in rows:
-        src = Path(row.source_path)
-        src.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(row.archived_path, str(src))  # restore the archived original
-        _remove(row.target_path)  # delete the moved file
-        _revert_db(row)  # reset BookFile/FinalMetadata paths from previous_paths
-        FileMove.objects.filter(pk=row.pk).update(state=S.ROLLED_BACK)
-        stop = ""
-        if row.book is not None and row.book.scan_folder is not None:
-            stop = row.book.scan_folder.path
-        cleanup.append((Path(row.target_path).parent, stop))
-        counts["restored"] += 1
+        try:
+            src = Path(row.source_path)
+            src.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(row.archived_path, str(src))  # restore the archived original
+            _remove(row.target_path)  # delete the moved file
+            _revert_db(row)  # reset BookFile/FinalMetadata paths from previous_paths
+            # Roll back this row and every journal row with the same move
+            # identity (the deduplicated duplicates) so a re-run finds nothing.
+            FileMove.objects.filter(
+                book_id=row.book_id,
+                source_path=row.source_path,
+                target_path=row.target_path,
+                archived_path=row.archived_path,
+            ).update(state=S.ROLLED_BACK)
+            stop = ""
+            if row.book is not None and row.book.scan_folder is not None:
+                stop = row.book.scan_folder.path
+            cleanup.append((Path(row.target_path).parent, stop))
+            counts["restored"] += 1
+        except Exception as exc:
+            # Report this row and stop: already-reverted rows stay reverted and
+            # this row stays pending_deletion for a later rerun.
+            failed.append({"id": row.id, "reason": f"failed: {exc}"})
+            break
 
     for parent, stop in cleanup:
         if stop:
             _remove_empty_dirs(parent, stop)
 
-    return {"plan": plan, "refusals": refusals, "counts": counts, "dry_run": False}
+    return {"plan": plan, "refusals": refusals, "failed": failed, "counts": counts, "dry_run": False}
