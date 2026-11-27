@@ -285,3 +285,71 @@ class SetAuthorOrderParityTests(TestCase):
 
         self.assertEqual(result["lines"], [cmd_out.getvalue().rstrip("\n")])
         self.assertEqual(svc_state, cmd_state)
+
+
+class StoreAuthorOrderRefusalTests(TestCase):
+    def _source(self):
+        return DataSource.objects.get_or_create(
+            name=DataSource.EPUB_INTERNAL, defaults={"priority": 1, "trust_level": 5}
+        )[0]
+
+    def _refused_setup(self):
+        natural = Author.objects.create(name="Natsume Soseki", is_reviewed=True)
+        holder = Author.objects.create(
+            name="Soseki Natsume", first_name="Soseki", last_name="Natsume"
+        )
+        source = self._source()
+        book = Book.objects.create()
+        BookAuthor.objects.create(book=book, author=natural, source=source)
+        return natural, holder, book
+
+    def test_execute_refuses_when_natural_row_reviewed(self):
+        natural, holder, book = self._refused_setup()
+
+        out = StringIO()
+        call_command(
+            "set_author_order",
+            "Natsume Soseki",
+            "--last", "Natsume", "--first", "Soseki", "--execute",
+            stdout=out,
+        )
+
+        text = out.getvalue()
+        self.assertTrue(text.startswith("Refused: "), text)
+        self.assertIn("Natsume Soseki", text)
+        self.assertIn("Soseki Natsume", text)
+        # Nothing changed: both rows remain and the reviewed row is untouched.
+        self.assertEqual(Author.objects.count(), 2)
+        natural.refresh_from_db()
+        self.assertTrue(natural.is_reviewed)
+        holder.refresh_from_db()
+        self.assertEqual(holder.name, "Soseki Natsume")
+        self.assertEqual(BookAuthor.objects.get().author_id, natural.pk)
+
+    def test_dry_run_reports_refusal_not_collision(self):
+        natural, holder, book = self._refused_setup()
+
+        out = StringIO()
+        call_command(
+            "set_author_order",
+            "Natsume Soseki",
+            "--last", "Natsume", "--first", "Soseki", stdout=out,
+        )
+
+        text = out.getvalue()
+        self.assertIn("Would store order for 'Natsume Soseki'", text)
+        self.assertIn("Refused: ", text)
+        self.assertNotIn("Collision:", text)
+        self.assertEqual(Author.objects.count(), 2)
+        self.assertEqual(Author.objects.filter(is_reviewed=True).count(), 1)
+
+    def test_service_returns_merged_false_on_refusal(self):
+        natural, holder, book = self._refused_setup()
+
+        result = store_author_order("Natsume Soseki", "Natsume", "Soseki", True)
+
+        self.assertFalse(result["merged"])
+        self.assertIsNone(result["author_id"])
+        self.assertTrue(result["lines"][0].startswith("Refused: "))
+        self.assertEqual(Author.objects.count(), 2)
+

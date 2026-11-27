@@ -58,6 +58,14 @@ def _collision_line(name, first, last, author, colliding):
     )
 
 
+def _refusal_line(author, colliding, first, last):
+    """One line refusing the merge because the natural-order row is reviewed."""
+    return (
+        f"Refused: '{author.name}' is already reviewed; will not merge it into "
+        f"'{colliding.name}' which holds first_name='{first}', last_name='{last}'"
+    )
+
+
 def store_author_order(name, last, first, execute):
     """Store a reviewed first/last order for the author keyed by ``name``.
 
@@ -79,13 +87,22 @@ def store_author_order(name, last, first, execute):
         author = find_author_by_name(name)
         colliding = _find_collision(author, first, last)
         if colliding is not None:
-            lines.append(_collision_line(name, first, last, author, colliding))
+            if author is not None and author.is_reviewed:
+                lines.append(_refusal_line(author, colliding, first, last))
+            else:
+                lines.append(_collision_line(name, first, last, author, colliding))
         return {"lines": lines, "merged": False, "author_id": None}
 
     author = find_author_by_name(name)
     colliding = _find_collision(author, first, last)
 
     if colliding is not None:
+        if author is not None and author.is_reviewed:
+            return {
+                "lines": [_refusal_line(author, colliding, first, last)],
+                "merged": False,
+                "author_id": None,
+            }
         with transaction.atomic():
             if author is not None:
                 _move_and_dedupe_book_authors(author, colliding)
@@ -111,3 +128,88 @@ def store_author_order(name, last, first, execute):
         f"last_name='{kept.last_name}', is_reviewed={kept.is_reviewed}"
     )
     return {"lines": [line], "merged": colliding is not None, "author_id": kept.pk}
+
+
+FIELDS = [
+    "final_title",
+    "final_title_confidence",
+    "final_author",
+    "final_author_confidence",
+    "final_series",
+    "final_series_number",
+    "final_series_confidence",
+]
+
+
+def _same(old, new):
+    if old is None:
+        old = ""
+    if new is None:
+        new = ""
+    return old == new
+
+
+def resync_final_metadata(execute=False, limit=None):
+    """Recompute final title/author/series for unreviewed books.
+
+    This is the single source of truth for the ``resync_final_metadata``
+    writing action; both the management command and the metadata resync
+    screen (UI) call it, so the command stays a thin printer.  It re-runs the
+    three final-value update functions and returns the result as data:
+    ``checked``, ``changed_titles``, ``changed_authors``, ``changed_series``
+    and ``changes`` (a list of ``(book_id, field, old, new)`` tuples for the
+    CSV).  Approved books (``is_reviewed=True``) are never touched, and only
+    the seven final fields are written via ``update_fields``.
+    """
+    from books.models import FinalMetadata
+
+    qs = FinalMetadata.objects.filter(is_reviewed=False).select_related("book").order_by("id")
+    if limit is not None:
+        qs = qs[:limit]
+
+    changed_titles = 0
+    changed_authors = 0
+    changed_series = 0
+    checked = 0
+    changes = []
+
+    for fm in qs.iterator():
+        checked += 1
+        old = {f: getattr(fm, f) for f in FIELDS}
+
+        fm.update_final_title()
+        fm.update_final_author()
+        fm.update_final_series()
+
+        changed = [f for f in FIELDS if not _same(old[f], getattr(fm, f))]
+        if not changed:
+            continue
+
+        if not _same(old["final_title"], fm.final_title) or not _same(
+            old["final_title_confidence"], fm.final_title_confidence
+        ):
+            changed_titles += 1
+        if not _same(old["final_author"], fm.final_author) or not _same(
+            old["final_author_confidence"], fm.final_author_confidence
+        ):
+            changed_authors += 1
+        if (
+            not _same(old["final_series"], fm.final_series)
+            or not _same(old["final_series_number"], fm.final_series_number)
+            or not _same(old["final_series_confidence"], fm.final_series_confidence)
+        ):
+            changed_series += 1
+
+        for f in changed:
+            changes.append((fm.book_id, f, old[f], getattr(fm, f)))
+
+        if execute:
+            fm.save(update_fields=FIELDS)
+
+    return {
+        "checked": checked,
+        "changed_titles": changed_titles,
+        "changed_authors": changed_authors,
+        "changed_series": changed_series,
+        "changes": changes,
+    }
