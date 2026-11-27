@@ -58,6 +58,14 @@ def _collision_line(name, first, last, author, colliding):
     )
 
 
+def _refusal_line(author, colliding, first, last):
+    """One line refusing the merge because the natural-order row is reviewed."""
+    return (
+        f"Refused: '{author.name}' is already reviewed; will not merge it into "
+        f"'{colliding.name}' which holds first_name='{first}', last_name='{last}'"
+    )
+
+
 def store_author_order(name, last, first, execute):
     """Store a reviewed first/last order for the author keyed by ``name``.
 
@@ -79,13 +87,22 @@ def store_author_order(name, last, first, execute):
         author = find_author_by_name(name)
         colliding = _find_collision(author, first, last)
         if colliding is not None:
-            lines.append(_collision_line(name, first, last, author, colliding))
+            if author is not None and author.is_reviewed:
+                lines.append(_refusal_line(author, colliding, first, last))
+            else:
+                lines.append(_collision_line(name, first, last, author, colliding))
         return {"lines": lines, "merged": False, "author_id": None}
 
     author = find_author_by_name(name)
     colliding = _find_collision(author, first, last)
 
     if colliding is not None:
+        if author is not None and author.is_reviewed:
+            return {
+                "lines": [_refusal_line(author, colliding, first, last)],
+                "merged": False,
+                "author_id": None,
+            }
         with transaction.atomic():
             if author is not None:
                 _move_and_dedupe_book_authors(author, colliding)
