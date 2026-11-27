@@ -207,6 +207,58 @@ class SetAuthorOrderMergeTests(TestCase):
         self.assertEqual(Author.objects.filter(is_reviewed=True).count(), 0)
 
 
+    def test_merge_no_natural_row_holder_wins(self):
+        # No row exists under the natural-order name; another row already
+        # holds the wanted pair.
+        holder = Author.objects.create(
+            name="Soseki Natsume", first_name="Soseki", last_name="Natsume"
+        )
+        source = self._source()
+        book = self._book()
+        self._link(book, holder, source)
+        link_id = BookAuthor.objects.get().pk
+
+        call_command(
+            "set_author_order",
+            "Natsume Soseki",
+            "--last", "Natsume", "--first", "Soseki", "--execute",
+        )
+
+        # Nothing is deleted: the holder survives, renamed and reviewed.
+        self.assertEqual(Author.objects.count(), 1)
+        kept = Author.objects.get()
+        self.assertEqual(kept.pk, holder.pk)
+        self.assertEqual(kept.name, "Natsume Soseki")
+        self.assertTrue(kept.is_reviewed)
+        # No BookAuthor row changed.
+        link = BookAuthor.objects.get()
+        self.assertEqual(link.pk, link_id)
+        self.assertEqual(link.author_id, holder.pk)
+
+    def test_dry_run_collision_line_exact(self):
+        natural = Author.objects.create(name="Natsume Soseki")
+        Author.objects.create(
+            name="Soseki Natsume", first_name="Soseki", last_name="Natsume"
+        )
+
+        out = StringIO()
+        call_command(
+            "set_author_order",
+            "Natsume Soseki",
+            "--last", "Natsume", "--first", "Soseki", stdout=out,
+        )
+
+        lines = out.getvalue().splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(
+            lines[1],
+            "Collision: 'Soseki Natsume' already holds first_name='Soseki', "
+            "last_name='Natsume'; would move BookAuthor links from "
+            "'Natsume Soseki' to it, delete 'Natsume Soseki', rename the kept "
+            "row to 'Natsume Soseki' and set it reviewed",
+        )
+
+
 class SetAuthorOrderParityTests(TestCase):
     def test_command_and_service_agree(self):
         # Command path.
