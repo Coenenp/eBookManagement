@@ -74,6 +74,50 @@ class MoveApprovedCommandTests(TestCase):
         out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
         self.assertEqual(out, "moved 1, needs_review 0, failed 0, skipped 0\n")
 
+    def test_golden_skipped_line_exact(self):
+        """Golden output: the skipped line is byte-for-byte stable."""
+        book, path = self._make_book("gs.pdf")
+        FileMove.objects.create(
+            book=book,
+            kind=FileMove.Kind.MAIN,
+            db_field=FileMove.DBField.FILE_PATH,
+            source_path=book.file_path,
+            target_path=str(Path(self.temp_dir) / "elsewhere" / "gs.pdf"),
+            state=FileMove.State.PLANNED,
+        )
+        out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        self.assertEqual(
+            out,
+            f"skipped {book.id} | unresolved planned (recover_file_moves --apply)\n"
+            f"moved 0, needs_review 0, failed 0, skipped 1\n",
+        )
+
+    def test_golden_needs_review_line_exact(self):
+        """Golden output: the needs_review line is byte-for-byte stable."""
+        epub_path = Path(self.temp_dir) / "g.epub"
+        epub_path.write_bytes(b"this is not a zip at all")
+        epub_book = create_test_book_with_file(
+            file_path=str(epub_path), file_format="epub", scan_folder=self.scan_folder,
+        )
+        FinalMetadata.objects.create(book=epub_book, final_title="g", is_reviewed=True, language="en")
+        out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        self.assertEqual(
+            out,
+            f"needs_review {epub_book.id} | cover-missing\n"
+            f"moved 0, needs_review 1, failed 0, skipped 0\n",
+        )
+
+    def test_golden_failed_line_exact(self):
+        """Golden output: the failed line is byte-for-byte stable."""
+        bad, bad_path = self._make_book("g-bad.pdf")
+        bad_path.unlink()  # missing source -> failed
+        out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")
+        self.assertEqual(
+            out,
+            f"failed {bad.id} | source does not exist: {bad_path}\n"
+            f"moved 0, needs_review 0, failed 1, skipped 0\n",
+        )
+
     def test_execute_moves_approved_and_tags_batch_id(self):
         book, path = self._make_book("m.pdf")
         out = self._run(execute=True, folder_pattern="Approved", filename_pattern="${title}.${ext}")

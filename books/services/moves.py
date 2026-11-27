@@ -258,41 +258,82 @@ def dry_run_report(plan):
     return {"planned": planned_out, "skipped": plan["skipped"] + dry_skips}
 
 
-def run_moves(plan, *, folder_pattern=None, filename_pattern=None):
+def run_moves(plan, *, folder_pattern=None, filename_pattern=None, callback=None, stop_check=None):
     """Execute a move plan through ``safe_move_book`` and the FileMove journal.
 
     Returns a dict with the per-book ``results`` (in execution order), the
     ``extra_skipped`` books discovered at runtime (not approved, target now
-    exists), the counts ``moved``/``needs_review``/``failed``/``skipped`` and
-    the run's ``batch_id``.
+    exists, recomputed target differs, book deleted), the counts
+    ``moved``/``needs_review``/``failed``/``skipped`` and the run's ``batch_id``.
+
+    ``callback``, when given, is called as ``callback(book_id, result, index,
+    total)`` after each attempted book, where ``result`` is one of ``"moved"``,
+    ``"needs_review"``, ``"failed"``, ``"plan changed"``, ``"not approved"``,
+    ``"target-exists"`` or ``"deleted"``. ``stop_check``, when given, is a
+    no-argument callable evaluated between books; when it returns truthy the run
+    ends cleanly and the remaining books are reported as ``"not run"``.
     """
     batch_id = str(uuid.uuid4())
     moved = needs_review = failed = 0
     extra_skipped = []
     results = []
+    planned = plan["planned"]
+    total = len(planned)
 
-    for entry in plan["planned"]:
-        book = Book.objects.get(pk=entry["id"])
+    def _notify(book_id, result, index):
+        if callback is not None:
+            callback(book_id, result, index, total)
+
+    for index, entry in enumerate(planned):
+        book_id = entry["id"]
+
+        # Stop check, evaluated between books (never before the first).
+        if index > 0 and stop_check is not None and stop_check():
+            for rest in planned[index:]:
+                results.append({"id": rest["id"], "result": "not run"})
+            break
+
+        try:
+            book = Book.objects.get(pk=book_id)
+        except Book.DoesNotExist:
+            # A book deleted between plan and run is skipped, not fatal.
+            extra_skipped.append({"id": book_id, "reason": "deleted"})
+            _notify(book_id, "deleted", index)
+            continue
+
         # Re-check approval immediately before the move.
         if not is_renamable(book):
             extra_skipped.append({"id": book.id, "reason": "not approved"})
+            _notify(book.id, "not approved", index)
             continue
+
         max_pk_before = FileMove.objects.aggregate(mx=Max("pk"))["mx"] or 0
         try:
             target = _compute_target(book, folder_pattern, filename_pattern)
+            planned_target = entry.get("target")
+            # Execute the target shown in the plan; refuse a book whose
+            # recomputed target has since changed.
+            if planned_target is not None and target != planned_target:
+                extra_skipped.append({"id": book.id, "reason": "plan changed"})
+                _notify(book.id, "plan changed", index)
+                continue
             if Path(target).exists():
                 extra_skipped.append({"id": book.id, "reason": "target-exists"})
+                _notify(book.id, "target-exists", index)
                 continue
             cover_path = book.finalmetadata.final_cover_path if book.finalmetadata else None
             safe_move_book(book, target, cover_path=cover_path)
             moved += 1
             results.append({"id": book.id, "result": "moved"})
+            _notify(book.id, "moved", index)
         except NeedsReview as exc:
             needs_review += 1
             results.append({"id": book.id, "result": "needs_review", "codes": list(exc.codes)})
+            _notify(book.id, "needs_review", index)
         except Exception as exc:
             failed += 1
             results.append({"id": book.id, "result": "failed", "error": str(exc)})
+            _notify(book.id, "failed", index)
         finally:
             # Tag only this book's journal rows created during the call
             # (the main move plus its companions) with the run's batch id.
