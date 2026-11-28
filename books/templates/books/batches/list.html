@@ -1,0 +1,65 @@
+{% extends 'books/base.html' %}
+{% load static %}
+
+{% block title %}Batches - Ebook Library Manager{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'book/css/unified-tables.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="unified-table-container">
+    <div class="unified-table-header">
+        <div>
+            <h2 class="unified-table-title">
+                <i class="fas fa-list-check"></i>
+                Batches
+            </h2>
+            <p class="unified-table-subtitle">
+                Approval batches, newest first
+            </p>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table unified-table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th>Batch</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Books</th>
+                    <th>Held</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for batch in batches %}
+                <tr>
+                    <td class="item-name" data-label="Batch">
+                        <a href="{% url 'books:batch_review' batch.batch_id %}">{{ batch.batch_id }}</a>
+                    </td>
+                    <td data-label="Status">
+                        <span class="status-badge {% if batch.status == 'applied' %}status-active{% else %}status-inactive{% endif %}">
+                            {{ batch.status }}
+                        </span>
+                    </td>
+                    <td class="date-display" data-label="Created">
+                        {{ batch.created|date:"M d, Y H:i" }}
+                    </td>
+                    <td data-label="Books">{{ batch.id_count }}</td>
+                    <td data-label="Held">{{ batch.held_count }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="table-empty">
+                        <i class="fas fa-list-check"></i>
+                        <h5>No Batches</h5>
+                        <p>No approval batches have been prepared yet.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

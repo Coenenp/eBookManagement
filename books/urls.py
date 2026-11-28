@@ -18,6 +18,7 @@ from .views import SeriesDetailView, SeriesListView
 from .views import ajax as ajax_views
 from .views import ajax_cover as ajax_cover_views
 from .views import author_management as author_management_views
+from .views import batches as batches_views
 from .views import scanning as scanning_views
 from .views import sections as sections_views
 from .views import wizard as wizard_views
@@ -134,6 +135,9 @@ urlpatterns = [
     path("scan_folders/<int:pk>/edit/", views.EditScanFolderView.as_view(), name="edit_scan_folder"),
     path("scan_folders/<int:pk>/trigger/", views.TriggerSingleScanView.as_view(), name="scan_folder_trigger"),
     path("scan_folders/<int:pk>/delete/", views.DeleteScanFolderView.as_view(), name="delete_scan_folder"),
+    # Batch review (read only)
+    path("batches/", batches_views.BatchListView.as_view(), name="batch_list"),
+    path("batches/<str:batch_id>/", batches_views.BatchReviewView.as_view(), name="batch_review"),
     # Scanning
     path("trigger_scan/", views.TriggerScanView.as_view(), name="trigger_scan"),
     path("scan_status/", views.ScanStatusView.as_view(), name="scan_status"),

@@ -1,0 +1,97 @@
+{% extends 'books/base.html' %}
+{% load static %}
+
+{% block title %}Batch {{ batch_id }} - Ebook Library Manager{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'book/css/unified-tables.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="unified-table-container">
+    <div class="unified-table-header">
+        <div>
+            <h2 class="unified-table-title">
+                <i class="fas fa-list-check"></i>
+                Batch {{ batch_id }}
+            </h2>
+            <p class="unified-table-subtitle">
+                Status: {{ status }}
+                &middot; approve {{ approve }}, hold {{ hold }}
+            </p>
+            {% if status == 'applied' %}
+            <p class="unified-table-subtitle">
+                Applied at {{ applied_at }}, approved {{ applied_count }}
+            </p>
+            {% endif %}
+        </div>
+        <div class="unified-table-actions">
+            <a href="{% url 'books:batch_list' %}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left me-1"></i>All batches
+            </a>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table unified-table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th>Cover</th>
+                    <th>Title</th>
+                    <th>Author</th>
+                    <th>Series</th>
+                    <th>Number</th>
+                    <th>Language</th>
+                    <th>Format</th>
+                    <th>Tier</th>
+                    <th>Folder</th>
+                    <th>File name</th>
+                    <th>Source path</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td data-label="Cover">
+                        {% if row.cover %}
+                        <img src="{{ row.cover }}" alt="cover" width="50">
+                        {% else %}
+                        <span class="text-muted">no cover</span>
+                        {% endif %}
+                    </td>
+                    <td class="item-name" data-label="Title">{{ row.title }}</td>
+                    <td data-label="Author">{{ row.last_name }}{% if row.first_name %}, {{ row.first_name }}{% endif %}</td>
+                    <td data-label="Series">{{ row.series }}</td>
+                    <td data-label="Number">{{ row.series_number }}</td>
+                    <td data-label="Language">{{ row.language }}</td>
+                    <td data-label="Format">{{ row.format }}</td>
+                    <td data-label="Tier">{{ row.tier }}</td>
+                    <td data-label="Folder">{{ row.folder }}</td>
+                    <td data-label="File name">{{ row.filename }}</td>
+                    <td data-label="Source path">{{ row.source }}</td>
+                    <td data-label="Status">
+                        {% if row.held %}
+                        <span class="badge bg-warning text-dark">Held: {{ row.hold_reason }}</span>
+                        {% else %}
+                        <span class="badge bg-success">Approved when applied</span>
+                        {% endif %}
+                        {% if row.flag %}
+                        <span class="badge bg-danger">{{ row.flag }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="12" class="table-empty">
+                        <i class="fas fa-list-check"></i>
+                        <h5>No Books</h5>
+                        <p>This batch has no books.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
