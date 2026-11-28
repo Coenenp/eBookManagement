@@ -386,8 +386,11 @@ def add_holds(ids, manifest_dir, reason):
     """Append one ``<id><TAB><reason>`` line per id to ``rejected_ids.txt``.
 
     A hold made with exclude ids persists: later runs skip every id that
-    appears here (``read_holds`` reads only the id column).
+    appears here (``read_holds`` reads only the id column).  Tabs and line
+    breaks in ``reason`` are replaced with spaces first, so a reason can never
+    corrupt the column layout or inject a line.
     """
+    reason = (reason or "").replace("\t", " ").replace("\n", " ").replace("\r", " ")
     path = Path(manifest_dir) / "rejected_ids.txt"
     with open(path, "a") as fh:
         for rid in ids:
@@ -395,20 +398,31 @@ def add_holds(ids, manifest_dir, reason):
 
 
 def _parse_exclude_ids(raw):
-    """Parse the comma separated ``--exclude-ids`` value.
+    """Parse the ``--exclude-ids`` value.
 
-    Returns ``(ids, error)``; ``error`` is a refusal message or ``None``.
+    Accepts the comma separated string of today, or a list, tuple or set of
+    ints or digit strings.  Returns ``(ids, error)``; ``error`` is a refusal
+    message or ``None``.
     """
     if not raw:
         return [], None
+    if isinstance(raw, (list, tuple, set)):
+        parts = list(raw)
+    else:
+        parts = str(raw).split(",")
     ids = []
-    for part in str(raw).split(","):
-        part = part.strip()
-        if not part:
+    for part in parts:
+        if isinstance(part, str):
+            part = part.strip()
+            if not part:
+                continue
+        if isinstance(part, int) and not isinstance(part, bool):
+            ids.append(part)
             continue
-        if not part.isdigit():
-            return None, f"refusing: invalid exclude id {part!r}"
-        ids.append(int(part))
+        if isinstance(part, str) and part.isdigit():
+            ids.append(int(part))
+            continue
+        return None, f"refusing: invalid exclude id {part!r}"
     return ids, None
 
 
@@ -433,8 +447,7 @@ def reject_books(manifest_path, reject_id, reason):
     excluded[str(reject_id)] = reason
     # Leave the status prepared: one held-back book never blocks the batch.
     manifest_path.write_text(json.dumps(data, indent=2))
-    clean = reason.replace("\t", " ").replace("\n", " ").replace("\r", " ")
-    add_holds([reject_id], manifest_path.parent, clean)
+    add_holds([reject_id], manifest_path.parent, reason)
     return {"line": f"rejected {reject_id}: {reason}"}
 
 
@@ -460,6 +473,8 @@ def apply_batch(
     data = json.loads(manifest_path.read_text())
     if data.get("status") == "blocked":
         return {"refusal": "refusing: manifest is blocked"}
+    if data.get("status") == "applied":
+        return {"refusal": "refusing: manifest already applied"}
 
     ids = data.get("ids", [])
     if confirm != len(ids):
@@ -785,7 +800,9 @@ def _sample_line(bid, corroborated, ctx, target=None):
 
 
 def select_batch(size, seed=None, manifest_dir=None):
-    """Select the next batch of eligible books. Writes nothing.
+    """Select the next batch of eligible books.
+
+    Creates the manifest folder (if it does not exist) but writes no files.
 
     Returns a dict with the selection data the command and the batch review
     page both need:

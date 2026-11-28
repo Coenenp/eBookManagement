@@ -91,7 +91,7 @@ def store_author_order(name, last, first, execute):
                 lines.append(_refusal_line(author, colliding, first, last))
             else:
                 lines.append(_collision_line(name, first, last, author, colliding))
-        return {"lines": lines, "merged": False, "author_id": None}
+        return {"lines": lines, "merged": False, "author_id": None, "refused": False}
 
     author = find_author_by_name(name)
     colliding = _find_collision(author, first, last)
@@ -102,6 +102,7 @@ def store_author_order(name, last, first, execute):
                 "lines": [_refusal_line(author, colliding, first, last)],
                 "merged": False,
                 "author_id": None,
+                "refused": True,
             }
         with transaction.atomic():
             if author is not None:
@@ -127,7 +128,7 @@ def store_author_order(name, last, first, execute):
         f"Stored order: name='{kept.name}', first_name='{kept.first_name}', "
         f"last_name='{kept.last_name}', is_reviewed={kept.is_reviewed}"
     )
-    return {"lines": [line], "merged": colliding is not None, "author_id": kept.pk}
+    return {"lines": [line], "merged": colliding is not None, "author_id": kept.pk, "refused": False}
 
 
 FIELDS = [
