@@ -15,13 +15,21 @@
                 <i class="fas fa-list-check"></i>
                 Batch {{ batch_id }}
             </h2>
-            <p class="unified-table-subtitle">
-                Status: {{ status }}
-                &middot; approve {{ approve }}, hold {{ hold }}
-            </p>
             {% if status == 'applied' %}
             <p class="unified-table-subtitle">
-                Applied at {{ applied_at }}, approved {{ applied_count }}
+                Status: applied
+                &middot; approved {{ approve }}, held {{ hold }}, not approved {{ not_approved }}
+            </p>
+            <p class="unified-table-subtitle">
+                Applied at {{ applied_at }}
+            </p>
+            {% else %}
+            <p class="unified-table-subtitle">
+                Status: prepared
+                &middot; approve {{ approve }}, hold {{ hold }}
+            </p>
+            <p class="unified-table-subtitle">
+                {{ approve }} books will be approved, {{ hold }} held. Nothing is approved until you apply.
             </p>
             {% endif %}
         </div>
@@ -31,6 +39,15 @@
             </a>
         </div>
     </div>
+
+    {% if status != 'applied' %}
+    <form method="post" action="{% url 'books:batch_apply' batch_id %}" class="mb-3">
+        {% csrf_token %}
+        <input type="number" name="count" min="0" required>
+        <span>Type the number of books that will be approved ({{ approve }}) to apply</span>
+        <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+    </form>
+    {% endif %}
 
     <div class="table-responsive">
         <table class="table unified-table table-striped table-hover">
@@ -48,6 +65,7 @@
                     <th>File name</th>
                     <th>Source path</th>
                     <th>Status</th>
+                    {% if status != 'applied' %}<th>Actions</th>{% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -71,19 +89,49 @@
                     <td data-label="File name">{{ row.filename }}</td>
                     <td data-label="Source path">{{ row.source }}</td>
                     <td data-label="Status">
-                        {% if row.held %}
-                        <span class="badge bg-warning text-dark">Held: {{ row.hold_reason }}</span>
+                        {% if status == 'applied' %}
+                            {% if row.state == 'approved' %}
+                            <span class="badge bg-success">Approved</span>
+                            {% elif row.state == 'held' %}
+                            <span class="badge bg-warning text-dark">Held: {{ row.hold_reason }}</span>
+                            {% else %}
+                            <span class="badge bg-danger">Not approved: {{ row.skip_reason }}</span>
+                            {% endif %}
                         {% else %}
-                        <span class="badge bg-success">Approved when applied</span>
-                        {% endif %}
-                        {% if row.flag %}
-                        <span class="badge bg-danger">{{ row.flag }}</span>
+                            {% if row.state == 'held' %}
+                            <span class="badge bg-warning text-dark">Held: {{ row.hold_reason }}</span>
+                            {% else %}
+                            <span class="badge bg-success">Approved when applied</span>
+                            {% endif %}
+                            {% if row.flag %}
+                            <span class="badge bg-danger">{{ row.flag }}</span>
+                            {% endif %}
                         {% endif %}
                     </td>
+                    {% if status != 'applied' %}
+                    <td data-label="Actions">
+                        {% if row.state == 'held' %}
+                        <form method="post" action="{% url 'books:batch_unhold' batch_id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="book_id" value="{{ row.id }}">
+                            <button type="submit" class="btn btn-outline-secondary btn-sm">Unhold</button>
+                        </form>
+                        {% else %}
+                        <form method="post" action="{% url 'books:batch_hold' batch_id %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="book_id" value="{{ row.id }}">
+                            <select name="reason">
+                                {% for code in hold_reason_codes %}<option value="{{ code }}">{{ code }}</option>{% endfor %}
+                            </select>
+                            <button type="submit" class="btn btn-outline-warning btn-sm">Hold</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                    {% endif %}
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="12" class="table-empty">
+                    <td colspan="13" class="table-empty">
                         <i class="fas fa-list-check"></i>
                         <h5>No Books</h5>
                         <p>This batch has no books.</p>

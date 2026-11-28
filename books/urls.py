@@ -138,6 +138,9 @@ urlpatterns = [
     # Batch review (read only)
     path("batches/", batches_views.BatchListView.as_view(), name="batch_list"),
     path("batches/<str:batch_id>/", batches_views.BatchReviewView.as_view(), name="batch_review"),
+    path("batches/<str:batch_id>/hold/", batches_views.BatchHoldView.as_view(), name="batch_hold"),
+    path("batches/<str:batch_id>/unhold/", batches_views.BatchUnholdView.as_view(), name="batch_unhold"),
+    path("batches/<str:batch_id>/apply/", batches_views.BatchApplyView.as_view(), name="batch_apply"),
     # Scanning
     path("trigger_scan/", views.TriggerScanView.as_view(), name="trigger_scan"),
     path("scan_status/", views.ScanStatusView.as_view(), name="scan_status"),

@@ -39,6 +39,9 @@ STOPLIST_TITLES = ("test", "untitled", "unknown", "title", "no title", "document
 # Authors that must never be auto-approved (case-insensitive).
 STOPLIST_AUTHORS = ("unknown", "anonymous", "n/a", "none")
 
+# Hold reason codes the review page offers (and reject_books records).
+HOLD_REASON_CODES = ("cover", "title", "author", "series", "language", "duplicate", "other")
+
 # A trailing file extension inside a title marks it as a filename, not a title.
 TITLE_EXTENSION_RE = re.compile(
     r"\.(epub|cbz|cbr|cb7|cbt|pdf|mobi|azw|azw3|fb2|lit|prc|mp3|m4a|m4b)$",
@@ -441,6 +444,8 @@ def reject_books(manifest_path, reject_id, reason):
     manifest_path = Path(manifest_path)
     data = json.loads(manifest_path.read_text())
     reason = reason or ""
+    if data.get("status") == "applied":
+        return {"refusal": "refusing: manifest already applied"}
     if reject_id not in data.get("ids", []):
         return {"refusal": f"refusing: reject id {reject_id} not in manifest"}
     excluded = data.setdefault("excluded", {})
@@ -535,6 +540,14 @@ def apply_batch(
     data["status"] = "applied"
     data["applied_at"] = timezone.now().isoformat()
     data["applied_ids"] = approved
+    # Held-back ids stay in "excluded"; only the books skipped for a
+    # criterion/missing reason are recorded here (id -> reason), so a held
+    # book is never also "not approved".
+    data["skipped"] = {
+        str(entry["id"]): entry["reason"]
+        for entry in skipped
+        if entry["id"] not in excluded_ids
+    }
     manifest_path.write_text(json.dumps(data, indent=2))
 
     return {
@@ -696,7 +709,7 @@ def _read_holds_reasons(manifest_dir):
     return reasons
 
 
-def batch_rows(manifest_path, targets=None):
+def batch_rows(manifest_path, targets=None, ctx=None):
     """One dict per book id of the manifest, in ascending id order.
 
     Each dict holds everything the review page and the batch review view need:
@@ -705,11 +718,16 @@ def batch_rows(manifest_path, targets=None):
     data URI thumbnail or ``None``), ``source`` (the primary file path),
     ``folder`` and ``filename`` (the planned target), ``flag`` (the first
     failing criterion now, or ``None``), ``held`` (bool), ``hold_reason``
-    (the reason from the manifest ``excluded`` map or the holds file) and
-    ``sample`` (bool).
+    (the reason from the manifest ``excluded`` map or the holds file),
+    ``state`` (``pending``/``held`` for a prepared manifest, or
+    ``approved``/``held``/``not approved`` for an applied one),
+    ``skip_reason`` (the reason for a ``not approved`` book) and ``sample``
+    (bool).
 
     ``targets``, when given, is the pre-planned ``{id: target}`` map from
-    ``select_batch``; otherwise the target is planned here.
+    ``select_batch``; otherwise the target is planned here.  ``ctx``, when
+    given, is a library context already built by the caller (``select_batch``
+    / ``write_batch_files``), so prepare builds the context exactly once.
     """
     from books.models import Book
     from books.utils.renaming_engine import RenamingEngine
@@ -719,12 +737,16 @@ def batch_rows(manifest_path, targets=None):
     ids = data.get("ids", [])
     sample_ids = set(data.get("sample_ids", []))
     excluded = data.get("excluded", {})
+    status = data.get("status")
+    applied_ids = set(data.get("applied_ids", []))
+    skipped = data.get("skipped", {})
     manifest_dir = manifest_path.parent
 
     holds = read_holds(manifest_dir)
     holds_reasons = _read_holds_reasons(manifest_dir)
 
-    ctx = _build_context()
+    if ctx is None:
+        ctx = _build_context()
     books = {
         b.id: b
         for b in Book.objects.select_related("finalmetadata", "scan_folder").filter(
@@ -770,14 +792,32 @@ def batch_rows(manifest_path, targets=None):
         folder, filename = _target_parts(target, scan_path)
         cover_uri = _cover_data_uri(cover_path)
 
-        flag = _exclusion(book, fm, ctx) if book is not None else "no final metadata"
-
         held = (str(bid) in excluded) or (bid in holds)
         hold_reason = None
         if str(bid) in excluded:
             hold_reason = excluded[str(bid)]
         elif bid in holds:
             hold_reason = holds_reasons.get(bid)
+
+        if status == "applied":
+            # An applied manifest no longer re-runs the criteria: approved
+            # books are is_reviewed and would otherwise report "already
+            # reviewed".  The state comes from applied_ids / excluded /
+            # skipped instead.
+            flag = None
+            if bid in applied_ids:
+                state = "approved"
+                skip_reason = None
+            elif held:
+                state = "held"
+                skip_reason = None
+            else:
+                state = "not approved"
+                skip_reason = skipped.get(str(bid), "")
+        else:
+            flag = _exclusion(book, fm, ctx) if book is not None else "no final metadata"
+            state = "held" if held else "pending"
+            skip_reason = None
 
         rows.append(
             {
@@ -797,13 +837,15 @@ def batch_rows(manifest_path, targets=None):
                 "flag": flag,
                 "held": held,
                 "hold_reason": hold_reason,
+                "state": state,
+                "skip_reason": skip_reason,
                 "sample": bid in sample_ids,
             }
         )
     return rows
 
 
-def _write_review_page(manifest_path, manifest_dir, targets=None):
+def _write_review_page(manifest_path, manifest_dir, targets=None, ctx=None):
     """Write a self-contained review HTML page (no scripts, no external assets).
 
     Uses :func:`batch_rows` for the per-book data, so the written page and the
@@ -812,7 +854,7 @@ def _write_review_page(manifest_path, manifest_dir, targets=None):
     """
     import html
 
-    rows = batch_rows(manifest_path, targets=targets)
+    rows = batch_rows(manifest_path, targets=targets, ctx=ctx)
     if not rows:
         return None, None
 
@@ -976,7 +1018,7 @@ def write_batch_files(selection, manifest_dir):
     manifest_path = Path(manifest_dir) / f"{batch_id}.json"
     manifest_path.write_text(json.dumps(manifest, indent=2))
 
-    review_name, review_line = _write_review_page(manifest_path, manifest_dir, targets)
+    review_name, review_line = _write_review_page(manifest_path, manifest_dir, targets, ctx=ctx)
     manifest["review_page"] = review_name
     manifest_path.write_text(json.dumps(manifest, indent=2))
 
@@ -1080,3 +1122,92 @@ def list_batches(manifest_dir=None):
         )
     batches.sort(key=lambda b: b["created"], reverse=True)
     return batches
+
+
+def batch_summary(manifest_path):
+    """Count ``approve`` / ``hold`` / ``not_approved`` / ``total`` for a manifest.
+
+    Reads the same manifest and holds-file data ``batch_rows`` uses, so the
+    counter always agrees with the per-book ``state`` shown on the page.  For
+    an applied manifest ``approve`` is the number of applied ids.
+    """
+    manifest_path = Path(manifest_path)
+    data = json.loads(manifest_path.read_text())
+    ids = data.get("ids", [])
+    total = len(ids)
+    excluded = data.get("excluded", {})
+    holds = read_holds(manifest_path.parent)
+    held_ids = {int(k) for k in excluded if str(k).isdigit()} | holds
+    hold = sum(1 for i in ids if i in held_ids)
+    if data.get("status") == "applied":
+        approve = len(data.get("applied_ids", []))
+        not_approved = total - approve - hold
+    else:
+        approve = total - hold
+        not_approved = 0
+    return {
+        "approve": approve,
+        "hold": hold,
+        "not_approved": not_approved,
+        "total": total,
+    }
+
+
+def remove_holds(ids, manifest_path):
+    """Remove holds: drop ``ids`` from the manifest ``excluded`` map and rewrite
+    ``rejected_ids.txt`` without those ids, keeping every other line exactly as
+    it is (written to a temp file then renamed into place).
+
+    Returns ``{"removed": ids}``, or a ``refusal`` (``manifest already applied``
+    or ``id <n> not in manifest``).
+    """
+    manifest_path = Path(manifest_path)
+    data = json.loads(manifest_path.read_text())
+    if data.get("status") == "applied":
+        return {"refusal": "refusing: manifest already applied"}
+    manifest_ids = data.get("ids", [])
+    ids = list(ids)
+    for rid in ids:
+        if rid not in manifest_ids:
+            return {"refusal": f"refusing: id {rid} not in manifest"}
+    excluded = data.setdefault("excluded", {})
+    for rid in ids:
+        excluded.pop(str(rid), None)
+    manifest_path.write_text(json.dumps(data, indent=2))
+
+    remove_set = {str(rid) for rid in ids}
+    holds_path = manifest_path.parent / "rejected_ids.txt"
+    if holds_path.exists():
+        kept = [
+            line
+            for line in holds_path.read_text().splitlines(keepends=True)
+            if line.split("\t", 1)[0].strip() not in remove_set
+        ]
+        tmp_path = holds_path.with_name(holds_path.name + ".tmp")
+        tmp_path.write_text("".join(kept))
+        tmp_path.replace(holds_path)
+    return {"removed": ids}
+
+
+def apply_reviewed(manifest_path, typed_count):
+    """Apply a prepared batch after the reviewer typed the exact approve count.
+
+    Refuses when ``typed_count`` is not the current approve count from
+    ``batch_summary``; otherwise applies with confirm set to the manifest id
+    count and the 30% exclusion valve in force (``allow_high_exclusion``
+    False) and returns ``apply_batch``'s result.
+    """
+    summary = batch_summary(manifest_path)
+    if typed_count != summary["approve"]:
+        return {
+            "refusal": f"refusing: typed {typed_count}, batch approves {summary['approve']}"
+        }
+    data = json.loads(Path(manifest_path).read_text())
+    confirm = len(data.get("ids", []))
+    return apply_batch(
+        manifest_path=manifest_path,
+        confirm=confirm,
+        exclude_ids=None,
+        exclude_reason="review",
+        allow_high_exclusion=False,
+    )

@@ -1,10 +1,10 @@
-"""Read-only batch list and batch review views.
+"""Batch list, review, and hold/apply action views.
 
-These views expose the batch pipeline (section 4d) through the shared service
-functions ``list_batches``, ``batch_rows`` and ``read_holds`` only; they hold
-no pipeline logic of their own.  They are read only: GET renders a page, any
-other method is refused (405).  The hold toggle and the apply screen land in
-the next PR.
+The read-only list and review pages and the hold / unhold / apply actions all
+call the shared service functions in :mod:`books.services.batches`; these views
+hold no pipeline logic of their own.  Every writing action redirects back to
+the review page and reports its result through Django messages (rendered by the
+base template).
 """
 
 import json
@@ -12,12 +12,22 @@ import uuid
 from pathlib import Path
 
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import Http404
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.views.generic import ListView, View
 
-from books.services.batches import DEFAULT_MANIFEST_DIR, batch_rows, list_batches
+from books.services.batches import (
+    DEFAULT_MANIFEST_DIR,
+    HOLD_REASON_CODES,
+    apply_reviewed,
+    batch_rows,
+    batch_summary,
+    list_batches,
+    reject_books,
+    remove_holds,
+)
 
 
 def _manifest_dir():
@@ -26,6 +36,23 @@ def _manifest_dir():
     if override:
         return Path(override)
     return DEFAULT_MANIFEST_DIR
+
+
+def _resolve_manifest(raw):
+    """Resolve a URL batch id to its manifest path; 404 on unknown/malformed.
+
+    A UUID pattern is the only value that may reach a path.  Anything else
+    (traversal, malformed, missing) is 404 before any path is built.  This is
+    the single shared batch-id check for every batch view.
+    """
+    try:
+        batch_id = str(uuid.UUID(raw))
+    except (ValueError, AttributeError, TypeError):
+        raise Http404("unknown batch")
+    path = _manifest_dir() / f"{batch_id}.json"
+    if not path.is_file():
+        raise Http404("unknown batch")
+    return batch_id, path
 
 
 class BatchListView(LoginRequiredMixin, ListView):
@@ -50,34 +77,86 @@ class BatchReviewView(LoginRequiredMixin, View):
     template_name = "books/batches/review.html"
     http_method_names = ["get"]  # GET only; anything else is 405.
 
-    def _batch_id(self, raw):
-        # A UUID pattern is the only value that may reach a path.  Anything
-        # else (traversal, malformed, missing) is 404 before any path is built.
-        try:
-            return str(uuid.UUID(raw))
-        except (ValueError, AttributeError, TypeError):
-            raise Http404("unknown batch")
-
     def get(self, request, batch_id):
-        batch_id = self._batch_id(batch_id)
-        manifest_path = _manifest_dir() / f"{batch_id}.json"
-        if not manifest_path.is_file():
-            raise Http404("unknown batch")
-
+        batch_id, manifest_path = _resolve_manifest(batch_id)
         data = json.loads(manifest_path.read_text())
         rows = batch_rows(manifest_path)
-
-        approve = sum(1 for r in rows if not r["held"])
-        hold = sum(1 for r in rows if r["held"])
+        summary = batch_summary(manifest_path)
 
         context = {
             "page_title": f"Batch {batch_id}",
             "batch_id": batch_id,
             "status": data.get("status"),
             "applied_at": data.get("applied_at"),
-            "applied_count": len(data.get("applied_ids", [])),
-            "approve": approve,
-            "hold": hold,
+            "approve": summary["approve"],
+            "hold": summary["hold"],
+            "not_approved": summary["not_approved"],
             "rows": rows,
+            "hold_reason_codes": HOLD_REASON_CODES,
         }
         return render(request, self.template_name, context)
+
+
+class _BatchActionView(LoginRequiredMixin, View):
+    """Shared POST-only base for the hold / unhold / apply actions.
+
+    Resolves the batch id (one shared check), runs the sub-view's ``_act``,
+    reports a refusal as an error message or a success message, and redirects
+    back to the review page.
+    """
+
+    http_method_names = ["post"]
+
+    def post(self, request, batch_id):
+        batch_id, manifest_path = _resolve_manifest(batch_id)
+        result = self._act(request, batch_id, manifest_path)
+        if result.get("refusal"):
+            messages.error(request, result["refusal"])
+        else:
+            messages.success(request, result["message"])
+        return redirect("books:batch_review", batch_id=batch_id)
+
+    def _act(self, request, batch_id, manifest_path):  # pragma: no cover - abstract
+        raise NotImplementedError
+
+
+class BatchHoldView(_BatchActionView):
+    def _act(self, request, batch_id, manifest_path):
+        reason = request.POST.get("reason", "")
+        if reason not in HOLD_REASON_CODES:
+            return {"refusal": f"unknown reason code: {reason}"}
+        try:
+            book_id = int(request.POST.get("book_id", ""))
+        except (TypeError, ValueError):
+            return {"refusal": "invalid book id"}
+        result = reject_books(str(manifest_path), book_id, reason)
+        if result.get("refusal"):
+            return result
+        return {"message": result["line"]}
+
+
+class BatchUnholdView(_BatchActionView):
+    def _act(self, request, batch_id, manifest_path):
+        try:
+            book_id = int(request.POST.get("book_id", ""))
+        except (TypeError, ValueError):
+            return {"refusal": "invalid book id"}
+        result = remove_holds([book_id], str(manifest_path))
+        if result.get("refusal"):
+            return result
+        return {"message": f"removed hold for {book_id}"}
+
+
+class BatchApplyView(_BatchActionView):
+    def _act(self, request, batch_id, manifest_path):
+        try:
+            typed = int(request.POST.get("count", ""))
+        except (TypeError, ValueError):
+            return {"refusal": "invalid count"}
+        result = apply_reviewed(str(manifest_path), typed)
+        if result.get("refusal"):
+            return result
+        return {
+            "message": f"approved {result['approved_count']}, "
+            f"skipped {result['skipped_count']}"
+        }

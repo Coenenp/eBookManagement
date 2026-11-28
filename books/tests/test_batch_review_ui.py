@@ -142,7 +142,7 @@ class BatchRowsTests(_BatchBase):
                 "id", "title", "last_name", "first_name", "series",
                 "series_number", "language", "format", "tier", "cover",
                 "source", "folder", "filename", "flag", "held", "hold_reason",
-                "sample",
+                "state", "skip_reason", "sample",
             },
         )
         self.assertEqual(first["title"], "Row Alpha")
