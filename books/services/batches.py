@@ -679,21 +679,52 @@ def _cover_data_uri(cover_path):
         return None
 
 
-def _write_review_page(selected, ctx, manifest_dir, batch_id, sample_ids, targets):
-    """Write a self-contained review HTML page (no scripts, no external assets).
+def _read_holds_reasons(manifest_dir):
+    """Read ``rejected_ids.txt`` as ``{id: reason}`` (id only -> empty reason)."""
+    path = Path(manifest_dir) / "rejected_ids.txt"
+    if not path.exists():
+        return {}
+    reasons = {}
+    for line in path.read_text().splitlines():
+        if "\t" in line:
+            col_id, col_reason = line.split("\t", 1)
+        else:
+            col_id, col_reason = line, ""
+        col_id = col_id.strip()
+        if col_id.isdigit():
+            reasons[int(col_id)] = col_reason
+    return reasons
 
-    Returns ``(page_name, line)``; both are ``None`` when there is nothing to
-    review.
+
+def batch_rows(manifest_path, targets=None):
+    """One dict per book id of the manifest, in ascending id order.
+
+    Each dict holds everything the review page and the batch review view need:
+    ``id``, ``title``, ``last_name``, ``first_name``, ``series``,
+    ``series_number``, ``language``, ``format``, ``tier``, ``cover`` (a JPEG
+    data URI thumbnail or ``None``), ``source`` (the primary file path),
+    ``folder`` and ``filename`` (the planned target), ``flag`` (the first
+    failing criterion now, or ``None``), ``held`` (bool), ``hold_reason``
+    (the reason from the manifest ``excluded`` map or the holds file) and
+    ``sample`` (bool).
+
+    ``targets``, when given, is the pre-planned ``{id: target}`` map from
+    ``select_batch``; otherwise the target is planned here.
     """
-    import html
-
     from books.models import Book
     from books.utils.renaming_engine import RenamingEngine
 
-    ids = sorted(bid for _corr, bid in selected)
-    if not ids:
-        return None, None
+    manifest_path = Path(manifest_path)
+    data = json.loads(manifest_path.read_text())
+    ids = data.get("ids", [])
+    sample_ids = set(data.get("sample_ids", []))
+    excluded = data.get("excluded", {})
+    manifest_dir = manifest_path.parent
 
+    holds = read_holds(manifest_dir)
+    holds_reasons = _read_holds_reasons(manifest_dir)
+
+    ctx = _build_context()
     books = {
         b.id: b
         for b in Book.objects.select_related("finalmetadata", "scan_folder").filter(
@@ -701,10 +732,9 @@ def _write_review_page(selected, ctx, manifest_dir, batch_id, sample_ids, target
         )
     }
     engine = RenamingEngine()
-    corroborated = {bid: c for c, bid in selected}
 
     rows = []
-    for bid in ids:
+    for bid in sorted(ids):
         book = books.get(bid)
         fm = book.finalmetadata if book is not None else None
         title = (fm.final_title if fm else None) or ""
@@ -726,35 +756,94 @@ def _write_review_page(selected, ctx, manifest_dir, batch_id, sample_ids, target
             first_name = (first_name or "").strip()
 
         source, fmt = ctx["primary_file"].get(bid, ("", ""))
-        tier = "corroborated" if corroborated.get(bid, False) else "standard"
-        target = targets.get(bid, "")
+        tier = (
+            "corroborated"
+            if fm is not None
+            and _conf(fm.final_title_confidence) >= CORROBORATED_THRESHOLD
+            else "standard"
+        )
+        if targets is None:
+            target = _planned_target(book) if book is not None else ""
+        else:
+            target = targets.get(bid, "")
         scan_path = book.scan_folder.path if (book is not None and book.scan_folder) else ""
         folder, filename = _target_parts(target, scan_path)
         cover_uri = _cover_data_uri(cover_path)
+
+        flag = _exclusion(book, fm, ctx) if book is not None else "no final metadata"
+
+        held = (str(bid) in excluded) or (bid in holds)
+        hold_reason = None
+        if str(bid) in excluded:
+            hold_reason = excluded[str(bid)]
+        elif bid in holds:
+            hold_reason = holds_reasons.get(bid)
+
+        rows.append(
+            {
+                "id": bid,
+                "title": title,
+                "last_name": last_name,
+                "first_name": first_name,
+                "series": series,
+                "series_number": series_number,
+                "language": language,
+                "format": fmt,
+                "tier": tier,
+                "cover": cover_uri,
+                "source": source,
+                "folder": folder,
+                "filename": filename,
+                "flag": flag,
+                "held": held,
+                "hold_reason": hold_reason,
+                "sample": bid in sample_ids,
+            }
+        )
+    return rows
+
+
+def _write_review_page(manifest_path, manifest_dir, targets=None):
+    """Write a self-contained review HTML page (no scripts, no external assets).
+
+    Uses :func:`batch_rows` for the per-book data, so the written page and the
+    batch review view share one implementation.  Returns ``(page_name, line)``;
+    both are ``None`` when there is nothing to review.
+    """
+    import html
+
+    rows = batch_rows(manifest_path, targets=targets)
+    if not rows:
+        return None, None
+
+    batch_id = json.loads(Path(manifest_path).read_text())["batch_id"]
+    trs = []
+    for row in rows:
+        cover_uri = row["cover"]
         cover_cell = (
             f'<img src="{html.escape(cover_uri, quote=True)}" alt="cover">'
             if cover_uri
             else "ERR"
         )
-        mark = "&#10003;" if bid in sample_ids else ""
-        row_class = ' class="sampled"' if bid in sample_ids else ""
+        mark = "&#10003;" if row["sample"] else ""
+        row_class = ' class="sampled"' if row["sample"] else ""
         cells = (
             f"<td>{cover_cell}</td>"
-            f"<td>{html.escape(str(bid))}</td>"
-            f"<td>{html.escape(title)}</td>"
-            f"<td>{html.escape(last_name)}</td>"
-            f"<td>{html.escape(first_name)}</td>"
-            f"<td>{html.escape(series)}</td>"
-            f"<td>{html.escape(series_number)}</td>"
-            f"<td>{html.escape(language)}</td>"
-            f"<td>{html.escape(fmt)}</td>"
-            f"<td>{html.escape(tier)}</td>"
-            f"<td>{html.escape(folder)}</td>"
-            f"<td>{html.escape(filename)}</td>"
-            f"<td>{html.escape(_path_tail(source))}</td>"
+            f"<td>{html.escape(str(row['id']))}</td>"
+            f"<td>{html.escape(row['title'])}</td>"
+            f"<td>{html.escape(row['last_name'])}</td>"
+            f"<td>{html.escape(row['first_name'])}</td>"
+            f"<td>{html.escape(row['series'])}</td>"
+            f"<td>{html.escape(row['series_number'])}</td>"
+            f"<td>{html.escape(row['language'])}</td>"
+            f"<td>{html.escape(row['format'])}</td>"
+            f"<td>{html.escape(row['tier'])}</td>"
+            f"<td>{html.escape(row['folder'])}</td>"
+            f"<td>{html.escape(row['filename'])}</td>"
+            f"<td>{html.escape(_path_tail(row['source']))}</td>"
             f"<td>{mark}</td>"
         )
-        rows.append(f"<tr{row_class}>{cells}</tr>")
+        trs.append(f"<tr{row_class}>{cells}</tr>")
 
     hold = html.escape(
         "To hold back books use --apply --manifest <manifest path> "
@@ -774,7 +863,7 @@ def _write_review_page(selected, ctx, manifest_dir, batch_id, sample_ids, target
         "<th>first name</th><th>series</th><th>number</th><th>language</th><th>format</th>"
         "<th>tier</th><th>folder</th><th>file name</th><th>source path</th><th>sample</th>"
         "</tr></thead><tbody>"
-        + "".join(rows)
+        + "".join(trs)
         + "</tbody></table></body></html>"
     )
     path = manifest_dir / f"{batch_id}_review.html"
@@ -872,7 +961,6 @@ def write_batch_files(selection, manifest_dir):
     ctx = selection["ctx"]
     selected = selection["selected"]
     batch_id = selection["batch_id"]
-    sample_ids = selection["sample_ids"]
     targets = selection["targets"]
 
     manifest = {
@@ -884,12 +972,12 @@ def write_batch_files(selection, manifest_dir):
     }
     sheets, sheet_lines = _write_contact_sheets(selected, ctx, manifest_dir, batch_id)
     manifest["sheets"] = sheets
-    review_name, review_line = _write_review_page(
-        selected, ctx, manifest_dir, batch_id, sample_ids, targets
-    )
-    manifest["review_page"] = review_name
 
     manifest_path = Path(manifest_dir) / f"{batch_id}.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+
+    review_name, review_line = _write_review_page(manifest_path, manifest_dir, targets)
+    manifest["review_page"] = review_name
     manifest_path.write_text(json.dumps(manifest, indent=2))
 
     file_lines = list(sheet_lines)
@@ -948,3 +1036,47 @@ def batch_report(manifest_dir=None):
         "by_language": dict(by_language),
         "by_tier": dict(by_tier),
     }
+
+
+def list_batches(manifest_dir=None):
+    """Summarise every manifest in the folder, newest first.
+
+    Returns a list of dicts, one per ``<batch_id>.json`` manifest, each with
+    ``batch_id``, ``status``, ``created`` (the manifest file mtime, a float
+    epoch), ``id_count``, ``held_count`` (ids held in the manifest ``excluded``
+    map or the shared holds file) and ``applied_at`` (or ``None``).  Malformed
+    or non-manifest JSON files are skipped.
+    """
+    manifest_dir = Path(manifest_dir) if manifest_dir else DEFAULT_MANIFEST_DIR
+    if not manifest_dir.exists():
+        return []
+    held = read_holds(manifest_dir)
+    batches = []
+    for path in manifest_dir.glob("*.json"):
+        try:
+            data = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        batch_id = data.get("batch_id")
+        if not batch_id:
+            continue
+        ids = data.get("ids", [])
+        excluded = data.get("excluded", {})
+        held_ids = set()
+        for key in excluded:
+            if str(key).isdigit():
+                held_ids.add(int(key))
+        held_ids |= held
+        held_count = sum(1 for i in ids if i in held_ids)
+        batches.append(
+            {
+                "batch_id": batch_id,
+                "status": data.get("status"),
+                "created": path.stat().st_mtime,
+                "id_count": len(ids),
+                "held_count": held_count,
+                "applied_at": data.get("applied_at"),
+            }
+        )
+    batches.sort(key=lambda b: b["created"], reverse=True)
+    return batches
